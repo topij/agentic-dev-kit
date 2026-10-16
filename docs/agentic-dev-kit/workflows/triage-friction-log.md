@@ -101,14 +101,18 @@ main worktree Git cannot name as a checkout of that common dir names itself too,
 before #1103: a bare repository's linked worktree, one whose primary was made with
 `--separate-git-dir`, and any linked worktree on a Git older than 2.36 (no
 `git worktree list -z`); its sessions do not continue from another worktree. The probes
-read only the invoking checkout and drop the environment variables that relocate a
-repository (`GIT_DIR`, `GIT_WORK_TREE` and the like).
+run in the invoking checkout and in the main worktree Git names for it, never in a
+recorded root, and drop the environment variables that relocate a repository
+(`GIT_DIR`, `GIT_WORK_TREE` and the like).
 
-A resumed run's identity must equal the recorded one exactly. A recorded root is never
+A resumed run's identity must equal the recorded one exactly, or equal it with the
+invoking checkout's own root in place of the main worktree's. A recorded root is never
 probed, because it comes from state on disk that may name a removed, moved or corrupted
-path. An identity a linked worktree recorded before #1103 names that worktree, so it
-does not match and the session holds with `repository-identity`; retire it with
-interactive `recover`. An independent clone, a changed origin, or any other root never
+path. The second form is what every run recorded before #1103: a session a linked
+worktree recorded then names that worktree, so it continues from a checkout at that
+worktree's path, as it did before, and from no other; anywhere else it holds with
+`repository-identity`. If that worktree was removed, add a worktree at the same path
+again to continue it. An independent clone, a changed origin, or any other root never
 matches. The report path is bound below the root the identity names, not below the
 invoking checkout, so a report a temporary worktree writes survives it.
 

@@ -31,6 +31,9 @@ DISPOSITIONS = ("completed", "waiting", "refused")
 # `finalize`: a resume carrying `finalize: true`. `recovery-approval`: the exact
 # approval of a recorded recovery plan. `rerun`: an applied recovery transition
 # left state that the next ordinary run resumes or restarts from.
+# `reconciliation`: a retained tracker or forge write that read-back left
+# unresolved; a rerun reads it back again, and advances only once the provider
+# shows it resolved, which may need the operator (a duplicate removed, say).
 WAITING_ON = (
     "analysis",
     "notification-delivery",
@@ -39,6 +42,7 @@ WAITING_ON = (
     "finalize",
     "recovery-approval",
     "rerun",
+    "reconciliation",
 )
 # The phase an active session rests in, mapped to what continues it. `propose`
 # and `completed` are absent on purpose: a session resting in `propose` (an
@@ -52,6 +56,28 @@ PHASE_WAITING_ON = {
     "forge-finalize": "finalize",
     "archive-sweep": "finalize",
 }
+# Forge operations whose unsettled read-back the next finalize run polls again;
+# any other unverified forge operation waits on reconciliation.
+_FORGE_POLLED = ("pr-watch", "merge-read-back")
+
+
+def session_waiting_on(state: dict[str, Any]) -> str | None:
+    """What continues an active session: its phase's wait, unless the last
+    retained tracker or forge write is unverified. The phase alone would report
+    an ambiguous tracker create as `tracker-write` on every run, a wait no
+    adapter selection ends."""
+    phase = state.get("phase")
+    if phase == "tracker-write":
+        operations = state.get("operations") or []
+        if operations and operations[-1].get("status") != "verified":
+            return "reconciliation"
+    if phase == "forge-finalize":
+        operations = state.get("finalization_operations") or []
+        if operations and operations[-1].get("status") != "verified" and not (
+            operations[-1].get("status") == "unsettled" and operations[-1].get("kind") in _FORGE_POLLED
+        ):
+            return "reconciliation"
+    return PHASE_WAITING_ON.get(phase)
 
 
 def disposition_fields(outcome: str, *, waiting_on: str | None = None, refusal_code: str | None = None) -> dict[str, Any]:

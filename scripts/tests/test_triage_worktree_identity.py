@@ -213,13 +213,13 @@ def test_invalid_state_read_from_a_linked_worktree_is_held_unchanged(
 # --- identities recorded before #1103 -------------------------------------------
 
 
-def test_a_pre_1103_linked_worktree_identity_is_held_for_recover(
+def test_a_pre_1103_linked_worktree_session_continues_only_from_its_own_path(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Before #1103 a linked worktree recorded its own root. The recorded root is
-    never probed: such an identity does not equal the main worktree's, so the
-    session holds with `repository-identity`, its bytes unchanged, and the refusal
-    names interactive `recover` as the way to retire it."""
+    never probed: from the primary checkout such an identity does not match, so
+    the session holds with `repository-identity` and its bytes unchanged, while a
+    checkout at the recording worktree's path continues it, as before #1103."""
     import triage.model as model
 
     root = repository(tmp_path)
@@ -229,12 +229,119 @@ def test_a_pre_1103_linked_worktree_identity_is_held_for_recover(
         before_1103.setattr(model, "canonical_repository_root", lambda repo: str(repo))
         presented, legacy = draft_awaiting_approval(old, state_root)
     assert presented["run_identity"]["repository_identity"]["root"] == str(old.resolve())
-    for start in (root, old):
-        held = run(None, context="unattended", request={}, start=start)
-        assert (held["disposition"], held["refusal_code"]) == ("refused", "repository-identity"), held["detail"]
-        assert "retired with interactive recover" in held["resume_action"]
-        assert (state_root / LIVE_STATE).read_bytes() == legacy
-        assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    held = run(None, context="unattended", request={}, start=root)
+    assert (held["disposition"], held["refusal_code"]) == ("refused", "repository-identity"), held["detail"]
+    assert "continues only from a checkout at that worktree's path" in held["resume_action"]
+    assert (state_root / LIVE_STATE).read_bytes() == legacy
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    resumed = run(None, context="interactive", request={}, start=old)
+    assert (resumed["disposition"], resumed["waiting_on"]) == ("waiting", "approval"), resumed["detail"]
+    assert loads_exact((state_root / LIVE_STATE).read_bytes())["run_identity"] == presented["run_identity"]
+
+
+def test_a_recorded_own_root_matches_only_with_the_same_remote() -> None:
+    current_identity = {"root": "/repo/main", "remote": "git@github.com:owner/repo.git"}
+    legacy = {"root": "/repo/old-worktree", "remote": current_identity["remote"]}
+    assert repository_identity_matches(current_identity, current_identity, own_root="/repo/old-worktree")
+    assert not repository_identity_matches(legacy, current_identity)
+    assert repository_identity_matches(legacy, current_identity, own_root="/repo/old-worktree")
+    assert not repository_identity_matches(legacy, current_identity, own_root="/repo/other-worktree")
+    for foreign in (
+        {**legacy, "remote": "git@github.com:owner/fork.git"},
+        {**legacy, "extra": True},
+        ["/repo/old-worktree", current_identity["remote"]],
+    ):
+        assert not repository_identity_matches(foreign, current_identity, own_root="/repo/old-worktree")
+
+
+PRE_1103_GATE_OWNER = r'''
+import sys, time
+from pathlib import Path
+from triage.gate import acquire
+from triage.model import load_settings, repository_identity
+from triage.storage import ArtifactStore
+settings = load_settings(Path(sys.argv[1]))
+legacy = {"root": str(settings.paths.repo), "remote": repository_identity(settings)["remote"]}
+acquire(ArtifactStore(settings, "live"), repository_identity=legacy, config_fingerprint=settings.fingerprint, run_identity=None)
+print("ready", flush=True)
+time.sleep(300)
+'''
+
+
+def test_a_gate_a_pre_1103_linked_worktree_left_is_recovered_from_that_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run a linked worktree started before #1103 that died left a gate naming
+    that worktree. Interactive `recover` from that worktree retires it through the
+    gate-only transition, as before #1103; from the primary checkout it is foreign."""
+    import subprocess
+
+    from triage.approval import ApprovalContext
+
+    root = repository(tmp_path)
+    state_root = shared_state(tmp_path, monkeypatch)
+    old = linked(root, "old-cron-worktree")
+    environment = {**os.environ, "PYTHONPATH": str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)}
+    owner = subprocess.Popen(
+        [sys.executable, "-c", PRE_1103_GATE_OWNER, str(old)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
+    )
+    try:
+        assert owner.stdout is not None and owner.stdout.readline().strip() == "ready"
+    finally:
+        owner.terminate()
+        owner.wait(timeout=10)
+    gate = state_root / "triage/triage-pipeline-gate_live.lock"
+    gate_bytes = gate.read_bytes()
+    foreign = run("recover", context="interactive", request={}, start=root)
+    assert (foreign["disposition"], foreign["refusal_code"]) == ("refused", "repository-identity")
+    assert foreign["detail"] == "gate repository identity is foreign"
+    assert gate.read_bytes() == gate_bytes
+    planned = run("recover", context="interactive", request={}, start=old)
+    assert (planned["disposition"], planned["waiting_on"]) == ("waiting", "recovery-approval"), planned["detail"]
+    core_digest = planned["recovery_plan"]["prepared_core_digest"]
+    supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
+    context = ApprovalContext("current-session", "operator", {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest})
+    recovered = run("recover", context="interactive", request={"recovery_approval": supplied}, start=old, approval_context=context)
+    assert recovered["detail"] == "gate-only-operator-held", recovered["detail"]
+    assert not gate.exists()
+    # The receipt the recovery wrote records the current identity, so it reports
+    # itself to every checkout of the repository.
+    for start in (old, root):
+        assert run(None, context="interactive", request={}, start=start)["detail"] == "gate-only-operator-held"
+
+
+def test_a_gate_temporary_a_pre_1103_linked_worktree_orphaned_is_cleared_from_that_worktree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A run that died before publishing its gate leaves only the temporary. One a
+    linked worktree left before #1103 names that worktree: a run there clears it
+    and proceeds, and the primary checkout refuses it as foreign."""
+    import subprocess
+
+    root = repository(tmp_path)
+    state_root = shared_state(tmp_path, monkeypatch)
+    old = linked(root, "old-cron-worktree")
+    environment = {**os.environ, "PYTHONPATH": str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)}
+    owner = subprocess.Popen(
+        [sys.executable, "-c", PRE_1103_GATE_OWNER, str(old)],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=environment,
+    )
+    try:
+        assert owner.stdout is not None and owner.stdout.readline().strip() == "ready"
+    finally:
+        owner.terminate()
+        owner.wait(timeout=10)
+    gate = state_root / "triage/triage-pipeline-gate_live.lock"
+    token = loads_exact(gate.read_bytes())["owner_token"]
+    orphan = gate.with_name(f".{gate.name}.{token}.tmp")
+    gate.rename(orphan)
+    foreign = run("new", context="interactive", request=request(root), start=root)
+    assert (foreign["disposition"], foreign["refusal_code"]) == ("refused", "repository-identity"), foreign["detail"]
+    assert orphan.exists()
+    drafted = run("new", context="interactive", request=request(old), start=old)
+    assert (drafted["disposition"], drafted["waiting_on"]) == ("waiting", "approval"), drafted["detail"]
+    assert not orphan.exists()
 
 
 def test_a_corrupted_recorded_root_is_refused_not_probed(
@@ -273,7 +380,7 @@ def current(root: Path) -> dict:
     return repository_identity(load_settings(root))
 
 
-def test_identities_match_by_equality_only(tmp_path: Path) -> None:
+def test_without_an_own_root_identities_match_by_equality_only(tmp_path: Path) -> None:
     root = repository(tmp_path)
     worktree = linked(root, "member")
     identity = current(root)
@@ -355,11 +462,11 @@ def test_a_separate_git_dir_primary_s_linked_worktree_names_itself(tmp_path: Pat
     assert not repository_identity_matches(primary, current(worktree))
 
 
-def test_gate_and_gate_only_evidence_match_identities_by_equality(
+def test_gate_and_gate_only_evidence_match_identities_like_the_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The gate record and gate-only state evidence compare repository identity
-    by the same equality rule as the state, and refuse with codes."""
+    by the same rule as the state, and refuse with codes."""
     from triage.canonical import dumps as canonical_dumps
     from triage.engine import _gate_only_state_value
     from triage.gate import acquire, validate_record
@@ -402,6 +509,18 @@ def test_gate_and_gate_only_evidence_match_identities_by_equality(
         with pytest.raises(TriageError) as held:
             _gate_only_state_value(store, canonical_dumps(foreign_intent))
         assert held.value.code == "repository-identity"
+
+    # Evidence a linked worktree recorded before #1103 names that worktree, and
+    # matches from a checkout at its path.
+    legacy_intent = {**intent, "repository_identity": legacy}
+    worktree_store = ArtifactStore(load_settings(worktree), "live")
+    assert _gate_only_state_value(worktree_store, canonical_dumps(legacy_intent)) == legacy_intent
+    legacy_lease = acquire(store, repository_identity=legacy, config_fingerprint=settings.fingerprint, run_identity=None)
+    legacy_record = legacy_lease.record
+    legacy_lease.release()
+    assert validate_record(
+        legacy_record, repository_identity=current(root), config_fingerprint=settings.fingerprint, own_root=legacy["root"]
+    ) == legacy_record
 
 
 def test_an_unattended_run_over_a_reserved_session_waits_on_analysis(
@@ -446,6 +565,46 @@ def test_only_resumable_phases_are_waits() -> None:
         "archive-sweep": "finalize",
     }
     assert set(PHASES) - set(PHASE_WAITING_ON) == {"propose", "completed"}
+
+
+def test_an_unresolved_tracker_create_waits_on_reconciliation_not_tracker_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ambiguous create stays unresolved on every rerun until the tracker shows
+    exactly the recorded write, so it reads `reconciliation`, not the phase's
+    `tracker-write`, which another adapter run would end."""
+    root = repository(tmp_path)
+    state_root = shared_state(tmp_path, monkeypatch)
+    presented, _ = draft_awaiting_approval(root, state_root)
+    ambiguous = FakeTracker([], ProviderObservation("ambiguous", {"accepted": True}, {"effect": "unknown"}))
+    held = run(
+        "resume", context="interactive", request={"approval": approval_for(presented)}, start=root,
+        approval_context=approval_context(presented), tracker=ambiguous, head_authority=FakeForge([]),
+    )
+    assert (held["disposition"], held["waiting_on"]) == ("waiting", "reconciliation"), held["detail"]
+    again = run(None, context="unattended", request={}, start=root, tracker=FakeTracker([]), head_authority=FakeForge([]))
+    assert (again["disposition"], again["waiting_on"]) == ("waiting", "reconciliation"), again["detail"]
+    assert loads_exact((state_root / LIVE_STATE).read_bytes())["operations"][-1]["status"] == "ambiguous"
+
+
+@pytest.mark.parametrize("phase, operations_key, last, expected", [
+    ("tracker-write", "operations", None, "tracker-write"),
+    ("tracker-write", "operations", {"status": "verified"}, "tracker-write"),
+    ("tracker-write", "operations", {"status": "ambiguous"}, "reconciliation"),
+    ("tracker-write", "operations", {"status": "attempting"}, "reconciliation"),
+    ("forge-finalize", "finalization_operations", None, "finalize"),
+    ("forge-finalize", "finalization_operations", {"kind": "push", "status": "verified"}, "finalize"),
+    ("forge-finalize", "finalization_operations", {"kind": "pr-watch", "status": "unsettled"}, "finalize"),
+    ("forge-finalize", "finalization_operations", {"kind": "merge-read-back", "status": "unsettled"}, "finalize"),
+    ("forge-finalize", "finalization_operations", {"kind": "push", "status": "unsettled"}, "reconciliation"),
+    ("forge-finalize", "finalization_operations", {"kind": "branch-create", "status": "failed"}, "reconciliation"),
+    ("archive-sweep", "finalization_operations", {"kind": "push", "status": "failed"}, "finalize"),
+])
+def test_an_unverified_last_write_waits_on_reconciliation(phase, operations_key, last, expected) -> None:
+    from triage.outcome import session_waiting_on
+
+    state = {"phase": phase, operations_key: [] if last is None else [{"status": "verified"}, last]}
+    assert session_waiting_on(state) == expected
 
 
 def test_refusal_codes_name_a_missing_origin_an_active_state_and_an_unattended_recover(

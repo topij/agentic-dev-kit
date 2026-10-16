@@ -45,7 +45,7 @@ from .model import (
     validate_sweep_cleanup,
 )
 from .model import worktree_conflicts_with_checkout as _worktree_conflicts_with_checkout
-from .outcome import PHASE_WAITING_ON, disposition_fields
+from .outcome import disposition_fields, session_waiting_on
 from .providers import (
     ForgeProvider,
     NotificationProvider,
@@ -269,7 +269,9 @@ def _gate_only_state_value(store: ArtifactStore, state_raw: bytes | None) -> dic
         raise TriageError("gate-only state evidence has the wrong shape", outcome="operator-held")
     if value.get("mode") != store.mode:
         raise TriageError("gate-only state evidence is foreign", outcome="operator-held")
-    if not repository_identity_matches(value.get("repository_identity"), repository_identity(store.settings)):
+    if not repository_identity_matches(
+        value.get("repository_identity"), repository_identity(store.settings), own_root=str(store.settings.paths.repo)
+    ):
         raise TriageError("gate-only state evidence is foreign", outcome="operator-held", code="repository-identity")
     old_gate_digest = value.get("old_gate_digest")
     if not isinstance(old_gate_digest, str) or value.get("configured_bundle_path") != str(store.recovery_path(old_gate_digest)):
@@ -308,6 +310,7 @@ def _prepared_gate_only_bundle(
             record,
             repository_identity=repository_identity(store.settings),
             config_fingerprint=store.settings.fingerprint,
+            own_root=str(store.settings.paths.repo),
         )
         if (
             record.get("owner_token") != state_value["recovery_gate_owner_token"]
@@ -741,13 +744,14 @@ def _write_report(path: Path, state: dict[str, Any], capabilities: dict[str, dic
 
 def _refusal_resume_action(exc: TriageError) -> str:
     """The safe next step for a refused run. A repository-identity refusal is
-    answered from a checkout of the recorded repository; a session no checkout
-    can match (one a linked worktree recorded before #1103) is retired with
-    interactive `recover`."""
+    answered from a checkout of the recorded repository; a session a linked
+    worktree recorded before #1103 names that worktree, and continues only from
+    a checkout at its path (`repository_identity_matches`)."""
     if exc.code == "repository-identity":
         return (
-            "run from a checkout of the recorded repository, with its origin; a session no checkout "
-            "of this repository matches is retired with interactive recover"
+            "run from a checkout of the recorded repository, with its origin; a session recorded "
+            "before #1103 by a linked worktree continues only from a checkout at that worktree's path "
+            "(add a worktree there again if it was removed)"
         )
     return "inspect retained evidence and follow the named recovery route"
 
@@ -1924,7 +1928,7 @@ def run(
         # established refuses as that, not as a held gate.
         current_identity = repository_identity(settings)
         try:
-            lease = acquire(store, repository_identity=current_identity, config_fingerprint=settings.fingerprint, run_identity=None)
+            lease = acquire(store, repository_identity=current_identity, config_fingerprint=settings.fingerprint, run_identity=None, own_root=str(settings.paths.repo))
         except TriageError as gate_error:
             capabilities["single-writer-state-gate"] = {"status": "operator-held", "mechanism": str(gate_error)}
             if context == "interactive" and entry in {"recover", "test"}:
@@ -1942,7 +1946,7 @@ def run(
                 state, state_digest, report_path, frozen_path, candidates, terminal = _new_draft(settings, store, lease, capabilities, request, context=context, notification=notification)
                 _write_report(report_path, state, capabilities, terminal or "operator-held")
                 lease.release()
-                return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="resume with analysis bound to the frozen candidate index" if state["phase"] == "reserved" else "rerun with the exact pending approval or provider action", detail="durable triage state retained", identifiers=state.get("verified_tracker_identifiers"), candidate_index=state["frozen_snapshot"]["content"]["candidate_index"], waiting_on=PHASE_WAITING_ON.get(state["phase"]))
+                return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="resume with analysis bound to the frozen candidate index" if state["phase"] == "reserved" else "rerun with the exact pending approval or provider action", detail="durable triage state retained", identifiers=state.get("verified_tracker_identifiers"), candidate_index=state["frozen_snapshot"]["content"]["candidate_index"], waiting_on=session_waiting_on(state))
             gate_only_state = _gate_only_state_value(store, state_raw)
             if gate_only_state is not None:
                 bundle = _prepared_gate_only_bundle(store, gate_only_state, own_gate_raw=lease.verify())
@@ -1970,7 +1974,7 @@ def run(
                 )
                 _write_report(report_path, state, capabilities, terminal or "operator-held")
                 lease.release()
-                return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="rerun with the exact pending approval or provider action", detail="verified recovery receipt replaced by reserved new state", identifiers=state.get("verified_tracker_identifiers"), waiting_on=PHASE_WAITING_ON.get(state["phase"]))
+                return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="rerun with the exact pending approval or provider action", detail="verified recovery receipt replaced by reserved new state", identifiers=state.get("verified_tracker_identifiers"), waiting_on=session_waiting_on(state))
             if entry == "recover":
                 captured = capture_state_present(store, settings, require_terminated=False, publish=False)
                 try:
@@ -2085,7 +2089,7 @@ def run(
                     raise TriageError(f"{retired}; the new draft did not start, so the next run starts fresh: {exc}", outcome=exc.outcome, code=exc.code) from exc
                 _write_report(report_path, state, capabilities, terminal or "operator-held")
                 lease.release()
-                return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="resume with analysis bound to the frozen candidate index" if state["phase"] == "reserved" else "rerun with the exact pending approval or provider action", detail=f"{retired}; durable triage state retained", identifiers=state.get("verified_tracker_identifiers"), candidate_index=state["frozen_snapshot"]["content"]["candidate_index"], waiting_on=PHASE_WAITING_ON.get(state["phase"]))
+                return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="resume with analysis bound to the frozen candidate index" if state["phase"] == "reserved" else "rerun with the exact pending approval or provider action", detail=f"{retired}; durable triage state retained", identifiers=state.get("verified_tracker_identifiers"), candidate_index=state["frozen_snapshot"]["content"]["candidate_index"], waiting_on=session_waiting_on(state))
             if entry == "new":
                 lease.release()
                 return _result(
@@ -2187,7 +2191,7 @@ def run(
             if report_path is not None:
                 _write_report(report_path, state, capabilities, terminal)
             lease.release()
-            return _result(capabilities, terminal, mode=mode, engine_mode=state["engine_mode"], report=str(report_path) if report_path else None, frozen=str(frozen_path), resume_action=_active_resume_action(state), detail="active session resumed", identifiers=state.get("verified_tracker_identifiers"), observed_protected_head=observed_protected_head, waiting_on=PHASE_WAITING_ON.get(state["phase"]), **_pr_result_fields(state))
+            return _result(capabilities, terminal, mode=mode, engine_mode=state["engine_mode"], report=str(report_path) if report_path else None, frozen=str(frozen_path), resume_action=_active_resume_action(state), detail="active session resumed", identifiers=state.get("verified_tracker_identifiers"), observed_protected_head=observed_protected_head, waiting_on=session_waiting_on(state), **_pr_result_fields(state))
         except TriageError:
             if lease.held:
                 lease.release()

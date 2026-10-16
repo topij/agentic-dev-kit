@@ -28,6 +28,7 @@ def validate_record(
     *,
     repository_identity: dict[str, Any] | None = None,
     config_fingerprint: str | None = None,
+    own_root: str | None = None,
 ) -> dict[str, Any]:
     if not isinstance(record, dict) or set(record) != {"kind", "schema_version", "gate_claim_core", "gate_claim_core_digest", *GATE_CORE_KEYS}:
         raise TriageError("gate owner record has the wrong shape", outcome="operator-held")
@@ -52,7 +53,7 @@ def validate_record(
         raise TriageError("gate owner metadata is malformed", outcome="operator-held")
     if core["owner_run_identity"] is not None and not isinstance(core["owner_run_identity"], dict):
         raise TriageError("gate run identity is malformed", outcome="operator-held")
-    if repository_identity is not None and not repository_identity_matches(core["repository_identity"], repository_identity):
+    if repository_identity is not None and not repository_identity_matches(core["repository_identity"], repository_identity, own_root=own_root):
         raise TriageError("gate repository identity is foreign", outcome="operator-held", code="repository-identity")
     if config_fingerprint is not None and core["config_fingerprint"] != config_fingerprint:
         raise TriageError("gate configuration identity is foreign", outcome="operator-held", code="configuration-identity")
@@ -111,6 +112,7 @@ def _cleanup_orphaned_temporaries(
     *,
     repository_identity: dict[str, Any],
     config_fingerprint: str,
+    own_root: str | None,
 ) -> None:
     gate = store.gate_path
     _, published = observe(gate, allow_links=True)
@@ -133,6 +135,7 @@ def _cleanup_orphaned_temporaries(
             record,
             repository_identity=repository_identity,
             config_fingerprint=config_fingerprint,
+            own_root=own_root,
         )
         if record.get("owner_token") != token or observation.links != 1:
             raise TriageError("orphaned gate temporary identity is ambiguous", outcome="operator-held")
@@ -174,13 +177,21 @@ class GateLease:
         self.held = False
 
 
-def acquire(store: ArtifactStore, *, repository_identity: dict[str, Any], config_fingerprint: str, run_identity: dict[str, Any] | None) -> GateLease:
+def acquire(
+    store: ArtifactStore,
+    *,
+    repository_identity: dict[str, Any],
+    config_fingerprint: str,
+    run_identity: dict[str, Any] | None,
+    own_root: str | None = None,
+) -> GateLease:
     gate = store.gate_path
     gate.parent.mkdir(parents=True, exist_ok=True)
     _cleanup_orphaned_temporaries(
         store,
         repository_identity=repository_identity,
         config_fingerprint=config_fingerprint,
+        own_root=own_root,
     )
     token = uuid.uuid4().hex
     if not TOKEN_RE.fullmatch(token):

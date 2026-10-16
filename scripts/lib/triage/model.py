@@ -425,18 +425,24 @@ def repository_identity(settings: Settings) -> dict[str, Any]:
     return {"root": canonical_repository_root(repo), "remote": remote.stdout.strip()}
 
 
-def repository_identity_matches(recorded: Any, current: dict[str, Any]) -> bool:
+def repository_identity_matches(recorded: Any, current: dict[str, Any], *, own_root: str | None = None) -> bool:
     """Whether a recorded repository identity names the repository `current` does.
 
     Exact equality, and nothing else: a recorded root is never probed with Git,
     because it comes from state on disk that may name a removed, moved or
     corrupted path. Every worktree of a repository records the same root
     (`canonical_repository_root`), so a session continues across worktrees by
-    equality alone. An identity a linked worktree recorded before #1103 names
-    that worktree and no longer matches; such a session is retired with
-    interactive `recover`. Stored identities are compared, never rewritten:
-    approval and gate bindings digest the bytes they were written with."""
-    return isinstance(recorded, dict) and recorded == current
+    equality alone. `own_root` is the invoking checkout's own root,
+    `str(settings.paths.repo)`: a recorded identity equal to `current` with that
+    root also matches. That is what every run recorded before #1103, so a
+    session a linked worktree recorded then continues from a checkout at that
+    worktree's path, as it did before; it does not continue from any other
+    worktree. A caller that passes no `own_root` matches by equality alone.
+    Stored identities are compared, never rewritten: approval and gate bindings
+    digest the bytes they were written with."""
+    if not isinstance(recorded, dict):
+        return False
+    return recorded == current or (own_root is not None and recorded == {**current, "root": own_root})
 
 
 def new_run_identity(settings: Settings, mode: str, session: str | None = None) -> dict[str, Any]:
@@ -625,7 +631,9 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
         )
         if not drifted_completed:
             raise TriageError("configuration identity mismatch", outcome="operator-held", code="configuration-identity")
-    if not repository_identity_matches(identity.get("repository_identity"), repository_identity(settings)):
+    if not repository_identity_matches(
+        identity.get("repository_identity"), repository_identity(settings), own_root=str(settings.paths.repo)
+    ):
         raise TriageError("repository identity mismatch", outcome="operator-held", code="repository-identity")
     if identity.get("friction_log") != str(settings.paths.friction_log.relative_to(settings.paths.repo)):
         raise TriageError("friction-log identity mismatch", outcome="operator-held")

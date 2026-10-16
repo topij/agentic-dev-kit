@@ -6,9 +6,8 @@ checkout (#1103). A session drafted in one worktree continues from the primary c
 or a later linked worktree that resolves the same state directory. Identities are
 compared by exact equality and never rewritten: a primary-checkout session matches
 unchanged. A session a linked worktree recorded before this change names that
-worktree, so it no longer matches and holds with `refusal_code` `repository-identity`;
-retire it with interactive `recover` (none existed in the kit, cs-toolkit or
-OpenKitchen state roots on 2026-10-15). An independent clone of the same remote, a
+worktree; it continues from a checkout at that worktree's path, as before, and holds
+with `refusal_code` `repository-identity` from any other checkout. An independent clone of the same remote, a
 changed origin, invalid state and an active session's configuration mismatch still
 hold. A linked worktree whose main worktree is not a checkout of the same common dir (a
 bare repository's, or one whose primary used `--separate-git-dir`), or one on a Git
@@ -22,7 +21,9 @@ ignored by Git in the primary checkout, as `/reports/` is in the kit.
 ADDED (report / return shape): every triage result, and the CLI's own hard stops, carry
 `disposition` (`completed`, `waiting` or `refused`), `waiting_on` and `refusal_code`.
 `operator-held` is `waiting` only where the engine names what it waits on; every other
-`operator-held` result is `refused`. A test that compares a whole result or a pinned
+`operator-held` result is `refused`. A tracker or forge write that read-back left
+unresolved waits on `reconciliation`, which may need the operator: alert on it rather
+than treat it as a routine wait. A test that compares a whole result or a pinned
 key set needs the three keys. A caller that treated every exit-0 `operator-held` as a
 wait should read `disposition` instead.
 

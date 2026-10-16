@@ -46,7 +46,7 @@ def _gate_capture(store: ArtifactStore, *, require_terminated: bool = True) -> t
         record = loads_exact(raw)
     except Exception as exc:
         raise TriageError("blocking gate is malformed", outcome="operator-held") from exc
-    validate_record(record, repository_identity=repository_identity(store.settings), config_fingerprint=store.settings.fingerprint)
+    validate_record(record, repository_identity=repository_identity(store.settings), config_fingerprint=store.settings.fingerprint, own_root=str(store.settings.paths.repo))
     if require_terminated and owner_status(record) != "terminated":
         raise TriageError("blocking gate owner is active or uncertain", outcome="operator-held")
     aliases: list[dict[str, Any]] = []
@@ -205,9 +205,10 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
         raise TriageError("prepared gate-only bundle digest mismatch", outcome="operator-held")
     expected_bundle_path = store.recovery_path(core.get("old_gate_digest", ""))
     current_identity = repository_identity(settings)
+    own_root = str(settings.paths.repo)
     if (
-        not repository_identity_matches(core.get("repository_identity"), current_identity)
-        or not repository_identity_matches(intent.get("repository_identity"), current_identity)
+        not repository_identity_matches(core.get("repository_identity"), current_identity, own_root=own_root)
+        or not repository_identity_matches(intent.get("repository_identity"), current_identity, own_root=own_root)
     ):
         raise TriageError("prepared gate-only bundle is foreign", outcome="operator-held", code="repository-identity")
     if (
@@ -252,6 +253,7 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
                 replacement_record,
                 repository_identity=repository_identity(settings),
                 config_fingerprint=settings.fingerprint,
+                own_root=str(settings.paths.repo),
             )
             if replacement_record.get("owner_run_identity") != replacement_run_identity:
                 raise TriageError("replacement gate is foreign to the prepared transition", outcome="operator-held")
@@ -271,6 +273,7 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
         repository_identity=repository_identity(settings),
         config_fingerprint=settings.fingerprint,
         run_identity=replacement_run_identity,
+        own_root=str(settings.paths.repo),
     )
     _, verified_intent_raw = observe(store.state_path)
     if verified_intent_raw != intent_raw:
