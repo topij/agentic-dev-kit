@@ -195,7 +195,7 @@ preflight and executed-span guidance on 2026-10-10. The P2 regression the operat
 deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
 archive sweep rewrites (friction log). #1096 (`8beee9a1`) pins its candidate bound
-with a positional test; #1089 stays open for the operator.
+with a positional test.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
 [#921](https://github.com/topij/agentic-dev-kit/issues/921),
@@ -227,7 +227,7 @@ uv-cache marker case observed during this session, whose remedy is not establish
 
 ▶ Next: #997 — choose how a session entry whose only git dirs are test fixtures
 becomes sweepable without reopening the outside-dependent fail-open (an operator
-design decision). Include the uv-cache marker observation in
+design decision). Use the uv-cache marker observation already recorded in
 `docs/kit-friction-log.md` as a separate case to explain before choosing the remedy.
 
 ### Reviewer profiles
