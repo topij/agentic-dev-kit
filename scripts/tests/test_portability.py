@@ -2112,7 +2112,7 @@ _SPLIT_WORKFLOW_SUMMARIES = {
         ),
         "state-schema.md": "the exact state, phase and single-writer gate shapes.",
         "finalize.md": "*Tracker writes and accounting* and *Finalize and sweep*.",
-        "engine-cli.md": "the engines' invocations and outputs.",
+        "engine-cli.md": "the engines' invocations, outputs and *Invocation outcome receipts*.",
     },
 }
 
@@ -2150,7 +2150,7 @@ _SPLIT_WORKFLOW_SECTIONS = {
             "The single-writer gate file",
         ),
         "finalize.md": ("Tracker writes and accounting", "Finalize and sweep"),
-        "engine-cli.md": ("Engine CLI", "Dispositions"),
+        "engine-cli.md": ("Engine CLI", "Dispositions", "Invocation outcome receipts"),
     },
 }
 

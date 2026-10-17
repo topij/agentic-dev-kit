@@ -356,16 +356,19 @@ for the headless lane profile.
 
 ### Triage outcome receipts
 
-**Status:** #1111 (`62e0ffaa`) shipped linked-worktree repository identity and result
-dispositions. The invocation-bound outcome receipt is the open half: its code is on
-branch `feat/triage-outcome-receipts` at `fabed73e`, #1111's round-4 head. Two #1111
-comments name the findings a redesign must meet: the round-3 decision packet, and the
-round-4 comment's MEDIUM that check mode can overwrite the receipt it checks, which the
-branch tip still has. #1116 holds #1111's residual LOW findings.
+**Status:** #1111 (`62e0ffaa`) shipped linked-worktree identity and result
+dispositions. The receipt contract makes the caller allocate a fresh id and
+destination before each engine CLI call, publishes without replacement, and checks
+without writing. The preserved `fabed73e` implementation is design evidence; the
+round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
+was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
+timeout and report-containment findings.
 **Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
 [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: #1103 — design the outcome receipt against #1111's round-3 decision packet and round-4 findings, starting from branch `feat/triage-outcome-receipts`.
+▶ Next: after the receipt contract is reviewed and merged, adopt it in cs-toolkit
+and instrument each scheduled engine call with caller-owned freshness and failure
+propagation; do not export a shared id around a multi-call agent run.
 
 ### Shared hook installation
 
@@ -379,12 +382,14 @@ the hooks every checkout shares. #1117 holds its residual LOW findings. #990's i
 
 ### Consumer upgrades
 
-**Status:** neither consumer was upgraded. With #1111 merged, cs-toolkit's scheduled
-triage runs from its temporary worktrees once its kit is upgraded; a deployment change
-that gates those jobs on an outcome receipt waits on #1103. The plan and the facts read
-from each consumer are in `saved_plans/consumer-upgrade-assessment_2026-10-15.md`
-(local).
-**Owner:** `saved_plans/consumer-upgrade-assessment_2026-10-15.md`; #1103, #990, #1011,
-#1109, #979.
+**Status:** cs-toolkit upgraded to kit `ce3b5f91` in
+[in-parallel-oy/cs-toolkit#2762](https://github.com/in-parallel-oy/cs-toolkit/pull/2762),
+merged on 2026-10-17. That upgrade installed identity and disposition handling but
+left the scheduled wrapper and retained triage state untouched. The earlier consumer
+assessment is `saved_plans/consumer-upgrade-assessment_2026-10-15.md` (local); it
+predates this upgrade and is not evidence of either consumer's current installation.
+**Owner:** #1103, #1116, #990, #1011, #1109, #979.
 
-▶ Next: `/upgrade` cs-toolkit from a fresh linked worktree of its `origin/main` (plan step 2 of the local `saved_plans/consumer-upgrade-assessment_2026-10-15.md`), with operator approval.
+▶ Next: integrate the reviewed receipt contract into cs-toolkit's scheduled caller
+when adopted, then verify completed-state retirement before removing the #979 shim.
+Reassess OpenKitchen's installation and lane prerequisites before an upgrade there.
