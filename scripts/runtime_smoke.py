@@ -689,7 +689,26 @@ def build_fixture(kit_root: Path, revision: str, run_dir: Path, base_env: dict[s
     if friction_rel not in budgets:
         raise Refusal(f"doc_budgets has no entry for paths.friction_log ({friction_rel})")
     target = pad_over_budget(repo / friction_rel, budgets[friction_rel])
-    git(repo, "add", friction_rel, env=env)
+    # Review prompts require an allocated round. Keep this fixture's roots and
+    # repository registrations inside the smoke run, never the operator's roots.
+    # This is a fixture control, committed before the review target is created.
+    scratch_root = run_dir / "review-scratch"
+    scratch_root.mkdir()
+    config_path = repo / "config" / "dev-model.yaml"
+    source = config_path.read_text(encoding="utf-8")
+    source, replaced = re.subn(
+        r"(?ms)^scratch:\n.*?(?=^[^ \t#\n]|\Z)",
+        lambda _match: (
+            "scratch:\n  roots:\n    - " + json.dumps(str(scratch_root)) + "\n"
+            "  grace_window: " + json.dumps(get(config, "scratch.grace_window")) + "\n"
+            "  worktree_repos:\n    - " + json.dumps(str(repo)) + "\n\n"
+        ),
+        source,
+    )
+    if replaced != 1:
+        raise Refusal("the smoke fixture needs a scratch configuration block")
+    config_path.write_text(source, encoding="utf-8")
+    git(repo, "add", friction_rel, "config/dev-model.yaml", env=env)
     git(repo, "commit", "-q", "-m", "fixture: smoke controls", env=env)
     main_head = git(repo, "rev-parse", "HEAD", env=env)
 
@@ -1575,7 +1594,19 @@ def _read_text(path: Path) -> str:
 
 def lens_tree(ctx: Context, name: str) -> Path:
     """A private clone at the review head, so no lens is handed a tree another uses."""
-    tree = ctx.run_dir / name
+    allocation = subprocess.run(
+        [sys.executable, str(ctx.fixture.engines / "sweep_scratch.py"),
+         "--create-review-round", str(ctx.run_dir / "review-scratch"),
+         "--head", ctx.fixture.review_head],
+        cwd=ctx.fixture.repo, env=ctx.base_env, capture_output=True, text=True, timeout=300,
+    )
+    if allocation.returncode != 0:
+        raise RuntimeError(f"review round allocation failed: {flatten(allocation.stderr)}")
+    receipt = json.loads(allocation.stdout)
+    # Smoke artifacts are deliberately retained for inspection with the run.
+    # The receipt stays outside the disposable round so it can later be retired.
+    (ctx.log_dir / f"{name}-allocation.json").write_text(allocation.stdout, encoding="utf-8")
+    tree = Path(receipt["path"]) / name
     env = fixture_git_env(ctx.base_env)
     git(ctx.run_dir, "clone", "-q", "--no-hardlinks", str(ctx.fixture.origin), str(tree), env=env)
     git(tree, "checkout", "-q", "--detach", ctx.fixture.review_head, env=env)

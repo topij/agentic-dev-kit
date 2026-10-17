@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "d075fb2f3f4dbedf91ca517dca92d31cedda24ab3a0bf8dc864e5004a4e97d52"
+      "sha256": "b8899b996674661cddf36b4a6f959402354e610f704983eb6fae6b2a1dac51df"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -75,7 +75,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "cdecd613b837fadc8d4850c586482c9f0bdeb3dc73a2677dcbacdd131b417435"
+      "sha256": "cb48cc2a5bd9460f66ab47d8ae93bd52554967f53e9b40958f7357d8fc952d7e"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -115,11 +115,11 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "665a21501f88fe3944630de321159a8f1a3822824a980f731baab386dc593e87"
+      "sha256": "d547b46442a160e464becf59ddfef9d223dc89b5e1bc92a1338696a6ad352c36"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "ff7f2d4873b5a56f22eea1b8c96748027c0e0ef994aa5cfcc95d74e49ad87de8"
+      "sha256": "090d2dab9f307b1f73aa205ca2a70d32acf37b0634eff20326dfdbe00dc9fc20"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -567,7 +567,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "0599c5d84257a2e8ef5e649f640d74b7611ac06ed936661d238b8c2c0bb6dfc9"
+      "sha256": "6fcdd11b0643e2c472a2bba551a6153bf91cf69f07bfaf28a3e6d45d57c7f765"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -583,11 +583,14 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "e3fbd84d90c92889d7be5ff0b79f04153fb6ae6c534ca1bdf1c6d540f1309ec3"
+      "sha256": "8706d6522167ffa54d3a7f783c99c46fa3af22ee2dd4a03ccd9a64fc5fe171a6"
     },
     "scripts/sweep_scratch.py": {
+      "required_by": [
+        "scripts/panel_prompt.py"
+      ],
       "role": "engine",
-      "sha256": "eda2699f5d80b0e2416e53d98817782ceb1a79a7076daba54d85400dfc3c1888"
+      "sha256": "80a4be1a693ff48603dcfa35ba8dad670ee5093b4f7aebe89923683da3bafe3b"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -607,7 +610,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "2b1d3a424a5cd89545357d1d5938ca68f80f1b664dba2b92dbce9ba7bb0ed035"
+      "sha256": "8e4dd8a191966ed0ff082b6dae7b9ce636ebd94ca08b2002ee63f20317100e88"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -655,7 +658,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "a4c5e43761a94ed9f02ef03ff67d422a76f73d0bc3d436087039e0abf7911f23"
+      "sha256": "2a5a6c88270385047ae60a9eb23089e10160547c9a7d087a8653016d45f5b8c3"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -683,11 +686,11 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "855ef83ceaf81483f79c057aacb5241fad886c88fc20233637f93d3690bce33b"
+      "sha256": "63246375dde2f8d8702df3f26f97e610a5d0942afdb61164afb9c2efd8e62247"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "8a1e1a50291d89824d1949c8f23b87c59215453cc5f2bc93cca4f04bc51e2379"
+      "sha256": "26312a022936d17f0af3ce7647ca68fb34ee529c41147f85fb25fa6dd4df2fad"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -727,7 +730,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "4dbcb41486ba5b56dbab21b59d7f77fd42b078991d5a03209c63b19ec31a3716"
+      "sha256": "d08ec0f2890593d699a9b6031a17bdc2506924e63fa608ccc879d572f875c062"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

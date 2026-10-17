@@ -122,11 +122,11 @@ settled by the rules above.
   operator-held merge authority are not draft reasons by themselves. Run
   `pr-watch --assert-ready` after ready creation or transition, before review polling.
 - **Behavioral changes to `scripts/pr_watch.py`, `scripts/dev_session.sh`,
-  `scripts/launch_lane.py`, or the profile named by
+  `scripts/launch_lane.py`, `scripts/sweep_scratch.py`, or the profile named by
   `parallel.claude_settings_profile` (`config/claude-lane-settings.json` in this
   repository) are safety-critical.** Read and apply
   `docs/agentic-dev-kit/safety-critical-changes.md` completely before changing any
-  gate, launch-authority, or merge-authority path. This precise root instruction is
+  gate, destructive operation, launch-authority, or merge-authority path. This precise root instruction is
   the Codex binding; Claude's
   path-scoped rule binds the same shared file. `review.safety_critical_paths` in
   `config/dev-model.yaml` is the declared list of these files, and a pull request

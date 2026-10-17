@@ -473,14 +473,15 @@ author re-reading their own diff. **Cite them by name, never by number.**
    finding: `#136` exists *because* a lens reported it, and a change that writes
    into the tree looks identical.
 
-   **Create those copies in the directory that holds the tree you were handed** —
-   beside it, as `<that directory>/mut-<lens>-<short-sha>/` — **never directly
-   under the system temp dir** (`/tmp`, `/private/tmp`, `$TMPDIR`). The scratch
-   sweep (`sweep_scratch.py`) cleans only its configured `scratch.roots` — the
-   kit's default names the Claude Code session scratchpads on macOS — and a copy
-   left among everything else in the system temp dir is never cleaned up
-   (`#900`). Handed no tree, use the session scratch
-   directory your runtime names, and report where the copy went.
+   **Create those copies inside the allocated review round that holds the tree
+   you were handed**, beside it as `<round>/mut-<lens>-<short-sha>/`. Keep private
+   environments and caches there too. Never use the system temp directory itself
+   (`/tmp`, `/private/tmp`, `$TMPDIR`) as a review root. The cockpit allocates the
+   round through `sweep_scratch.py --create-review-round`; `panel_prompt.py`
+   requires a supplied lens tree inside that allocation under `scratch.roots`.
+   If the runtime gives you a different tree, stop and report it rather than
+   creating unmanaged copies elsewhere. The cockpit retains terminal reports and
+   mutation evidence outside the disposable round before retiring it (#900).
 
    The wording above was already right and a lens still hit the refusal —
    round 2 of `#459`'s panel recorded one (the correctness lens, worked around
@@ -587,17 +588,26 @@ author re-reading their own diff. **Cite them by name, never by number.**
    point at them, and why the sha is the field that lets a lens recover on its
    own.
 
-   Build each lens's review tree yourself when the runtime lets you hand one
-   over: a detached worktree at the named sha, outside the repo, under the
-   session scratchpad rather than directly in the system temp dir (**Scratch
-   namespace** has why), namespaced by lens and revision —
+   Allocate a fresh round for this head under an expanded `scratch.roots` entry.
+   Resolve it from the cockpit repository's merged config, not a lens clone's
+   path. If absent, create that exact configured directory and let allocation
+   validate it; do not substitute a top-level temp directory. Keep the allocation
+   receipt and reviewer outputs outside the round. Allocation prints JSON;
+   retain it before launching anything and read its `path` as `<round>`:
 
    ```sh
-   git worktree add --detach <scratch>/lens-<name>-<short-sha> <sha>
+   uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
    ```
 
-   — and name that path in the launch prompt (remove the worktrees when the
-   round ends). The cockpit is the only party that knows the target;
+   Build each lens's detached review tree at the named sha inside that round,
+   namespaced by lens and revision —
+
+   ```sh
+   git worktree add --detach <round>/lens-<name>-<short-sha> <sha>
+   ```
+
+   — and name that absolute, unaliased path with `panel_prompt.py --scratch`.
+   The prompt builder verifies its allocated parent and head. The cockpit is the only party that knows the target;
    runtime-provided isolation routinely lands at the wrong ref (`#75` holds
    the occurrence data; read it there rather than a figure here, and note its
    own tallies say they are **approximate**). A cockpit-built tree turns that
@@ -647,6 +657,30 @@ author re-reading their own diff. **Cite them by name, never by number.**
      --lenses <names of the lenses that actually ran> \
      --head <polled-sha>
    ```
+
+   **Retire each round before starting another.** After recording its receipt (or
+   recording findings and the reviewed head for a fix round), join or stop every
+   reviewer and descendant verification process. Preserve terminal reports,
+   mutation diffs, restoration evidence and relevant logs outside `<round>`;
+   do not retain entire dependency trees as evidence. Remove only this round's
+   registered lens worktrees with `git worktree remove` after checking their
+   status. Then preview and apply targeted retirement using the allocation
+   receipt:
+
+   ```sh
+   uv run <engine-dir>/sweep_scratch.py --finish-review-round <receipt-outside-round>
+   uv run <engine-dir>/sweep_scratch.py --finish-review-round <receipt-outside-round> --apply --reviewers-finished
+   ```
+
+   `--reviewers-finished` is the cockpit's attestation of completed processes and
+   retained evidence; the engine cannot discover or terminate them. It exempts
+   only the identity-matched allocation from the age gate and retains dependency
+   and filesystem refusals. A `kept` result or interrupted cleanup is unfinished
+   cleanup: report the exact residual path and reason. Do not bypass a refusal,
+   reset timestamps or broaden `scratch.roots`. Bare fixture repositories remain
+   protected (#997). On an interrupted review, preserve its receipt and resume
+   its process/report accounting before retirement. A normal age sweep cannot
+   reclaim a fresh round because it retains the configured grace window.
 
    A standard pull request's one-lens full pass records `fallback:lens`, with
    `--lenses` naming exactly that one lens. The engine refuses `fallback:lens` on

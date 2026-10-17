@@ -55,6 +55,7 @@ complete.
 | `repository-state-read` | required | Read the current symbolic branch or explicitly classify detached HEAD, plus working-tree state. Empty branch output is not ready: when no symbolic branch exists, resolve the exact commit and report `DETACHED at <sha>`. Failure to establish either state is a hard stop because unfinished local work would otherwise disappear from classification. |
 | `forge-pr-read` | optional | Prove authenticated, complete pagination for open pull requests and for each pull request's review submissions, issue comments, and inline comments, independent of any local acknowledgement or seen-set. List metadata or an acknowledgement-filtered view alone is not ready. If the forge cannot prove thread resolution, keep an actionable finding as a candidate and label resolution unverified. Unavailability or suspected truncation at either layer degrades to `PRs unavailable: <reason>` and must never render as an empty list. |
 | `ci-cron-read` | optional | Use the configured or project-native health mechanism. Unavailability degrades to `CI/cron: unavailable: <reason>`; it is not an all-clear. |
+| `scratch-report` | optional | Run `<engine-dir>/sweep_scratch.py --disk --json` when scratch is configured. Report available disk space, stale entries and protected leftovers; unavailable engine, scan or disk data is an explicit gap. Never apply cleanup during session-start. |
 | `tracker-read` | optional | Read a complete field-limited backlog from `<tracker>`. Missing config, credentials, client, or complete pagination degrades to an explicit tracker gap; discard partial payloads and continue. |
 | `config-drift-read` | optional when configured | Run only when the project defines an apply/verify mechanism. Failure renders `config drift: unavailable (<reason>)`; absence of such a project mechanism omits the capability entirely. |
 | `archive-remediation-read` | conditional | Required before promoting a candidate to `Now`. If the scoped archive lookup cannot run, keep that candidate out of `Now`, name the remediation gap, and continue with a degraded briefing. |
@@ -100,12 +101,21 @@ source that failed on the retry.
 | Open PRs         | `gh pr list` (or its REST equivalent, `gh api --paginate` on the `pulls` route) plus a non-acknowledging `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
 | Working tree     | `git status --short` plus a symbolic-branch read or explicit `DETACHED at <sha>` classification — unfinished business from last session |
 | CI/cron health   | your cron/CI runner's status command (adapt to your infra — e.g. a wrapper script that logs recent job outcomes)                         |
+| Disk / scratch | `<engine-dir>/sweep_scratch.py --disk --json` — preserve root scope, available bytes, sizes and keep reasons; it cannot inventory directories outside configured roots |
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
 | Narrative archives | `<handoff-history>` + `<friction-log-archive>` — deliberately **not** part of the gather and never read whole; grepped per-candidate in *Remediation check*, and only for a candidate you are about to promote to 🔴 |
 
 ### 0 · Gather (run in parallel)
 
 Fire these together — they're independent.
+
+Gather the read-only disk/scratch report with the other sources. Include a
+`Disk / scratch:` line in the briefing, naming available space and stale or
+protected leftovers from the command output, stamped with revision and date.
+Name refused or absent roots and unavailable disk data. A report limited to
+configured roots is not a whole-machine all-clear; recurring pressure with no
+sweepable entries can mean unmanaged review roots or protected fixture repos.
+Do not expand roots or delete anything as part of this briefing.
 
 **A source that fails is reported as unavailable, never as its empty value.** A
 non-zero exit, a missing binary, or an absent credential returns nothing — and
@@ -491,6 +501,7 @@ something already classified 🟡 is later raised to 🔴, it gets the check the
 
 Where things stand
   • Environment: <cloud | local | unknown> · <evidence or invocation context>
+  • Disk / scratch: <available space, stale/protected paths and reasons, command/revision/date | unavailable: reason>
   • <branch> (<clean | N uncommitted/untracked>) · <N open PRs | PRs unavailable: reason> · CI/cron: <all green | N failed/skipped | unavailable: reason>
   • Workstreams: <the entry names under ## Workstreams, one line>
   • Last session: <one-line theme from the newest session entry — context, not an assignment>

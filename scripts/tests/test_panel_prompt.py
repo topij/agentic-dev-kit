@@ -153,6 +153,7 @@ def repo(tmp_path: Path) -> Path:
     # The real doctrine, so the contract these tests assert on is the shipped one.
     (root / DOCTRINE).write_text(doctrine_text())
     (root / "config" / "dev-model.yaml").write_text(
+        f"scratch:\n  roots: [{str(root.parent / 'scratch-root')!r}]\n  grace_window: 24h\n  worktree_repos: [{str(root)!r}]\n"
         "vcs:\n  protected_branch: main\n"
         "review:\n"
         "  fallback_panel:\n"
@@ -192,7 +193,18 @@ def _revs(root: Path) -> tuple[str, str]:
     return _git(root, "rev-parse", "HEAD~1"), _git(root, "rev-parse", "HEAD")
 
 
+_DEFAULT_TREES: dict[tuple[str, str], str] = {}
+
+
 def _run(root: Path, *args: str) -> subprocess.CompletedProcess:
+    if "--scratch" not in args and "--agent-definition" not in args and "--head" in args:
+        rev = str(args[args.index("--head") + 1])
+        if _run_ok(root, "rev-parse", "--verify", f"{rev}^{{commit}}"):
+            head = _git(root, "rev-parse", f"{rev}^{{commit}}")
+            key = (str(root), head)
+            if key not in _DEFAULT_TREES:
+                _DEFAULT_TREES[key] = _detached_tree(root, root.parent, head)
+            args = (*args, "--scratch", _DEFAULT_TREES[key])
     return subprocess.run(
         [sys.executable, str(ENGINE), "--root", str(root), *args],
         cwd=root,
@@ -259,10 +271,10 @@ def test_narrative_preflight_is_quoted_and_names_the_comparison(repo):
     commands = [line for line in out.stdout.splitlines() if line.startswith("uv run ")]
     invocation = next(shlex.split(line) for line in commands if "check_record_prose.py" in line)
     assert invocation[:5] == ["uv", "run", "--no-config", "--no-project", "--isolated"]
-    assert invocation[-7:] == ["--root", str(repo), "--base", base, "--head", head, "--json"]
+    assert invocation[-7:] == ["--root", _DEFAULT_TREES[(str(repo), head)], "--base", base, "--head", head, "--json"]
     spec = json.loads(invocation[invocation.index("-c") + 2])
     assert [row[0] for row in spec] == ["kitconfig", "__main__"]
-    assert spec[-1][1] == str(repo / "scripts/check_record_prose.py")
+    assert spec[-1][1] == str(Path(_DEFAULT_TREES[(str(repo), head)]) / "scripts/check_record_prose.py")
 
 
 @pytest.mark.parametrize("layout", ["scripts/devkit", "tools/vendor kit", "."])
@@ -285,7 +297,7 @@ def test_preflight_command_uses_a_real_checker_in_the_configured_directory(repo,
     assert out.returncode == 0, out.stderr
     commands = [shlex.split(line) for line in out.stdout.splitlines() if line.startswith("uv run ")]
     spec = json.loads(commands[-1][commands[-1].index("-c") + 2])
-    assert spec[-1][1] == str(checker)
+    assert spec[-1][1] == str(Path(_DEFAULT_TREES[(str(repo), head)]) / layout / "check_record_prose.py")
 
 
 @pytest.mark.parametrize("shape", [
@@ -773,13 +785,18 @@ def test_the_no_worktree_write_safety_instruction_is_present(repo):
     """
     base, head = _revs(repo)
     out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
-    assert "do not write into any tree you were handed" in out.stdout
-    assert "No worktree was provided" in out.stdout
+    assert "No writes in the tree you were given" in out.stdout
+    assert "Caller-supplied scratch path" in out.stdout
 
 
 def _detached_tree(repo: Path, tmp_path: Path, rev: str, name: str = "lens-x") -> str:
     """A real detached worktree at ``rev`` — what `--scratch` is required to name."""
-    tree = tmp_path / "scratch" / name
+    sweep = _load().sweep_scratch
+    settings = sweep.load_settings(repo / "config/dev-model.yaml", root=repo)
+    scratch_root = repo.parent / "scratch-root"
+    scratch_root.mkdir(exist_ok=True)
+    receipt = sweep.create_review_round(str(scratch_root), rev, settings, repo)
+    tree = Path(receipt["path"]) / name
     _git(repo, "worktree", "add", "-q", "--detach", str(tree), rev)
     return str(tree)
 
@@ -801,7 +818,12 @@ def test_a_provided_worktree_is_named_and_the_no_worktree_warning_is_dropped(rep
 
 def test_an_empty_git_root_reports_state_without_claiming_a_checkout(repo, tmp_path):
     base, head = _revs(repo)
-    empty = tmp_path / "empty-root"
+    sweep = _load().sweep_scratch
+    settings = sweep.load_settings(repo / "config/dev-model.yaml", root=repo)
+    scratch_root = repo.parent / "scratch-root"
+    scratch_root.mkdir(exist_ok=True)
+    receipt = sweep.create_review_round(str(scratch_root), head, settings, repo)
+    empty = Path(receipt["path"]) / "empty-root"
     empty.mkdir()
     database = empty / ".git"
     _git(repo, "clone", "-q", "--bare", str(repo), str(database))
@@ -961,7 +983,7 @@ def test_a_nested_directory_is_not_a_review_worktree_root(repo, tmp_path):
 
 
 @pytest.mark.parametrize("kind", ["symlink", "relative"])
-def test_a_worktree_root_alias_is_accepted(repo, tmp_path, kind):
+def test_a_worktree_root_alias_is_refused(repo, tmp_path, kind):
     base, head = _revs(repo)
     tree = Path(_detached_tree(repo, tmp_path, head))
     alias = tmp_path / "alias"
@@ -971,9 +993,8 @@ def test_a_worktree_root_alias_is_accepted(repo, tmp_path, kind):
         repo, "--lens", "adversarial", "--head", head, "--base", base,
         "--branch", "b", "--scratch", scratch,
     )
-    assert out.returncode == 0, out.stderr
-    assert scratch in out.stdout
-    assert "Caller-supplied scratch path" in out.stdout
+    assert out.returncode == 2
+    assert "absolute path without aliases" in out.stderr
 
 
 def test_a_scratch_path_that_is_not_a_git_tree_is_refused(repo, tmp_path):
@@ -1078,31 +1099,36 @@ def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
     assert "Scratch namespace" in out.stdout
 
 
-@pytest.mark.parametrize(
-    "scratch, placement",
-    [
-        pytest.param(True, "**beside the tree you were handed", id="handed-tree"),
-        pytest.param(False, "**in the session scratch directory your runtime names", id="no-tree"),
-    ],
-)
-def test_lens_scratch_placement_names_the_handed_tree_or_the_session_scratch(
-    repo, tmp_path, scratch, placement
-):
-    """#900: the scratch sweep cleans only its configured roots, so a lens copy made
-    directly under the system temp dir is never cleaned up. The early reminder names
-    where the copy goes — beside a handed tree, or with none the session scratch
-    directory — ahead of the quoted contract item that carries the full rule.
-    """
+def test_lens_scratch_placement_names_the_allocated_parent(repo, tmp_path):
     base, head = _revs(repo)
-    extra = ["--scratch", _detached_tree(repo, tmp_path, head)] if scratch else []
-    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b", *extra)
+    tree = _detached_tree(repo, tmp_path, head)
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base,
+               "--branch", "b", "--scratch", tree)
     assert out.returncode == 0, out.stderr
-    early = f"{placement}, never directly under the system temp dir**"
-    contract = "**Create those copies in the directory that holds the tree you were handed**"
+    early = "**beside the tree you were handed, never directly under the system temp dir**"
+    contract = "**Create those copies inside the allocated review round"
     heading = "## The contract every lens gets"
     assert out.stdout.index(early) < out.stdout.index(heading) < out.stdout.index(contract)
-    other = "**in the session scratch directory" if scratch else "**beside the tree you were handed"
-    assert other not in out.stdout
+    assert "Its parent is the allocated review round" in out.stdout
+
+
+def test_cli_cannot_omit_a_managed_review_tree(repo):
+    base, head = _revs(repo)
+    out = subprocess.run([sys.executable, str(ENGINE), "--root", str(repo),
+                          "--lens", "adversarial", "--head", head, "--base", base],
+                         cwd=repo, capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "requires --scratch" in out.stderr
+
+
+def test_detached_checkout_outside_managed_round_is_refused(repo, tmp_path):
+    base, head = _revs(repo)
+    unmanaged = tmp_path / "unmanaged-review"
+    _git(repo, "worktree", "add", "--detach", str(unmanaged), head)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base,
+               "--scratch", str(unmanaged))
+    assert out.returncode == 2
+    assert "allocate a fresh review round" in out.stderr
 
 
 def test_the_scratch_namespace_reminder_survives_with_a_provided_worktree(repo, tmp_path):
@@ -1679,7 +1705,7 @@ def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel, rec
     (root / ".git").mkdir()
     engines = root / engine_rel
     for relative in (
-        "panel_prompt.py", "kit_doctor.py", "lib/kitconfig.py",
+        "panel_prompt.py", "kit_doctor.py", "sweep_scratch.py", "lib/kitconfig.py",
         "tests/_repo_layout.py", "tests/conftest.py", "tests/test_panel_prompt.py",
     ):
         destination = engines / relative
@@ -1891,11 +1917,20 @@ def test_loose_object_forwards_the_probe_stderr(tmp_path, monkeypatch):
         _loose_object(tmp_path, "1" * 40)
 
 
+def _allocated_clone_path(repo, head, name):
+    sweep = _load().sweep_scratch
+    settings = sweep.load_settings(repo / "config/dev-model.yaml", root=repo)
+    scratch_root = repo.parent / "scratch-root"
+    scratch_root.mkdir(exist_ok=True)
+    receipt = sweep.create_review_round(str(scratch_root), head, settings, repo)
+    return Path(receipt["path"]) / name
+
+
 def test_generated_preflight_uses_supplied_review_tree(executable_preflight, tmp_path):
     import shlex
 
     root, base, head = executable_preflight
-    scratch = tmp_path / "review"
+    scratch = _allocated_clone_path(root, head, "review")
     subprocess.run(["git", "clone", "--no-hardlinks", str(root), str(scratch)],
                    check=True, capture_output=True)
     _git(scratch, "config", "gc.auto", "0")
@@ -1921,7 +1956,7 @@ def test_generated_preflight_does_not_fetch_missing_engine_blobs(executable_pref
 
     root, base, head = executable_preflight
     _git(root, "config", "uploadpack.allowFilter", "true")
-    partial = tmp_path / "partial"
+    partial = _allocated_clone_path(root, head, "partial")
     subprocess.run(["git", "clone", "--filter=blob:none", "--no-checkout", root.as_uri(), str(partial)],
                    capture_output=True, check=True)
     _git(partial, "update-ref", "--no-deref", "HEAD", head)
@@ -1942,3 +1977,35 @@ def test_generated_preflight_does_not_fetch_missing_engine_blobs(executable_pref
     subprocess.run(["git", "cat-file", "blob", spec[0][2]], cwd=partial,
                    capture_output=True, timeout=30, env={**os.environ, "GIT_NO_LAZY_FETCH": "0"})
     assert marker.exists()
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_scratch_authority_import_cannot_be_shadowed_by_lib(repo, tmp_path, managed):
+    """A copied engine must enforce the sibling authority even with a lib impostor."""
+    engines = tmp_path / "copied-engines"
+    engines.mkdir()
+    for name in ("panel_prompt.py", "kit_doctor.py", "sweep_scratch.py"):
+        shutil.copyfile(ENGINE.parent / name, engines / name)
+    shutil.copytree(ENGINE.parent / "lib", engines / "lib")
+    marker = tmp_path / "shadow-imported"
+    (engines / "lib/sweep_scratch.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).touch()\n"
+        "def load_settings(*args, **kwargs): return None\n"
+        "def require_review_scratch(*args, **kwargs): return None\n",
+        encoding="utf-8",
+    )
+    base, head = _revs(repo)
+    if managed:
+        tree = _detached_tree(repo, tmp_path, head)
+    else:
+        tree = str(tmp_path / "unmanaged")
+        subprocess.run(["git", "clone", "--no-hardlinks", str(repo), tree],
+                       check=True, capture_output=True)
+        _git(Path(tree), "checkout", "--detach", head)
+    result = subprocess.run(
+        [sys.executable, str(engines / "panel_prompt.py"), "--root", str(repo),
+         "--lens", "adversarial", "--head", head, "--base", base, "--scratch", tree],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert result.returncode == (0 if managed else 2), result.stderr
+    assert not marker.exists()

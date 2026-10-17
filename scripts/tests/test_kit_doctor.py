@@ -110,6 +110,7 @@ review:
     )
     engine = root / engines
     shutil.copy2(ENGINE_DIR / "panel_prompt.py", engine / "panel_prompt.py")
+    shutil.copy2(ENGINE_DIR / "sweep_scratch.py", engine / "sweep_scratch.py")
     shutil.copy2(ENGINE_DIR / "kit_doctor.py", engine / "kit_doctor.py")
     shutil.copytree(ENGINE_DIR / "lib", engine / "lib")
     return root
@@ -2745,6 +2746,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
     # is where such a file would be authored. This is the guard that replaced
     # the withdrawn scanner, and it costs five lines instead of thirty-five.
     assert set(graph) == {
+        "scripts/sweep_scratch.py",
         "scripts/lib/atomic_write.py",
         "scripts/lib/kitconfig.py",
         "scripts/kit_doctor.py",
@@ -4236,10 +4238,6 @@ _KNOWN_PRE_EXISTING_HARDCODED_ENGINE_PATHS: dict[str, list[str]] = {
         r"uv run scripts/archive_plan_sessions.py --target-lines <budget>  # sweep to a line budget",
         r"uv run scripts/archive_plan_sessions.py --dry-run         # report only",
         r"uv run scripts/archive_plan_sessions.py --plan docs/handoff.md --history docs/handoff-history.md",
-    ],
-    "scripts/panel_prompt.py": [
-        r"uv run scripts/panel_prompt.py --lens adversarial --head <sha>",
-        r"uv run scripts/panel_prompt.py --lens correctness --head <sha> \\",
     ],
     "scripts/check_memory_budget.py": [
         r"python3 scripts/check_memory_budget.py            # report",

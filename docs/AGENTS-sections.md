@@ -29,8 +29,8 @@ status in the configured handoff, not in `AGENTS.md`.
   workstream the session worked on.
 - For customer-facing gates, destructive operations, recovery paths, security work,
   and behavioral changes to the configured `<engine-dir>/pr_watch.py`,
-  `<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, or the profile named
-  by `parallel.claude_settings_profile` (shipped as
+  `<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`,
+  `<engine-dir>/sweep_scratch.py`, or the profile named by `parallel.claude_settings_profile` (shipped as
   `config/claude-lane-settings.json`), read and apply
   `docs/agentic-dev-kit/safety-critical-changes.md`. Green CI is necessary but not
   sufficient; require independent review and operator sign-off.

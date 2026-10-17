@@ -95,6 +95,23 @@ Usage (``<engine-dir>`` is ``paths.engines``):
     uv run <engine-dir>/sweep_scratch.py                          # report
     uv run <engine-dir>/sweep_scratch.py --json                   # machine-readable report
     uv run <engine-dir>/sweep_scratch.py --apply --older-than 7d  # remove stale entries
+    uv run <engine-dir>/sweep_scratch.py --disk --json           # disk + scratch tripwire
+    uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
+    uv run <engine-dir>/sweep_scratch.py --finish-review-round <receipt-outside-round>
+    uv run <engine-dir>/sweep_scratch.py --finish-review-round <receipt-outside-round> --apply --reviewers-finished
+
+Review-round retirement is a separate ownership-based operation, not an age sweep.
+The caller retains the allocation receipt outside the round, terminates or joins
+every reviewer and descendant process, saves the terminal reports outside it,
+and removes its registered worktrees before attesting ``--reviewers-finished``.
+The engine cannot infer process completion or verify a review receipt. It verifies
+allocation and directory identity, then exempts ONLY that round from the age gate.
+Every repository-dependency and filesystem refusal still applies. A kept round
+exits 1 and must be reported, not silently abandoned or retried with weaker guards.
+The caller must not allow concurrent writes during retirement; this is not a
+security boundary against a writer with the same filesystem access. An interrupted
+retirement may leave a partially removed round. Preserve the external receipt and
+report the residual path; a missing or mismatched marker refuses a retry.
 
 Ages are ``<n>s``, ``<n>m``, ``<n>h`` or ``<n>d``.
 
@@ -121,6 +138,7 @@ import string
 import subprocess
 import sys
 import time
+import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -131,6 +149,9 @@ LIVE = "live-worktree"
 GRACE = "in-grace"
 STALE = "stale"
 UNCLASSIFIED = "unclassified"
+
+ROUND_MARKER = ".devkit-review-round.json"
+ROUND_KEYS = {"kind", "version", "id", "head", "root", "path", "root_identity", "identity"}
 
 _AGE_RE = re.compile(r"^(\d+)([smhd])$")
 _AGE_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -737,6 +758,142 @@ def remove_entry(entry: str, root: str, identity: tuple[int, int] | None) -> Non
         raise Refused("neither a file nor a directory")
 
 
+# A round is allocated by the cockpit, not inferred from a directory's name or
+# age. Its receipt is retained OUTSIDE the round before any reviewer is launched.
+# This is ownership/correlation evidence, not authentication against a writer
+# with the cockpit's filesystem access. The caller must finish every reviewer
+# and descendant process before asking for immediate retirement.
+def _round_root(path: str, settings: Settings, repo: Path) -> list[str]:
+    roots = [expand_root(raw, root=repo).rstrip("/") or "/" for raw in settings.roots]
+    if path not in roots:
+        raise ConfigError("review round root is not an expanded scratch.roots entry")
+    status, reason = validate_root(path, guarded_paths(settings.repos))
+    if status != "ok":
+        raise ConfigError(f"review round root unavailable: {reason or status}")
+    # A configured system temp directory would put unrelated users' artifacts
+    # under a disposable-root policy. It is not a review namespace.
+    if path in {"/tmp", "/private/tmp", os.path.realpath(os.environ.get("TMPDIR", "/tmp"))}:
+        raise ConfigError("a system temp directory itself is not a review round root")
+    for worktree in registered_worktrees(settings.repos):
+        # A root may contain a review worktree from another round, but may not
+        # sit inside a worktree. Otherwise allocation puts disposable copies in
+        # somebody's checkout and can make them part of a later git add.
+        if _holds(worktree, path) is not False:
+            raise ConfigError(f"review round root is inside a registered worktree: {worktree}")
+    return roots
+
+
+def _read_round_json(path: Path) -> dict:
+    """Bounded regular-file read; never block on a FIFO or follow a final link."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1 or st.st_size > 16384:
+            raise ConfigError("review round record must be a small, unaliased regular file")
+        raw = os.read(fd, 16385)
+    finally:
+        os.close(fd)
+    try:
+        record = json.loads(raw)
+    except (ValueError, UnicodeError) as exc:
+        raise ConfigError("invalid review round record") from exc
+    if not isinstance(record, dict) or set(record) != ROUND_KEYS:
+        raise ConfigError("invalid review round record shape")
+    return record
+
+
+def create_review_round(root: str, head: str, settings: Settings, repo: Path) -> dict:
+    """Allocate a private, fresh direct child; return its caller-retained receipt."""
+    _round_root(root, settings, repo)
+    if not isinstance(head, str) or re.fullmatch(r"[0-9a-f]{40}", head) is None:
+        raise ConfigError("--head must be the full reviewed commit SHA")
+    root_identity = _identity(root)
+    token = uuid.uuid4().hex
+    path = Path(root) / f"review-{token}"
+    path.mkdir(mode=0o700)
+    record = {
+        "kind": "devkit-review-round", "version": 1, "id": token, "head": head,
+        "root": root, "path": str(path), "root_identity": list(root_identity),
+        "identity": list(_identity(str(path))),
+    }
+    fd = os.open(path / ROUND_MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        json.dump(record, handle, sort_keys=True)
+        handle.flush()
+        os.fsync(handle.fileno())
+    validate_review_round(record, settings, repo, head=head)
+    return record
+
+
+def validate_review_round(record: dict, settings: Settings, repo: Path, *, head: str | None = None) -> list[str]:
+    """Verify allocation identity and namespace; does not attest process liveness."""
+    if not isinstance(record, dict) or set(record) != ROUND_KEYS:
+        raise ConfigError("invalid review round record shape")
+    if (record["kind"] != "devkit-review-round" or type(record["version"]) is not int
+            or record["version"] != 1 or not isinstance(record["id"], str)
+            or re.fullmatch(r"[0-9a-f]{32}", record["id"]) is None
+            or not isinstance(record["head"], str) or re.fullmatch(r"[0-9a-f]{40}", record["head"]) is None
+            or not isinstance(record["root"], str) or not isinstance(record["path"], str)):
+        raise ConfigError("invalid review round record fields")
+    for key in ("identity", "root_identity"):
+        value = record[key]
+        if not isinstance(value, list) or len(value) != 2 or any(type(n) is not int for n in value):
+            raise ConfigError("invalid review round filesystem identity")
+    roots = _round_root(record["root"], settings, repo)
+    path = record["path"]
+    if path != str(Path(record["root"]) / f"review-{record['id']}"):
+        raise ConfigError("review round path does not match its allocation")
+    st = os.lstat(path)
+    if not stat.S_ISDIR(st.st_mode) or (st.st_dev, st.st_ino) != tuple(record["identity"]):
+        raise ConfigError("review round was replaced or is not a directory")
+    if _identity(record["root"]) != tuple(record["root_identity"]):
+        raise ConfigError("review round root was replaced")
+    if head is not None and record["head"] != head:
+        raise ConfigError("review round belongs to another reviewed head")
+    if _read_round_json(Path(path) / ROUND_MARKER) != record:
+        raise ConfigError("review round allocation receipt does not match its marker")
+    return roots
+
+
+def require_review_scratch(path: str, head: str, settings: Settings, repo: Path) -> str:
+    """A lens tree is a direct child of a verified allocated review round."""
+    if not os.path.isabs(path) or os.path.realpath(path) != path:
+        raise ConfigError("review scratch must be an absolute path without aliases")
+    parent = Path(path).parent
+    record = _read_round_json(parent / ROUND_MARKER)
+    validate_review_round(record, settings, repo, head=head)
+    if record["path"] != str(parent):
+        raise ConfigError("review scratch is not inside its allocated round")
+    return str(parent)
+
+
+def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: bool = False,
+                        reviewers_finished: bool = False) -> Outcome:
+    """Retire only a caller-owned finished round, keeping dependency protections.
+
+    The age exemption applies only to an allocated, identity-matched round whose
+    caller attests reviewers and descendant processes have ended. Unowned session
+    entries, reused paths, live worktrees, borrowed stores, bare fixture repos,
+    aliases and unreadable entries are NOT exempt. In particular this does not
+    address #997 by guessing that a bare repository is a disposable fixture.
+    """
+    if apply and not reviewers_finished:
+        raise ConfigError("--apply retirement requires --reviewers-finished after all processes end and evidence is retained")
+    roots = validate_review_round(record, settings, repo)
+    worktrees = registered_worktrees(settings.repos)
+    stores = repository_stores(worktrees)
+    entry = classify(record["path"], device=record["root_identity"][0], worktrees=worktrees,
+                     stores=stores, roots=[r for r in roots if r != record["root"]],
+                     grace_seconds=0, now=time.time())
+    if entry.owner != STALE:
+        return Outcome(record["path"], "kept", f"{entry.owner}: {entry.reason}")
+    if not apply:
+        return Outcome(record["path"], "eligible", "caller must finish processes and retain evidence before applying")
+    validate_review_round(record, settings, repo)
+    remove_entry(record["path"], record["root"], tuple(record["identity"]))
+    return Outcome(record["path"], "removed")
+
+
 # --------------------------------------------------------------------------- #
 # report + apply
 # --------------------------------------------------------------------------- #
@@ -901,22 +1058,56 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--apply", action="store_true", help="remove stale entries")
     parser.add_argument("--older-than", help="with --apply: minimum age of a removed entry")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--create-review-round", metavar="ROOT", help="allocate a round under an expanded configured scratch root; print its JSON receipt")
+    modes.add_argument("--finish-review-round", metavar="RECEIPT", type=Path, help="report or retire the exact round named by a caller-retained allocation receipt")
+    parser.add_argument("--head", help="with --create-review-round: full reviewed SHA")
+    parser.add_argument("--reviewers-finished", action="store_true", help="attest all round processes ended and review evidence is retained outside it")
+    parser.add_argument("--disk", action="store_true", help="include available disk space for the repository and configured scratch roots")
     args = parser.parse_args(argv)
-    if args.apply != (args.older_than is not None):
+    round_mode = args.create_review_round is not None or args.finish_review_round is not None
+    if not round_mode and args.apply != (args.older_than is not None):
         parser.error("--apply and --older-than go together")
+    if round_mode and (args.older_than is not None or args.disk):
+        parser.error("round operations do not accept --older-than or --disk")
+    if args.create_review_round is not None and (args.apply or args.reviewers_finished or args.head is None):
+        parser.error("round allocation requires --head and accepts no removal flags")
+    if args.head is not None and args.create_review_round is None:
+        parser.error("--head requires --create-review-round")
+    if args.reviewers_finished and (args.finish_review_round is None or not args.apply):
+        parser.error("--reviewers-finished requires --finish-review-round and --apply")
 
     root = repo_root()
     try:
-        older_than = parse_age(args.older_than, "--older-than") if args.apply else None
+        older_than = parse_age(args.older_than, "--older-than") if args.older_than is not None else None
         settings = load_settings(args.config, root=root)
+        if args.create_review_round is not None:
+            print(json.dumps(create_review_round(args.create_review_round, args.head, settings, root), sort_keys=True))
+            return 0
+        if args.finish_review_round is not None:
+            record = _read_round_json(args.finish_review_round)
+            if isinstance(record.get("path"), str) and args.finish_review_round.resolve().is_relative_to(record["path"]):
+                raise ConfigError("retain the allocation receipt outside the disposable round")
+            outcome = finish_review_round(record, settings, root, apply=args.apply,
+                                          reviewers_finished=args.reviewers_finished)
+            print(json.dumps(asdict(outcome)))
+            return 1 if outcome.action == "kept" else 0
         reports = survey(settings, root=root, now=time.time())
         outcomes = (
             apply(reports, settings, older_than=older_than) if older_than is not None else None
         )
-    except ConfigError as exc:
+    except (ConfigError, Refused, OSError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    disks = []
+    if args.disk:
+        for path in dict.fromkeys([str(root), *(r.root for r in reports)]):
+            try:
+                usage = shutil.disk_usage(path)
+                disks.append({"path": path, "total_bytes": usage.total, "free_bytes": usage.free})
+            except OSError as exc:
+                disks.append({"path": path, "unavailable": str(exc)})
     if args.json:
         payload: dict[str, object] = {
             "roots": [
@@ -933,8 +1124,13 @@ def main(argv: list[str] | None = None) -> int:
         }
         if outcomes is not None:
             payload["outcomes"] = [asdict(o) for o in outcomes]
+        if args.disk:
+            payload["disk"] = disks
         print(json.dumps(payload, indent=2))
     else:
+        for disk in disks:
+            print(f"disk {disk['path']}: " + (f"unavailable: {disk['unavailable']}" if "unavailable" in disk
+                                             else f"{format_size(disk['free_bytes'])} available"))
         print(render(reports, outcomes))
 
     refused = any(r.status == "refused" for r in reports)
