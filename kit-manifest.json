@@ -119,7 +119,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "ff7f2d4873b5a56f22eea1b8c96748027c0e0ef994aa5cfcc95d74e49ad87de8"
+      "sha256": "090d2dab9f307b1f73aa205ca2a70d32acf37b0634eff20326dfdbe00dc9fc20"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -567,7 +567,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "8eb2009efd31dee1b1a74eec2cb1670a3dd79272d365136a10257d7662251a93"
+      "sha256": "6fcdd11b0643e2c472a2bba551a6153bf91cf69f07bfaf28a3e6d45d57c7f765"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -583,7 +583,7 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "e3fbd84d90c92889d7be5ff0b79f04153fb6ae6c534ca1bdf1c6d540f1309ec3"
+      "sha256": "8706d6522167ffa54d3a7f783c99c46fa3af22ee2dd4a03ccd9a64fc5fe171a6"
     },
     "scripts/sweep_scratch.py": {
       "required_by": [
@@ -658,7 +658,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "a4c5e43761a94ed9f02ef03ff67d422a76f73d0bc3d436087039e0abf7911f23"
+      "sha256": "2a5a6c88270385047ae60a9eb23089e10160547c9a7d087a8653016d45f5b8c3"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -686,11 +686,11 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "4fb94b15cecff41546f103bf3623b7b3e274f2cf3c33f9913c450c4a83291ab1"
+      "sha256": "63246375dde2f8d8702df3f26f97e610a5d0942afdb61164afb9c2efd8e62247"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "0bf505bdc0ce79492a7a4757b642497244bc7b6ccc8cb5bf8c95b8c13b70f877"
+      "sha256": "26312a022936d17f0af3ce7647ca68fb34ee529c41147f85fb25fa6dd4df2fad"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

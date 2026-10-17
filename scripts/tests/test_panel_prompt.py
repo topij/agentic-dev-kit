@@ -1977,3 +1977,35 @@ def test_generated_preflight_does_not_fetch_missing_engine_blobs(executable_pref
     subprocess.run(["git", "cat-file", "blob", spec[0][2]], cwd=partial,
                    capture_output=True, timeout=30, env={**os.environ, "GIT_NO_LAZY_FETCH": "0"})
     assert marker.exists()
+
+
+@pytest.mark.parametrize("managed", [False, True])
+def test_scratch_authority_import_cannot_be_shadowed_by_lib(repo, tmp_path, managed):
+    """A copied engine must enforce the sibling authority even with a lib impostor."""
+    engines = tmp_path / "copied-engines"
+    engines.mkdir()
+    for name in ("panel_prompt.py", "kit_doctor.py", "sweep_scratch.py"):
+        shutil.copyfile(ENGINE.parent / name, engines / name)
+    shutil.copytree(ENGINE.parent / "lib", engines / "lib")
+    marker = tmp_path / "shadow-imported"
+    (engines / "lib/sweep_scratch.py").write_text(
+        f"from pathlib import Path\nPath({str(marker)!r}).touch()\n"
+        "def load_settings(*args, **kwargs): return None\n"
+        "def require_review_scratch(*args, **kwargs): return None\n",
+        encoding="utf-8",
+    )
+    base, head = _revs(repo)
+    if managed:
+        tree = _detached_tree(repo, tmp_path, head)
+    else:
+        tree = str(tmp_path / "unmanaged")
+        subprocess.run(["git", "clone", "--no-hardlinks", str(repo), tree],
+                       check=True, capture_output=True)
+        _git(Path(tree), "checkout", "--detach", head)
+    result = subprocess.run(
+        [sys.executable, str(engines / "panel_prompt.py"), "--root", str(repo),
+         "--lens", "adversarial", "--head", head, "--base", base, "--scratch", tree],
+        cwd=repo, capture_output=True, text=True,
+    )
+    assert result.returncode == (0 if managed else 2), result.stderr
+    assert not marker.exists()

@@ -15934,10 +15934,10 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     root_binding_flat = " ".join(root_binding.split())
     assert (
         "`scripts/pr_watch.py`, `scripts/dev_session.sh`, "
-        "`scripts/launch_lane.py`, or the profile named by "
+        "`scripts/launch_lane.py`, `scripts/sweep_scratch.py`, or the profile named by "
         f"`{profile_key}` (`{configured_profile_path}` in this repository) "
         f"are safety-critical.** Read and apply `{doctrine}` completely before "
-        "changing any gate, launch-authority, or merge-authority path."
+        "changing any gate, destructive operation, launch-authority, or merge-authority path."
         in root_binding_flat
     )
     template_binding = template.split(
@@ -15946,7 +15946,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     template_binding_flat = " ".join(template_binding.split())
     assert (
         "path-scoped rule.** Behavioral changes to `{{ENGINE_DIR}}/pr_watch.py`, "
-        "`{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/launch_lane.py`, or the "
+        "`{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/launch_lane.py`, "
+        "`{{ENGINE_DIR}}/sweep_scratch.py`, or the "
         f"profile named by `{profile_key}` (shipped as `{shipped_profile_path}`), "
         "along with customer-facing send paths, destructive operations, and "
         "kill/recovery paths, are governed by "
@@ -15962,7 +15963,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     merge_binding_flat = " ".join(merge_binding.split())
     assert (
         "and behavioral changes to the configured `<engine-dir>/pr_watch.py`, "
-        "`<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, or the profile "
+        "`<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, "
+        "`<engine-dir>/sweep_scratch.py`, or the profile "
         f"named by `{profile_key}` (shipped as `{shipped_profile_path}`), read and "
         f"apply `{doctrine}`. Green CI is necessary but not sufficient; require "
         "independent review and operator sign-off."
@@ -15998,6 +16000,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     )
     claude_frontmatter = yaml.safe_load(claude_rule.split("---", 2)[1])
     assert set(claude_frontmatter["paths"]) == {
+        "scripts/sweep_scratch.py",
+        "scripts/devkit/sweep_scratch.py",
         "scripts/dev_session.sh",
         "scripts/devkit/dev_session.sh",
         "scripts/launch_lane.py",

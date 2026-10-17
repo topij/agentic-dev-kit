@@ -47,10 +47,10 @@ compute and enforces nothing, while the frontmatter of ``.claude/agents/<lens>.m
 applied by the runtime when the cockpit launches the agent named after the lens.
 
 Usage:
-    uv run scripts/panel_prompt.py --lens adversarial --head <sha> --scratch <allocated-round>/lens-adversarial
+    uv run <engine-dir>/panel_prompt.py --lens adversarial --head <sha> --scratch <allocated-round>/lens-adversarial
     uv run <engine-dir>/panel_prompt.py --lens adversarial --agent-definition \\
         > .claude/agents/adversarial.md
-    uv run scripts/panel_prompt.py --lens correctness --head <sha> \\
+    uv run <engine-dir>/panel_prompt.py --lens correctness --head <sha> \\
         --scratch <allocated-round>/lens-correctness-<short-sha> --pr 218 --carry-forward "Rounds 1-3 found everything in
         the author's claims and nothing in the changed content. Invert that."
 
@@ -88,8 +88,12 @@ from kit_doctor import (  # noqa: E402
 # Import the sibling doctor before prepending ``lib``. The advertised
 # regeneration command must reach the exact engine that owns the renderer, not
 # an untracked ``lib/kit_doctor.py`` that happens to shadow it on ``sys.path``.
-sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+# The doctor also prepends lib while loading its own helpers. Restore sibling
+# precedence before importing the scratch authority, then load the shared helpers.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sweep_scratch  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, loads, repo_root  # noqa: E402
 
 REPO_ROOT = repo_root(Path(__file__).resolve())
