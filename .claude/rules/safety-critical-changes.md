@@ -18,6 +18,8 @@ paths:
   # decision is made, not only the one that acts on it.
   - "scripts/pr_watch.py"
   - "scripts/devkit/pr_watch.py"
+  - "scripts/sweep_scratch.py"
+  - "scripts/devkit/sweep_scratch.py"
 # Add your own send-path / gate / kill-path files or globs here. This rule is useful
 # only after its paths match the files that gate sends or destructive/recovery work.
 ---

@@ -1195,3 +1195,189 @@ def test_a_path_that_cannot_be_statted_fails_closed(check, root: Path, base: Pat
         assert check(str(root), [str(locked / "repo")])
     finally:
         locked.chmod(0o700)
+
+
+# Review rounds exempt only caller-owned, finished scratch from the age gate.
+ROUND_HEAD = "a" * 40
+
+
+def _round(root, repo):
+    settings = _settings([root], repo)
+    receipt = sweep.create_review_round(str(root), ROUND_HEAD, settings, repo)
+    return settings, receipt, Path(receipt["path"])
+
+
+def test_finished_round_reclaims_fresh_clones_but_not_another_round(root, repo):
+    settings, receipt, path = _round(root, repo)
+    _, other, sibling = _round(root, repo)
+    _git(repo, "clone", "--no-hardlinks", str(repo), str(path / "lens"))
+    (path / "cache").write_text("disposable")
+    assert _owners(sweep.survey(settings, root=repo, now=time.time()))[path.name] == sweep.GRACE
+    assert sweep.finish_review_round(receipt, settings, repo).action == "eligible"
+    assert path.exists()
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "removed"
+    assert not path.exists()
+    assert sibling.exists()
+    sweep.validate_review_round(other, settings, repo)
+
+
+def test_retirement_requires_process_completion_attestation(root, repo):
+    settings, receipt, path = _round(root, repo)
+    with pytest.raises(sweep.ConfigError, match="reviewers-finished"):
+        sweep.finish_review_round(receipt, settings, repo, apply=True)
+    assert path.exists()
+
+
+@pytest.mark.parametrize("kind", ["registered", "bare", "borrowed", "nested-root"])
+def test_finished_round_keeps_dependency_and_root_protections(root, repo, kind):
+    settings, receipt, path = _round(root, repo)
+    if kind == "registered":
+        _git(repo, "worktree", "add", "--detach", str(path / "lens"))
+    elif kind == "bare":
+        _git(repo, "clone", "--bare", str(repo), str(path / "fixture.git"))
+    elif kind == "borrowed":
+        _git(repo, "clone", "--no-hardlinks", str(repo), str(path / "source"))
+        outside = root.parent / "borrower"
+        _git(repo, "clone", "--shared", str(path / "source"), str(outside))
+        settings.repos.append(outside)
+    else:
+        nested = path / "other-root"
+        nested.mkdir()
+        settings.roots.append(str(nested))
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert path.exists()
+
+
+@pytest.mark.parametrize("kind", ["receipt-id", "receipt-inode", "marker", "replacement", "symlink", "root-replacement", "outside"])
+def test_retirement_rejects_foreign_or_replaced_rounds(root, repo, kind):
+    settings, receipt, path = _round(root, repo)
+    (path / "keep").write_text("preserve")
+    original = path
+    if kind == "receipt-id":
+        receipt["id"] = "f" * 32
+    elif kind == "receipt-inode":
+        receipt["identity"][1] += 1
+    elif kind == "marker":
+        (path / sweep.ROUND_MARKER).write_text("{}")
+    elif kind in ("replacement", "symlink"):
+        original = root / "original"
+        path.rename(original)
+        if kind == "replacement":
+            path.mkdir()
+        else:
+            path.symlink_to(original, target_is_directory=True)
+    elif kind == "root-replacement":
+        moved = root.parent / "moved-root"
+        root.rename(moved)
+        root.mkdir()
+        (moved / path.name).rename(path)
+    else:
+        settings.roots = [str(root.parent / "elsewhere")]
+    with pytest.raises((sweep.ConfigError, OSError)):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert (original / "keep").read_text() == "preserve"
+
+
+def test_prompt_round_binds_head_and_disallows_aliases(root, repo):
+    settings, receipt, path = _round(root, repo)
+    lens = path / "lens"
+    lens.mkdir()
+    assert sweep.require_review_scratch(str(lens), ROUND_HEAD, settings, repo) == str(path)
+    with pytest.raises(sweep.ConfigError, match="another reviewed head"):
+        sweep.require_review_scratch(str(lens), "b" * 40, settings, repo)
+    alias = root / "alias"
+    alias.symlink_to(path, target_is_directory=True)
+    with pytest.raises(sweep.ConfigError, match="aliases"):
+        sweep.require_review_scratch(str(alias / "lens"), ROUND_HEAD, settings, repo)
+
+
+def test_retirement_rechecks_marker_after_scan(root, repo, monkeypatch):
+    settings, receipt, path = _round(root, repo)
+    real_classify = sweep.classify
+
+    def change_marker(*args, **kwargs):
+        result = real_classify(*args, **kwargs)
+        (path / sweep.ROUND_MARKER).write_text("{}")
+        return result
+
+    monkeypatch.setattr(sweep, "classify", change_marker)
+    with pytest.raises(sweep.ConfigError):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert path.exists()
+
+
+def test_round_cli_allocation_report_and_retirement(root, repo):
+    config = repo / "scratch.yaml"
+    config.write_text(f"scratch:\n  roots:\n    - {root}\n  grace_window: 24h\n  worktree_repos:\n    - {repo}\n")
+
+    def cli(*args):
+        return subprocess.run([sys.executable, str(SCRIPT_PATH), "--config", str(config), *args],
+                              cwd=repo, capture_output=True, text=True, timeout=30)
+
+    allocation = cli("--create-review-round", str(root), "--head", ROUND_HEAD)
+    assert allocation.returncode == 0, allocation.stderr
+    record = json.loads(allocation.stdout)
+    path = Path(record["path"])
+    receipt = repo / "receipt.json"
+    receipt.write_text(allocation.stdout)
+    report = cli("--finish-review-round", str(receipt))
+    assert report.returncode == 0, report.stderr
+    assert json.loads(report.stdout)["action"] == "eligible"
+    assert path.exists()
+    refused = cli("--finish-review-round", str(receipt), "--apply")
+    assert refused.returncode == 2
+    assert path.exists()
+    disk = cli("--disk", "--json")
+    assert disk.returncode == 0, disk.stderr
+    assert all("free_bytes" in d for d in json.loads(disk.stdout)["disk"])
+    removed = cli("--finish-review-round", str(receipt), "--apply", "--reviewers-finished")
+    assert removed.returncode == 0, removed.stderr
+    assert json.loads(removed.stdout)["action"] == "removed"
+    assert not path.exists()
+
+
+def test_allocation_refuses_system_temp_as_root(repo, monkeypatch, root):
+    monkeypatch.setenv("TMPDIR", str(root))
+    with pytest.raises(sweep.ConfigError, match="system temp directory"):
+        sweep.create_review_round(str(root), ROUND_HEAD, _settings([root], repo), repo)
+
+
+def test_allocation_refuses_a_root_inside_a_checkout(repo):
+    inside = repo / "scratch"
+    inside.mkdir()
+    with pytest.raises(sweep.ConfigError, match="inside a registered worktree"):
+        sweep.create_review_round(str(inside), ROUND_HEAD, _settings([inside], repo), repo)
+
+
+def test_other_rounds_registered_worktrees_do_not_block_allocation(root, repo):
+    settings, _receipt, path = _round(root, repo)
+    _git(repo, "worktree", "add", "--detach", str(path / "lens"))
+    other = sweep.create_review_round(str(root), ROUND_HEAD, settings, repo)
+    assert Path(other["path"]).is_dir()
+
+
+@pytest.mark.parametrize("kind", ["symlink", "hardlink", "fifo", "oversize", "version-bool"])
+def test_retirement_refuses_unsafe_allocation_markers(root, repo, kind):
+    settings, receipt, path = _round(root, repo)
+    marker = path / sweep.ROUND_MARKER
+    original = marker.read_bytes()
+    marker.unlink()
+    external = repo / "allocation-copy"
+    external.write_bytes(original)
+    if kind == "symlink":
+        marker.symlink_to(external)
+    elif kind == "hardlink":
+        os.link(external, marker)
+    elif kind == "fifo":
+        os.mkfifo(marker)
+    elif kind == "oversize":
+        marker.write_bytes(b" " * 16385)
+    else:
+        receipt["version"] = True
+        marker.write_text(json.dumps(receipt))
+    with pytest.raises((sweep.ConfigError, OSError)):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert external.read_bytes() == original
+    assert path.exists()

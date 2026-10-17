@@ -50,6 +50,7 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
 | `forge-merge-write` | conditional and authority-gated | Required only when the exact head is mergeable and `merge-authority` permits this workflow to merge it. For an isolated lane whose persisted class is `self`, the cockpit must invoke `<engine-dir>/dev_session.sh merge <scope>`; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward `successful-completion`; if it proves failure or remains ambiguous, preserve the exact head and report `incomplete-resumable`. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
+| `scratch-report` | optional | Run `<engine-dir>/sweep_scratch.py --disk --json` when scratch is configured. Report residual paths and keep reasons or an explicit unavailable gap. An age-based `--apply --older-than` sweep requires the operator's approval of the concrete report and age; wrap-up alone does not authorize deletion. |
 
 ### Authority contract
 
@@ -85,6 +86,16 @@ sufficient. Non-interactive runs never wait for approval and always take the dec
 park route.
 
 ### Durable artifacts, resumability, and completion
+
+Before the final handoff, run the read-only scratch report and include available
+disk space, stale entries and protected leftovers with their paths and reasons.
+Stamp measured output with the command, revision and date. Report an unavailable
+scan as a gap. If an age sweep is useful, present its concrete entries and age
+for operator approval before `--apply --older-than`; a report is not approval.
+Review rounds created by this session instead follow the allocated-round
+retirement contract in `fallback-review-panel.md`, after reviewer processes end
+and evidence is retained. Report any round the engine kept; do not weaken its
+guards to make a wrap-up look complete.
 
 The repository artifact set is load-bearing: `<handoff>` and, when applicable,
 `<handoff-history>`, `<friction-log>`, and an existing project-status artifact changed

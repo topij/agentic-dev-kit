@@ -47,11 +47,11 @@ compute and enforces nothing, while the frontmatter of ``.claude/agents/<lens>.m
 applied by the runtime when the cockpit launches the agent named after the lens.
 
 Usage:
-    uv run scripts/panel_prompt.py --lens adversarial --head <sha>
+    uv run scripts/panel_prompt.py --lens adversarial --head <sha> --scratch <allocated-round>/lens-adversarial
     uv run <engine-dir>/panel_prompt.py --lens adversarial --agent-definition \\
         > .claude/agents/adversarial.md
     uv run scripts/panel_prompt.py --lens correctness --head <sha> \\
-        --scratch <session-scratchpad>/lens-correctness-<short-sha> --pr 218 --carry-forward "Rounds 1-3 found everything in
+        --scratch <allocated-round>/lens-correctness-<short-sha> --pr 218 --carry-forward "Rounds 1-3 found everything in
         the author's claims and nothing in the changed content. Invert that."
 
 A delta pass — and only a delta pass — adds the author's two stated draws for the
@@ -89,6 +89,7 @@ from kit_doctor import (  # noqa: E402
 # regeneration command must reach the exact engine that owns the renderer, not
 # an untracked ``lib/kit_doctor.py`` that happens to shadow it on ``sys.path``.
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+import sweep_scratch  # noqa: E402
 from kitconfig import get, load_config, loads, repo_root  # noqa: E402
 
 REPO_ROOT = repo_root(Path(__file__).resolve())
@@ -386,9 +387,10 @@ def _require_scratch(scratch: str, head: str) -> str:
     branch, committed mid-review, and both lenses watched HEAD move; the detached
     and exact-HEAD checks still refuse that assembly-time state.
 
-    Checks run once, at assembly time. The path need not be absolute or clean,
-    and nothing re-checks it after the prompt is printed. This assembler has no
-    write path and never constructs a checkout.
+    Checks run once, at assembly time. This helper checks Git state; build also
+    requires an absolute, unaliased path inside an allocated review round under
+    scratch.roots. Neither checks cleanliness or re-checks after printing. This
+    assembler has no write path and never constructs a checkout.
 
     Inherited ``GIT_*`` variables are dropped: ``git -C`` does not override an
     exported ``GIT_DIR``, so every check must observe the supplied path.
@@ -554,6 +556,9 @@ def render(
         "  once, at assembly time. Checkout contents and cleanliness are not verified\n"
         "  here. The caller must create and inspect the checkout; independently\n"
         "  verify what you received.\n"
+        "  Its parent is the allocated review round. Keep all disposable clones,\n"
+        "  environments and caches inside that parent; retain final reports outside\n"
+        "  it so the cockpit can retire the round after every process ends.\n"
         if scratch is not None
         else "- **No worktree was provided.** Obtain the revision into a copy you made; "
         "do not write into any tree you were handed.\n"
@@ -937,8 +942,14 @@ def build(args: argparse.Namespace) -> str:
     roster = _lens_roster(config, args.lens)
 
     head = _require_commit(root, args.head)
-    if o_scratch is not None:
-        _require_scratch(o_scratch, head)
+    if o_scratch is None:
+        raise PromptError("a prompt requires --scratch: allocate a review round with sweep_scratch.py --create-review-round, then build a detached lens tree inside it")
+    _require_scratch(o_scratch, head)
+    try:
+        scratch_settings = sweep_scratch.load_settings(root / "config" / "dev-model.yaml", root=root)
+        sweep_scratch.require_review_scratch(o_scratch, head, scratch_settings, root)
+    except (sweep_scratch.ConfigError, OSError, ValueError) as exc:
+        raise PromptError(f"--scratch {o_scratch}: {exc}; allocate a fresh review round under scratch.roots for {head}") from exc
     branch = resolve_branch(root, o_branch, head)
     base_branch = o_base_branch or get(config, "vcs.protected_branch", "main")
     # These two must agree, or the provenance label describes the wrong path.
@@ -1013,9 +1024,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--base", default=None, help="override the remote-resolved base (discouraged)")
     parser.add_argument("--base-branch", default=None, help="branch to resolve the base from")
     parser.add_argument("--branch", default=None, help="branch under review (default: current)")
-    parser.add_argument("--scratch", default=None, help="detached worktree at --head to name in the prompt; "
-                        "checked once (HEAD is --head, detached) and refused otherwise, never built; "
-                        "pass an absolute path, since it is printed as given")
+    parser.add_argument("--scratch", default=None, help="required for prompts: absolute, unaliased detached tree at --head, "
+                        "directly inside a round allocated by sweep_scratch.py; checked once, never built")
     parser.add_argument("--pr", type=int, default=None, help="PR number, for the lens's context")
     parser.add_argument("--runtime", default="claude", help="lens_compute.<runtime> key to render")
     parser.add_argument(

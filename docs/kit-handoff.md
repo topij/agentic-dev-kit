@@ -244,9 +244,11 @@ is recorded.
 judges root and entry containment by filesystem identity as well as by path string (#1000).
 #1034 (`79d33fb9`) preserves unquoted alternate path whitespace and filesystem bytes (#1032). #997 owns
 reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
-guards, wording, and the `.git`-gone exit 2. #900 stays open for the round-end
-cockpit sweep, the wrap-up and session-start integrations, and listing the engine
-in `review.safety_critical_paths`. `state/review-evidence/` waits on #861.
+guards, wording, and the `.git`-gone exit 2. #900 adds allocated review rounds,
+prompt enforcement, explicit round retirement and disk/scratch reporting in
+session-start and wrap-up. Its retirement path retains Git-dependency protections;
+bare fixture repositories still prevent reclamation under #997.
+`state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
@@ -357,7 +359,8 @@ for the headless lane profile.
 ### Triage outcome receipts
 
 **Status:** #1111 (`62e0ffaa`) shipped linked-worktree identity and result
-dispositions. The receipt contract makes the caller allocate a fresh id and
+dispositions. #1121 merged as `d5129869` on 2026-10-18 (Europe/Helsinki), completing
+#1103's receipt follow-up. The receipt contract makes the caller allocate a fresh id and
 destination before each engine CLI call, publishes without replacement, and checks
 without writing. The preserved `fabed73e` implementation is design evidence; the
 round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
@@ -366,8 +369,7 @@ timeout and report-containment findings.
 **Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
 [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: after the receipt contract is reviewed and merged, adopt it in cs-toolkit
-and instrument each scheduled engine call with caller-owned freshness and failure
+▶ Next: adopt the merged receipt contract in cs-toolkit and instrument each scheduled engine call with caller-owned freshness and failure
 propagation; do not export a shared id around a multi-call agent run.
 
 ### Shared hook installation

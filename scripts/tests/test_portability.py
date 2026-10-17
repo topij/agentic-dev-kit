@@ -3297,6 +3297,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "optional",
                 "Prove authenticated, complete pagination for open pull requests and for each pull request's review submissions, issue comments, and inline comments, independent of any local acknowledgement or seen-set. List metadata or an acknowledgement-filtered view alone is not ready. If the forge cannot prove thread resolution, keep an actionable finding as a candidate and label resolution unverified. Unavailability or suspected truncation at either layer degrades to PRs unavailable: <reason> and must never render as an empty list.",
             ),
+            "scratch-report": (
+                "optional",
+                "Run <engine-dir>/sweep_scratch.py --disk --json when scratch is configured. Report available disk space, stale entries and protected leftovers; unavailable engine, scan or disk data is an explicit gap. Never apply cleanup during session-start.",
+            ),
             "ci-cron-read": (
                 "optional",
                 "Use the configured or project-native health mechanism. Unavailability degrades to CI/cron: unavailable: <reason>; it is not an all-clear.",
@@ -3509,6 +3513,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "forge-merge-write": (
                 "conditional and authority-gated",
                 "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. For an isolated lane whose persisted class is self, the cockpit must invoke <engine-dir>/dev_session.sh merge <scope>; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
+            ),
+            "scratch-report": (
+                "optional",
+                "Run <engine-dir>/sweep_scratch.py --disk --json when scratch is configured. Report residual paths and keep reasons or an explicit unavailable gap. An age-based --apply --older-than sweep requires the operator's approval of the concrete report and age; wrap-up alone does not authorize deletion.",
             ),
             "project-status-write": (
                 "optional enhancement",
