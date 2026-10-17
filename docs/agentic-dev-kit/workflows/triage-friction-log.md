@@ -238,7 +238,7 @@ not in part, before the first action of any run**, whatever its entry, mode or p
 - [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md) — *Tracker writes
   and accounting* and *Finalize and sweep*.
 - [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md) — the
-  engines' invocations and outputs.
+  engines' invocations, outputs and *Invocation outcome receipts*.
 
 ## Authoritative integration declaration
 
