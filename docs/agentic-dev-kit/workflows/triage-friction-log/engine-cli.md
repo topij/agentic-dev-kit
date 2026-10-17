@@ -10,6 +10,7 @@ its reference files.
 
 - Entry points, inputs and outputs of both engines
 - Dispositions, and running from a linked worktree
+- Invocation outcome receipts and caller-owned freshness
 
 ## Engine CLI
 
@@ -127,9 +128,9 @@ in `propose` (an unattended draft that had no notification provider) has no
 continuation, so a result reporting it is `refused`. Classify on these keys, never on
 `detail`.
 
-A scheduled caller whose own exit status does not come from the CLI (an agent run that
-invokes the CLI itself) reads the disposition from the CLI's printed result. An
-invocation-bound receipt for such callers is separate follow-up work.
+A scheduled caller can read a durable invocation outcome receipt instead of parsing
+an agent's summary. The caller-owned freshness contract below binds each receipt to
+a particular engine CLI call; it does not attest an entire agent conversation.
 
 Repository identity is the main worktree's root for every worktree of one repository
 whose main worktree is a checkout (a bare repository's linked worktree, one whose
@@ -148,3 +149,77 @@ before it rebinds or advances the session. Otherwise it stops with `hard-stop` a
 gate released. A completed session that a session-starting entry retires first stays
 retired (its bytes kept, as *Completed-state retirement* describes), and the next run
 starts fresh.
+
+
+## Invocation outcome receipts
+
+The caller allocates a fresh invocation id and a fresh absolute receipt path **before
+every engine CLI call**, including retries and continuations. Keep that expectation
+outside agent-authored output. Use a random UUID for the id and a new private directory
+for the call's artifacts, beneath a caller-owned job artifact root. Resolve that
+parent's path before passing it: the storage reader refuses symlink ancestors, including
+an unresolved system temporary-directory alias. The parent must already exist.
+
+Pass `--outcome-receipt <absolute-path> --invocation-id <fresh-id>`, or set
+`DEVKIT_TRIAGE_OUTCOME_RECEIPT` and `DEVKIT_TRIAGE_INVOCATION_ID` in that call's
+environment. An explicit flag overrides its environment value. Both the path and id
+are required when either is supplied. The id must match
+`[A-Za-z0-9][A-Za-z0-9_-]{0,127}`. These are transport inputs, not configuration keys.
+Neither the engine nor the checker generates the caller's expected identity.
+
+The CLI refuses an occupied destination before invoking the engine. It publishes a
+canonical JSON receipt with exclusive creation after the engine returns, preserving
+any file another writer placed there in the meantime. It never deletes or overwrites a
+receipt. Publication failure makes the CLI exit nonzero while preserving the printed
+engine result: the engine may already have acted. Inspect retained workflow state
+before deciding how to continue; absence of evidence is not evidence of no side effect.
+
+A malformed command line, `--help`, a failed receipt preflight, an unhandled exception,
+or a killed process may leave no receipt. Fresh identity, not removal of previous
+files, prevents an earlier result being accepted for that call. **Never reuse an id or
+path, even after failure.** The checker cannot detect reuse of the same expected id
+against an earlier valid receipt. An unwritable destination does not authorize the CLI
+to clear an old artifact, and it cannot guarantee removal from such a destination.
+
+After the process has exited, check using the expectation retained before dispatch:
+
+```console
+uv run <engine-dir>/triage_friction_log.py --check-outcome-receipt <absolute-path> --invocation-id <fresh-id> --expect-entry resume --expect-context unattended --expect-mode live
+```
+
+`--expect-entry` is `auto` when the draft CLI's positional entry was omitted, otherwise
+it names that entry. The finalize CLI defaults the execution entry to `resume`; its
+receipt checks do not inject that default. `--expect-context` and `--expect-mode` are
+required alongside `--expect-entry`. A refusal before mode discovery records `unknown`
+and stays refused; a waiting or completed receipt with unknown mode is malformed.
+The checker ignores the publishing destination environment variable and accepts no
+execution flags. It performs no writes, including on parse failures or help.
+
+| Check verdict | Exit | Caller interpretation |
+|---|---|---|
+| `completed` | `0` | The engine returned successful or degraded completion; inspect its result for the scope and limitations. |
+| `waiting` | `0` | A classified continuation is pending, not a completed job; use `waiting_on`. Alert on `reconciliation`. |
+| `refused` | `1` | The engine refused the transition; use `refusal_code`. |
+| `evidence-missing` | `2` | No outcome exists at the expected path. |
+| `evidence-stale` | `2` | The receipt belongs to another invocation id. |
+| `evidence-wrong-invocation` | `2` | Entry, context or known mode differs from the expected call. |
+| `evidence-malformed` | `2` | Unsafe file, invalid canonical JSON, unsupported schema, digest mismatch or inconsistent result. |
+
+Invalid checker arguments also exit `2`. Require both the invoked process's successful
+exit and an acceptable checked verdict; a receipt published before a later process
+failure does not override that failure. The ordinary execution CLI preserves its
+existing exit convention, so its exit `0` alone still cannot distinguish refusal from
+waiting. The receipt contains `kind`, `schema_version`, `invocation_id`, `entry`,
+`context`, the full `result`, and `result_digest`. The digest checks internal integrity;
+it does not authenticate an agent or process with access to the private directory.
+
+For an agent-driven scheduled job, route **every** engine call through the caller's
+per-call launcher so it records a new expectation before dispatch and checks that
+call's result afterwards. Do not export a shared id once around an agent run that may
+make repeated engine calls. The outer wrapper must retain the call results, reject
+failed or missing calls and apply its job-specific policy to the final checked
+result. An agent run that never invoked the engine has no outcome evidence. Retrying
+with a new id does not retroactively turn a failed scheduled job into success.
+Adopting these flags alone does not instrument an existing scheduler; deploy its
+per-call launcher and failure propagation together. Refresh the CLI, finalize entry,
+`lib/triage/outcome.py`, and this workflow reference from the same kit revision.

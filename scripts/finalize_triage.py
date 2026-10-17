@@ -12,7 +12,4 @@ import sys
 from triage_friction_log import main
 
 if __name__ == "__main__":
-    arguments = sys.argv[1:]
-    if not arguments or arguments[0].startswith("-"):
-        arguments = ["resume", *arguments]
-    raise SystemExit(main(arguments))
+    raise SystemExit(main(sys.argv[1:], default_entry="resume"))
