@@ -24,6 +24,24 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-18
+
+- **Allocated review rounds retained uv-cache Git markers.** Severity M; incomplete finding:
+  a safe reclamation remedy has not been established. After the reviewers and their
+  verification processes ended, targeted retirement for #1122 kept these rounds under
+  `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/`:
+  - `review-61be4adb9788438295452adb9e87b415`, citing an unparseable `.git` file at
+    `uv-cache-adversarial-22aa2dcc/sdists-v9/.git`.
+  - `review-bc2904eefb804fd692834298deafa461`, citing an unparseable `.git` file at
+    `mutation-uv-cache-e0805361/sdists-v9/.git`.
+  `sweep_scratch.py --finish-review-round <receipt> --apply --reviewers-finished`
+  returned `kept` at `e080536159c0b16874f47ed8b36336e296d820a3` on 2026-10-18 in
+  `/Users/topi/Coding/agentic-dev-kit`. Receipts and terminal evidence were retained
+  outside those rounds in `codex-900-s5h3qa0p` under the same scratch root; the
+  [PR disposition](https://github.com/topij/agentic-dev-kit/pull/1122#issuecomment-6242495091)
+  records the review. #997 covers bare fixture repositories, not an established
+  remedy for this cache shape. Preserve the dependency refusal while investigating.
+
 ## 2026-10-16
 
 - **A lens wrote generically named helper files into the shared session scratchpad.** Severity L, kept for accumulation.

@@ -20,6 +20,28 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-18 (caller-owned triage receipts; managed review scratch)
+
+- **Triage outcome receipts:** [#1121](https://github.com/topij/agentic-dev-kit/pull/1121)
+  merged as `d5129869`. The caller allocates freshness for each engine call;
+  cs-toolkit's scheduled caller still needs the receipt integration.
+- **Scratch retention:** [#1122](https://github.com/topij/agentic-dev-kit/pull/1122)
+  merged as `dd089388`, completing #900. Reviews now allocate owned rounds and
+  retire them after processes finish and evidence is retained. The dependency
+  protections remain in force; this did not reclaim legacy unmanaged scratch.
+  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1122#issuecomment-6242495091)
+  retains the review evidence; the residual CLI-help finding was routed to #996.
+- Verification: `make test` at `e080536159c0b16874f47ed8b36336e296d820a3`, in
+  `/Users/topi/Coding/agentic-dev-kit`, on 2026-10-18 passed. This is the reviewed
+  scratch-lifecycle candidate, before the squash merge.
+- Retirement kept the opening and repair panel rounds because uv-cache `.git`
+  markers triggered dependency protection. The friction inbox records the paths
+  and unresolved reclamation design; the guards were not bypassed.
+- Workstream assignment confirmed by the operator: **Triage outcome receipts**
+  and **Scratch retention**.
+
+______________________________________________________________________
+
 ## Session — 2026-10-16 (ticket-creation region snapshots; split-workflow placement and citation pins; REST review-read gap decision, in a Claude Code cloud session)
 
 - **Ticket execution environments:** [#1114](https://github.com/topij/agentic-dev-kit/pull/1114)
@@ -157,59 +179,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Session — 2026-10-13 (move-candidate bound, split-workflow link check, kit_doctor reference edge and panel_prompt fixture objects, from headless lanes, in Claude Code)
-
-- **How it ran:** an autonomous overnight session. The operator approved the four lanes
-  and self-merge for the `self`-class ones. Each lane ran as a headless `claude` lane
-  (`dev_session.sh new --headless`, `launch_lane.py`). None of them opened its PR.
-  The #1075, #1070 and #1079 lanes stopped because they could not regenerate
-  `kit-manifest.json`. The #1089 lane ended earlier, on a denied call after its
-  `make test` was killed at the Bash time limit. Both walls are parked in the friction
-  log.
-
-  The cockpit finished each lane: rebase, `uv run scripts/kit_doctor.py
-  --generate-manifest`, the stamp, the review, and `dev_session.sh merge`.
-  `reconcile_sessions.sh` reported all four scopes merged, and the lane sessions were
-  removed.
-- **Review:** CodeRabbit skipped every PR (automatic reviews are disabled). Each PR had
-  an isolated adversarial `fallback:lens` full pass. LOW findings took
-  `fallback:delta` repairs or tickets, with the dispositions and verbatim verdict lines
-  on each PR. The cockpit applied every mutant a lane named, in a scratch clone.
-- **Review proportionality:** [#1096](https://github.com/topij/agentic-dev-kit/pull/1096)
-  merged as `8beee9a1`. A positional test now pins `MAX_MOVE_CANDIDATES`, so the values
-  7, 9 and 1 each fail a behavioural case. The full pass had no findings.
-- **Skills and instruction files:**
-  - [#1097](https://github.com/topij/agentic-dev-kit/pull/1097) merged as `0f8e93f2`. A
-    fence-like line inside an HTML block, or after a form feed, no longer hides later
-    links from the split-workflow link check. A delta added four cases for the full
-    pass's surviving mutants. The state-machine gaps that pass found are
-    [#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
-  - [#1100](https://github.com/topij/agentic-dev-kit/pull/1100) merged as `5d29a75f`.
-    It covers #1069's residual LOWs. Two deltas then narrowed the read-all pin and
-    shortened its docstring to what the regex matches.
-- **Panel prompt test fixtures:**
-  [#1099](https://github.com/topij/agentic-dev-kit/pull/1099) merged as `1666e247`.
-  Tampering tests reach fixture objects through `_loose_object`, which names a packed
-  or missing object as a setup error. Two deltas followed. Their last pair of LOWs went
-  to #1079 as a comment rather than a third repair round, because each round had
-  produced a new wording-sized LOW (the #1080 shape).
-- **Verification:** each PR carries its own `make test` stamp in a PR comment, run in
-  that lane's worktree under `/Users/topi/Coding/dev-model-sessions/` on 2026-10-13.
-  The LOW repairs had focused runs and current-head CI, as the LOW rule prescribes.
-  After the last merge, `pytest scripts/tests/test_kit_doctor.py -k
-  self_check_is_clean` at `1666e247` on 2026-10-14, in
-  `/Users/topi/Coding/agentic-dev-kit`, passed,
-  which shows the four separately regenerated manifest hunks merged consistently.
-- **Filed this session:** #1098 and an occurrence comment on #1079. Both were written
-  during the night under the operator's overnight grant. The wrap-up rule does not
-  count that grant as approval for a tracker write, so the operator should confirm
-  both.
-- **Not established:** #1089, #1075, #1070 and #1079 are still open, for the operator to
-  mark done; #1079 now also carries the residual LOWs. The workstream assignment
-  of *Panel prompt test fixtures* is unconfirmed.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -226,7 +195,7 @@ preflight and executed-span guidance on 2026-10-10. The P2 regression the operat
 deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
 archive sweep rewrites (friction log). #1096 (`8beee9a1`) pins its candidate bound
-with a positional test; #1089 stays open for the operator.
+with a positional test.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
 [#921](https://github.com/topij/agentic-dev-kit/issues/921),
@@ -244,10 +213,11 @@ is recorded.
 judges root and entry containment by filesystem identity as well as by path string (#1000).
 #1034 (`79d33fb9`) preserves unquoted alternate path whitespace and filesystem bytes (#1032). #997 owns
 reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
-guards, wording, and the `.git`-gone exit 2. #900 adds allocated review rounds,
-prompt enforcement, explicit round retirement and disk/scratch reporting in
-session-start and wrap-up. Its retirement path retains Git-dependency protections;
-bare fixture repositories still prevent reclamation under #997.
+guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up from
+#1122. #1122 (`dd089388`) shipped #900: allocated review rounds, prompt enforcement,
+explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
+protections. #997 owns bare fixture retention; the friction inbox records the
+uv-cache marker case observed during this session, whose remedy is not established.
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -257,7 +227,8 @@ bare fixture repositories still prevent reclamation under #997.
 
 ▶ Next: #997 — choose how a session entry whose only git dirs are test fixtures
 becomes sweepable without reopening the outside-dependent fail-open (an operator
-design decision), then build it.
+design decision). Use the uv-cache marker observation already recorded in
+`docs/kit-friction-log.md` as a separate case to explain before choosing the remedy.
 
 ### Reviewer profiles
 
@@ -369,8 +340,9 @@ timeout and report-containment findings.
 **Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
 [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: adopt the merged receipt contract in cs-toolkit and instrument each scheduled engine call with caller-owned freshness and failure
-propagation; do not export a shared id around a multi-call agent run.
+▶ Next: adopt the merged receipt contract in cs-toolkit and instrument each scheduled
+engine call with caller-owned freshness and failure propagation; do not export a
+shared id around a multi-call agent run.
 
 ### Shared hook installation
 

@@ -5,6 +5,57 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-13 (move-candidate bound, split-workflow link check, kit_doctor reference edge and panel_prompt fixture objects, from headless lanes, in Claude Code)
+
+- **How it ran:** an autonomous overnight session. The operator approved the four lanes
+  and self-merge for the `self`-class ones. Each lane ran as a headless `claude` lane
+  (`dev_session.sh new --headless`, `launch_lane.py`). None of them opened its PR.
+  The #1075, #1070 and #1079 lanes stopped because they could not regenerate
+  `kit-manifest.json`. The #1089 lane ended earlier, on a denied call after its
+  `make test` was killed at the Bash time limit. Both walls are parked in the friction
+  log.
+
+  The cockpit finished each lane: rebase, `uv run scripts/kit_doctor.py
+  --generate-manifest`, the stamp, the review, and `dev_session.sh merge`.
+  `reconcile_sessions.sh` reported all four scopes merged, and the lane sessions were
+  removed.
+- **Review:** CodeRabbit skipped every PR (automatic reviews are disabled). Each PR had
+  an isolated adversarial `fallback:lens` full pass. LOW findings took
+  `fallback:delta` repairs or tickets, with the dispositions and verbatim verdict lines
+  on each PR. The cockpit applied every mutant a lane named, in a scratch clone.
+- **Review proportionality:** [#1096](https://github.com/topij/agentic-dev-kit/pull/1096)
+  merged as `8beee9a1`. A positional test now pins `MAX_MOVE_CANDIDATES`, so the values
+  7, 9 and 1 each fail a behavioural case. The full pass had no findings.
+- **Skills and instruction files:**
+  - [#1097](https://github.com/topij/agentic-dev-kit/pull/1097) merged as `0f8e93f2`. A
+    fence-like line inside an HTML block, or after a form feed, no longer hides later
+    links from the split-workflow link check. A delta added four cases for the full
+    pass's surviving mutants. The state-machine gaps that pass found are
+    [#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
+  - [#1100](https://github.com/topij/agentic-dev-kit/pull/1100) merged as `5d29a75f`.
+    It covers #1069's residual LOWs. Two deltas then narrowed the read-all pin and
+    shortened its docstring to what the regex matches.
+- **Panel prompt test fixtures:**
+  [#1099](https://github.com/topij/agentic-dev-kit/pull/1099) merged as `1666e247`.
+  Tampering tests reach fixture objects through `_loose_object`, which names a packed
+  or missing object as a setup error. Two deltas followed. Their last pair of LOWs went
+  to #1079 as a comment rather than a third repair round, because each round had
+  produced a new wording-sized LOW (the #1080 shape).
+- **Verification:** each PR carries its own `make test` stamp in a PR comment, run in
+  that lane's worktree under `/Users/topi/Coding/dev-model-sessions/` on 2026-10-13.
+  The LOW repairs had focused runs and current-head CI, as the LOW rule prescribes.
+  After the last merge, `pytest scripts/tests/test_kit_doctor.py -k
+  self_check_is_clean` at `1666e247` on 2026-10-14, in
+  `/Users/topi/Coding/agentic-dev-kit`, passed,
+  which shows the four separately regenerated manifest hunks merged consistently.
+- **Filed this session:** #1098 and an occurrence comment on #1079. Both were written
+  during the night under the operator's overnight grant. The wrap-up rule does not
+  count that grant as approval for a tracker write, so the operator should confirm
+  both.
+- **Not established:** #1089, #1075, #1070 and #1079 are still open, for the operator to
+  mark done; #1079 now also carries the residual LOWs. The workstream assignment
+  of *Panel prompt test fixtures* is unconfirmed.
+
 ### 2026-10-13 (kit-retired command deletion checks adopter references; REST reads judged against GitHub's counts, in a Claude Code cloud session)
 
 - **Skills and instruction files:** [#1077](https://github.com/topij/agentic-dev-kit/pull/1077)
