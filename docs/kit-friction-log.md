@@ -26,6 +26,27 @@
 
 ## 2026-10-18
 
+- **Review mutation overlapped a full-suite run again.** Severity M, kept for
+  accumulation with the 2026-10-15 review-verification incident. The correctness lens
+  for #1130 mutated its private checkout while `make test` was still running at
+  `2fb0981c6e8cbc71b3fe5785714029a201685555` on 2026-10-18. The cockpit audited
+  the timeline and required an amended report; the overlapping run was discarded
+  as unmodified verification. The author and adversarial lens supplied separate
+  unmodified full runs. Original/amended reports and the timeline are retained in
+  `/private/tmp/devkit-1127-1129-evidence-eTfHvO/`; the
+  [PR disposition](https://github.com/topij/agentic-dev-kit/pull/1130#issuecomment-6248253499)
+  records the distinction. No additional enforcement remedy was selected.
+- **The uv-cache retirement refusal recurred.** Severity M; reclamation remedy remains
+  unresolved, as in the allocated-round entry below. After reviewer termination,
+  retirement retained these rounds beneath
+  `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/`:
+  - `review-cc73b1f0678c41d399813cf09f12a4c9` from #1126.
+  - `review-4114ba6928cd4d2fa1ae0d4e3d2cf147` from #1130, whose preview cited
+    `uv-cache-correctness-2fb0981c/sdists-v9/.git` as an unparseable Git marker.
+  Evidence is retained in `/private/tmp/devkit-1124-evidence-wfAgnC/` and
+  `/private/tmp/devkit-1127-1129-evidence-eTfHvO/retirement-2fb0981c-preview.json`.
+  No marker was deleted to bypass the dependency guard.
+
 - **Allocated review rounds retained uv-cache Git markers.** Severity M; incomplete finding:
   a safe reclamation remedy has not been established. After the reviewers and their
   verification processes ended, targeted retirement for #1122 kept these rounds under
