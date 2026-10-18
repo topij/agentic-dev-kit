@@ -889,6 +889,20 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
         return Outcome(record["path"], "kept", f"{entry.owner}: {entry.reason}")
     if not apply:
         return Outcome(record["path"], "eligible", "caller must finish processes and retain evidence before applying")
+    # The initial classification is only a survey. Refresh dependencies and the
+    # configured roots at act time, just as age-based apply does. This narrows
+    # accidental concurrent changes; it does not permit concurrent writers.
+    roots = validate_review_round(record, settings, repo)
+    try:
+        worktrees = registered_worktrees(settings.repos)
+        stores = repository_stores(worktrees)
+    except ConfigError as exc:
+        return Outcome(record["path"], "kept", str(exc))
+    fresh = classify(record["path"], device=record["root_identity"][0], worktrees=worktrees,
+                     stores=stores, roots=[r for r in roots if r != record["root"]],
+                     grace_seconds=0, now=time.time())
+    if fresh.owner != STALE:
+        return Outcome(record["path"], "kept", f"now {fresh.owner}: {fresh.reason}")
     validate_review_round(record, settings, repo)
     remove_entry(record["path"], record["root"], tuple(record["identity"]))
     return Outcome(record["path"], "removed")

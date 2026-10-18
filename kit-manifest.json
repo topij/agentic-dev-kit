@@ -86,7 +86,7 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "7e3c4f8502753fc26c2845e84e690afbb7285ee032753599fb0bd8ae7bd74a48"
+      "sha256": "c76a68994c705be5ad3538907e27bcc5baac240f9f65bf1ae1fccd5bdf501b09"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md": {
       "required_by": [
@@ -590,7 +590,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "2798186b1fab762347ebfd0597d8009b95e9a9b5b4d87344eb8ac08395bf6805"
+      "sha256": "ed5c267c7d39efa31a2c1736f5012010989584a2a1d37fc4ca2dc06383a87cb0"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -730,7 +730,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "d08ec0f2890593d699a9b6031a17bdc2506924e63fa608ccc879d572f875c062"
+      "sha256": "50d19fd95df6b2bbe44515f989d5a3dd0b3ac6e80fbb0a369529ccf40dfe4ec2"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",
@@ -809,7 +809,7 @@
         "scripts/finalize_triage.py"
       ],
       "role": "engine",
-      "sha256": "eedd0bb1056f8ada68229bafee5f04deb333c583ddb0efc5009bde788c5fc870"
+      "sha256": "e9b3bbfe22a8e26d0390fe3c10a6814e8f6fbcdbaba6b0297177caf9795e39ac"
     },
     "scripts/verify_live_validation_bundle.py": {
       "role": "repo-only",
