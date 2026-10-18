@@ -20,6 +20,33 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-18 (cs-toolkit upgrade support)
+
+- **Scratch retention:** [#1126](https://github.com/topij/agentic-dev-kit/pull/1126)
+  merged as `bc1bd023`, annotating the deliberate system-temp refusal for Bandit
+  (#1124). [#1130](https://github.com/topij/agentic-dev-kit/pull/1130) merged as
+  `d2f40206`; retirement now refreshes Git dependencies before removal (#1127).
+  The cosmetic Bandit-selector follow-up is #1128.
+- **Triage outcome receipts:** #1130 also delivered scheduled caller enforcement
+  (#1129). Its [review disposition](https://github.com/topij/agentic-dev-kit/pull/1130#issuecomment-6248253499)
+  records the evidence and the corrected verification chronology from the
+  correctness lens; its overlapping full-suite run was discarded as verification.
+- **Consumer upgrades:** the operator will continue cs-toolkit's upgrade using
+  kit `d2f40206d3b819b496398ad0d08eba97a9d7b9ca`. This session did not upgrade
+  cs-toolkit. Scheduled caller integration and completed-state retirement still
+  need adopter verification; copying CLI files alone does not establish them.
+- Verification: `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `2fb0981c6e8cbc71b3fe5785714029a201685555` on 2026-10-18 passed. The merged
+  `d2f40206` tree matches that candidate. Full output is retained in
+  `/private/tmp/devkit-1127-1129-evidence-eTfHvO/make-test-2fb0981c.log`.
+- The friction inbox retains the repeated uv-cache dependency refusal and review
+  mutation/verification overlap. Scratch guards were preserved.
+- On the operator's request, triage session `749a3ff1c51d4fe1928d7f0d4553c2cc`
+  was left awaiting decisions. Resume with `triage-friction-log resume`; its report
+  is `reports/triage_live_2026-10-18_749a3ff1c51d4fe1928d7f0d4553c2cc.md`.
+
+______________________________________________________________________
+
 ## Session — 2026-10-18 (caller-owned triage receipts; managed review scratch)
 
 - **Triage outcome receipts:** [#1121](https://github.com/topij/agentic-dev-kit/pull/1121)
@@ -216,7 +243,7 @@ reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
 guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up from
 #1122. #1122 (`dd089388`) shipped #900: allocated review rounds, prompt enforcement,
 explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
-protections; #1127's follow-up refreshes those dependencies at retirement time.
+protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retirement time.
 #997 owns bare fixture retention; the friction inbox records the
 uv-cache marker case observed during this session, whose remedy is not established.
 `state/review-evidence/` retention remains scoped to #861.
@@ -334,8 +361,8 @@ for the headless lane profile.
 dispositions. #1121 merged as `d5129869` on 2026-10-18 (Europe/Helsinki), completing
 #1103's receipt follow-up. The receipt contract makes the caller allocate a fresh id and
 destination before each engine CLI call, publishes without replacement, and checks
-without writing. #1129's follow-up requires scheduled calls to claim a caller-owned
-attempt before dispatch and makes the final caller check retain direct-call refusals.
+without writing. #1130 (`d2f40206`) delivered #1129: scheduled calls claim a
+caller-owned attempt before dispatch, and the final caller check retains direct-call refusals.
 The preserved `fabed73e` implementation is design evidence; the
 round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
 was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
