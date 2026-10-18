@@ -2357,6 +2357,14 @@ _HTML_BLOCK_LONE_TAG = re.compile(
     r"|</[A-Za-z][A-Za-z0-9-]*\s*>)[ \t]*"
 )
 _NOT_PARAGRAPH = re.compile(r" {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$)|[ \t]*$")
+_SETEXT_UNDERLINE = re.compile(r" {0,3}(?:=+|-+)[ \t]*")
+# A deliberately bounded single-line reference definition: a plain label and
+# an angle-bracketed destination or a bare destination without parentheses.
+_PARAGRAPH_REFERENCE = re.compile(
+    r" {0,3}\[(?=[^\]\n]*[^\s\]])[^\[\]\\\n]+\]:[ \t]*"
+    r"(?:<[^<>\n]*>|[^\s()<>\\]+)"
+    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*"
+)
 
 
 def _without_fenced_code(text: str) -> str:
@@ -2367,7 +2375,14 @@ def _without_fenced_code(text: str) -> str:
     HTML block opens nothing either; the block's lines stay in, so its hrefs
     are checked, and so is link-shaped text that CommonMark would not parse
     as a link there. Lines end at a newline only: read_text has already folded
-    CRLF and CR, and a form feed or other splitlines break is no line end."""
+    CRLF and CR, and a form feed or other splitlines break is no line end.
+
+    Paragraph boundaries include setext underlines, indented code outside a
+    paragraph, and the single-line definitions matched by _PARAGRAPH_REFERENCE.
+    This is not a full block parser: multiline/escaped reference definitions
+    and containers (lists and block quotes) remain known misses. In particular,
+    list-contained fences combined with form feeds can still hide later links.
+    Indented code stays in the returned text, like HTML content."""
     kept, fence, html_end, paragraph = [], None, None, False
     for line in text.split("\n"):
         if fence is not None:
@@ -2386,7 +2401,17 @@ def _without_fenced_code(text: str) -> str:
         if end is None and not paragraph and _HTML_BLOCK_LONE_TAG.fullmatch(line):
             end = _BLANK_LINE
         if end is None:
-            paragraph = not _NOT_PARAGRAPH.match(line)
+            if paragraph and _SETEXT_UNDERLINE.fullmatch(line):
+                paragraph = False
+            elif not paragraph and (
+                line.expandtabs(4).startswith("    ")
+                or _PARAGRAPH_REFERENCE.fullmatch(line)
+            ):
+                # Neither indented code nor a reference definition can interrupt
+                # a paragraph; they leave us outside one only at a block boundary.
+                continue
+            else:
+                paragraph = not _NOT_PARAGRAPH.match(line)
         else:
             html_end = end if end is _BLANK_LINE or not end.search(line) else None
             paragraph = False
@@ -2413,6 +2438,58 @@ def _assert_split_workflow_relative_links_resolve(root: Path) -> None:
 def test_split_workflow_relative_links_resolve() -> None:
     require_kit_source()
     _assert_split_workflow_relative_links_resolve(REPO_ROOT)
+
+
+@pytest.mark.parametrize("prefix", (
+    "text\n===",
+    "text\n-",
+    "text\n  ==\t",
+    "    code",
+    "\tcode",
+    "text\n    ",
+    "text\n\t",
+    "[ref]: ../present.md",
+    '[ref]: <../present.md> "title"',
+    # Dropping the paragraph reset on HTML-block entry (M11) leaves the
+    # paragraph before <div> active even after the block's blank-line end.
+    "text\n<div>\n\n",
+    "text\n<!-- x -->",
+))
+def test_split_workflow_block_boundaries_expose_later_links(
+    tmp_path: Path, prefix: str,
+) -> None:
+    workflows = tmp_path / "docs" / "agentic-dev-kit" / "workflows"
+    reference = workflows / "example" / "reference.md"
+    reference.parent.mkdir(parents=True)
+    (workflows / "present.md").write_text("", encoding="utf-8")
+    reference.write_text(
+        prefix + "\n<span>\n```\n\n[x](../absent.md)\n", encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match=r"links '\.\./absent\.md'"):
+        _assert_split_workflow_relative_links_resolve(tmp_path)
+
+
+@pytest.mark.parametrize("prefix", (
+    "===",  # An underline without preceding paragraph text is not a heading.
+    "text\n===x",
+    "text\n    continuation",
+    "text\n\tcontinuation",
+    "text\n[ref]: ../present.md",
+    "[ref]: ../present.md trailing prose",
+    "[ ]: ../present.md",  # A reference label cannot be whitespace only.
+    '[ref]: ../present.md "unterminated',
+))
+def test_split_workflow_paragraph_continuations_preserve_fences(
+    tmp_path: Path, prefix: str,
+) -> None:
+    workflows = tmp_path / "docs" / "agentic-dev-kit" / "workflows"
+    reference = workflows / "example" / "reference.md"
+    reference.parent.mkdir(parents=True)
+    (workflows / "present.md").write_text("", encoding="utf-8")
+    reference.write_text(
+        prefix + "\n<span>\n```\n\n[x](../absent.md)\n", encoding="utf-8",
+    )
+    _assert_split_workflow_relative_links_resolve(tmp_path)
 
 
 def test_split_workflow_broken_links_are_rejected(tmp_path: Path) -> None:
