@@ -198,7 +198,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "241d117f0286afe91293692662e906a1a3e3e2c8b6b01433aba112d91e58a214"
+      "sha256": "c5de51c5b84d07787e1f4dbda50ec1f2be70270c73a49e2944f9fde6fb2beb6c"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -462,6 +462,13 @@
       "role": "engine",
       "sha256": "6ee16cd5173d2b2a6759302cf49e374c6355fb057d5bf92693d5b0b95f1ca2d2"
     },
+    "scripts/lib/triage/caller.py": {
+      "required_by": [
+        "scripts/triage_friction_log.py"
+      ],
+      "role": "engine",
+      "sha256": "19bebf85c350c6721c1f4d32e5409b79c64ccd95e412519f17bc83843727fa3d"
+    },
     "scripts/lib/triage/canonical.py": {
       "required_by": [
         "scripts/lib/systemize/config.py",
@@ -469,6 +476,7 @@
         "scripts/lib/systemize/fetch.py",
         "scripts/lib/systemize/heartbeat.py",
         "scripts/lib/systemize/identity.py",
+        "scripts/lib/triage/caller.py",
         "scripts/lib/triage/engine.py",
         "scripts/lib/triage/finalize.py",
         "scripts/lib/triage/gate.py",
@@ -518,6 +526,7 @@
     "scripts/lib/triage/model.py": {
       "required_by": [
         "scripts/lib/triage/approval.py",
+        "scripts/lib/triage/caller.py",
         "scripts/lib/triage/engine.py",
         "scripts/lib/triage/finalize.py",
         "scripts/lib/triage/gate.py",
@@ -533,6 +542,7 @@
     },
     "scripts/lib/triage/outcome.py": {
       "required_by": [
+        "scripts/lib/triage/caller.py",
         "scripts/lib/triage/engine.py",
         "scripts/triage_friction_log.py"
       ],
@@ -556,6 +566,7 @@
     },
     "scripts/lib/triage/storage.py": {
       "required_by": [
+        "scripts/lib/triage/caller.py",
         "scripts/lib/triage/engine.py",
         "scripts/lib/triage/gate.py",
         "scripts/lib/triage/outcome.py",
@@ -759,6 +770,10 @@
     "scripts/tests/test_triage_approval.py": {
       "role": "test",
       "sha256": "44030d5693ec83cf8fe84742a8c7ba649455c345e47d2cbd7d72fd001f7afc84"
+    },
+    "scripts/tests/test_triage_caller.py": {
+      "role": "test",
+      "sha256": "637de08cdc1f386056c4122d3f523dd4b656023a36154b36f68cce92c1a76a76"
     },
     "scripts/tests/test_triage_canonical.py": {
       "role": "test",
