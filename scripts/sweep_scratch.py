@@ -772,7 +772,7 @@ def _round_root(path: str, settings: Settings, repo: Path) -> list[str]:
         raise ConfigError(f"review round root unavailable: {reason or status}")
     # A configured system temp directory would put unrelated users' artifacts
     # under a disposable-root policy. It is not a review namespace.
-    if path in {"/tmp", "/private/tmp", os.path.realpath(os.environ.get("TMPDIR", "/tmp"))}:
+    if path in {"/tmp", "/private/tmp", os.path.realpath(os.environ.get("TMPDIR", "/tmp"))}:  # nosec B108 - rejects system temp roots
         raise ConfigError("a system temp directory itself is not a review round root")
     for worktree in registered_worktrees(settings.repos):
         # A root may contain a review worktree from another round, but may not
