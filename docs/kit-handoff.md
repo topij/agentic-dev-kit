@@ -20,7 +20,7 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
-## Session — 2026-10-18 (cs-toolkit upgrade fixes)
+## Session — 2026-10-18 (cs-toolkit upgrade support)
 
 - **Scratch retention:** [#1126](https://github.com/topij/agentic-dev-kit/pull/1126)
   merged as `bc1bd023`, annotating the deliberate system-temp refusal for Bandit
