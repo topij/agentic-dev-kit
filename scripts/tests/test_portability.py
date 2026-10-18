@@ -2360,9 +2360,11 @@ _NOT_PARAGRAPH = re.compile(r" {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}
 _SETEXT_UNDERLINE = re.compile(r" {0,3}(?:=+|-+)[ \t]*")
 # A deliberately bounded single-line reference definition: a plain label and
 # an angle-bracketed destination or a bare destination without parentheses.
+# Decline escapes rather than treating an escaped delimiter as a closing one;
+# the label limit and bare-destination control exclusion are CommonMark rules.
 _PARAGRAPH_REFERENCE = re.compile(
-    r" {0,3}\[(?=[^\]\n]*[^\s\]])[^\[\]\\\n]+\]:[ \t]*"
-    r"(?:<[^<>\\\n]*>|[^\s()<>\\]+)"
+    r" {0,3}\[(?=[^\]\n]*[^\s\]])[^\[\]\\\n]{1,999}\]:[ \t]*"
+    r"(?:<[^<>\\\n]*>|[^\s\x00-\x1f\x7f()<>\\]+)"
     r"(?:[ \t]+(?:\"[^\"\\\n]*\"|'[^'\\\n]*'|\([^()\\\n]*\)))?[ \t]*"
 )
 
@@ -2450,9 +2452,10 @@ def test_split_workflow_relative_links_resolve() -> None:
     "text\n\t",
     "[ref]: ../present.md",
     '[ref]: <../present.md> "title"',
+    pytest.param("[" + "x" * 999 + "]: ../present.md", id="maximum-label"),
     # Dropping the paragraph reset on HTML-block entry (M11) leaves the
     # paragraph before <div> active even after the block's blank-line end.
-    "text\n<div>\n\n",
+    "text\n<div>\n",
     "text\n<!-- x -->",
 ))
 def test_split_workflow_block_boundaries_expose_later_links(
@@ -2497,8 +2500,11 @@ def test_split_workflow_paragraph_continuations_preserve_fences(
     '[ref]: ../present.md "title\\"',
     "[ref]: ../present.md 'title\\'",
     '[ref]: ../present.md (title\\)',
+    "[ref]: ../present.md#\x01",
+    "[ref]: ../present.md#\x7f",
+    pytest.param("[" + "x" * 1000 + "]: ../present.md", id="overlong-label"),
 ))
-def test_split_workflow_escaped_terminators_do_not_shift_fences(
+def test_split_workflow_invalid_references_do_not_shift_fences(
     tmp_path: Path, prefix: str,
 ) -> None:
     workflows = tmp_path / "docs" / "agentic-dev-kit" / "workflows"
