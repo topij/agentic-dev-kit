@@ -2757,6 +2757,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
         "scripts/lib/state_paths/__init__.py",
         "scripts/lib/triage/approval.py",
         "scripts/lib/triage/canonical.py",
+        "scripts/lib/triage/caller.py",
         "scripts/lib/triage/engine.py",
         "scripts/lib/triage/finalize.py",
         "scripts/lib/triage/gate.py",

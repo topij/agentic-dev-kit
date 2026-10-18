@@ -244,6 +244,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/lib/triage/finalize.py", "engine"),
     ("scripts/lib/triage/engine.py", "engine"),
     ("scripts/lib/triage/outcome.py", "engine"),
+    ("scripts/lib/triage/caller.py", "engine"),
     ("scripts/tests/test_triage_canonical.py", "test"),
     ("scripts/tests/test_triage_config.py", "test"),
     ("scripts/tests/test_triage_gate.py", "test"),
@@ -256,6 +257,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_triage_engine.py", "test"),
     ("scripts/tests/test_triage_worktree_identity.py", "test"),
     ("scripts/tests/test_triage_outcome_receipts.py", "test"),
+    ("scripts/tests/test_triage_caller.py", "test"),
     ("scripts/tests/test_finalize_triage.py", "test"),
     # Post-merge-systemize engines: installed together or not at all (the
     # workflow stops on a partial set), with their installed verification.

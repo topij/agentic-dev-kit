@@ -216,7 +216,8 @@ reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
 guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up from
 #1122. #1122 (`dd089388`) shipped #900: allocated review rounds, prompt enforcement,
 explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
-protections. #997 owns bare fixture retention; the friction inbox records the
+protections; #1127's follow-up refreshes those dependencies at retirement time.
+#997 owns bare fixture retention; the friction inbox records the
 uv-cache marker case observed during this session, whose remedy is not established.
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
@@ -333,16 +334,18 @@ for the headless lane profile.
 dispositions. #1121 merged as `d5129869` on 2026-10-18 (Europe/Helsinki), completing
 #1103's receipt follow-up. The receipt contract makes the caller allocate a fresh id and
 destination before each engine CLI call, publishes without replacement, and checks
-without writing. The preserved `fabed73e` implementation is design evidence; the
+without writing. #1129's follow-up requires scheduled calls to claim a caller-owned
+attempt before dispatch and makes the final caller check retain direct-call refusals.
+The preserved `fabed73e` implementation is design evidence; the
 round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
 was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
 timeout and report-containment findings.
 **Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
 [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: adopt the merged receipt contract in cs-toolkit and instrument each scheduled
-engine call with caller-owned freshness and failure propagation; do not export a
-shared id around a multi-call agent run.
+▶ Next: adopt the receipt and scheduled-caller contract in cs-toolkit. Integrate run
+allocation, per-call attempts, process status and final ledger checking, and establish
+the documented trusted launcher boundary before claiming complete invocation coverage.
 
 ### Shared hook installation
 
@@ -364,6 +367,6 @@ assessment is `saved_plans/consumer-upgrade-assessment_2026-10-15.md` (local); i
 predates this upgrade and is not evidence of either consumer's current installation.
 **Owner:** #1103, #1116, #990, #1011, #1109, #979.
 
-▶ Next: integrate the reviewed receipt contract into cs-toolkit's scheduled caller
+▶ Next: integrate the receipt and scheduled-caller contract into cs-toolkit's caller
 when adopted, then verify completed-state retirement before removing the #979 shim.
 Reassess OpenKitchen's installation and lane prerequisites before an upgrade there.

@@ -11,6 +11,7 @@ its reference files.
 - Entry points, inputs and outputs of both engines
 - Dispositions, and running from a linked worktree
 - Invocation outcome receipts and caller-owned freshness
+- Scheduled caller enforcement and launcher integration
 
 ## Engine CLI
 
@@ -159,6 +160,9 @@ outside agent-authored output. Use a random UUID for the id and a new private di
 for the call's artifacts, beneath a caller-owned job artifact root. Resolve that
 parent's path before passing it: the storage reader refuses symlink ancestors, including
 an unresolved system temporary-directory alias. The parent must already exist.
+Scheduled callers use the allocation API under *Scheduled caller enforcement* below;
+receipt flags alone are insufficient for scheduled execution. Interactive calls may
+continue without receipts.
 
 Pass `--outcome-receipt <absolute-path> --invocation-id <fresh-id>`, or set
 `DEVKIT_TRIAGE_OUTCOME_RECEIPT` and `DEVKIT_TRIAGE_INVOCATION_ID` in that call's
@@ -192,8 +196,9 @@ it names that entry. The finalize CLI defaults the execution entry to `resume`; 
 receipt checks do not inject that default. `--expect-context` and `--expect-mode` are
 required alongside `--expect-entry`. A refusal before mode discovery records `unknown`
 and stays refused; a waiting or completed receipt with unknown mode is malformed.
-The checker ignores the publishing destination environment variable and accepts no
-execution flags. It performs no writes, including on parse failures or help.
+The checker ignores publishing and caller environment variables and accepts no
+execution flags. A valid checker invocation and `--help` perform no writes. Malformed
+CLI arguments in a caller run retain a rejection in that run, without changing receipts.
 
 | Check verdict | Exit | Caller interpretation |
 |---|---|---|
@@ -220,6 +225,69 @@ make repeated engine calls. The outer wrapper must retain the call results, reje
 failed or missing calls and apply its job-specific policy to the final checked
 result. An agent run that never invoked the engine has no outcome evidence. Retrying
 with a new id does not retroactively turn a failed scheduled job into success.
-Adopting these flags alone does not instrument an existing scheduler; deploy its
-per-call launcher and failure propagation together. Refresh the CLI, finalize entry,
-`lib/triage/outcome.py`, and this workflow reference from the same kit revision.
+Adopting these flags alone does not instrument an existing scheduler; deploy the
+enforcement integration below and failure propagation together. Refresh the CLI,
+finalize entry, `lib/triage/outcome.py`, `lib/triage/caller.py`, and this workflow
+reference from the same kit revision.
+
+## Scheduled caller enforcement
+
+Both CLI entry points require a caller attempt before engine dispatch when context is
+`unattended`, or when any of `JOB_NAME`, `AUTOMATION_RUN_ID`,
+`DEVKIT_TRIAGE_CALLER_RUN` or `DEVKIT_TRIAGE_CALLER_ATTEMPT` is present (even empty).
+An explicit `--context interactive` does not override scheduled markers. These are
+transport markers, not job-name configuration. Other schedulers must inject
+`DEVKIT_TRIAGE_CALLER_RUN`; the CLI cannot discover an unmarked scheduled process.
+
+Integrate the Python API in `<engine-dir>/lib/triage/caller.py` into the trusted caller:
+
+1. Before launching the agent, call `create_run(root)` with a fresh absolute path
+   beneath an existing caller-owned artifact directory. Resolve system temporary
+   aliases first. The run directory must not exist; keep other wrapper artifacts
+   outside it. Inject `DEVKIT_TRIAGE_CALLER_RUN=str(root)` into **every** agent/tool
+   subprocess, including direct CLI calls. Do not set a run-wide attempt or receipt id.
+2. Before each engine process, call `prepare_attempt(root, entry=entry, mode=mode)`.
+   It returns the absolute attempt path and allocates a fresh id and receipt path.
+   Use `read_attempt(root, attempt)` to obtain `invocation_id` and `outcome_receipt`.
+   `entry` is `None` for omitted draft entry and `resume` for omitted finalize entry;
+   select `live` or `test` as the expected mode. Retain dispatch order in the caller.
+3. Pass the expected id and receipt using the existing flags and pass
+   `--caller-attempt <attempt-path>` (or `DEVKIT_TRIAGE_CALLER_ATTEMPT` for that child
+   only), with `--context unattended`. The caller controls these inputs: its launcher
+   must reject agent-supplied overrides. Resolve the configured engine location from
+   merged `paths.engines` and `triage.draft_engine` / `triage.finalize_engine`.
+4. After the process exits, call `record_exit(root, attempt, returncode)` with its
+   actual status, or `None` if launch/timeout handling could not establish a terminal
+   status. Do not infer status from stdout or an agent summary. A missing status is
+   also failure. Retain evidence; do not remove a failed attempt before retrying.
+5. After the agent and all tool processes have ended, call `check_run(root)` and
+   fail the job on **any exception**. It checks every allocated attempt, its exclusive
+   claim, process status and outcome receipt; a rejected direct call or incomplete
+   attempt prevents acceptance even after a valid call. An empty run fails. Returned
+   checks prove invocation coverage inside this contract, not job completion, and
+   are not dispatch ordered. Also require the agent's successful exit and apply the
+   existing final-result policy using caller-retained dispatch order: approval waits
+   remain pending, reconciliation requires attention, and unfinished phases are not
+   completed jobs. Keep finalization's resume-only and frozen-inbox protections.
+
+The CLI claims an attempt by exclusive creation before reading requests or invoking
+the engine. It matches run identity, attempt location, entry, unattended context,
+invocation id and receipt destination. Reuse, foreign attempts, missing transport or
+an occupied destination return a hard stop before transition side effects. Rejected
+direct calls are recorded in the run. A malformed or inaccessible run cannot authorize
+dispatch. The final caller must treat unreadable evidence as failure. Read-only receipt
+checks and help do not consume attempts. Engine failures, receipt publication failures,
+process interruption and mode mismatch remain failures under the final check.
+
+**Trusted boundary:** this protocol enforces dispatch through the installed CLI under
+a trusted launcher and filesystem. It is not authentication or a security sandbox.
+An unrestricted shell can unset markers, forge or delete evidence, import `engine.run`
+directly, or replace engine bytes. Environment detection alone cannot prevent that.
+To claim coverage against such a caller, the runtime must mediate tool/process launch,
+preserve the run marker, protect caller evidence and engine code, and prevent execution
+outside the guarded CLI (for example through a broker with separate authority). The
+launcher owns allocation and process-status writes; agent tool calls request dispatch
+through it. Prompt instructions and a child-only environment variable do not establish
+this boundary. If the runtime cannot provide it, report coverage as trusted/cooperative
+only and do not claim enforcement against arbitrary shell bypass. These requirements
+do not grant tracker, approval, notification, recovery or workflow-state authority.

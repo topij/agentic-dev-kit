@@ -15,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 
 from triage.approval import ApprovalContext  # noqa: E402
+from triage.caller import ATTEMPT_ENV, enforce_attempt, record_rejection  # noqa: E402
 from triage.canonical import CanonicalError, dumps, loads_exact  # noqa: E402
 from triage.engine import run  # noqa: E402
 from triage.model import (
@@ -49,6 +50,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--enable-github-forge", action="store_true", help="allow an approved finalization transition through git and gh")
     result.add_argument("--outcome-receipt", type=Path, help="fresh absolute receipt path (or DEVKIT_TRIAGE_OUTCOME_RECEIPT)")
     result.add_argument("--invocation-id", help="fresh per-call caller id (or DEVKIT_TRIAGE_INVOCATION_ID)")
+    result.add_argument("--caller-attempt", type=Path, help="scheduled caller's attempt record (or DEVKIT_TRIAGE_CALLER_ATTEMPT)")
     result.add_argument("--check-outcome-receipt", type=Path, help="read-only receipt classification; requires invocation expectations")
     result.add_argument("--expect-entry", choices=("auto", "resume", "new", "recover", "test"))
     result.add_argument("--expect-context", choices=("interactive", "unattended"))
@@ -81,17 +83,24 @@ def hard_stop(detail: str, code: str = "invalid-invocation") -> dict:
 
 
 def main(argv: list[str] | None = None, *, default_entry: str | None = None) -> int:
+    def refuse(detail: str) -> int:
+        try:
+            record_rejection(detail)
+        except (OSError, ValueError, TriageError) as exc:
+            print(f"caller rejection not recorded: {exc}", file=sys.stderr)
+        print(dumps(hard_stop(detail)).decode())
+        return 2
+
     try:
         args = parser().parse_args(argv)
     except TriageError as exc:
-        print(dumps(hard_stop(str(exc))).decode())
-        return 2
+        return refuse(str(exc))
     invocation_id = args.invocation_id if args.invocation_id is not None else os.environ.get("DEVKIT_TRIAGE_INVOCATION_ID")
     if args.check_outcome_receipt is not None:
         # Checking never dispatches through the publishing path, even if the
         # environment contains a receipt destination. Parse errors and --help
         # also return before any receipt I/O.
-        run_flags = (args.entry, args.context, args.request, args.approval_context, args.outcome_receipt)
+        run_flags = (args.entry, args.context, args.request, args.approval_context, args.outcome_receipt, args.caller_attempt)
         if (any(value is not None for value in run_flags)
                 or args.enable_github_tracker or args.enable_tracker or args.enable_github_forge
                 or args.expect_entry is None or args.expect_context is None or args.expect_mode is None):
@@ -107,8 +116,7 @@ def main(argv: list[str] | None = None, *, default_entry: str | None = None) -> 
         print(dumps(checked).decode())
         return {"completed": 0, "waiting": 0, "refused": 1}.get(checked["verdict"], 2)
     if any(value is not None for value in (args.expect_entry, args.expect_context, args.expect_mode)):
-        print(dumps(hard_stop("invocation expectations require --check-outcome-receipt")).decode())
-        return 2
+        return refuse("invocation expectations require --check-outcome-receipt")
     args.entry = args.entry if args.entry is not None else default_entry
     args.context = args.context or "interactive"
     receipt_path = args.outcome_receipt
@@ -120,8 +128,15 @@ def main(argv: list[str] | None = None, *, default_entry: str | None = None) -> 
                 raise TriageError("an outcome receipt needs both a path and an invocation id", code="invalid-invocation")
             preflight_receipt(receipt_path, invocation_id)
         except (OSError, TriageError) as exc:
-            print(dumps(hard_stop(f"outcome receipt unavailable: {exc}")).decode())
-            return 2
+            return refuse(f"outcome receipt unavailable: {exc}")
+    attempt = args.caller_attempt
+    if attempt is None and ATTEMPT_ENV in os.environ:
+        attempt = Path(os.environ[ATTEMPT_ENV])
+    try:
+        enforce_attempt(attempt=attempt, receipt=receipt_path, invocation_id=invocation_id,
+                        entry=args.entry, context=args.context)
+    except (OSError, ValueError, TriageError) as exc:
+        return refuse(f"scheduled caller unavailable: {exc}")
 
     def finish(result: dict, status: int) -> int:
         # Preserve the engine result even when publication fails after it acted.

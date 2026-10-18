@@ -1308,6 +1308,48 @@ def test_retirement_rechecks_marker_after_scan(root, repo, monkeypatch):
     assert path.exists()
 
 
+@pytest.mark.parametrize("kind", ["registered", "borrowed", "bare", "nested-root", "unreadable-registration"])
+def test_retirement_rechecks_dependencies_after_scan(root, repo, monkeypatch, kind):
+    settings, receipt, path = _round(root, repo)
+    source = path / "source"
+    if kind == "borrowed":
+        _git(repo, "clone", "--no-hardlinks", str(repo), str(source))
+    real_classify = sweep.classify
+    changed = False
+
+    def add_dependency(*args, **kwargs):
+        nonlocal changed
+        result = real_classify(*args, **kwargs)
+        if not changed:
+            changed = True
+            assert result.owner == sweep.STALE
+            if kind == "registered":
+                _git(repo, "worktree", "add", "--detach", str(source))
+            elif kind == "borrowed":
+                outside = root.parent / "late-borrower"
+                _git(repo, "clone", "--shared", str(source), str(outside))
+                settings.repos.append(outside)
+            elif kind == "bare":
+                _git(repo, "clone", "--bare", str(repo), str(source))
+            elif kind == "nested-root":
+                source.mkdir()
+                settings.roots.append(str(source))
+            else:
+                def unavailable(*args):
+                    raise sweep.ConfigError("late registration read failed")
+                monkeypatch.setattr(sweep, "repository_stores", unavailable)
+        return result
+
+    monkeypatch.setattr(sweep, "classify", add_dependency)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert path.exists()
+    if kind != "unreadable-registration":
+        assert source.exists()
+    if kind == "registered":
+        assert str(source) in sweep.registered_worktrees(settings.repos)
+
+
 def test_round_cli_allocation_report_and_retirement(root, repo):
     config = repo / "scratch.yaml"
     config.write_text(f"scratch:\n  roots:\n    - {root}\n  grace_window: 24h\n  worktree_repos:\n    - {repo}\n")
