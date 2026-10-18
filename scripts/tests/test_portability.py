@@ -2362,8 +2362,8 @@ _SETEXT_UNDERLINE = re.compile(r" {0,3}(?:=+|-+)[ \t]*")
 # an angle-bracketed destination or a bare destination without parentheses.
 _PARAGRAPH_REFERENCE = re.compile(
     r" {0,3}\[(?=[^\]\n]*[^\s\]])[^\[\]\\\n]+\]:[ \t]*"
-    r"(?:<[^<>\n]*>|[^\s()<>\\]+)"
-    r"(?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^()\n]*\)))?[ \t]*"
+    r"(?:<[^<>\\\n]*>|[^\s()<>\\]+)"
+    r"(?:[ \t]+(?:\"[^\"\\\n]*\"|'[^'\\\n]*'|\([^()\\\n]*\)))?[ \t]*"
 )
 
 
@@ -2490,6 +2490,29 @@ def test_split_workflow_paragraph_continuations_preserve_fences(
         prefix + "\n<span>\n```\n\n[x](../absent.md)\n", encoding="utf-8",
     )
     _assert_split_workflow_relative_links_resolve(tmp_path)
+
+
+@pytest.mark.parametrize("prefix", (
+    '[ref]: <../present.md\\>',
+    '[ref]: ../present.md "title\\"',
+    "[ref]: ../present.md 'title\\'",
+    '[ref]: ../present.md (title\\)',
+))
+def test_split_workflow_escaped_terminators_do_not_shift_fences(
+    tmp_path: Path, prefix: str,
+) -> None:
+    workflows = tmp_path / "docs" / "agentic-dev-kit" / "workflows"
+    reference = workflows / "example" / "reference.md"
+    reference.parent.mkdir(parents=True)
+    # The link extractor also scans definition-shaped literal text. Make its
+    # targets exist so only the trailing broken link can fail the assertion.
+    for name in ("present.md", "present.md\\"):
+        (workflows / name).write_text("", encoding="utf-8")
+    reference.write_text(
+        prefix + "\n<span>\n```\n\n```\n[x](../absent.md)\n", encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match=r"links '\.\./absent\.md'"):
+        _assert_split_workflow_relative_links_resolve(tmp_path)
 
 
 def test_split_workflow_broken_links_are_rejected(tmp_path: Path) -> None:
