@@ -590,7 +590,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "80a4be1a693ff48603dcfa35ba8dad670ee5093b4f7aebe89923683da3bafe3b"
+      "sha256": "2798186b1fab762347ebfd0597d8009b95e9a9b5b4d87344eb8ac08395bf6805"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
