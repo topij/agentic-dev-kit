@@ -244,8 +244,8 @@ guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up fr
 #1122. #1122 (`dd089388`) shipped #900: allocated review rounds, prompt enforcement,
 explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
 protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retirement time.
-#997 owns bare fixture retention; the friction inbox records the
-uv-cache marker case observed during this session, whose remedy is not established.
+#997 owns bare fixture retention; the friction inbox records the uv-cache marker
+case. Empty regular `.git` markers are now inert; fixture dependencies remain protected.
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -255,8 +255,8 @@ uv-cache marker case observed during this session, whose remedy is not establish
 
 ▶ Next: #997 — choose how a session entry whose only git dirs are test fixtures
 becomes sweepable without reopening the outside-dependent fail-open (an operator
-design decision). Use the uv-cache marker observation already recorded in
-`docs/kit-friction-log.md` as a separate case to explain before choosing the remedy.
+design decision). Keep empty-cache-marker handling separate from the fixture
+dependency decision.
 
 ### Reviewer profiles
 

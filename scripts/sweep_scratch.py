@@ -25,9 +25,10 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     records nothing about who uses it) outside a ``.git`` directory; or it is,
     holds or sits inside the git dir of a configured repository or an object
     store one borrows from through ``objects/info/alternates``, followed
-    transitively. A ``.git`` file or ``worktrees`` record the engine cannot read
-    or parse also lands here, with that as its reason: kept, as if live; an
-    unreadable or quoted ``alternates`` file is an exit 2.
+    transitively. An unreadable ``.git`` file, a nonempty ``.git`` file the engine
+    cannot parse, or an unreadable or unparseable ``worktrees`` record also lands
+    here: kept, as if live. Empty regular ``.git`` files do not name a dependency.
+    An unreadable or quoted ``alternates`` file is an exit 2.
 ``in-grace``
     Something anywhere inside the entry was modified within
     ``scratch.grace_window``. The newest timestamp over the whole tree decides,
@@ -531,6 +532,13 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
             text = handle.read(_GIT_FILE_MAX + 1)
     except OSError as exc:
         return f"unreadable .git file {git_file}: {exc.strerror}"
+    # Only an empty regular file is inert (uv creates sdists-v9/.git this way).
+    # Nonempty files, including whitespace-only or malformed pointers, still
+    # need parsing or protection. Unreadable files stay protected above; symlinks
+    # and .git directories keep their separate scan rules. Ignoring this marker
+    # does not exempt its siblings or parent from dependency checks.
+    if text == "":
+        return None
     lines = text.strip().splitlines()
     if len(text) > _GIT_FILE_MAX or len(lines) != 1 or not lines[0].startswith("gitdir:"):
         return f"unparseable .git file {git_file}"
