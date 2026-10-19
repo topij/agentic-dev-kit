@@ -601,7 +601,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "0efba476bb38df672db3d01e780f8edd77c1d4dc566464c4d806bbad59581d81"
+      "sha256": "69f227a08b176ff6c30bc5c11891d041b921645cbfb0cf11111767fec64e81fa"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",

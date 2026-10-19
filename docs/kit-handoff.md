@@ -245,7 +245,7 @@ guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up fr
 explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
 protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retirement time.
 #997 owns bare fixture retention; the friction inbox records the uv-cache marker
-case. Empty regular `.git` markers are now inert; fixture dependencies remain protected.
+case. Empty regular `.git` files do not imply a Git dependency; fixtures stay protected.
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),

@@ -532,7 +532,7 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
             text = handle.read(_GIT_FILE_MAX + 1)
     except OSError as exc:
         return f"unreadable .git file {git_file}: {exc.strerror}"
-    # Only an empty regular file is inert (uv creates sdists-v9/.git this way).
+    # An empty regular file names no Git dependency (uv creates sdists-v9/.git).
     # Nonempty files, including whitespace-only or malformed pointers, still
     # need parsing or protection. Unreadable files stay protected above; symlinks
     # and .git directories keep their separate scan rules. Ignoring this marker
