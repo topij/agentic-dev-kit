@@ -40,6 +40,12 @@ if "kitconfig" not in sys.modules:
 from kitconfig import get, loads, repo_root  # noqa: E402
 
 NARRATIVE_KEYS = ("handoff", "handoff_history", "friction_log", "friction_log_archive")
+# A moved pairing longer than this is reported rather than aligned, and at most
+# this many unclaimed deleted lines are tried as its source. Both bound the work
+# per pairing, so a long moved archive cannot make the mandatory preflight
+# superlinear; past either bound the pairing fails closed and is reported.
+MAX_MOVED_SPAN = 64
+MAX_MOVE_CANDIDATES = 8
 LIMITS = [
     "Only destinations parsed as CommonMark links or images are checked; unresolved reference text is not a parsed link.",
     "Links and stamps are checked in changed Markdown blocks, including newly active blocks after deletions; a changed reference definition also rechecks document links.",
@@ -48,7 +54,8 @@ LIMITS = [
     "A historical stamp need not name the candidate head; the reviewer must judge its stated scope.",
     "Stamp fields use code spans and the connectors at, optional in, and on; raw HTML and unrelated connector wording are outside this scan.",
     "Closing keywords pair conservatively with the next issue reference across intervening text and markup; declare each intended reference exactly.",
-    "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, a deletion inside it, a pairing spanning more than MAX_MOVED_SPAN lines, or one whose source is not among the first MAX_MOVE_CANDIDATES unclaimed deleted lines matching its first line is still reported.",
+    "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, a deletion inside it, a pairing spanning more than "
+    f"{MAX_MOVED_SPAN} lines, or one whose source is not among the first {MAX_MOVE_CANDIDATES} unclaimed deleted lines matching its first line is still reported.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -62,14 +69,6 @@ _CLOSING_TOKEN = re.compile(
     r"\b(?P<keyword>close[sd]?|closing|fix(?:es|ed|ing)?|resolve[sd]?|resolving)\b",
     re.IGNORECASE,
 )
-
-
-# A moved pairing longer than this is reported rather than aligned, and at most
-# this many unclaimed deleted lines are tried as its source. Both bound the work
-# per pairing, so a long moved archive cannot make the mandatory preflight
-# superlinear; past either bound the pairing fails closed and is reported.
-MAX_MOVED_SPAN = 64
-MAX_MOVE_CANDIDATES = 8
 
 
 class CheckError(Exception):
