@@ -24,6 +24,17 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-20
+
+- **A prose review treated instruction conditionals as program branches.** Severity L,
+  kept for accumulation. The adversarial lens for #1136 mutated the worktree preference
+  in `AGENTS.md` and started `make mutation-test`. The cockpit stopped the exploratory
+  full-suite runs and required restoration and a terminal clarification. The reviewer
+  withdrew its claim that those runs were required: the code suite could not establish
+  whether an agent follows the instruction. The
+  [review disposition](https://github.com/topij/agentic-dev-kit/pull/1136#issuecomment-6287957657)
+  retains the limits. No workflow remedy was selected.
+
 ## 2026-10-20 — Backlog migrated by triage session 7858b0190c764ac3af1d3d1002463f7f
 
 Engine mode: `engine-backed`.

@@ -20,6 +20,27 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-20 (worktree-first sessions)
+
+- **Worktree-first sessions:** [#1136](https://github.com/topij/agentic-dev-kit/pull/1136)
+  merged as `023a211bc7b7cd7689fd98ad49b1841efe43f77e` on the operator's request.
+  The shared `AGENTS.md` carries the task-worktree preference.
+- Verification: `make test` at `7438abb864b6aea3fe74c5995c5039d021318ce3`, in
+  `/private/tmp/agentic-dev-kit-worktree-preference-20261020`, on 2026-10-20 passed.
+  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1136#issuecomment-6287957657)
+  retains the exploratory mutation limits; no agent-compliance harness was run.
+- The operator-approved triage filed
+  [#1137](https://github.com/topij/agentic-dev-kit/issues/1137),
+  [#1138](https://github.com/topij/agentic-dev-kit/issues/1138),
+  [#1139](https://github.com/topij/agentic-dev-kit/issues/1139) and
+  [#1140](https://github.com/topij/agentic-dev-kit/issues/1140). The archive-sweep
+  [#1141](https://github.com/topij/agentic-dev-kit/pull/1141) carries the exact
+  approve/archive/park commands; parked source entries remain in the inbox.
+- Workstream **Worktree-first sessions** finished on the operator's confirmation;
+  no follow-up remains.
+
+______________________________________________________________________
+
 ## Session — 2026-10-18 (cs-toolkit upgrade support)
 
 - **Scratch retention:** [#1126](https://github.com/topij/agentic-dev-kit/pull/1126)
@@ -39,11 +60,13 @@
   `2fb0981c6e8cbc71b3fe5785714029a201685555` on 2026-10-18 passed. The merged
   `d2f40206` tree matches that candidate. Full output is retained in
   `/private/tmp/devkit-1127-1129-evidence-eTfHvO/make-test-2fb0981c.log`.
-- The friction inbox retains the repeated uv-cache dependency refusal and review
-  mutation/verification overlap. Scratch guards were preserved.
-- On the operator's request, triage session `749a3ff1c51d4fe1928d7f0d4553c2cc`
-  was left awaiting decisions. Resume with `triage-friction-log resume`; its report
-  is `reports/triage_live_2026-10-18_749a3ff1c51d4fe1928d7f0d4553c2cc.md`.
+- The session recorded uv-cache dependency refusals and review mutation/verification
+  overlap, preserving scratch guards. The later triage sweep is recorded in
+  [#1141](https://github.com/topij/agentic-dev-kit/pull/1141).
+- On 2026-10-20 the operator canceled the retained October 18 triage draft
+  `749a3ff1c51d4fe1928d7f0d4553c2cc`, preserving its source entries and report at
+  `reports/triage_live_2026-10-18_749a3ff1c51d4fe1928d7f0d4553c2cc.md`.
+  Fresh session `7858b0190c764ac3af1d3d1002463f7f` took the operator's new decisions.
 
 ______________________________________________________________________
 
@@ -62,8 +85,8 @@ ______________________________________________________________________
   `/Users/topi/Coding/agentic-dev-kit`, on 2026-10-18 passed. This is the reviewed
   scratch-lifecycle candidate, before the squash merge.
 - Retirement kept the opening and repair panel rounds because uv-cache `.git`
-  markers triggered dependency protection. The friction inbox records the paths
-  and unresolved reclamation design; the guards were not bypassed.
+  markers triggered dependency protection. The friction archive records the paths
+  after the #1141 sweep; the guards were not bypassed.
 - Workstream assignment confirmed by the operator: **Triage outcome receipts**
   and **Scratch retention**.
 
@@ -137,75 +160,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Session — 2026-10-15 (triage linked-worktree identity and outcome receipts; shared-hook install from linked worktrees; consumer-upgrade assessment, in Claude Code)
-
-- **Triage repository identity and outcome receipts:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111)
-  (for #1103) is open and ready at `9ee0fd9b`, held for the operator.
-  - What it does: linked worktrees name the main worktree; recorded identities are
-    compared by verified Git membership, never rewritten; results carry
-    `disposition` / `waiting_on` / `refusal_code`; the CLI can publish and check an
-    invocation-bound outcome receipt.
-  - Review: the two-lens panel ran three rounds (`342f0a9a`, `cc3eb05f`, `9ee0fd9b`),
-    and the round budget is spent. The decision packet on the PR names the open
-    findings. The receipt-clearing path drew a finding in every round, so the packet
-    treats it as design feedback rather than proposing another patch.
-  - Found by the author in round 1, then corrected: a `--separate-git-dir` primary's linked
-    worktree would have hard-stopped.
-  - Verification: `make test` at `9ee0fd9bd486e0e8860233cfaa02a62287a3562a` on
-    2026-10-15, in `/Users/topi/Coding/agentic-dev-kit-wt/triage-worktree-identity`,
-    printed `5069 passed, 1 skipped`.
-- **Shared hook installation:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112)
-  (for #990 item 2) is open and ready at `5fda739d`, held for the operator.
-  - What it does: from a linked worktree, `init.sh` / `make install-hooks` report a
-    shared hooks directory instead of writing it. A byte-identical, executable shim is
-    `already current`; anything else is `deferred`, unless
-    `DEVKIT_INSTALL_SHARED_HOOKS=1` is set.
-  - Review: three panel rounds, and the round budget is spent. The decision packet's
-    open findings are stale `init.sh --help` / `adopt.md` prose (MEDIUM) and five LOW
-    findings.
-  - Verification: `make test` at `5fda739deb899a75a959e7c2b1e2df0282e478e3` on
-    2026-10-15, in `/Users/topi/Coding/agentic-dev-kit-wt/linked-worktree-hooks`,
-    printed `5041 passed, 1 skipped`.
-  - #990's items 1 (lens definitions rendered for the kit's config) and 3 (migration
-    gaps) are untouched and remain on #990.
-- **Consumer upgrades:** the assessment is `saved_plans/consumer-upgrade-assessment_2026-10-15.md`
-  (local, not committed).
-  - Read-only facts: cs-toolkit records kit `6f543433` and OpenKitchen `55869a7e`
-    (their `kit-manifest.json` on `origin/main`).
-  - cs-toolkit's retained triage state is a completed live session bound to its
-    primary checkout. It matches exactly under #1111, and it still carries the #979
-    receipt.
-  - Its 2026-10-09 scheduled draft stopped on the identity mismatch in a `/tmp`
-    worktree, and the finalize job logged a passed deliverable check anyway.
-  - #989's items do not trigger for either consumer's install scope.
-  - #1011 and #1109 matter only to OpenKitchen, which installs lanes; cs-toolkit
-    declines them.
-  - No consumer was upgraded and no tracker write was made, on the operator's
-    instruction.
-- **Assignment:** all three workstream entries below are new, and the operator did not
-  confirm the assignment.
-
-______________________________________________________________________
-
-## Session — 2026-10-15 (Codex policy reporting, fixture diagnostics and lane manifest guidance)
-
-- **Skills and instruction files:** [#1108](https://github.com/topij/agentic-dev-kit/pull/1108)
-  merged as `f066b3ae3d4b902e7c8d30c8ea78eff25d9d7c95`. Added Codex invocation-policy reporting.
-  Original scope `oct14-policy-report` is consciously parked; its replacement shipped.
-- **Panel prompt test fixtures:** [#1107](https://github.com/topij/agentic-dev-kit/pull/1107)
-  shipped git-stderr provenance coverage and missing-object wording on 2026-10-14.
-  Original scope `oct14-fixture-stderr` is consciously parked; its replacement shipped.
-- **Headless lane manifest refresh:** [#1106](https://github.com/topij/agentic-dev-kit/pull/1106)
-  documented the allowed refresh command on 2026-10-14. Original scope
-  `oct14-manifest-command` is consciously parked; its replacement shipped.
-- **Decisions and evidence:** workstream assignments were confirmed. PR comments retain
-  verification and review receipts. Failed launcher receipts were not treated as completion.
-- **Filed with exact-payload approval:** [#1109](https://github.com/topij/agentic-dev-kit/issues/1109)
-  and an [occurrence on #1011](https://github.com/topij/agentic-dev-kit/issues/1011#issuecomment-6185414536).
-  Review-screening and verification-ordering incidents remain in the friction inbox.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -221,7 +175,7 @@ added named delta draws; #993 (`2d40c960`) shipped the review round budget.
 preflight and executed-span guidance on 2026-10-10. The P2 regression the operator
 deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
-archive sweep rewrites (friction log). #1096 (`8beee9a1`) pins its candidate bound
+archive sweep rewrites (friction archive; #1139). #1096 (`8beee9a1`) pins its candidate bound
 with a positional test.
 #921 owns the cockpit check of verdict-line names.
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
@@ -244,8 +198,8 @@ guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up fr
 #1122. #1122 (`dd089388`) shipped #900: allocated review rounds, prompt enforcement,
 explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
 protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retirement time.
-#997 owns bare fixture retention; the friction inbox records the uv-cache marker
-case. Empty regular `.git` files do not imply a Git dependency; fixture dependencies remain protected.
+#997 owns bare fixture retention; the friction archive records the uv-cache marker
+case. #1134 (`b739bc46`) delivered empty-marker handling. Fixture dependencies remain protected.
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -326,8 +280,8 @@ hiding later links (#1075), and #1100 (`5d29a75f`) covers #1069's residual LOWs
 (#1070).
 #1108 (`f066b3ae3d4b902e7c8d30c8ea78eff25d9d7c95`) added the Codex invocation-policy report for #1055.
 #1115 (`738d1b2e`) pins the triage split's section placement and summary citations
-for #1058, which stays open for the operator. #1098 owns the link check's remaining
-state-machine gaps.
+for #1058, which stays open for the operator. #1132
+(`a5ec9c0f594142559bdb47ece083f6133a5efe6e`) delivered #1098's link-check follow-up.
 **Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
@@ -335,8 +289,7 @@ state-machine gaps.
 [#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
 [#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
 
-▶ Next: #1098 — make the split-workflow link check treat setext headings, indented
-code and reference definitions as their own blocks, not paragraph text.
+▶ Next: operator selection after #1132; the previous #1098 implementation step shipped.
 
 ### Panel prompt test fixtures
 
