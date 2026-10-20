@@ -847,6 +847,12 @@ def _sweep(root: Path, inbox_before: str, archive_before: str,
     return root, base, commit(root)
 
 
+def _move_limit(report: dict) -> str:
+    [limit] = [item for item in report["limits"] if item.startswith("A narrative pairing is not reported")]
+    assert "MAX_" not in limit, limit
+    return limit
+
+
 def test_pairing_moved_whole_to_another_narrative_path_is_not_reported(repo):
     root, _ = repo
     entry = f"- **An entry.** The fix is either a grant or a launcher step.\n- **Next.** On {LOCAL_REF} the lens\n  found a gap.\n"
@@ -1070,6 +1076,8 @@ def test_moved_pairings_longer_than_the_span_bound_are_reported(repo):
     reference = keywords + 3
     assert [item["line"] for item in report["findings"]] == [
         line for line in range(3, reference) if reference - line >= 64]
+    # The report states the bound this run enforced, not a constant's name.
+    assert _move_limit(report).count("spanning more than 64 lines") == 1
 
 
 def test_pathological_identical_moves_fail_closed_within_a_bounded_time(repo):
@@ -1129,3 +1137,4 @@ def test_move_source_is_found_only_among_the_first_eight_candidates(repo, positi
     else:
         assert code == 0, report
         assert report["findings"] == []
+    assert _move_limit(report).count("among the first 8 unclaimed deleted lines") == 1
