@@ -26,6 +26,16 @@
 
 ## 2026-10-20
 
+- **A reviewer ran verification in its handed linked tree.** Severity L, kept for
+  accumulation with #1078. On 2026-10-20 the correctness review of #1142 at
+  `b7182eda2b6756316222b786c863b5e318de5f51` ran `make test` from its handed
+  detached checkout, writing ignored bytecode and test/lint caches. Its report said
+  it had skipped private-copy creation because there was no executable mutation
+  branch. The cockpit retained the violation, required source/provenance checks
+  from an independent clone, and required a fresh review with read-only source
+  permissions. No shared reviewer-copy enforcement change was selected; the
+  [review record](https://github.com/topij/agentic-dev-kit/pull/1142) retains the limits.
+
 - **A prose review treated instruction conditionals as program branches.** Severity L,
   kept for accumulation. The adversarial lens for #1136 mutated the worktree preference
   in `AGENTS.md` and started `make mutation-test`. The cockpit stopped the exploratory

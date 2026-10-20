@@ -36,6 +36,16 @@
   [#1140](https://github.com/topij/agentic-dev-kit/issues/1140). The archive-sweep
   [#1141](https://github.com/topij/agentic-dev-kit/pull/1141) carries the exact
   approve/archive/park commands; parked source entries remain in the inbox.
+- Evidence availability: `test -e` at `0b6db571544eca5ecda299cc5c821aefad62e5ec`,
+  in `/private/tmp/agentic-dev-kit-triage-20261020-7858b019`, on 2026-10-20 found
+  `/private/tmp/devkit-overnight-20261014-01a13bcb/` absent, including its
+  `reviews/review-1108-ownership.log` and `reviews/review-1108-ownership-amended.log`.
+  The dated 2026-10-15 TRI-11 source is archived verbatim and included in
+  [#1137](https://github.com/topij/agentic-dev-kit/issues/1137); its location wording
+  is historical. That ticket's acceptance audit needs another retained source or an
+  explicit unavailable-input result. The
+  [availability correction](https://github.com/topij/agentic-dev-kit/pull/1141#issuecomment-6289423693)
+  records the distinction without changing the approved source or payload.
 - Workstream **Worktree-first sessions** finished on the operator's confirmation;
   no follow-up remains.
 
