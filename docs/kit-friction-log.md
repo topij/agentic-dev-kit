@@ -24,6 +24,27 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-20
+
+- **A reviewer ran verification in its handed linked tree.** Severity L, kept for
+  accumulation with #1078. On 2026-10-20 the correctness review of #1142 at
+  `b7182eda2b6756316222b786c863b5e318de5f51` ran `make test` from its handed
+  detached checkout, writing ignored bytecode and test/lint caches. Its report said
+  it had skipped private-copy creation because there was no executable mutation
+  branch. The cockpit retained the violation, required source/provenance checks
+  from an independent clone, and required a fresh review with read-only source
+  permissions. No shared reviewer-copy enforcement change was selected; the
+  [review record](https://github.com/topij/agentic-dev-kit/pull/1142) retains the limits.
+
+- **A prose review treated instruction conditionals as program branches.** Severity L,
+  kept for accumulation. The adversarial lens for #1136 mutated the worktree preference
+  in `AGENTS.md` and started `make mutation-test`. The cockpit stopped the exploratory
+  full-suite runs and required restoration and a terminal clarification. The reviewer
+  withdrew its claim that those runs were required: the code suite could not establish
+  whether an agent follows the instruction. The
+  [review disposition](https://github.com/topij/agentic-dev-kit/pull/1136#issuecomment-6287957657)
+  retains the limits. No workflow remedy was selected.
+
 ## 2026-10-20 — Backlog migrated by triage session 7858b0190c764ac3af1d3d1002463f7f
 
 Engine mode: `engine-backed`.

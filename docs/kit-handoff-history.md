@@ -5,6 +5,71 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-15 (triage linked-worktree identity and outcome receipts; shared-hook install from linked worktrees; consumer-upgrade assessment, in Claude Code)
+
+- **Triage repository identity and outcome receipts:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111)
+  (for #1103) is open and ready at `9ee0fd9b`, held for the operator.
+  - What it does: linked worktrees name the main worktree; recorded identities are
+    compared by verified Git membership, never rewritten; results carry
+    `disposition` / `waiting_on` / `refusal_code`; the CLI can publish and check an
+    invocation-bound outcome receipt.
+  - Review: the two-lens panel ran three rounds (`342f0a9a`, `cc3eb05f`, `9ee0fd9b`),
+    and the round budget is spent. The decision packet on the PR names the open
+    findings. The receipt-clearing path drew a finding in every round, so the packet
+    treats it as design feedback rather than proposing another patch.
+  - Found by the author in round 1, then corrected: a `--separate-git-dir` primary's linked
+    worktree would have hard-stopped.
+  - Verification: `make test` at `9ee0fd9bd486e0e8860233cfaa02a62287a3562a` on
+    2026-10-15, in `/Users/topi/Coding/agentic-dev-kit-wt/triage-worktree-identity`,
+    printed `5069 passed, 1 skipped`.
+- **Shared hook installation:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112)
+  (for #990 item 2) is open and ready at `5fda739d`, held for the operator.
+  - What it does: from a linked worktree, `init.sh` / `make install-hooks` report a
+    shared hooks directory instead of writing it. A byte-identical, executable shim is
+    `already current`; anything else is `deferred`, unless
+    `DEVKIT_INSTALL_SHARED_HOOKS=1` is set.
+  - Review: three panel rounds, and the round budget is spent. The decision packet's
+    open findings are stale `init.sh --help` / `adopt.md` prose (MEDIUM) and five LOW
+    findings.
+  - Verification: `make test` at `5fda739deb899a75a959e7c2b1e2df0282e478e3` on
+    2026-10-15, in `/Users/topi/Coding/agentic-dev-kit-wt/linked-worktree-hooks`,
+    printed `5041 passed, 1 skipped`.
+  - #990's items 1 (lens definitions rendered for the kit's config) and 3 (migration
+    gaps) are untouched and remain on #990.
+- **Consumer upgrades:** the assessment is `saved_plans/consumer-upgrade-assessment_2026-10-15.md`
+  (local, not committed).
+  - Read-only facts: cs-toolkit records kit `6f543433` and OpenKitchen `55869a7e`
+    (their `kit-manifest.json` on `origin/main`).
+  - cs-toolkit's retained triage state is a completed live session bound to its
+    primary checkout. It matches exactly under #1111, and it still carries the #979
+    receipt.
+  - Its 2026-10-09 scheduled draft stopped on the identity mismatch in a `/tmp`
+    worktree, and the finalize job logged a passed deliverable check anyway.
+  - #989's items do not trigger for either consumer's install scope.
+  - #1011 and #1109 matter only to OpenKitchen, which installs lanes; cs-toolkit
+    declines them.
+  - No consumer was upgraded and no tracker write was made, on the operator's
+    instruction.
+- **Assignment:** all three workstream entries below are new, and the operator did not
+  confirm the assignment.
+
+### 2026-10-15 (Codex policy reporting, fixture diagnostics and lane manifest guidance)
+
+- **Skills and instruction files:** [#1108](https://github.com/topij/agentic-dev-kit/pull/1108)
+  merged as `f066b3ae3d4b902e7c8d30c8ea78eff25d9d7c95`. Added Codex invocation-policy reporting.
+  Original scope `oct14-policy-report` is consciously parked; its replacement shipped.
+- **Panel prompt test fixtures:** [#1107](https://github.com/topij/agentic-dev-kit/pull/1107)
+  shipped git-stderr provenance coverage and missing-object wording on 2026-10-14.
+  Original scope `oct14-fixture-stderr` is consciously parked; its replacement shipped.
+- **Headless lane manifest refresh:** [#1106](https://github.com/topij/agentic-dev-kit/pull/1106)
+  documented the allowed refresh command on 2026-10-14. Original scope
+  `oct14-manifest-command` is consciously parked; its replacement shipped.
+- **Decisions and evidence:** workstream assignments were confirmed. PR comments retain
+  verification and review receipts. Failed launcher receipts were not treated as completion.
+- **Filed with exact-payload approval:** [#1109](https://github.com/topij/agentic-dev-kit/issues/1109)
+  and an [occurrence on #1011](https://github.com/topij/agentic-dev-kit/issues/1011#issuecomment-6185414536).
+  Review-screening and verification-ordering incidents remain in the friction inbox.
+
 ### 2026-10-13 (move-candidate bound, split-workflow link check, kit_doctor reference edge and panel_prompt fixture objects, from headless lanes, in Claude Code)
 
 - **How it ran:** an autonomous overnight session. The operator approved the four lanes
