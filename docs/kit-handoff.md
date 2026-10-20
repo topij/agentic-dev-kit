@@ -20,6 +20,23 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-21 (changelog lookup and record-prose report limits)
+
+- **Changelog fragments:** [#1147](https://github.com/topij/agentic-dev-kit/pull/1147)
+  merged as `f98cc100a9527fcc0f908e89683d11ec5556ca0a`. It pins the lookup's baseline
+  range and pathspec and aligns fragment naming guidance with the malformed-path warning.
+- **Record-prose report limits:** [#1146](https://github.com/topij/agentic-dev-kit/pull/1146)
+  merged as `f1999dfb56db0bd38624feb72bd5f228adc3c401`. The report prints the declared
+  move bounds; the existing boundary tests assert the emitted wording.
+  This workstream assignment was not confirmed by the operator.
+- The PR bodies retain the `make test` commands, revisions, directories, dates and
+  terminal output; their review dispositions retain the independent checks and limits.
+  Headless-lane verification was interrupted; the cockpit took over at the unchanged heads.
+- Tracker disposition and workstream closure remain operator decisions. The friction
+  inbox records the recurring verification timeout; no tracker write was made.
+
+______________________________________________________________________
+
 ## Session — 2026-10-20 (worktree-first sessions)
 
 - **Worktree-first sessions:** [#1136](https://github.com/topij/agentic-dev-kit/pull/1136)
@@ -263,10 +280,19 @@ confirm no state root holds a `proposal_correction`, then remove the shim (#979)
 
 ### Changelog fragments
 
-**Status:** changelog entries are `changelog.d/` fragments since #1020 (`f9146c5f`), and #1022 and #1023 shipped the first two. #1026 holds the lookup's test gaps and naming wording; #1022's fragment `dev-pr-watch-trio.md` already departs from that rule, which gives `pr-watch-trio.md`. #507's heading check has no new entries to check.
-**Owner:** [#1026](https://github.com/topij/agentic-dev-kit/issues/1026); the closed [#1009](https://github.com/topij/agentic-dev-kit/issues/1009) states the problem, and #1020 (`f9146c5f`) holds the design.
+**Status:** #1147 (`f98cc100a9527fcc0f908e89683d11ec5556ca0a`) delivered the lookup
+fixtures and naming follow-up. The fragment design remains in #1020 (`f9146c5f`).
+**Owner:** [#1026](https://github.com/topij/agentic-dev-kit/issues/1026).
 
-▶ Next: #1026 — pin the lookup's baseline range and pathspec with tests, and state one fragment naming rule.
+▶ Next: review #1026 against the delivered lookup changes and decide its tracker disposition.
+
+### Record-prose report limits
+
+**Status:** #1146 (`f1999dfb56db0bd38624feb72bd5f228adc3c401`) delivered the rendered
+move-bound values and assertions; assignment unconfirmed — may belong to Review proportionality.
+**Owner:** [#1120](https://github.com/topij/agentic-dev-kit/issues/1120).
+
+▶ Next: review #1120 against the delivered report wording and decide its tracker disposition.
 
 ### Handoff workstream naming
 

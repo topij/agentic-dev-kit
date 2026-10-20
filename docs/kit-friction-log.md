@@ -24,6 +24,22 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-21
+
+- **Headless verification hit the runtime limit again.** Severity M, kept for
+  accumulation with the 2026-10-14 entry. The changelog and report-limit lanes'
+  `make test` processes were killed before a pytest summary. The cockpit stopped
+  those launchers and took over verification at the unchanged candidate heads.
+  [#1147](https://github.com/topij/agentic-dev-kit/pull/1147) and
+  [#1146](https://github.com/topij/agentic-dev-kit/pull/1146) retain the command,
+  revision, directory, date and terminal results. The launcher wrote interrupted
+  receipts, which were not used as completion evidence. No timeout remedy was selected.
+- **Review fixtures initially escaped their allocated round through pytest defaults.**
+  Severity L, kept for accumulation. The report-limit reviewer superseded those probes
+  with contained runs; the changelog reviewer repeated the missing mutation evidence
+  with `TMPDIR` and `--basetemp` inside its round. Their PR review dispositions retain
+  the limits. No shared fixture-containment change was selected.
+
 ## 2026-10-20
 
 - **A reviewer ran verification in its handed linked tree.** Severity L, kept for
