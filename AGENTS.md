@@ -108,6 +108,12 @@ settled by the rules above.
 
 ## Ground rules
 
+- **Start repository changes in a dedicated linked worktree.** Before the first
+  repository edit, create a worktree and task branch; when resuming work, reuse the
+  task's existing worktree instead. Run edits, verification, and commits there,
+  leaving the primary checkout and unrelated local work untouched. Read-only
+  inspection, including `session-start`, may run in the current checkout. An
+  explicit operator instruction to use a particular checkout takes precedence.
 - `main` is protected: never commit to it directly. Branch and open a PR — and opening
   the PR is not done; watch it to green and review-clean (`pr-watch`).
   **Cockpit work branches `chore/<slug>` or `feat/<slug>`, never `dev/<scope>`.**
