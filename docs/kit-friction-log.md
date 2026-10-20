@@ -36,8 +36,8 @@
   `/private/tmp/devkit-1127-1129-evidence-eTfHvO/`; the
   [PR disposition](https://github.com/topij/agentic-dev-kit/pull/1130#issuecomment-6248253499)
   records the distinction. No additional enforcement remedy was selected.
-- **The uv-cache retirement refusal recurred.** Severity M; reclamation remedy remains
-  unresolved, as in the allocated-round entry below. After reviewer termination,
+- **The uv-cache retirement refusal recurred.** Severity M; this observation predates
+  empty-marker handling in `sweep_scratch.py`. After reviewer termination,
   retirement retained these rounds beneath
   `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/`:
   - `review-cc73b1f0678c41d399813cf09f12a4c9` from #1126.
@@ -47,8 +47,8 @@
   `/private/tmp/devkit-1127-1129-evidence-eTfHvO/retirement-2fb0981c-preview.json`.
   No marker was deleted to bypass the dependency guard.
 
-- **Allocated review rounds retained uv-cache Git markers.** Severity M; incomplete finding:
-  a safe reclamation remedy has not been established. After the reviewers and their
+- **Allocated review rounds retained uv-cache Git markers.** Severity M; this observation
+  predates empty-marker handling in `sweep_scratch.py`. After the reviewers and their
   verification processes ended, targeted retirement for #1122 kept these rounds under
   `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/`:
   - `review-61be4adb9788438295452adb9e87b415`, citing an unparseable `.git` file at
@@ -60,8 +60,8 @@
   `/Users/topi/Coding/agentic-dev-kit`. Receipts and terminal evidence were retained
   outside those rounds in `codex-900-s5h3qa0p` under the same scratch root; the
   [PR disposition](https://github.com/topij/agentic-dev-kit/pull/1122#issuecomment-6242495091)
-  records the review. #997 covers bare fixture repositories, not an established
-  remedy for this cache shape. Preserve the dependency refusal while investigating.
+  records the review. #997 covers bare fixture repositories; those dependency refusals
+  remain binding when empty cache markers are ignored.
 
 ## 2026-10-16
 

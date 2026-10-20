@@ -437,16 +437,30 @@ def test_each_refusal_is_what_keeps_its_fixture(
     assert entry.exists() is not neutralised
 
 
-def test_unparseable_git_file_keeps_the_entry(root: Path, repo: Path):
+@pytest.mark.parametrize("content", [b"garbage\n", b" ", b"\n", b"\x00", b"\xff"])
+def test_unparseable_git_file_keeps_the_entry(root: Path, repo: Path, content):
     entry = root / "entry"
     entry.mkdir()
-    (entry / ".git").write_text("garbage\n", encoding="utf-8")
+    (entry / ".git").write_bytes(content)
     _set_age(entry, OLD)
     reports, outcomes = _run([root], repo, older_than=0)
     assert _owners(reports) == {"entry": sweep.LIVE}
     assert "unparseable .git file" in reports[0].entries[0].reason
     assert outcomes == []
     assert entry.is_dir()
+
+
+@pytest.mark.parametrize("relative", [".git", "uv-cache/sdists-v9/.git"])
+def test_empty_git_cache_marker_allows_stale_entry_removal(root: Path, repo: Path, relative):
+    entry = _tree(root / "entry")
+    marker = entry / relative
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.touch()
+    _set_age(entry, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"entry": sweep.STALE}
+    assert [o.action for o in outcomes] == ["removed"]
+    assert not entry.exists()
 
 
 def test_worktree_registered_after_the_report_is_rechecked_before_removal(
@@ -1229,6 +1243,36 @@ def test_retirement_requires_process_completion_attestation(root, repo):
     assert path.exists()
 
 
+def test_finished_round_reclaims_uv_cache_with_empty_git_marker(root, repo):
+    settings, receipt, path = _round(root, repo)
+    cache = path / "uv-cache" / "sdists-v9"
+    cache.mkdir(parents=True)
+    (cache / ".git").touch()
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "removed"
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("kind", ["linked", "bare", "malformed"])
+def test_empty_git_marker_does_not_exempt_other_dependencies(root, repo, base, kind):
+    settings, receipt, path = _round(root, repo)
+    cache = path / "uv-cache" / "sdists-v9"
+    cache.mkdir(parents=True)
+    (cache / ".git").touch()
+    if kind == "linked":
+        other = base / "other-repo"
+        _git(repo, "clone", "--no-hardlinks", str(repo), str(other))
+        _git(other, "worktree", "add", "--detach", str(path / "outside-linked"))
+    elif kind == "bare":
+        _git(repo, "clone", "--bare", str(repo), str(path / "fixture.git"))
+    else:
+        (path / "other").mkdir()
+        (path / "other" / ".git").write_text("garbage\n")
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert path.exists()
+
+
 @pytest.mark.parametrize("kind", ["registered", "bare", "borrowed", "nested-root"])
 def test_finished_round_keeps_dependency_and_root_protections(root, repo, kind):
     settings, receipt, path = _round(root, repo)
@@ -1362,6 +1406,9 @@ def test_round_cli_allocation_report_and_retirement(root, repo):
     assert allocation.returncode == 0, allocation.stderr
     record = json.loads(allocation.stdout)
     path = Path(record["path"])
+    cache = path / "uv-cache" / "sdists-v9"
+    cache.mkdir(parents=True)
+    (cache / ".git").touch()
     receipt = repo / "receipt.json"
     receipt.write_text(allocation.stdout)
     report = cli("--finish-review-round", str(receipt))
