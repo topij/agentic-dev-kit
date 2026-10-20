@@ -24,44 +24,35 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
-## 2026-10-18
+## 2026-10-20 — Backlog migrated by triage session 7858b0190c764ac3af1d3d1002463f7f
 
-- **Review mutation overlapped a full-suite run again.** Severity M, kept for
-  accumulation with the 2026-10-15 review-verification incident. The correctness lens
-  for #1130 mutated its private checkout while `make test` was still running at
-  `2fb0981c6e8cbc71b3fe5785714029a201685555` on 2026-10-18. The cockpit audited
-  the timeline and required an amended report; the overlapping run was discarded
-  as unmodified verification. The author and adversarial lens supplied separate
-  unmodified full runs. Original/amended reports and the timeline are retained in
-  `/private/tmp/devkit-1127-1129-evidence-eTfHvO/`; the
-  [PR disposition](https://github.com/topij/agentic-dev-kit/pull/1130#issuecomment-6248253499)
-  records the distinction. No additional enforcement remedy was selected.
-- **The uv-cache retirement refusal recurred.** Severity M; this observation predates
-  empty-marker handling in `sweep_scratch.py`. After reviewer termination,
-  retirement retained these rounds beneath
-  `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/`:
-  - `review-cc73b1f0678c41d399813cf09f12a4c9` from #1126.
-  - `review-4114ba6928cd4d2fa1ae0d4e3d2cf147` from #1130, whose preview cited
-    `uv-cache-correctness-2fb0981c/sdists-v9/.git` as an unparseable Git marker.
-  Evidence is retained in `/private/tmp/devkit-1124-evidence-wfAgnC/` and
-  `/private/tmp/devkit-1127-1129-evidence-eTfHvO/retirement-2fb0981c-preview.json`.
-  No marker was deleted to bypass the dependency guard.
+Engine mode: `engine-backed`.
 
-- **Allocated review rounds retained uv-cache Git markers.** Severity M; this observation
-  predates empty-marker handling in `sweep_scratch.py`. After the reviewers and their
-  verification processes ended, targeted retirement for #1122 kept these rounds under
-  `/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/`:
-  - `review-61be4adb9788438295452adb9e87b415`, citing an unparseable `.git` file at
-    `uv-cache-adversarial-22aa2dcc/sdists-v9/.git`.
-  - `review-bc2904eefb804fd692834298deafa461`, citing an unparseable `.git` file at
-    `mutation-uv-cache-e0805361/sdists-v9/.git`.
-  `sweep_scratch.py --finish-review-round <receipt> --apply --reviewers-finished`
-  returned `kept` at `e080536159c0b16874f47ed8b36336e296d820a3` on 2026-10-18 in
-  `/Users/topi/Coding/agentic-dev-kit`. Receipts and terminal evidence were retained
-  outside those rounds in `codex-900-s5h3qa0p` under the same scratch root; the
-  [PR disposition](https://github.com/topij/agentic-dev-kit/pull/1122#issuecomment-6242495091)
-  records the review. #997 covers bare fixture repositories; those dependency refusals
-  remain binding when empty cache markers are ignored.
+Filed [#1137](https://github.com/topij/agentic-dev-kit/issues/1137) from TRI-01, the `2026-10-18` entry `Review mutation overlapped a full-suite run again.`.
+
+Filed [#1138](https://github.com/topij/agentic-dev-kit/issues/1138) from TRI-05, the `2026-10-15` entry `A review lens rewrote the kit's shared pre-push hook from a copied worktree.`.
+
+Filed [#1139](https://github.com/topij/agentic-dev-kit/issues/1139) from TRI-15, the `2026-10-14` entry `The archive sweep's moved-pairing case recurred, as in the 2026-10-12 entry below.`.
+
+Filed [#1140](https://github.com/topij/agentic-dev-kit/issues/1140) from TRI-19, the `2026-10-09` entry `A field-limited backlog read still exceeded the tool output limit.`.
+
+Archived without filing: TRI-02, the `2026-10-18` entry `The uv-cache retirement refusal recurred.`.
+
+Archived without filing: TRI-03, the `2026-10-18` entry `Allocated review rounds retained uv-cache Git markers.`.
+
+Archived without filing: TRI-07, the `2026-10-15` entry `Backgrounded lens suites failed SIGINT tests again.`.
+
+Archived without filing: TRI-11, the `2026-10-15` entry `Review claimed post-restoration verification despite overlap.`.
+
+Archived without filing: TRI-12, the `2026-10-14` entry `Headless lanes used a denied manifest-refresh spelling during the 2026-10-13 batch.`.
+
+Archived without filing: TRI-14, the `2026-10-14` entry `The #1080 repair-chain shape recurred on LOW-only test-helper repairs.`.
+
+Archived without filing: TRI-16, the `2026-10-12` entry `A handoff archive sweep still trips the record-prose preflight after #1088.`.
+
+Archived without filing: TRI-18, the `2026-10-10` entry `Archival preservation met the new narrative preflight's conservative lexer.`.
+
+Approval commands: `approve TRI-01 TRI-05 TRI-15 TRI-19`, `archive TRI-02 TRI-03 TRI-07 TRI-11 TRI-12 TRI-14 TRI-16 TRI-18`, `park TRI-04 TRI-06 TRI-08 TRI-09 TRI-10 TRI-13 TRI-17 TRI-20`. Approver: `topij`.
 
 ## 2026-10-16
 
@@ -73,27 +64,10 @@
 
 ## 2026-10-15
 
-- **A review lens rewrote the kit's shared pre-push hook from a copied worktree.**
-  Severity M; parked because the operator held tracker writes for separate approval.
-  - **Repro:** the round-3 correctness lens on #1112 copied its handed linked worktree
-    with `cp -R`, which copies the `.git` gitfile and so shares the real repository's
-    worktree admin dir. From that copy it ran `git worktree add` and
-    `DEVKIT_INSTALL_SHARED_HOOKS=1 make install-hooks`, which wrote
-    `/Users/topi/Coding/agentic-dev-kit/.git/hooks/pre-push`.
-  - **Effect:** checked afterwards, the file is the standard kit shim with mode 755,
-    so its content is unchanged. The lens reported it.
-  - **Proposed remedy:** the lens contract should name `git clone --no-hardlinks`, never
-    `cp -R`, for a writable copy of a worktree. Same family as #1078 (lenses writing
-    into what they were handed).
 - **A review lens ran a global `pkill -f "pytest scripts/tests"`.** Severity L, kept for
   accumulation. The round-2 correctness lens on #1111 used it to stop its own stray run,
   and it could have killed another lens's suite in the same session. No collateral
   failure was observed.
-- **Backgrounded lens suites failed SIGINT tests again.** Severity L, an occurrence of
-  #992's shape. Two lenses on #1111 reported 25 `test_portability.py` archive failures
-  ("SIGINT did not interrupt the synthetic child") from runs started with `&`. The same
-  tests passed in the foreground, at base and at head.
-
 - **Launcher shutdown verification hit its timing assertion.** Severity M, kept for accumulation.
   `make test` at `5635a764884ef61b0a690234c10bc68e1ec628b2` on 2026-10-15 in
   `/private/tmp/devkit-overnight-20261014-01a13bcb/sessions/oct14-policy-report-r2/wt`
@@ -109,28 +83,8 @@
   running in the policy lane. The suite and reviewer found a renderer stand-in regression;
   its correction moved the head and required another review allowance. Finish author
   verification before dispatching a budget-limited review of the exact head.
-- **Review claimed post-restoration verification despite overlap.** Severity M, kept for accumulation.
-  At `5635a764884ef61b0a690234c10bc68e1ec628b2`, the reviewer mutated its private copy
-  while its suite ran, then described that run as after restoration. The cockpit withheld
-  a receipt and required corrected evidence. Original and amended review logs are under
-  `/private/tmp/devkit-overnight-20261014-01a13bcb/reviews/`: `review-1108-ownership.log` and `review-1108-ownership-amended.log`.
-
 ## 2026-10-14
 
-- **Headless lanes used a denied manifest-refresh spelling during the 2026-10-13 batch.**
-  Severity M. This entry records the original incident and its later correction.
-  - **Repro:** in the 2026-10-13 overnight batch, the #1075, #1070 and #1079 lanes
-    edited files that `kit-manifest.json` hashes, and could not refresh it.
-    At that revision, `CONTRIBUTING.md` named `python3 scripts/kit_doctor.py --generate-manifest`. The
-    lane profile (`config/claude-lane-settings.json`) allows only
-    `Bash(uv run scripts/kit_doctor.py:*)`, and the lanes did not reach for that
-    spelling.
-  - **Effect:** each of those lanes' `make test` failed on
-    `test_kit_repo_self_check_is_clean`, and the #1070 lane's push was refused by the
-    pre-push hook. Each stopped without a PR.
-  - **Correction — 2026-10-15:** [#1106](https://github.com/topij/agentic-dev-kit/pull/1106)
-    documented `uv run scripts/kit_doctor.py --generate-manifest`. Routine polling and
-    cleanup denials are recorded on [#1011](https://github.com/topij/agentic-dev-kit/issues/1011#issuecomment-6185414536).
 - **`make test` outruns a headless lane's Bash time limit.** Severity M. Kept for
   accumulation, because the remedy is not established.
   - In the same batch, the first `make test` of the #1089, #1070 and #1079 lanes was
@@ -139,75 +93,12 @@
   - The #1089 lane then ended on a denied call before committing.
   - Whether the lane contract should prescribe a longer foreground timeout, or the lanes
     should stop before the stamp and leave it to the cockpit, was not decided.
-- **The #1080 repair-chain shape recurred on LOW-only test-helper repairs.** Severity L,
-  kept for accumulation.
-  - On #1099 and #1100, each delta repair of a wording or pinning LOW drew a new LOW of
-    the same size from the next delta lens.
-  - #1100 converged once the claim was shortened to what the regex does.
-  - #1099's third pair went to its ticket instead of a third round.
-- **The archive sweep's moved-pairing case recurred, as in the 2026-10-12 entry below.**
-  Severity L, kept for accumulation. This wrap-up's sweep joined the 2026-10-11 and
-  2026-10-10 history blocks. The preflight then paired a GitHub keyword in the moved
-  text with the next issue reference, at `docs/kit-handoff-history.md:72`. The text
-  stays as exact bytes, per the 2026-10-12 decision.
-
-## 2026-10-12
-
-- **A handoff archive sweep still trips the record-prose preflight after #1088.** Severity
-  L, kept for accumulation. The move exemption needs every line of a pairing moved
-  unchanged. `archive_plan_sessions.py` rewrites each moved `## Session — …` heading to
-  `### …` and drops the separator line, so a pre-existing pairing that spans a session
-  boundary stays reported. It happened on this wrap-up: the last sentence of the 2026-10-09
-  block in `docs/kit-handoff-history.md` pairs with the first reference of the 2026-10-08
-  block below it. That history text is left unchanged.
-
-## 2026-10-12 — Backlog migrated by triage session ae0b23b828f945bd9228c7c591ff0530
-
-Engine mode: `engine-backed`.
-
-Filed [#1078](https://github.com/topij/agentic-dev-kit/issues/1078) from TRI-01, the `2026-10-12` entry `A review lens wrote into the tree it was handed, again.`.
-
-Filed [#1079](https://github.com/topij/agentic-dev-kit/issues/1079) from TRI-03, the `2026-10-11` entry `A CI-only failure in the pinned-preflight test passed on rerun.`.
-
-Filed [#1080](https://github.com/topij/agentic-dev-kit/issues/1080) from TRI-05, the `2026-10-10` entry `The repair-and-review chain shape recurred in the record-prose preflight.`.
-
-Filed [#1081](https://github.com/topij/agentic-dev-kit/issues/1081) from TRI-10, the `2026-10-08` entry `The headless lane profile cannot read the lane's own ticket.`.
-
-Filed [#1082](https://github.com/topij/agentic-dev-kit/issues/1082) from TRI-12, the `2026-10-08` entry ``A cockpit `pr_watch` call invalidated its own `make test` stamp again.``.
-
-Filed [#1083](https://github.com/topij/agentic-dev-kit/issues/1083) from TRI-13, the `2026-10-08` entry ``A comment in `scripts/sweep_scratch.py` still describes the bare-repo skip by its object store.``.
-
-Archived without filing: TRI-04, the `2026-10-11` entry `Pinning prose did not converge on #1054; a design change did.`.
-
-Archived without filing: TRI-08, the `2026-10-09` entry `A review lens wrote refs into the tree it was handed.`.
-
-Archived without filing: TRI-09, the `2026-10-09` entry `The review-chain shape in the 2026-10-08 entry below recurred on #1028.`.
-
-Archived without filing: TRI-11, the `2026-10-08` entry `A full-pass review chain on an executed doc block found a new shape each round.`.
-
-Approval commands: `approve TRI-01 TRI-03 TRI-05 TRI-10 TRI-12 TRI-13`, `archive TRI-04 TRI-08 TRI-09 TRI-11`, `park TRI-02 TRI-06 TRI-07 TRI-14`. Approver: `topij`.
-
 ## 2026-10-11
 
 - **Each #1063 lens pass found a LOW in the author's own claims about its tests.**
   Severity L, kept for accumulation. The
   full pass and the delta pass each found a changelog fragment or commit message saying
   the tests caught more than they did.
-## 2026-10-10
-
-- **Archival preservation met the new narrative preflight's conservative lexer.**
-  Severity L, parked because no workflow remedy was established. During this
-  wrap-up, the budget helper moved the dated merge-gate review-evidence entry into
-  history. The preflight then treated its historical ticket-state verbs as added
-  keyword/reference pairings. The shared wrap-up workflow prescribes preserving
-  earlier session entries, while the repository forbids unintended ticket-state
-  directives. The moved entry retained its dated decisions with neutral wording;
-  the archive helper itself was not changed. Whether preservation should mean
-  exact bytes or historical meaning under this guard needs a scoped decision.
-
-## 2026-10-09
-
-- **A field-limited backlog read still exceeded the tool output limit.** Severity L, kept for accumulation. During this Codex session’s `session-start` read, `gh issue list --json number,title,labels,state,updatedAt,url --limit 500` returned label IDs, descriptions and colours, and the tool truncated the output. A rerun kept the complete query, checked its page ceiling, and rendered issue numbers, priority labels and titles compactly. This is related to #143’s payload-overflow shape; selecting fields alone did not keep the rendered payload within the tool limit.
 ## 2026-10-08
 
 - **An approval-pending triage session cannot survive a configuration change.** Severity L, kept for accumulation.
