@@ -54,8 +54,8 @@ ______________________________________________________________________
   correctness lens; its overlapping full-suite run was discarded as verification.
 - **Consumer upgrades:** the operator will continue cs-toolkit's upgrade using
   kit `d2f40206d3b819b496398ad0d08eba97a9d7b9ca`. This session did not upgrade
-  cs-toolkit. Scheduled caller integration and completed-state retirement still
-  need adopter verification; copying CLI files alone does not establish them.
+  cs-toolkit. The later adopter evidence is in **Consumer upgrades** below;
+  copying CLI files alone does not establish real scheduled-run behavior.
 - Verification: `make test` in `/Users/topi/Coding/agentic-dev-kit` at
   `2fb0981c6e8cbc71b3fe5785714029a201685555` on 2026-10-18 passed. The merged
   `d2f40206` tree matches that candidate. Full output is retained in
@@ -74,7 +74,7 @@ ______________________________________________________________________
 
 - **Triage outcome receipts:** [#1121](https://github.com/topij/agentic-dev-kit/pull/1121)
   merged as `d5129869`. The caller allocates freshness for each engine call;
-  cs-toolkit's scheduled caller still needs the receipt integration.
+  cs-toolkit later integrated the wrapper in its PR 2769.
 - **Scratch retention:** [#1122](https://github.com/topij/agentic-dev-kit/pull/1122)
   merged as `dd089388`, completing #900. Reviews now allocate owned rounds and
   retire them after processes finish and evidence is retained. The dependency
@@ -286,8 +286,7 @@ for #1058, which stays open for the operator. #1132
 [#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
 [#1058](https://github.com/topij/agentic-dev-kit/issues/1058),
 [#1070](https://github.com/topij/agentic-dev-kit/issues/1070),
-[#1075](https://github.com/topij/agentic-dev-kit/issues/1075),
-[#1098](https://github.com/topij/agentic-dev-kit/issues/1098).
+[#1075](https://github.com/topij/agentic-dev-kit/issues/1075).
 
 ▶ Next: operator selection after #1132; the previous #1098 implementation step shipped.
 
@@ -323,9 +322,9 @@ timeout and report-containment findings.
 **Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
 [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: adopt the receipt and scheduled-caller contract in cs-toolkit. Integrate run
-allocation, per-call attempts, process status and final ledger checking, and establish
-the documented trusted launcher boundary before claiming complete invocation coverage.
+▶ Next: verify cs-toolkit's real scheduled-run receipts and the documented trusted
+launcher boundary; installed wrapper code alone does not establish live invocation
+coverage or completed-state retirement.
 
 ### Shared hook installation
 
@@ -339,14 +338,21 @@ the hooks every checkout shares. #1117 holds its residual LOW findings. #990's i
 
 ### Consumer upgrades
 
-**Status:** cs-toolkit upgraded to kit `ce3b5f91` in
-[in-parallel-oy/cs-toolkit#2762](https://github.com/in-parallel-oy/cs-toolkit/pull/2762),
-merged on 2026-10-17. That upgrade installed identity and disposition handling but
-left the scheduled wrapper and retained triage state untouched. The earlier consumer
-assessment is `saved_plans/consumer-upgrade-assessment_2026-10-15.md` (local); it
-predates this upgrade and is not evidence of either consumer's current installation.
-**Owner:** #1103, #1116, #990, #1011, #1109, #979.
+**Status:** cs-toolkit's
+[in-parallel-oy/cs-toolkit#2769](https://github.com/in-parallel-oy/cs-toolkit/pull/2769)
+integrated caller enforcement and managed review rounds after the #2762 upgrade.
+`git show 5b49543928c4d4187598e18d17deececb9419a34:kit-manifest.json` in
+`/Users/topi/Coding/in-parallel/cs-toolkit` on 2026-10-20 recorded kit
+`b739bc46faa99764f3a10200dc2e02720e61a6de`. At that same adopter revision,
+`git show` of `scripts/scheduled_triage.py` and `config/automations.yaml` showed
+the per-call wrapper and its deliverable checks; `scripts/retire_triage_state.py`
+was a read-only guard. No real scheduled job or live state retirement was run here.
+The adopter handoff separates notification-provider integration from the installed
+receipt contract. The earlier local assessment,
+`saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates these upgrades.
+**Owner:** #1116, #990, #1011, #1109, #979.
 
-▶ Next: integrate the receipt and scheduled-caller contract into cs-toolkit's caller
-when adopted, then verify completed-state retirement before removing the #979 shim.
-Reassess OpenKitchen's installation and lane prerequisites before an upgrade there.
+▶ Next: verify cs-toolkit's scheduled-run receipts and completed-state retirement
+before removing the #979 shim; resolve unattended notification delivery as its own
+adopter decision. Reassess OpenKitchen's installation and lane prerequisites before
+an upgrade there.
