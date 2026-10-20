@@ -278,8 +278,9 @@ places, split at a cutover**, and the block below reads both:
   the working tree, a fragment a later PR overwrote or deleted still prints, and a
   corrected entry prints once per version. A symlink prints as its target path, never
   as the file it points to. A path under `changelog.d/` that is not a `<name>.md`
-  fragment, or that git prints quoted because of an unusual character, is named with a
-  `⚠` line rather than skipped: read that one by hand.
+  fragment directly in it, one in a subdirectory or whose name starts with a `.`, or one
+  that git prints quoted because of an unusual character, is named with a `⚠` line
+  rather than skipped: read that one by hand.
 - **`CHANGELOG.md` is frozen at the cutover** and holds every entry before it, each headed
   by the PR that made the change. A squash merge on the kit ordinarily carries its PR
   number as a trailing `(#NNN)`, so for this half those numbers are the index.
@@ -322,22 +323,23 @@ else
     # first, read from that commit — never from the working tree — so a reused name
     # prints both entries and a deleted fragment still prints. `-c` lists, for a merge,
     # the fragments it changed relative to every parent: one written while resolving
-    # the merge. A path under
-    # changelog.d/ that is not a <name>.md fragment is named, not dropped.
+    # the merge. A path under changelog.d/ that is not a <name>.md fragment directly
+    # in it — nested, dot-led, or another extension — is named, not dropped.
     git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list "$BASELINE..HEAD" -- changelog.d/ |
       while IFS= read -r c; do
         at="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log -1 --format='%h %s' "$c")"
-        git -C "${KIT:?KIT is not set — re-run Step 0}" diff-tree -c --no-commit-id --no-renames --diff-filter=AMT \
+        git -C "${KIT:?KIT is not set — re-run Step 0}" diff-tree -c --no-commit-id --diff-filter=AMT \
             --name-only -r "$c" -- changelog.d/ |
           while IFS= read -r frag; do
             case "$frag" in
-              changelog.d/*.md) ;;
-              *) echo "⚠ $frag ($at) is not a changelog.d/<name>.md fragment — read it by hand"
-                 continue ;;
+              changelog.d/*/* | changelog.d/.*) ;;
+              changelog.d/*.md)
+                echo "── $frag ($at)"
+                git -C "${KIT:?KIT is not set — re-run Step 0}" show "$c:$frag"
+                echo
+                continue ;;
             esac
-            echo "── $frag ($at)"
-            git -C "${KIT:?KIT is not set — re-run Step 0}" show "$c:$frag"
-            echo
+            echo "⚠ $frag ($at) is not a changelog.d/<name>.md fragment — read it by hand"
           done
       done
     # CHANGELOG.md: entries from before the cutover, indexed by PR number.
@@ -394,11 +396,12 @@ not a string, which `kit_doctor` normalizes away rather than aborting the report
 There is no range to compute, so:
 
 - Read every entry instead, and treat every `BREAKING` line as applying to you until you
-  can show otherwise. Both halves are short by construction — this is minutes, not the
-  session `#430` describes. For the fragments, run the block above with its own
-  `BASELINE=` line replaced by `BASELINE` set to the kit's root commit,
-  `git -C "$KIT" rev-list --max-parents=0 HEAD`; then read `$KIT/CHANGELOG.md` from the
-  top.
+  can show otherwise. It takes longer than a ranged read, but it is still reading, not
+  the debugging session `#430` describes. For the fragments, run the block above with
+  its own `BASELINE=` line replaced by `BASELINE` set to the kit's root commit,
+  `git -C "$KIT" rev-list --max-parents=0 HEAD`. For the frozen entries, read
+  `$KIT/CHANGELOG.md` once from the top, and skip the `## #NNN` entries the block
+  printed after its fragments: each one is in that file too.
 - If you know roughly when this repo last upgraded, bound it by date instead: run the
   block with its `BASELINE=` line replaced the same way, by
   `git -C "$KIT" rev-list -1 --before=<date> HEAD`. If that prints nothing, the date is

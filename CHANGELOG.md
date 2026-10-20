@@ -30,8 +30,8 @@ resolves your recorded baseline kit commit into the entries new to you, from
 `changelog.d/` and from the frozen entries below; follow that.
 
 **This file is frozen. New entries go in `changelog.d/`.** Each PR with an observable
-change adds its own fragment file there, directly in `changelog.d/` and named for the
-part of its branch after the last `/`, in lower case: branch `feat/pr-watch-sha-bound`
+change adds its own `<slug>.md` file directly in `changelog.d/`, named for the part of
+its branch name after the last `/`, in lower case: branch `feat/pr-watch-sha-bound`
 writes `changelog.d/pr-watch-sha-bound.md`. A fragment is a regular file, never a
 symlink. A fragment starts with a `## ` heading,
 ends with a newline, and carries the axis lines described below. It needs no PR number:

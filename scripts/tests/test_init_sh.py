@@ -6387,21 +6387,27 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
 
     Each case is a separate way the range can go wrong:
 
-    - a fragment added before the baseline and untouched since must not print;
+    - a fragment added before the baseline and untouched since must not print.
+      It is added in a commit after the root, because `diff-tree` prints nothing
+      for a root commit: there, a listing that ignored `$BASELINE` would pass;
     - one added before it but corrected after it must print the correction only;
     - one added and then deleted inside the range must still print: an adopter
       whose range holds the add was owed that entry;
-    - one added and then renamed inside the range must print under its new name.
-      With git's default rename detection the rename is an `R`, not an `A`;
+    - one renamed inside the range must print under its new name. Plumbing
+      `diff-tree` detects no renames unless asked, so the rename is a delete
+      plus an `A`; a switch to porcelain `git log`, which detects them by
+      default, would turn it into an `R` that `--diff-filter=AMT` drops;
     - a name a later PR reuses must print both entries, not only the later one;
     - a symlink must print as its target path, never as the file it names;
-    - a non-`.md` file under `changelog.d/` is named, not printed;
-    - a commit that touches nothing under `changelog.d/` adds no line at all.
+    - a non-`.md` file under `changelog.d/` is named, not printed, and so is a
+      `.md` file in a subdirectory or with a dot-led name;
+    - a commit that touches nothing under `changelog.d/` adds no line at all,
+      and one that adds a fragment beside other files names only the fragment.
     """
     kit = tmp_path / "kit"
     subprocess.run(["git", "init", "-q", str(kit)], check=True)
-    _kit_commit(kit, "seed (#1)", write={
-        "CHANGELOG.md": "## #1 — frozen\n\nFROZEN-ENTRY\n",
+    _kit_commit(kit, "seed (#1)", write={"CHANGELOG.md": "## #1 — frozen\n\nFROZEN-ENTRY\n"})
+    _kit_commit(kit, "pre-baseline lanes (#1)", write={
         "changelog.d/untouched.md": "## untouched\n\nUNTOUCHED-ENTRY\n",
         "changelog.d/corrected.md": "## corrected\n\nORIGINAL-WORDING\n",
     })
@@ -6429,6 +6435,14 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     (kit / "changelog.d" / "linked.md").symlink_to(tmp_path / "outside.txt")
     subprocess.run(["git", "-C", str(kit), "add", "changelog.d/linked.md"], check=True)
     _kit_commit(kit, "symlink (#15)")
+    _kit_commit(kit, "misplaced names (#16)", write={
+        "changelog.d/sub/nested.md": "## nested\n\nNESTED-ENTRY\n",
+        "changelog.d/.hidden.md": "## hidden\n\nHIDDEN-ENTRY\n",
+    })
+    _kit_commit(kit, "ordinary lane (#17)", write={
+        "changelog.d/ordinary.md": "## o\n\nORDINARY-ENTRY\n",
+        "scripts/x.py": "x = 1\n",
+    })
 
     result = _run_lookup(tmp_path, baseline, kit)
     out = result.stdout
@@ -6462,10 +6476,23 @@ def test_upgrade_changelog_lookup_reads_fragments_added_or_edited_in_range(
     assert "NOT-A-FRAGMENT" not in out, f"a non-`.md` file printed as a fragment.\n{out}"
     # A path the lookup cannot print is named, never dropped: git C-quotes a
     # non-ASCII name, and `*.md` is case-sensitive, so each needs a reader.
-    for name in ("notes.txt", "UPPER.MD", '"changelog.d/\\303\\251clair.md"'):
+    for name in ("notes.txt", "UPPER.MD", '"changelog.d/\\303\\251clair.md"',
+                 "changelog.d/sub/nested.md", "changelog.d/.hidden.md"):
         assert any(ln.startswith("⚠") and name in ln for ln in out.splitlines()), (
             f"{name} under changelog.d/ was dropped without a warning.\n{out}"
         )
+    # A nested or dot-led name breaks the naming rule but is still a `*.md`
+    # path, so only the case arm ahead of `changelog.d/*.md` keeps it unprinted.
+    assert "NESTED-ENTRY" not in out and "HIDDEN-ENTRY" not in out, (
+        f"a nested or dot-led name printed as a fragment.\n{out}"
+    )
+    # Without the `-- changelog.d/` pathspec on `diff-tree`, every other file a
+    # fragment's commit touched would get a `⚠` line: every ordinary PR.
+    assert "ORDINARY-ENTRY" in out and not any(
+        ln.startswith("⚠") and "ordinary lane (#17)" in ln for ln in out.splitlines()
+    ) and "scripts/x.py" not in out, (
+        f"a file beside a fragment in the same commit was named.\n{out}"
+    )
     assert "NO-NEWLINE-END\n" in out, (
         f"a fragment with no final newline ran into the next line.\n{out}"
     )
@@ -6597,9 +6624,12 @@ def test_changelog_fragments_are_well_formed() -> None:
     The lookup names, rather than prints, a path that is not a plain
     lower-case `<name>.md`, so a misnamed fragment would reach an adopter only
     as a warning. The heading separates one printed entry from the next.
+    The directory must hold at least one fragment, or the loop checks nothing.
     """
     directory = REPO_ROOT / "changelog.d"
-    for path in sorted(directory.rglob("*")) if directory.is_dir() else []:
+    paths = sorted(directory.rglob("*")) if directory.is_dir() else []
+    assert paths, f"{directory} holds no fragment, so nothing below would be checked"
+    for path in paths:
         rel = path.relative_to(REPO_ROOT)
         assert not path.is_symlink(), f"{rel} is a symlink; a fragment is a regular file"
         assert path.is_file() and re.fullmatch(r"[a-z0-9][a-z0-9._-]*\.md", path.name) \
