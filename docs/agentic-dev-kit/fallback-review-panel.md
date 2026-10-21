@@ -915,10 +915,13 @@ ticketed pre-existing finding makes no commit and needs no re-review. The author
 may still fix it in the pull request, but then it is an ordinary fix round under
 its own severity, not a free addition (`safety-critical-changes.md` rule 3).
 
-**On a safety-critical path it goes to the operator as well.** When the defect
-sits in a file `review.safety_critical_paths` matches, the comment that links the
-ticket is addressed to the operator, who decides whether the pull request merges
-with it open. An agent does not merge past it because a ticket exists.
+**On a safety-critical path, or at HIGH, it goes to the operator as well.** When
+the defect sits in a file `review.safety_critical_paths` matches, or the lens rated
+it HIGH, the comment that links the ticket is addressed to the operator, who decides
+whether the pull request merges with it open. An agent does not merge past it
+because a ticket exists. Nothing in the engine reads the pre-existing label or the
+base lines it cites: like `--lenses` (`#32`), the label is the lens's claim and the
+route is the author's, both on the pull request where a reviewer can dispute them.
 
 `post-merge-systemize` and `triage-friction-log` read the class: a pre-existing
 finding counts against the code it names, never against the pull request that
@@ -1084,7 +1087,9 @@ measurement).
 
 **After the second full pass, a standard pull request's later rounds take the
 delta pass at any severity.** `#1153` asked for this decision; the operator made
-it on 2026-10-21, as a comment on that issue records, after a team running agent reviewers on agent authors
+it on 2026-10-21, in the project's own discussion, and a comment on that issue
+(https://github.com/topij/agentic-dev-kit/issues/1153#issuecomment-6313254957)
+records it, after a team running agent reviewers on agent authors
 reported that switching to diff-only re-review after its opening passes cut its
 long review chains. Two is the kit's declared point for that switch. It
 narrows the paragraph above, which still governs until two full passes have

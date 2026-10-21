@@ -545,8 +545,9 @@ def test_prior_dispositions_refuse_anything_but_an_https_link(repo, value):
 
 
 def test_prior_dispositions_follow_the_coverage_notes_and_the_draws(repo):
-    """The pointer is the last thing before the contract, after what the pass is
-    aimed with, so a lens meets it as a closing instruction, not as an aim."""
+    """The pointer comes after what the pass is aimed with and before the contract,
+    so a lens meets it as a closing instruction, not as an aim. This pins the order
+    of these four headings only."""
     base, head = _revs(repo)
     out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
                "--carry-forward", "Round 1 covered the guards.", *DRAWS,

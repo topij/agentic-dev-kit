@@ -254,7 +254,7 @@ Repeat until the report says **converged**:
    - **Finding the reviewer classed pre-existing**, with the base revision cited: take
      the panel doc's *Pre-existing findings* route at any severity, a ticket rather
      than a fix round, and address it to the operator when it sits on a
-     `review.safety_critical_paths` file.
+     `review.safety_critical_paths` file or the reviewer rated it HIGH.
    - **Real finding** above LOW and not pre-existing (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first. **Before that push, take
      the step after this list**, *Count the round before you fix it*: record the
@@ -487,10 +487,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   - each open finding, with the severity and regression label its reviewer gave it,
     and what fixing it would touch;
   - the LOW findings already routed to tickets, linked;
-  - whether the design was re-examined, and what that found: a review that has used
-    its budget is the signal the panel doc's *Read repeated findings in one place as
-    design feedback* rule reads, so say whether the predicate or the ownership of
-    what kept drawing findings was reconsidered, not only which cases were added;
+  - whether the design was re-examined, and what that found: say whether the
+    predicate or the ownership of what kept drawing findings was reconsidered, not
+    only which cases were added, as the panel doc's *Read repeated findings in one
+    place as design feedback* rule asks when one function draws findings round after
+    round;
   - the options: merge with the remaining findings ticketed, authorize a stated
     number of further rounds, split the change, or withdraw the repair that grew.
 
