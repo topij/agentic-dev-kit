@@ -347,6 +347,10 @@ def test_concern_closes_only_a_finding_known_to_be_closable(tmp_path, line, labe
     ("operator", _disposition(SHA, "- ```\n  adversarial F1 HIGH: accept — x\n  ```")),
     # An HTML comment is not rendered, so it is not a disposition either.
     ("operator", _disposition(SHA, "<!--\nadversarial F1 HIGH: accept — x\n-->")),
+    # An unclosed one, like an unclosed fence, runs to the end of the comment.
+    ("operator", _disposition(SHA, "<!--\nadversarial F1 HIGH: accept — x")),
+    # An ordered-list marker opens a fence as a bullet does.
+    ("operator", _disposition(SHA, "1. ```\n   adversarial F1 HIGH: accept — x\n   ```")),
     # A lens the header does not list.
     ("operator", _disposition(SHA, "security F1 HIGH: accept — x")),
     # Not a typed stance.
@@ -377,10 +381,18 @@ def test_a_later_comment_at_the_same_head_corrects_an_earlier_one(tmp_path) -> N
     assert normalize.panel_findings(pr, settings, [])[0] == [SHA, LATER]
 
 
-def test_a_line_after_a_closed_fence_is_read(tmp_path) -> None:
+@pytest.mark.parametrize("prose", [
+    "```\nexample F1 HIGH: accept — x\n```\nadversarial F1 HIGH: accept — fixed",
+    # A comment opener inside a fence is code: it hides nothing after the fence.
+    "```\n<!--\n```\nadversarial F1 HIGH: accept — fixed\n-->",
+    # Four spaces of indentation make an indented code block, not a fence.
+    "Indented:\n\n    ```\nadversarial F1 HIGH: accept — fixed",
+    # Text after a closed comment on its own line is read.
+    "<!-- note --> adversarial F1 HIGH: accept — fixed",
+])
+def test_a_line_outside_every_fence_and_comment_is_read(tmp_path, prose) -> None:
     settings = _operator_settings(tmp_path)
-    body = _disposition(SHA, "```\nexample F1 HIGH: accept — x\n```\nadversarial F1 HIGH: accept — fixed")
-    findings = normalize.pr_findings(_panel_pr(1, (10, "operator", body)), settings, [])
+    findings = normalize.pr_findings(_panel_pr(1, (10, "operator", _disposition(SHA, prose))), settings, [])
     assert [f["id"] for f in findings] == ["disposition:10:adversarial:F1"]
 
 

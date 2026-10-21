@@ -384,8 +384,9 @@ inside a lens name, or the parts in another order leaves the line unmatched.
 `regression` marks a lens-marked regression; it and the stance are read in any case.
 `R<k>` names the round a line came from: a lens numbers its findings afresh each round,
 so a comment carrying several rounds tags each line. A line is skipped when it is
-quoted (`>`), inside a fenced block (backticks or tildes, an unclosed one running to the
-end of the comment) or inside an HTML comment, when its lens is not in the header's
+quoted (`>`), inside a fenced block (backticks or tildes opened at most three spaces in
+or behind a list marker) or inside an HTML comment, either running to the end of the
+comment when unclosed, when its lens is not in the header's
 `- lenses:` list, when its stance is anything else, or when its `<lens> [R<k>] F<n>`
 already appeared earlier in the same comment. Across comments at the same reviewed
 head, a later line for the same `<lens> [R<k>] F<n>` replaces the earlier one, because a

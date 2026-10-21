@@ -153,19 +153,31 @@ _DISPOSITION_LINE = re.compile(
 # A CommonMark code fence: three or more backticks or tildes, optionally after a
 # list marker; it closes on a line of at least as many of the same character and
 # nothing else, and an unclosed fence runs to the end of the comment.
-_FENCE_OPEN = re.compile(r"^[ \t]*(?:[-*+][ \t]+)?(`{3,}|~{3,})")
+_FENCE_OPEN = re.compile(r"^ {0,3}(?:(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)?(`{3,}|~{3,})")
 STANCES = ("accept", "dispute-evidence", "dispute-concern")
 
 
 def unfenced(prose: str) -> str:
-    """``prose`` with HTML comments and every fenced block's lines removed."""
+    """``prose`` with every fenced block's lines and every HTML comment removed.
+
+    One pass in reading order, so a ``<!--`` inside a fence is code and a fence
+    inside a comment is hidden; an unclosed fence or comment runs to the end.
+    """
     kept: list[str] = []
     fence: str | None = None
-    for line in _HTML_COMMENT.sub("", prose).split("\n"):
+    commented = False
+    for line in prose.split("\n"):
+        if commented:
+            if "-->" not in line:
+                continue
+            line, commented = line.split("-->", 1)[1], False
         if fence is not None:
             if re.fullmatch(rf"[ \t]*{re.escape(fence[0])}{{{len(fence)},}}[ \t]*", line):
                 fence = None
             continue
+        line = _HTML_COMMENT.sub("", line)
+        if "<!--" in line:
+            line, commented = line.split("<!--", 1)[0], True
         opened = _FENCE_OPEN.match(line)
         if opened and not (opened.group(1)[0] == "`" and "`" in line[opened.end():]):
             fence = opened.group(1)
@@ -281,7 +293,7 @@ def panel_findings(pr: dict[str, Any], settings: Settings,
 
     The heads are distinct and in comment order: one per recorded round. A later
     comment at the same head replaces an earlier one's findings for the same
-    ``<lens> F<n>``, because a correction is posted after what it corrects.
+    ``<lens> [R<k>] F<n>``, because a correction is posted after what it corrects.
     """
     heads: list[str] = []
     found: dict[tuple[str, str], dict[str, Any]] = {}
