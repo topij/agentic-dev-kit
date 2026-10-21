@@ -871,7 +871,8 @@ def render_verifier(
     in the quoted contract, so this renders it and adds no second copy. No flag text
     reaches it: ``build`` refuses every free-text flag, so there is no branch line and
     no verify line, the runtime selects a fixed carrier string or is refused, and the
-    scratch path is held to a charset that cannot leave its code span.
+    scratch path is held to a charset that cannot leave its code span. The repo slug
+    is not a flag: it comes from the checkout's git config, unvalidated.
     """
     compute_line = (
         "\nRun at: the cockpit's choice. No kit key declares verifier compute yet; "
@@ -1166,7 +1167,9 @@ def build(args: argparse.Namespace) -> str:
     # caller text at all rather than validating it: --verify-command and --branch are
     # refused (it checks against the head sha, and re-runs what the reports name), and
     # --runtime must be a key of VERIFIER_CARRIER, so only fixed strings render. The
-    # one caller value still rendered, the scratch path, is held to _SAFE_PATH below.
+    # one flag value still rendered, the scratch path, is held to _SAFE_PATH below. The
+    # repo slug also renders, from remote.origin.url in git config rather than a flag,
+    # and nothing here validates it (#1163).
     if args.verifier:
         stray = [
             flag
