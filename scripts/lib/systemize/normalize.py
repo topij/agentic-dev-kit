@@ -144,10 +144,12 @@ _DISPOSITION_HEADER = re.compile(
 )
 _DISPOSITION_LINE = re.compile(
     r"^[ \t]*(?:[-*][ \t]+)?`?(?P<lens>[A-Za-z0-9_.-]+) F(?P<n>[1-9][0-9]*)"
-    r"(?: (?P<severity>[A-Za-z]+))?: (?P<stance>accept|dispute-evidence|dispute-concern)"
+    r"(?: (?P<severity>[A-Za-z0-9-]+))?(?: (?P<regression>regression))?"
+    r": (?P<stance>accept|dispute-evidence|dispute-concern)"
     r"(?=[ :—`]|$)[^\n]*$",
     re.MULTILINE,
 )
+_FENCE = re.compile(r"^[ \t]*(```|~~~)[^\n]*\n.*?^[ \t]*\1[^\n]*$", re.MULTILINE | re.DOTALL)
 STANCES = ("accept", "dispute-evidence", "dispute-concern")
 
 
@@ -165,14 +167,16 @@ def disposition_header(body: str) -> dict[str, Any] | None:
     }
 
 
-def stance_addressed(stance: str, severity: str) -> str:
+def stance_addressed(stance: str, severity: str, *, known: bool = True, regression: bool = False) -> str:
     """A typed disposition is the panel's addressed-state evidence (#772, #748).
 
     Every stance answers the finding on the pull request, except that a HIGH or
-    CRITICAL finding is never closed by ``dispute-concern``
-    (fallback-review-panel.md *Typed dispositions*), so that one stays unaddressed.
+    CRITICAL finding, or a lens-marked regression, is never closed by
+    ``dispute-concern`` (fallback-review-panel.md *Typed dispositions*), so that
+    one stays unaddressed. A severity that is absent or not in the table is not
+    known to be below HIGH, so concern does not close it either.
     """
-    if stance == "dispute-concern" and RANK[severity] >= RANK["high"]:
+    if stance == "dispute-concern" and (regression or not known or RANK[severity] >= RANK["high"]):
         return "unaddressed"
     return "addressed"
 
@@ -181,19 +185,23 @@ def disposition_findings(comment: dict[str, Any], source: dict[str, str],
                          citation_paths: list[str]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """``(header, findings)`` for one trusted comment; ``(None, [])`` if it is not one.
 
-    A line inside a blockquote is a quotation, not this round's disposition, and
-    a line naming a lens the header does not list is not this round's finding.
+    A line inside a blockquote or a fenced block is a quotation, not this round's
+    disposition, and a line naming a lens the header does not list is not this
+    round's finding.
     A repeated ``<lens> F<n>`` in one comment counts once, first line first.
     """
     header = disposition_header(comment.get("body") or "")
     if header is None:
         return None, []
     findings: dict[tuple[str, str], dict[str, Any]] = {}
-    for match in _DISPOSITION_LINE.finditer(header["prose"]):
+    for match in _DISPOSITION_LINE.finditer(_FENCE.sub("", header["prose"])):
         lens, number = match.group("lens"), match.group("n")
         if lens not in header["lenses"] or (lens, number) in findings:
             continue
         label = match.group("severity")
+        regression = match.group("regression") is not None
+        if label is not None and label.lower() == "regression" and not regression:
+            label, regression = None, True
         severity, mapped = normalize_severity(label)
         line = match.group(0)
         text, truncated = clean_text(line)
@@ -205,7 +213,8 @@ def disposition_findings(comment: dict[str, Any], source: dict[str, str],
             "source_severity": label,
             "severity": severity,
             "severity_mapped": mapped,
-            "addressed": stance_addressed(match.group("stance"), severity),
+            "addressed": stance_addressed(match.group("stance"), severity,
+                                          known=label is not None and mapped, regression=regression),
             "stance": match.group("stance"),
             "reviewed_head": header["head"],
             "guideline_citation": guideline_citation(line, citation_paths),

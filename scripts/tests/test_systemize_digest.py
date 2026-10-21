@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -303,6 +304,24 @@ def test_panel_dispositions_are_findings_with_lens_severity_stance_and_addressed
     assert found["disposition:10:adversarial:F2"]["addressed"] == "addressed"
 
 
+@pytest.mark.parametrize("line, label, severity, addressed", [
+    # Concern closes only a finding known to be below HIGH and not a regression.
+    ("adversarial F1 MEDIUM regression: dispute-concern — x", "MEDIUM", "normal", "unaddressed"),
+    ("adversarial F1 regression: dispute-concern — x", None, "normal", "unaddressed"),
+    ("adversarial F1: dispute-concern — x", None, "normal", "unaddressed"),
+    ("adversarial F1 HGH: dispute-concern — x", "HGH", "normal", "unaddressed"),
+    ("adversarial F1 P1: dispute-concern — x", "P1", "normal", "unaddressed"),
+    ("adversarial F1 MEDIUM: dispute-concern — x", "MEDIUM", "normal", "addressed"),
+    # The other stances close it whatever the label.
+    ("adversarial F1 HGH regression: dispute-evidence — a.py:1", "HGH", "normal", "addressed"),
+    ("adversarial F1: accept — fixed", None, "normal", "addressed"),
+])
+def test_concern_closes_only_a_finding_known_to_be_closable(tmp_path, line, label, severity, addressed) -> None:
+    settings = _operator_settings(tmp_path)
+    [found] = normalize.pr_findings(_panel_pr(1, (10, "operator", _disposition(SHA, line))), settings, [])
+    assert (found["source_severity"], found["severity"], found["addressed"]) == (label, severity, addressed)
+
+
 @pytest.mark.parametrize("author, body", [
     # An untrusted author, however exact the comment.
     ("someone", _disposition(SHA, "adversarial F1 HIGH: accept — x")),
@@ -315,6 +334,9 @@ def test_panel_dispositions_are_findings_with_lens_severity_stance_and_addressed
         f"reviewed head: `{SHA}`", f"reviewed head: `{LATER}`")),
     # A quoted line is a quotation, not this round's disposition.
     ("operator", _disposition(SHA, "> adversarial F1 HIGH: accept — x")),
+    # So is a line inside a fenced block, either fence.
+    ("operator", _disposition(SHA, "```text\nadversarial F1 HIGH: accept — x\n```")),
+    ("operator", _disposition(SHA, "~~~\nadversarial F1 HIGH: accept — x\n~~~")),
     # A lens the header does not list.
     ("operator", _disposition(SHA, "security F1 HIGH: accept — x")),
     # Not a typed stance.
@@ -373,7 +395,10 @@ def test_the_tally_counts_each_source_over_the_uncapped_window(tmp_path) -> None
                   (11, "operator", _disposition(LATER, "adversarial F1 LOW: accept — fixed"))),
         _pr(2, ("**High Severity**", True), ("_🟡 Minor_", False)),
     ]
-    tally = normalize.build(_raw(prs, settings), settings, [])["reviewer_tally"]
+    # One PR survives the cap; the tally still counts both.
+    digest = normalize.build(_raw(prs, settings), replace(settings, max_findings_prs_per_run=1), [])
+    assert len(digest["prs"]) == 1 and digest["input_cap"]["omitted_prs"]
+    tally = digest["reviewer_tally"]
     by_source = {s["source"]: s for s in tally["sources"]}
     assert list(by_source) == ["configured-reviewer:coderabbitai", "lens:adversarial", "lens:correctness"]
     adversarial = by_source["lens:adversarial"]

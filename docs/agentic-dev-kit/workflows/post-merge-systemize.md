@@ -373,26 +373,29 @@ after the header, each finding is one line of the grammar
 [Typed dispositions](../fallback-review-panel.md#typed-dispositions) sets:
 
 ```text
-<lens> F<n> <SEVERITY>: <stance> — <route, citation or objection>
+<lens> F<n> <SEVERITY> [regression]: <stance> — <route, citation or objection>
 ```
 
 The line may sit behind a `- ` or `* ` bullet or open with a backtick. `<stance>` is
 `accept`, `dispute-evidence` or `dispute-concern`, and `<SEVERITY>` is the lens's label,
 kept as the source severity and normalized by the table below; a line without one has
-an absent label. A line is skipped when it is quoted (`>`), when its lens is not in the
-header's `- lenses:` list, when its stance is anything else, or when its `<lens> F<n>`
-already appeared earlier in the same comment. Across comments at the same reviewed
-head, a later line for the same `<lens> F<n>` replaces the earlier one, because a
-correction is posted after what it corrects. Each such finding records its `stance`, its
-`reviewed_head`, and a source carrying the comment author's trust class plus the `lens`
-and the header's `review_source`; its path and line are null, its id is
-`disposition:<comment-id>:<lens>:F<n>`, and its text is the line.
+an absent label. The label is letters, digits and hyphens; any other character, or a
+space inside a lens name, leaves the line unmatched. `regression` marks a lens-marked
+regression. A line is skipped when it is quoted (`>`) or inside a fenced block, when
+its lens is not in the header's `- lenses:` list, when its stance is anything else, or
+when its `<lens> F<n>` already appeared earlier in the same comment. Across comments
+at the same reviewed head, a later line for the same `<lens> F<n>` replaces the earlier
+one, because a correction is posted after what it corrects. Each such finding records
+its `stance`, its `reviewed_head`, and a source carrying the comment author's trust
+class plus the `lens` and the header's `review_source`; its path and line are null, its
+id is `disposition:<comment-id>:<lens>:F<n>`, and its text is the line.
 
 A disposition's addressed state is its stance, under the same rule thread resolution
 follows: evidence the author answered the finding on the pull request. `accept` and
-`dispute-evidence` are `addressed`. `dispute-concern` is `addressed` below `high` and
-`unaddressed` at `high` or `critical`, which concern alone never closes. The line
-carries no regression mark, so a regression is read by its severity alone. Thread and
+`dispute-evidence` are `addressed`. `dispute-concern` is `unaddressed` at `high` or
+`critical`, on a line marked `regression`, and on a line whose label is absent or not
+in the table, since none of those is known to be closable by concern; below `high` it
+is `addressed`. Thread and
 review findings carry a null `stance` and `reviewed_head`.
 
 Normalize every source severity before ranking, capping, or routing. Preserve the

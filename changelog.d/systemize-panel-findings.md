@@ -16,5 +16,7 @@ ADDED (config keys): `systemize.refuted_flag_min_findings` and
 
 To get panel findings into a run, list the account that posts the disposition comments
 in `systemize.operator_logins`, for example in `config/dev-model.local.yaml`. Write each
-finding's disposition as the typed line, with the lens's severity. An empty operator
-list still reads no disposition comment.
+finding's disposition as the typed line, with the lens's severity, and add `regression`
+after the severity when the lens marked one. A `dispute-concern` on a regression, or on
+a line whose severity is absent or unknown, counts as unaddressed. A line inside a
+fenced block is not read. An empty operator list still reads no disposition comment.
