@@ -389,6 +389,8 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     ("## What I reviewed\n- bug.py:2 read\n\n1. **F1** bug.py:2 divides by zero", True),
     # A bold lead-in is body text, and a comment in fenced code is not a heading.
     ("**bug.py:2** — divides by zero, executed on every call", True),
+    ("**Verified clean:** bug.py:2 cleared", False),
+    ("**Executed** pytest at bug.py:2 passes", False),
     ("### F1\nother.py:1\n```sh\n# mutation executed here\n```\nbug.py:2 divides by zero", True),
 ])
 def test_a_hit_needs_an_overlapping_citation(report, hit) -> None:

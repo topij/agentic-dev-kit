@@ -75,9 +75,11 @@ _FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b",
 # is a finding.
 _NOT_FINDINGS = re.compile(r"[*_ ]*(?:verified clean|what i reviewed|executed|attestation|mutation|"
                            r"earlier dispositions|disposition check|routes)", re.IGNORECASE)
-# A heading is an ATX heading or a line that is bold from end to end; a bold lead-in
-# such as `**path:250** — wrong` is body text.
+# A heading is an ATX heading or a line that is bold from end to end. A bold lead-in
+# heads a section only when it names one (`**Verified clean:** a.py:2 cleared`);
+# `**path:250** — wrong` is body text.
 _HEADING = re.compile(r"[ ]{0,3}(?:#{1,6}[ \t]+(?P<atx>.*?)[ \t#]*|\*\*(?P<bold>[^*]+)\*\*:?[ \t]*)")
+_BOLD_LEAD = re.compile(r"[ ]{0,3}\*\*(?P<bold>[^*]+)\*\*")
 _REPO_LINE = re.compile(r"^(- \*\*Repo:\*\* ).*$", re.MULTILINE)
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
 # The widest citation that still counts as a hit: wider is a file, not a finding.
@@ -198,6 +200,8 @@ def findings_text(report: str) -> str:
         elif (heading := _HEADING.fullmatch(text)) is not None:
             title = heading.group("atx") if heading.group("atx") is not None else heading.group("bold")
             cut = bool(_NOT_FINDINGS.match(title)) and not re.match(r"[*_ ]*F\d+\b", title)
+        elif (lead := _BOLD_LEAD.match(text)) is not None and _NOT_FINDINGS.match(lead.group("bold")):
+            cut = True
         elif blank and _FINDING_NUMBER.match(text):
             cut = False
         blank = fence is None and not text.strip()
