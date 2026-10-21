@@ -32,7 +32,8 @@ clean case's findings are candidate false alarms, so the operator reads both bef
 score is recorded.
 
 Exit 0 prints the result JSON (and writes it with ``--out``); exit 1 is a case that
-could not be run; exit 2 is a rejected invocation or case file.
+could not be run, and ``--out`` then holds the partial result, ``complete: false``;
+exit 2 is a rejected invocation, case file, or a kit checkout with uncommitted changes.
 """
 
 from __future__ import annotations
@@ -81,6 +82,14 @@ class EvalError(Exception):
 
 class RunError(Exception):
     """A case that could not be run (exit 1)."""
+
+
+class LensEscaped(Exception):
+    """A process the lens started left its group and still holds the lens's output."""
+
+
+# How long the runner waits for the lens's output to close once its group is killed.
+DRAIN_SECONDS = 10
 
 
 def _git(root: Path, *args: str) -> str:
@@ -226,8 +235,11 @@ def _isolated_tree(root: Path, tree: Path, case: dict[str, Any], kit_rev: str) -
 def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subprocess.CompletedProcess:
     """Run the lens in its own process group, and end the group before returning.
 
-    The round is retired as finished once this returns, so nothing the lens
-    command started may outlive it, whether it exited or timed out.
+    The round is retired as finished once this returns, so the group is killed
+    whether the lens exited or timed out. A process that left the group (``setsid``)
+    is out of reach of that kill; if one still holds the lens's output after the
+    kill, this raises ``LensEscaped`` rather than wait on it or call the round
+    finished. One that left and closed its output is not seen at all.
     """
     proc = subprocess.Popen(command, cwd=tree, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, start_new_session=True)
@@ -235,7 +247,10 @@ def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subp
         stdout, stderr = proc.communicate(prompt, timeout=timeout)
     except subprocess.TimeoutExpired:
         _kill_group(proc.pid)
-        proc.communicate()
+        try:
+            proc.communicate(timeout=DRAIN_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            raise LensEscaped from exc
         raise
     finally:
         _kill_group(proc.pid)
@@ -273,11 +288,17 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
         raise RunError(f"{case['id']} {lens}: cannot allocate a review round: {exc}") from exc
     (work / f"{case['id']}-{lens}.round.json").write_text(json.dumps(record, sort_keys=True))
     tree = Path(record["path"]) / f"lens-{lens}-{case['head'][:7]}"
+    escaped = False
     try:
         _isolated_tree(root, tree, case, kit_rev)
         prompt = _run_engine("panel_prompt.py", prompt_args(root, case, lens, runtime, tree, kit_rev), root)
         try:
             proc = _run_lens(command, tree, prompt, timeout)
+        except LensEscaped as exc:
+            escaped = True
+            raise RunError(f"{case['id']} {lens}: lens command timed out after {timeout}s and a process it "
+                           f"started left its group and still holds its output; the round is left at "
+                           f"{record['path']} to retire once that process ends") from exc
         except subprocess.TimeoutExpired as exc:
             raise RunError(f"{case['id']} {lens}: lens command timed out after {timeout}s") from exc
         except OSError as exc:
@@ -287,14 +308,21 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
                            f"{proc.stderr.strip()[:500]}")
         return proc.stdout
     finally:
-        shutil.rmtree(tree, ignore_errors=True)
-        try:
-            outcome = sweep_scratch.finish_review_round(record, settings, root, apply=True,
-                                                        reviewers_finished=True)
-        except (sweep_scratch.ConfigError, sweep_scratch.Refused, OSError, ValueError) as exc:
-            raise RunError(f"{case['id']} {lens}: review round not retired: {exc}") from exc
-        if outcome.action == "kept":
-            raise RunError(f"{case['id']} {lens}: review round kept at {outcome.path}: {outcome.reason}")
+        # A process that escaped the lens's group may still be working in the tree,
+        # so that round is neither removed nor called finished.
+        if not escaped:
+            _retire(root, record, settings, tree, f"{case['id']} {lens}")
+
+
+def _retire(root: Path, record: dict[str, Any], settings: Any, tree: Path, label: str) -> None:
+    shutil.rmtree(tree, ignore_errors=True)
+    try:
+        outcome = sweep_scratch.finish_review_round(record, settings, root, apply=True,
+                                                    reviewers_finished=True)
+    except (sweep_scratch.ConfigError, sweep_scratch.Refused, OSError, ValueError) as exc:
+        raise RunError(f"{label}: review round not retired: {exc}") from exc
+    if outcome.action == "kept":
+        raise RunError(f"{label}: review round kept at {outcome.path}: {outcome.reason}")
 
 
 def summarize(results: list[dict[str, Any]], lenses: list[str]) -> dict[str, Any]:
@@ -363,11 +391,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    # The score is stamped with the kit's HEAD, so HEAD must be what produced it: a
+    # lens's focus and the engines are read from the working tree.
+    dirty = _git(root, "status", "--porcelain", "--untracked-files=no")
+    if dirty:
+        print("error: the kit checkout has uncommitted changes, so kit_revision would not name "
+              "what produced the score; commit them first:\n" + dirty, file=sys.stderr)
+        return 2
+
     out = Path(args.out).resolve() if args.out else None
     work = out or Path(_git(root, "rev-parse", "--absolute-git-dir")) / "review-eval"
     work.mkdir(parents=True, exist_ok=True)
     kit_rev = _git(root, "rev-parse", "HEAD")
+    cases_sha256 = hashlib.sha256(cases_path.read_bytes()).hexdigest()
     results = []
+    failure = None
     try:
         for kind, case in selected:
             for lens in lenses:
@@ -381,21 +419,26 @@ def main(argv: list[str] | None = None) -> int:
                 entry.update(score_bug(report, case) if kind == "bug" else score_clean(report))
                 results.append(entry)
     except RunError as exc:
+        failure = str(exc)
         print(f"error: {exc}", file=sys.stderr)
-        return 1
 
     result = {
         "schema": RESULT_SCHEMA,
         "runtime": args.runtime,
         "lens_command": args.lens_command,
         "kit_revision": kit_rev,
-        "cases_sha256": hashlib.sha256(cases_path.read_bytes()).hexdigest(),
+        "cases_sha256": cases_sha256,
+        # A run that stopped on a case keeps what it scored before it, marked partial.
+        "complete": failure is None,
+        "failure": failure,
         "summary": summarize(results, lenses),
         "results": results,
     }
     text = json.dumps(result, indent=2, sort_keys=True) + "\n"
     if out is not None:
         (out / "result.json").write_text(text)
+    if failure is not None:
+        return 1
     sys.stdout.write(text)
     return 0
 

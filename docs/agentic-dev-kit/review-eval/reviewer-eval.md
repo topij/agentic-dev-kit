@@ -30,8 +30,15 @@ The runner needs the kit's full history (`git fetch --unshallow` in a shallow cl
 and an expanded `scratch.roots` entry. Per lens and case it allocates a review round,
 builds a fresh repository there holding only the case's base and head history, detached
 at the head, renders the same prompt a real round gets, runs your command in that tree
-with the prompt on stdin, keeps its stdout as the report, ends every process the command
-started, and retires the round.
+with the prompt on stdin, keeps its stdout as the report, kills the command's process
+group, and retires the round. A process that left the group (`setsid`) is out of reach
+of that kill: if one still holds the command's output, the run stops with exit 1 and
+leaves that round in place, unretired, for you to retire once the process ends.
+
+Run it from a kit checkout with no uncommitted changes: a lens's `focus` and the engines
+are read from the working tree, and the result is stamped with `HEAD`, so the runner
+refuses a dirty checkout. A run that stops on a case still writes `result.json` under
+`--out`, with `complete: false` and what it scored before the failure.
 
 **The tree hides the answer, the sandbox does not.** A linked worktree would share the
 kit's refs and objects, so a lens could find the fix commits or this case file in its

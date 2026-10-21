@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -107,6 +110,7 @@ def test_a_cited_bug_is_a_hit_and_clean_findings_are_candidate_false_alarms(repo
     result = json.loads(proc.stdout)
     assert json.loads((out / "result.json").read_text()) == result
     assert result["schema"] == "review-eval-result-v1" and result["runtime"] == "claude"
+    assert result["complete"] is True and result["failure"] is None
     assert result["lens_command"] == command
     assert result["kit_revision"] == repo["clean"]
     by_case = {r["case"]: r for r in result["results"]}
@@ -223,11 +227,58 @@ def test_nothing_the_lens_started_outlives_it(repo, tmp_path) -> None:
 
 def test_a_lens_that_overruns_its_timeout_is_stopped_and_cleaned_up(repo, tmp_path) -> None:
     script = tmp_path / "slow.py"
-    script.write_text("import sys, time\nsys.stdin.read()\ntime.sleep(60)\n")
+    # Its child holds the lens's output too, and goes with the group.
+    script.write_text("import subprocess, sys, time\nsys.stdin.read()\n"
+                      "subprocess.Popen(['sleep', '60'])\ntime.sleep(60)\n")
     proc = _run(repo, f"{sys.executable} {script}", "--lens", "adversarial", "--case", "divide-by-zero",
                 "--timeout", "1")
-    assert proc.returncode == 1 and "timed out" in proc.stderr
+    assert proc.returncode == 1 and "timed out" in proc.stderr and "left its group" not in proc.stderr
     assert list(repo["scratch"].iterdir()) == []
+
+
+def test_a_lens_that_escapes_its_group_leaves_the_round_unretired(repo, tmp_path, monkeypatch, capsys) -> None:
+    """A process that left the group cannot be killed with it: the round is not called finished."""
+    script = tmp_path / "escape.py"
+    script.write_text(
+        "import subprocess, sys, time\nsys.stdin.read()\n"
+        "child = subprocess.Popen(['sleep', '60'], start_new_session=True)\n"
+        f"open({str(tmp_path / 'escaped.pid')!r}, 'w').write(str(child.pid))\ntime.sleep(60)\n")
+    monkeypatch.setattr(review_eval, "DRAIN_SECONDS", 1)
+    try:
+        code = review_eval.main([
+            "--root", str(repo["root"]), "--cases", str(repo["cases"]), "--runtime", "claude",
+            "--lens-command", f"{sys.executable} {script}", "--scratch-root", str(repo["scratch"]),
+            "--lens", "adversarial", "--case", "divide-by-zero", "--timeout", "1"])
+    finally:
+        pid = tmp_path / "escaped.pid"
+        if pid.exists():
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(int(pid.read_text()), signal.SIGKILL)
+    assert code == 1
+    assert "left its group" in capsys.readouterr().err
+    assert len(list(repo["scratch"].iterdir())) == 1
+
+
+def test_a_dirty_kit_checkout_is_refused(repo, tmp_path) -> None:
+    """kit_revision must name what produced the score, and a lens's focus is read from the tree."""
+    (repo["root"] / "notes.md").write_text("an uncommitted edit\n")
+    proc = _run(repo, _stub(tmp_path, ""))
+    assert proc.returncode == 2 and "uncommitted" in proc.stderr
+    assert list(repo["scratch"].iterdir()) == []
+
+
+def test_a_run_that_stops_keeps_what_it_scored(repo, tmp_path) -> None:
+    script = tmp_path / "late-fail.py"
+    script.write_text(
+        "import subprocess, sys\nsys.stdin.read()\n"
+        "head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()\n"
+        f"sys.exit(3 if head == {repo['clean']!r} else 0)\n")
+    out = tmp_path / "out"
+    proc = _run(repo, f"{sys.executable} {script}", "--lens", "adversarial", out=out)
+    assert proc.returncode == 1 and proc.stdout == ""
+    result = json.loads((out / "result.json").read_text())
+    assert result["complete"] is False and "exited 3" in result["failure"]
+    assert [r["case"] for r in result["results"]] == ["divide-by-zero", "unconfirmed-case"]
 
 
 @pytest.mark.parametrize("report, count", [
