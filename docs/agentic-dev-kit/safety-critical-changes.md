@@ -1,7 +1,9 @@
 # Safety-critical decision logic — review doctrine
 
-These files gate customer-facing sends, destructive operations, or process
-kill/recovery paths. Four rules apply to any behavioral change here — each one earned
+These files gate customer-facing sends, destructive operations, process
+kill/recovery paths, or the checks that guard a merge (CI workflows, git hooks and
+each runtime's hook registration, which can switch a check off without touching an
+engine). Four rules apply to any behavioral change here — each one earned
 by a real shipped failure that CI-green + full unit tests did not catch (an
 approval-matcher inversion; a send-gate with holes found only in review; a destructive
 operation whose "safety" fix reintroduced the hazard; a kill-path that passed unit

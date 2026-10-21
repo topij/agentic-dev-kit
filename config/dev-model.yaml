@@ -343,6 +343,15 @@ review:
     - "scripts/devkit/pr_watch.py"
     - "scripts/sweep_scratch.py"
     - "scripts/devkit/sweep_scratch.py"
+    # Files that can switch a check off without touching an engine (#1150): the
+    # CI that `require_ci` relies on, the git hooks (the pre-push guard and the
+    # PR follow-up hook), and each runtime's hook registration. Both runtimes'
+    # registrations are listed, so neither can be weakened under one lens.
+    - ".github/workflows/*"
+    - "scripts/hooks/*"
+    - "scripts/devkit/hooks/*"
+    - ".claude/settings.json"
+    - ".codex/hooks.json"
   # The independent pass to run when a configured bot can't review. TWO shapes,
   # and the difference is whether the reviewer is independent of the author:
   #

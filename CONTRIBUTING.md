@@ -58,7 +58,9 @@ report a `make test` run.
 ## Opening the pull request
 
 Fill in the template. Say how you verified the change. If you couldn't run
-`make test`, say so and why; that is fine, and better than leaving it out.
+`make test`, say so and why; that is fine, and better than leaving it out. Say what
+could break and how to undo the change: the template's Risk and How to revert
+sections.
 
 The first time you contribute, CI waits for a maintainer to approve the run, so a
 pending check right after you open the PR is expected.

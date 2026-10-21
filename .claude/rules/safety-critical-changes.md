@@ -20,6 +20,13 @@ paths:
   - "scripts/devkit/pr_watch.py"
   - "scripts/sweep_scratch.py"
   - "scripts/devkit/sweep_scratch.py"
+  # Files that can switch a check off without touching an engine (#1150): CI,
+  # the git hooks, and both runtimes' hook registrations.
+  - ".github/workflows/*"
+  - "scripts/hooks/*"
+  - "scripts/devkit/hooks/*"
+  - ".claude/settings.json"
+  - ".codex/hooks.json"
 # Add your own send-path / gate / kill-path files or globs here. This rule is useful
 # only after its paths match the files that gate sends or destructive/recovery work.
 ---

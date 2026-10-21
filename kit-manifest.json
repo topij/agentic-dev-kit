@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "2c150653b0bb48f364fd0780250e71b5ac857ad9a13010f24048d63db7afd461"
+      "sha256": "cb65ea1c73cb4260261aaa3ce3543404a199dae3dc3aff68a4b4525bb1690030"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -119,7 +119,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "090d2dab9f307b1f73aa205ca2a70d32acf37b0634eff20326dfdbe00dc9fc20"
+      "sha256": "ce9a4050763ae879791e314b077e08424ce719e3c85ce39a3fa90101fce36d0e"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -709,7 +709,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "bc507f645d317f4bafbc2c61d8520c3f633b093ead9dcebb9a6a9ad460e0f65b"
+      "sha256": "066d2da6036e03259e84f4434d599b086c6c9514e64926300a8abd767037350a"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
