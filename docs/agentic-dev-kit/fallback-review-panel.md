@@ -934,12 +934,14 @@ before the route that carries it out (`#613`):
 only means fix it, or escalate it to the operator. A reply-with-reason (step 5) is a
 typed dispute, and a logged record-prose imprecision is an `accept` whose route is the
 log. Write one line per finding, in the verifier's form plus the lens's severity, and
-the word `regression` after the severity when the lens marked one:
+the word `regression` after the severity when the lens marked one. A lens numbers its
+findings afresh each round, so when one comment carries several rounds' findings, tag
+each line with its round after the lens name (`adversarial R2 F1 …`):
 
 ```text
 <lens> F<n> <SEVERITY>: accept — <route>
 <lens> F<n> <SEVERITY> regression: dispute-evidence — <citation or executed probe>
-<lens> F<n> <SEVERITY>: dispute-concern — <objection>
+<lens> R<k> F<n> <SEVERITY>: dispute-concern — <objection>
 ```
 
 Put the lines in the prose `pr_watch.py --record-review --disposition` posts, unquoted,
@@ -947,8 +949,8 @@ one per finding of every lens the receipt names, with the lens's own name and fi
 number. `post-merge-systemize` reads them from that comment, and only from it, as the
 panel's findings: a lens's severity, the stance, and whether a typed disposition
 answered it (`#772`), tallied per lens with the round count (`#1157`). The workflow's
-Step 1 has the exact reading. A line in another comment, in a blockquote or fenced
-block, naming a lens the receipt does not, or without a stance is not read, so a
+Step 1 has the exact reading. A line in another comment, in a blockquote, fenced block
+or HTML comment, naming a lens the receipt does not, or without a stance is not read, so a
 finding disposed of that way is missing from the tally. A clean round still posts its
 disposition: the tally counts it as a round.
 

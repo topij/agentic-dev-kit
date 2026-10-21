@@ -337,6 +337,16 @@ def test_concern_closes_only_a_finding_known_to_be_closable(tmp_path, line, labe
     # So is a line inside a fenced block, either fence.
     ("operator", _disposition(SHA, "```text\nadversarial F1 HIGH: accept — x\n```")),
     ("operator", _disposition(SHA, "~~~\nadversarial F1 HIGH: accept — x\n~~~")),
+    # An unclosed fence runs to the end of the comment.
+    ("operator", _disposition(SHA, "```\nadversarial F1 HIGH: accept — x")),
+    # A line with text after the fence characters does not close it.
+    ("operator", _disposition(SHA, "```\n``` text\nadversarial F1 HIGH: accept — x\n```")),
+    # A shorter run does not close a longer fence.
+    ("operator", _disposition(SHA, "````\n```\nadversarial F1 HIGH: accept — x\n````")),
+    # A fence opened behind a list marker.
+    ("operator", _disposition(SHA, "- ```\n  adversarial F1 HIGH: accept — x\n  ```")),
+    # An HTML comment is not rendered, so it is not a disposition either.
+    ("operator", _disposition(SHA, "<!--\nadversarial F1 HIGH: accept — x\n-->")),
     # A lens the header does not list.
     ("operator", _disposition(SHA, "security F1 HIGH: accept — x")),
     # Not a typed stance.
@@ -365,6 +375,34 @@ def test_a_later_comment_at_the_same_head_corrects_an_earlier_one(tmp_path) -> N
                      "disposition:11:adversarial:F1": "accept",
                      "disposition:12:adversarial:F1": "accept"}
     assert normalize.panel_findings(pr, settings, [])[0] == [SHA, LATER]
+
+
+def test_a_line_after_a_closed_fence_is_read(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    body = _disposition(SHA, "```\nexample F1 HIGH: accept — x\n```\nadversarial F1 HIGH: accept — fixed")
+    findings = normalize.pr_findings(_panel_pr(1, (10, "operator", body)), settings, [])
+    assert [f["id"] for f in findings] == ["disposition:10:adversarial:F1"]
+
+
+def test_the_marker_and_stance_are_read_in_any_case(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    body = _disposition(SHA, "adversarial F1 MEDIUM Regression: Dispute-Concern — x")
+    [found] = normalize.pr_findings(_panel_pr(1, (10, "operator", body)), settings, [])
+    assert (found["stance"], found["addressed"]) == ("dispute-concern", "unaddressed")
+
+
+def test_round_tags_keep_each_round_and_count_it(tmp_path) -> None:
+    """One comment at the final head carries every round, and a lens restarts at F1."""
+    settings = _operator_settings(tmp_path)
+    prose = ("adversarial R1 F1 HIGH: accept — fixed in 1234567\n"
+             "adversarial R2 F1 LOW: dispute-evidence — a.py:3\n"
+             "adversarial R3 F1 LOW: accept — fixed")
+    pr = _panel_pr(1, (10, "operator", _disposition(SHA, prose)))
+    found = {f["id"]: f["review_round"] for f in normalize.pr_findings(pr, settings, [])}
+    assert found == {"disposition:10:adversarial:R1:F1": 1, "disposition:10:adversarial:R2:F1": 2,
+                     "disposition:10:adversarial:R3:F1": 3}
+    digest = normalize.build(_raw([pr], settings), settings, [])
+    assert digest["reviewer_tally"]["rounds"] == [{"pr": 1, "rounds": 3}]
 
 
 def test_a_repeated_line_in_one_comment_counts_once(tmp_path) -> None:
@@ -414,6 +452,15 @@ def test_the_tally_counts_each_source_over_the_uncapped_window(tmp_path) -> None
     assert (tally["refuted_flag_min_findings"], tally["refuted_flag_percent"]) == (2, 50)
 
 
+def test_the_flag_needs_its_percent(tmp_path) -> None:
+    settings = _operator_settings(tmp_path, refuted_flag_min_findings=2, refuted_flag_percent=50)
+    prose = "\n".join(f"adversarial F{n} LOW: {stance} — a:{n}" for n, stance in
+                      enumerate(["dispute-evidence", "accept", "accept"], start=1))
+    tally = normalize.build(_raw([_panel_pr(1, (10, "operator", _disposition(SHA, prose)))], settings),
+                            settings, [])["reviewer_tally"]
+    assert tally["sources"][0]["refuted"] == 1 and tally["sources"][0]["refuted_flag"] is False
+
+
 def test_the_flag_needs_its_minimum_sample(tmp_path) -> None:
     settings = _operator_settings(tmp_path)  # the defaults: 5 findings, 50 percent
     prose = "adversarial F1 LOW: dispute-evidence — a:1"
@@ -442,7 +489,7 @@ def test_verify_recomputes_panel_findings_and_the_tally(tmp_path) -> None:
     dropped["prs"] = []
     with pytest.raises(SystemizeError, match="finding evidence"):
         normalize.verify(dropped, expected, "candidate")
-    for field in ("stance", "reviewed_head"):
+    for field in ("stance", "reviewed_head", "review_round"):
         altered = deepcopy(expected)
         altered["prs"][0]["findings"][0][field] = "altered"
         with pytest.raises(SystemizeError, match="finding evidence"):

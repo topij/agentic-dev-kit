@@ -273,7 +273,8 @@ Repeat until the report says **converged**:
      ([Typed dispositions](../fallback-review-panel.md#typed-dispositions)). A HIGH
      or a reviewer-marked regression is never closed by `dispute-concern`. For a
      fallback round, write each as one line,
-     `<lens> F<n> <SEVERITY>: <stance> — <route, citation or objection>`, in the
+     `<lens> F<n> <SEVERITY>: <stance> — <route, citation or objection>`, tagged
+     `<lens> R<k> F<n> …` when the comment carries several rounds, in the
      `--record-review --disposition` prose: `post-merge-systemize` reads only that
      line, from that comment, to count the panel's findings.
 

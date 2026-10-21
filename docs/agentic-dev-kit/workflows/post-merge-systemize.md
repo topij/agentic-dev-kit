@@ -373,30 +373,35 @@ after the header, each finding is one line of the grammar
 [Typed dispositions](../fallback-review-panel.md#typed-dispositions) sets:
 
 ```text
-<lens> F<n> <SEVERITY> [regression]: <stance> — <route, citation or objection>
+<lens> [R<k>] F<n> <SEVERITY> [regression]: <stance> — <route, citation or objection>
 ```
 
 The line may sit behind a `- ` or `* ` bullet or open with a backtick. `<stance>` is
 `accept`, `dispute-evidence` or `dispute-concern`, and `<SEVERITY>` is the lens's label,
 kept as the source severity and normalized by the table below; a line without one has
-an absent label. The label is letters, digits and hyphens; any other character, or a
-space inside a lens name, leaves the line unmatched. `regression` marks a lens-marked
-regression. A line is skipped when it is quoted (`>`) or inside a fenced block, when
-its lens is not in the header's `- lenses:` list, when its stance is anything else, or
-when its `<lens> F<n>` already appeared earlier in the same comment. Across comments
-at the same reviewed head, a later line for the same `<lens> F<n>` replaces the earlier
-one, because a correction is posted after what it corrects. Each such finding records
-its `stance`, its `reviewed_head`, and a source carrying the comment author's trust
-class plus the `lens` and the header's `review_source`; its path and line are null, its
-id is `disposition:<comment-id>:<lens>:F<n>`, and its text is the line.
+an absent label. The label is letters, digits and hyphens; any other character, a space
+inside a lens name, or the parts in another order leaves the line unmatched.
+`regression` marks a lens-marked regression; it and the stance are read in any case.
+`R<k>` names the round a line came from: a lens numbers its findings afresh each round,
+so a comment carrying several rounds tags each line. A line is skipped when it is
+quoted (`>`), inside a fenced block (backticks or tildes, an unclosed one running to the
+end of the comment) or inside an HTML comment, when its lens is not in the header's
+`- lenses:` list, when its stance is anything else, or when its `<lens> [R<k>] F<n>`
+already appeared earlier in the same comment. Across comments at the same reviewed
+head, a later line for the same `<lens> [R<k>] F<n>` replaces the earlier one, because a
+correction is posted after what it corrects. Each such finding records its `stance`,
+its `reviewed_head`, its `review_round` (`k`, or null), and a source carrying the
+comment author's trust class plus the `lens` and the header's `review_source`; its path
+and line are null, its id is `disposition:<comment-id>:<lens>:F<n>`, with `R<k>:` before
+the `F` on a tagged line, and its text is the line.
 
 A disposition's addressed state is its stance, under the same rule thread resolution
 follows: evidence the author answered the finding on the pull request. `accept` and
 `dispute-evidence` are `addressed`. `dispute-concern` is `unaddressed` at `high` or
 `critical`, on a line marked `regression`, and on a line whose label is absent or not
 in the table, since none of those is known to be closable by concern; below `high` it
-is `addressed`. Thread and
-review findings carry a null `stance` and `reviewed_head`.
+is `addressed`. Thread and review findings carry a null `stance`, `reviewed_head` and
+`review_round`.
 
 Normalize every source severity before ranking, capping, or routing. Preserve the
 source label beside the normalized value. The canonical order is
@@ -436,9 +441,10 @@ below:
     is at least `refuted_flag_min_findings`, and `refuted × 100` is at least
     `refuted_flag_percent × findings`.
   - `rounds[]`, sorted by pull request: `{pr, rounds}` for each pull request with at
-    least one trusted disposition comment, where `rounds` counts its distinct reviewed
-    heads, a clean round included. A merged pull request passed, so this is its
-    rounds-to-pass.
+    least one trusted disposition comment, where `rounds` is the larger of its distinct
+    reviewed heads, a clean round included, and its highest `R<k>` tag. A round that
+    leaves findings records `--record-round`, not a disposition comment, so an untagged
+    pull request's count is a lower bound on its rounds-to-pass.
   - the two flag values applied.
 - `findings_pr_count = len(prs)` after the cap,
   `single_pass_recommended = (findings_pr_count <=

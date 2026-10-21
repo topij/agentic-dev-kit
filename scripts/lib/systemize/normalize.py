@@ -121,6 +121,7 @@ def _finding(kind: str, comment: dict[str, Any], source: dict[str, str], *, path
         "addressed": addressed,
         "stance": None,
         "reviewed_head": None,
+        "review_round": None,
         "guideline_citation": guideline_citation(body, citation_paths),
         "text": text,
         "text_truncated": truncated,
@@ -143,14 +144,34 @@ _DISPOSITION_HEADER = re.compile(
     r"- lenses: (?P<lenses>[^\n]*)\n"
 )
 _DISPOSITION_LINE = re.compile(
-    r"^[ \t]*(?:[-*][ \t]+)?`?(?P<lens>[A-Za-z0-9_.-]+) F(?P<n>[1-9][0-9]*)"
-    r"(?: (?P<severity>[A-Za-z0-9-]+))?(?: (?P<regression>regression))?"
-    r": (?P<stance>accept|dispute-evidence|dispute-concern)"
+    r"^[ \t]*(?:[-*][ \t]+)?`?(?P<lens>[A-Za-z0-9_.-]+)(?: R(?P<round>[1-9][0-9]*))? F(?P<n>[1-9][0-9]*)"
+    r"(?: (?P<severity>[A-Za-z0-9-]+))?(?: (?P<regression>(?i:regression)))?"
+    r": (?P<stance>(?i:accept|dispute-evidence|dispute-concern))"
     r"(?=[ :—`]|$)[^\n]*$",
     re.MULTILINE,
 )
-_FENCE = re.compile(r"^[ \t]*(```|~~~)[^\n]*\n.*?^[ \t]*\1[^\n]*$", re.MULTILINE | re.DOTALL)
+# A CommonMark code fence: three or more backticks or tildes, optionally after a
+# list marker; it closes on a line of at least as many of the same character and
+# nothing else, and an unclosed fence runs to the end of the comment.
+_FENCE_OPEN = re.compile(r"^[ \t]*(?:[-*+][ \t]+)?(`{3,}|~{3,})")
 STANCES = ("accept", "dispute-evidence", "dispute-concern")
+
+
+def unfenced(prose: str) -> str:
+    """``prose`` with HTML comments and every fenced block's lines removed."""
+    kept: list[str] = []
+    fence: str | None = None
+    for line in _HTML_COMMENT.sub("", prose).split("\n"):
+        if fence is not None:
+            if re.fullmatch(rf"[ \t]*{re.escape(fence[0])}{{{len(fence)},}}[ \t]*", line):
+                fence = None
+            continue
+        opened = _FENCE_OPEN.match(line)
+        if opened and not (opened.group(1)[0] == "`" and "`" in line[opened.end():]):
+            fence = opened.group(1)
+            continue
+        kept.append(line)
+    return "\n".join(kept)
 
 
 def disposition_header(body: str) -> dict[str, Any] | None:
@@ -185,38 +206,43 @@ def disposition_findings(comment: dict[str, Any], source: dict[str, str],
                          citation_paths: list[str]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
     """``(header, findings)`` for one trusted comment; ``(None, [])`` if it is not one.
 
-    A line inside a blockquote or a fenced block is a quotation, not this round's
-    disposition, and a line naming a lens the header does not list is not this
-    round's finding.
-    A repeated ``<lens> F<n>`` in one comment counts once, first line first.
+    A line inside a blockquote, a fenced block or an HTML comment is a quotation,
+    not this round's disposition, and a line naming a lens the header does not
+    list is not this round's finding. A lens numbers its findings afresh each
+    round, so a comment carrying several rounds tags each line ``R<k>``; a
+    repeated ``<lens> [R<k>] F<n>`` in one comment counts once, first line first.
     """
     header = disposition_header(comment.get("body") or "")
     if header is None:
         return None, []
-    findings: dict[tuple[str, str], dict[str, Any]] = {}
-    for match in _DISPOSITION_LINE.finditer(_FENCE.sub("", header["prose"])):
-        lens, number = match.group("lens"), match.group("n")
-        if lens not in header["lenses"] or (lens, number) in findings:
+    findings: dict[tuple[str, str | None, str], dict[str, Any]] = {}
+    for match in _DISPOSITION_LINE.finditer(unfenced(header["prose"])):
+        lens, review_round, number = match.group("lens"), match.group("round"), match.group("n")
+        if lens not in header["lenses"] or (lens, review_round, number) in findings:
             continue
+        stance = match.group("stance").lower()
         label = match.group("severity")
         regression = match.group("regression") is not None
         if label is not None and label.lower() == "regression" and not regression:
+            # `F1 regression:` has no severity: the word is the marker, not a label.
             label, regression = None, True
         severity, mapped = normalize_severity(label)
         line = match.group(0)
         text, truncated = clean_text(line)
-        findings[(lens, number)] = {
-            "id": f"disposition:{comment.get('id')}:{lens}:F{number}",
+        tag = f"R{review_round}:" if review_round else ""
+        findings[(lens, review_round, number)] = {
+            "id": f"disposition:{comment.get('id')}:{lens}:{tag}F{number}",
             "source": {**source, "lens": lens, "review_source": header["review_source"]},
             "path": None,
             "line": None,
             "source_severity": label,
             "severity": severity,
             "severity_mapped": mapped,
-            "addressed": stance_addressed(match.group("stance"), severity,
+            "addressed": stance_addressed(stance, severity,
                                           known=label is not None and mapped, regression=regression),
-            "stance": match.group("stance"),
+            "stance": stance,
             "reviewed_head": header["head"],
+            "review_round": int(review_round) if review_round else None,
             "guideline_citation": guideline_citation(line, citation_paths),
             "text": text,
             "text_truncated": truncated,
@@ -339,9 +365,12 @@ def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) ->
     every_finding: list[dict[str, Any]] = []
     rounds: list[dict[str, int]] = []
     for pr in raw.get("prs") or []:
-        heads, _ = panel_findings(pr, settings, citation_paths)
+        heads, panel = panel_findings(pr, settings, citation_paths)
         if heads:
-            rounds.append({"pr": pr["number"], "rounds": len(heads)})
+            # A round that leaves findings records no disposition comment, so the
+            # heads alone undercount; a line's R<k> tag names the round it came from.
+            tagged = max((f["review_round"] or 0 for f in panel), default=0)
+            rounds.append({"pr": pr["number"], "rounds": max(len(heads), tagged)})
         findings = pr_findings(pr, settings, citation_paths)
         every_finding.extend(findings)
         if not findings:
