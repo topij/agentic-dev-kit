@@ -15386,6 +15386,8 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         "commit_subject",
         "pr_draft",
         "subprocess_timeout_seconds",
+        "refuted_flag_min_findings",
+        "refuted_flag_percent",
     }
     assert systemize["analysis_tier"] in config["models"]["tiers"]
     assert isinstance(systemize["operator_logins"], list)

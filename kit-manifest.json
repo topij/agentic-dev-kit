@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "651fed19b96d3a92082d8e2b2f83e3dc8061ba1adbff5d2a36936c5833a30915"
+      "sha256": "80e73ce06fad560395d5408d756df5e3b975deaa29a94d9a2376f525f6a787ff"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/review-eval/reviewer-eval.md": {
       "role": "repo-only",
-      "sha256": "91c9b5a66a472f995991b91dec8be57d68705ef2e3a379d1cef10cd6970dcea7"
+      "sha256": "5da565ef5be0a3439ecb796d64c1ffc1a6cf08b65ef118c45b39618037c7f779"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
@@ -68,11 +68,11 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "ae39efbd37b24238016d3afdc56002f18f8ba21aa120e71e53a6ddba20ee65b9"
+      "sha256": "0e47b8a7f1ed1379b9689bf36fdbd311038991a1e66bf9cc51a910eba945336c"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "ea06099cf23cbda4ff9f48564b3150ada18cd9820bdc882ec535e4fae9c9ea5a"
+      "sha256": "2deaab7808142f7e08ded180bee7e845d515d9f69444d262e9c10692e96a63b6"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -151,7 +151,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "86cd7c48183f6765910a1baf63b72160a05ada4a1c030267f47ab2bb18ce21c8"
+      "sha256": "4811455cfa004f2dd910725ccfd05b18c8c70a01440efa50ffdef32a956bbe10"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -391,7 +391,7 @@
         "scripts/lib/systemize/normalize.py"
       ],
       "role": "engine",
-      "sha256": "ddd1bc82c6a22ed35f0f224f63482230c64d43a61eed129b957db5050a025f07"
+      "sha256": "1c32b41027b33a09698c48620261393445b54ae9fe771952989486ecac017a55"
     },
     "scripts/lib/systemize/digest.py": {
       "required_by": [
@@ -455,7 +455,7 @@
         "scripts/lib/systemize/digest.py"
       ],
       "role": "engine",
-      "sha256": "f060c78843ec436fbb80cc9a97b42b4be2e9a9811597ac4d6544006efda05c90"
+      "sha256": "0713048753e0facdd215fccadf8ab3c77d076e2d465526cf47c4af1668b3b53e"
     },
     "scripts/lib/triage/__init__.py": {
       "role": "engine",
@@ -598,7 +598,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "987ccff3271465a123276361c7db33dbdfc4ac16b3fb00f474efe0a44ab90361"
+      "sha256": "83d91c3469b6b3fb641bd0897f7f8689b3d85f79a037c3fdacbad9f720b464a9"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -633,7 +633,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "98e1f510450cc74f75df42a668a6558fbc44d3fd3a0b98a0c6c18f8c20097b1d"
+      "sha256": "92617a64259f7b8eb6976a5d8164d2038af6e26b72fa872bdb49abf14c899aef"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -713,7 +713,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "827764f2a2cbde3fc1caa4c73154d9ecf1a1e49734daec929ebd551070505120"
+      "sha256": "3d192650a403d46c975ae7da7f7d2667d7b6fd8a6c9a7fe2fffd26cb3c0daff3"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -741,7 +741,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "405c59dc7d22d0d7f05d78c096109da79e724d6ebf71b8258ea6d146bc885592"
+      "sha256": "3771cbd61c1d983114c4014b8adfcc52533401696ef1c8a85f64fa4f9f2b69f6"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",
@@ -769,7 +769,7 @@
     },
     "scripts/tests/test_systemize_digest.py": {
       "role": "test",
-      "sha256": "fd18e8cabf9862f2dce4061c37917565def1a317cba72926918c99cd0a9d68c2"
+      "sha256": "9ff532248d778b50be3bd5ef24c9b333c8612bbceb8c7873776dd0ead6fc2c8a"
     },
     "scripts/tests/test_systemize_engines.py": {
       "role": "test",

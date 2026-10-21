@@ -88,6 +88,8 @@ class Settings:
     heartbeat_pattern: str | None
     control_inputs: tuple[Path, ...]
     subprocess_timeout_seconds: int = 60
+    refuted_flag_min_findings: int = 5
+    refuted_flag_percent: int = 50
 
     def window_days_for(self, requested: int) -> int:
         if requested not in (self.lookback_days, self.backfill_days):
@@ -219,6 +221,17 @@ def load_settings(start: Path | None = None) -> Settings:
         {"subprocess_timeout_seconds": section.get("subprocess_timeout_seconds", 60)},
         "subprocess_timeout_seconds",
     )
+    # Optional like the timeout: an older configuration that omits them reads the
+    # documented defaults, and the digest records the values it applied.
+    flag_min = _positive_int(
+        {"refuted_flag_min_findings": section.get("refuted_flag_min_findings", 5)},
+        "refuted_flag_min_findings",
+    )
+    flag_percent = _positive_int(
+        {"refuted_flag_percent": section.get("refuted_flag_percent", 50)}, "refuted_flag_percent"
+    )
+    if flag_percent > 100:
+        raise SystemizeError("systemize.refuted_flag_percent must be at most 100")
     if ints["pattern_threshold"] < 2:
         raise SystemizeError("systemize.pattern_threshold must be at least 2")
     if ints["backfill_days"] < ints["lookback_days"]:
@@ -323,4 +336,6 @@ def load_settings(start: Path | None = None) -> Settings:
         heartbeat_pattern=heartbeat,
         control_inputs=tuple(Path(os.path.abspath(p)) for p in controls),
         subprocess_timeout_seconds=timeout,
+        refuted_flag_min_findings=flag_min,
+        refuted_flag_percent=flag_percent,
     )

@@ -1356,6 +1356,10 @@ migrate_kit_schema() {
   operator_logins: []
   # Bound each forge and artifact Git read; a timeout stops without publishing.
   subprocess_timeout_seconds: 60
+  # The reviewer tally in the digest flags a source whose findings are mostly refuted
+  # (dispute-evidence) once it has this many in the window. A report line only.
+  refuted_flag_min_findings: 5
+  refuted_flag_percent: 50
   lookback_days: 7
   backfill_days: 28
   pattern_threshold: 2
