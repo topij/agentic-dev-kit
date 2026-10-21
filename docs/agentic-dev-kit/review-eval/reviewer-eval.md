@@ -78,12 +78,13 @@ cited `path:line` overlapping a known finding's lines, in a citation at most 40 
 wide. A clean case's candidate false alarms are the `F<n>` numbers that open a line of
 its report, or, in a report that numbers none, its distinct citations. Neither count
 reads a section the lens contract has it write about what it checked (*Verified clean*,
-*What I reviewed*, *Executed* and the like), so a line it cleared is not a hit. Such a
-section runs to the next heading or to the next paragraph that opens with an `F<n>` number,
-so a finding listed after it without a heading of its own still counts, and so does a
-paragraph there that opens with an earlier finding's number to clear it. That is a
-proxy. A report can
-cite the right lines for the wrong reason, or describe the bug without a citation, so
+*What I reviewed*, *Executed* and the like), so a line it cleared is not a hit. A
+heading with that name opens such a section, and a bold label with it, such as
+`**Executed:** ran it`, drops only its own line. A section runs to the next heading or
+to the next paragraph that opens with an `F<n>` number, so a finding listed after it
+without a heading of its own still counts, and so does a paragraph there that opens
+with an earlier finding's number to clear it. That is a proxy. A report can cite the
+right lines for the wrong reason, or describe the bug without a citation, so
 read each case's `matched_citations` and report before recording the score.
 
 A score is a reading. Record it where the change is decided, in the pull request that

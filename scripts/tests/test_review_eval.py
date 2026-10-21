@@ -391,6 +391,18 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     ("**bug.py:2** — divides by zero, executed on every call", True),
     ("**Verified clean:** bug.py:2 cleared", False),
     ("**Executed** pytest at bug.py:2 passes", False),
+    ("- **Verified clean:** bug.py:2 cleared", False),
+    ("> **Verified clean:** bug.py:2 cleared", False),
+    ("__Verified clean:__ bug.py:2 cleared", False),
+    ("## Verified clean (what I executed)\n- bug.py:2 fine", False),
+    ("### Mutation and verification\n- deleting bug.py:2 fails a test", False),
+    # A section name opening a finding's title does not make it a section.
+    ("**Mutation of shared state in bug.py:2** — aliasing", True),
+    ("**Executed path skips guard** bug.py:2 divides by zero", True),
+    ("## Mutation of state\nbug.py:2", True),
+    # An evidence label inside a finding drops its own line, not the finding.
+    ("F1 HIGH divides by zero\n**Executed:** ran it\nbug.py:2 raises ZeroDivisionError", True),
+    ("**Verified clean:** a.py:1\n\n**bug.py:2** — divides by zero", True),
     ("### F1\nother.py:1\n```sh\n# mutation executed here\n```\nbug.py:2 divides by zero", True),
 ])
 def test_a_hit_needs_an_overlapping_citation(report, hit) -> None:

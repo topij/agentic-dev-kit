@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/review-eval/reviewer-eval.md": {
       "role": "repo-only",
-      "sha256": "33e811b73733b43758ad2a5b0baa00ae06a678902defba9082e90793697890d8"
+      "sha256": "73243f872454c34ca64c1bc729183211ced11b7144077444edb865220cee5942"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
@@ -598,7 +598,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "722ce8f9190a5ad59c4bffbae4fde8e4261b09c351fba7fd6abe411fdf2e4894"
+      "sha256": "94c5e4f78c069ab30cdf23a8a64c5b2cb1f171f7f69c490ec306f1cc8cccf207"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -741,7 +741,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "bb5c2f57d6d51e4b84169ab51bac0757e0675e16bf6861e52bc062f6d945bcd2"
+      "sha256": "a90756ed7b314d94df1a7fc671670a3621576070d03bb1e3d61ab2d3a7f66adf"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",

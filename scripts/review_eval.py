@@ -70,16 +70,18 @@ _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
 # A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`, `1. **F3**`.
 _FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b", re.MULTILINE)
-# The lens contract's own sections cite what was checked, not what is wrong. A
-# title names one only by opening with it: `### Finding 1 — Executed check ignored`
-# is a finding.
-_NOT_FINDINGS = re.compile(r"[*_ ]*(?:verified clean|what i reviewed|executed|attestation|mutation|"
-                           r"earlier dispositions|disposition check|routes)", re.IGNORECASE)
-# A heading is an ATX heading or a line that is bold from end to end. A bold lead-in
-# heads a section only when it names one (`**Verified clean:** a.py:2 cleared`);
-# `**path:250** — wrong` is body text.
-_HEADING = re.compile(r"[ ]{0,3}(?:#{1,6}[ \t]+(?P<atx>.*?)[ \t#]*|\*\*(?P<bold>[^*]+)\*\*:?[ \t]*)")
-_BOLD_LEAD = re.compile(r"[ ]{0,3}\*\*(?P<bold>[^*]+)\*\*")
+# The lens contract's own sections cite what was checked, not what is wrong. A label
+# names one only when it is that name, with at most an `and ...` tail, a parenthetical
+# and a colon: `### Mutation of shared state` and `**Executed path skips guard**` are
+# findings.
+_NOT_FINDINGS = re.compile(r"(?:verified clean|what i reviewed|executed|attestation|mutation(?: testing)?|"
+                           r"earlier dispositions|disposition check|routes)"
+                           r"(?:[ \t]+and[ \t]+[\w ]+)?(?:[ \t]*\([^)]*\))?[ \t]*[:.]?[ \t]*", re.IGNORECASE)
+# A heading is an ATX heading or a line that is bold from end to end; a bold label
+# may sit after a list or quote marker. A bold lead-in followed by more text is body.
+_LEAD = r"[ ]{0,3}(?:[-*+>][ \t]+|\d{1,3}[.)][ \t]+)?(?P<mark>\*\*|__)(?P<bold>.+?)(?P=mark)"
+_HEADING = re.compile(rf"[ ]{{0,3}}#{{1,6}}[ \t]+(?P<atx>.*?)[ \t#]*|{_LEAD}[ \t]*:?[ \t]*")
+_BOLD_LEAD = re.compile(_LEAD)
 _REPO_LINE = re.compile(r"^(- \*\*Repo:\*\* ).*$", re.MULTILINE)
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
 # The widest citation that still counts as a hit: wider is a file, not a finding.
@@ -179,17 +181,19 @@ def load_cases(path: Path, root: Path) -> dict[str, list[dict[str, Any]]]:
 
 
 def findings_text(report: str) -> str:
-    """``report`` without the sections that record what was checked.
+    """``report`` without what the lens records having checked.
 
-    A heading whose title opens with one of the contract's report sections drops the
-    lines after it until the next heading or the next paragraph that opens with a
-    numbered finding, so a cited line the lens cleared is neither a hit nor a false alarm,
+    A heading that names one of the contract's report sections drops the lines after
+    it until the next heading or the next paragraph that opens with a numbered
+    finding; a bold lead-in that names one (``**Executed:** ran it``) drops only its
+    own line. A cited line the lens cleared is then neither a hit nor a false alarm,
     and a finding listed after such a section without a heading of its own is kept.
     Fenced code is never a heading.
     """
     kept, cut, fence, blank = [], False, None, True
     for line in report.splitlines(keepends=True):
         text = line.rstrip("\r\n")
+        drop = False
         if fence is not None:
             closer = _FENCE.match(text)
             if closer and closer.group(1)[0] == fence[0] and len(closer.group(1)) >= len(fence) \
@@ -199,13 +203,13 @@ def findings_text(report: str) -> str:
             fence = opener.group(1)
         elif (heading := _HEADING.fullmatch(text)) is not None:
             title = heading.group("atx") if heading.group("atx") is not None else heading.group("bold")
-            cut = bool(_NOT_FINDINGS.match(title)) and not re.match(r"[*_ ]*F\d+\b", title)
-        elif (lead := _BOLD_LEAD.match(text)) is not None and _NOT_FINDINGS.match(lead.group("bold")):
-            cut = True
+            cut = bool(_NOT_FINDINGS.fullmatch(title.strip("*_ ")))
+        elif (lead := _BOLD_LEAD.match(text)) is not None and _NOT_FINDINGS.fullmatch(lead.group("bold").strip()):
+            drop = True
         elif blank and _FINDING_NUMBER.match(text):
             cut = False
         blank = fence is None and not text.strip()
-        if not cut:
+        if not (cut or drop):
             kept.append(line)
     return "".join(kept)
 
