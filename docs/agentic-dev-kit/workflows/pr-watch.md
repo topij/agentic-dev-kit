@@ -264,7 +264,14 @@ Repeat until the report says **converged**:
      --body "..."` for a top-level reply, summarizing what you addressed vs. skipped
      and why.
    - Verify each finding against the *current* code before acting — some go stale
-     across rounds (a later commit already fixed it).
+     across rounds (a later commit already fixed it). For a fallback round you may
+     first run the panel doc's verifier over the lenses' findings
+     ([Verifying findings](../fallback-review-panel.md#verifying-findings)). It is
+     optional until measured, and a HIGH it refutes goes to the operator rather than
+     being dropped.
+   - Type each disposition `accept`, `dispute-evidence` or `dispute-concern`
+     ([Typed dispositions](../fallback-review-panel.md#typed-dispositions)). A HIGH
+     or a reviewer-marked regression is never closed by `dispute-concern`.
 
 1. **Count the round before you fix it.** A review that leaves findings to fix
    records no receipt yet, so record the round itself, against the head that was
@@ -338,6 +345,11 @@ Repeat until the report says **converged**:
    `--record-review --disposition`; a hand-written comment under some other heading
    does not clear it, because the check reads the marker the engine writes rather
    than matching prose.
+
+   **A lens that amends its report after the receipt** gets a correction comment on
+   the pull request and leaves the receipt alone; an amendment that adds a finding is
+   disposed of before merge
+   ([When a lens amends its report after the receipt](../fallback-review-panel.md#when-a-lens-amends-its-report-after-the-receipt)).
 
 1. **Pace the next poll** (see below), then go to step 1.
 
