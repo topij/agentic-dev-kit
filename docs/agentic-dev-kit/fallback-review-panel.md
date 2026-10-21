@@ -1311,8 +1311,8 @@ severity in scope; never use `--repair-boundary` for it, whose LOW-rule wording 
 the lens the opposite. It refuses a sha older than the branch's fork point,
 `git merge-base <base> <head>`, whose delta would carry upstream commits as the fix
 round (`#1166`). A branch that merged the base after the last reviewed head is in that
-case too, and its next round is a full pass; the round after that has its delta again. **Expect the remediation to carry the next defect** is what it
-is aimed with. Record it
+case too, and its next round is a full pass; the round after that has its delta again.
+**Expect the remediation to carry the next defect** is what it is aimed with. Record it
 as `fallback:delta` with `--compose-parent`, as below. A finding above LOW from
 that pass is fixed and delta-reviewed again under this paragraph; it does not
 restore the full pass by itself. The round budget still stops the loop at the
