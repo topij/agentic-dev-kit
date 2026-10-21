@@ -349,9 +349,9 @@ review:
     # registration. Both runtimes' registrations are listed, so neither can be
     # weakened under one lens. NOT the full set. Among what is not listed: the
     # Makefile's test targets, init.sh's hook installer, ruff.toml,
-    # scripts/tests/conftest.py (#434), the checkers CI runs (kit_doctor.py,
-    # scripts/check_*), the lens agent definitions under .claude/agents/, other
-    # .github/ files, an adopter's .codex/config.toml, and any review-bot config.
+    # scripts/tests/conftest.py (#434), the checker CI runs (kit_doctor.py), the
+    # lens agent definitions under .claude/agents/, other .github/ files, an
+    # adopter's .codex/config.toml, and any review-bot config.
     # Adding them is an operator decision about review cost.
     - ".github/workflows/*"
     - "scripts/hooks/*"

@@ -21,8 +21,8 @@ paths:
   - "scripts/sweep_scratch.py"
   - "scripts/devkit/sweep_scratch.py"
   # Some files that can switch a check off without touching an engine (#1150):
-  # CI, the hook scripts, and both runtimes' hook registrations. The config
-  # comment names what this leaves out.
+  # CI, the hook scripts, and both runtimes' hook registrations. The kit's
+  # shipped config comment names some of what this leaves out.
   - ".github/workflows/*"
   - "scripts/hooks/*"
   - "scripts/devkit/hooks/*"
