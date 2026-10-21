@@ -12,7 +12,8 @@ better or worse. This runs every lens over every case in
 cases it caught and how many findings it raised on the clean ones.
 
 For each case and lens it allocates a review round with ``sweep_scratch.py``, builds a
-detached tree at the case head, renders the lens prompt with ``panel_prompt.py`` (the
+repository there holding only the case's own history, detached at the case head (so the
+fix commits and this case file are not reachable from it), renders the lens prompt with ``panel_prompt.py`` (the
 same prompt a real round gets, with ``--preflight-rev`` set to this checkout's
 ``HEAD``, because a historical head predates the preflight checker), runs
 ``--lens-command`` in that tree with the prompt on stdin, keeps its stdout as the
@@ -24,8 +25,8 @@ result, so a score always names what produced it. Tests pass a stub, so ``make t
 never calls a model.
 
 **A hit is a citation, not a judgment.** A bug case counts as caught when the report
-cites ``path:line`` (or ``path:start-end``) overlapping one of the case's known
-findings. That is a proxy: a report can cite the right lines for the wrong reason, or
+cites ``path:line`` (or ``path:start-end``, at most ``HIT_SPAN`` lines wide) overlapping
+one of the case's known findings. That is a proxy: a report can cite the right lines for the wrong reason, or
 describe the bug without a citation. The result keeps every matched citation, and a
 clean case's findings are candidate false alarms, so the operator reads both before a
 score is recorded.
@@ -37,10 +38,14 @@ could not be run; exit 2 is a rejected invocation or case file.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
+import os
 import re
 import shlex
+import shutil
+import signal
 import subprocess
 import sys
 from pathlib import Path
@@ -63,6 +68,11 @@ _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 # `path:line` or `path:start-end`, the citation form the lens contract asks for.
 _CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):(\d+)(?:[-–](\d+))?")
 _FINDING_NUMBER = re.compile(r"\bF(\d+)\b")
+# The widest citation that still counts as a hit: wider is a file, not a finding.
+HIT_SPAN = 40
+# What the lens sees as the branch: the same for every case, so the name says
+# nothing about the case or its kind.
+BRANCH = "review-eval/case"
 
 
 class EvalError(Exception):
@@ -163,15 +173,20 @@ def score_bug(report: str, case: dict[str, Any]) -> dict[str, Any]:
     matched = []
     for cited in citations(report):
         for index, known in enumerate(case["findings"]):
-            if (_same_path(cited["path"], known["path"])
+            if (cited["lines"][1] - cited["lines"][0] < HIT_SPAN
+                    and _same_path(cited["path"], known["path"])
                     and cited["lines"][0] <= known["lines"][1] and known["lines"][0] <= cited["lines"][1]):
                 matched.append({"finding": index, **cited})
     return {"hit": bool(matched), "matched_citations": matched}
 
 
 def score_clean(report: str) -> dict[str, Any]:
-    numbers = sorted({int(n) for n in _FINDING_NUMBER.findall(report)})
-    return {"candidate_false_alarms": len(numbers), "citations": citations(report)}
+    """A clean case's findings: its ``F<n>`` numbers, or, in a report that numbers
+    none, each distinct citation, so an unnumbered report is not read as silent."""
+    numbers = {int(n) for n in _FINDING_NUMBER.findall(report)}
+    cited = citations(report)
+    count = len(numbers) or len({(c["path"], *c["lines"]) for c in cited})
+    return {"candidate_false_alarms": count, "citations": cited}
 
 
 def _run_engine(name: str, args: list[str], root: Path) -> str:
@@ -180,6 +195,68 @@ def _run_engine(name: str, args: list[str], root: Path) -> str:
     if proc.returncode != 0:
         raise RunError(f"{name} {' '.join(args[:2])} failed: {proc.stderr.strip()[:500]}")
     return proc.stdout
+
+
+def _isolated_tree(root: Path, tree: Path, case: dict[str, Any], kit_rev: str) -> None:
+    """A fresh repository at ``tree`` holding only the case's base and head history.
+
+    A linked worktree would share ``root``'s refs and objects, and with them the fix
+    commits, this case file and the issue references a lens could search for the
+    answer. Only the two shas are fetched, so nothing later than the case head is
+    reachable. The preflight checker's two blobs at ``kit_rev`` are written in by
+    content, unreferenced, because the prompt pins them there.
+    """
+    tree.mkdir()
+    _git(tree, "init", "-q")
+    _git(tree, "fetch", "-q", "--no-tags", "--upload-pack",
+         "git -c uploadpack.allowAnySHA1InWant=true upload-pack", str(root), case["base"], case["head"])
+    (Path(_git(tree, "rev-parse", "--absolute-git-dir")) / "FETCH_HEAD").unlink(missing_ok=True)
+    _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", case["head"])
+    engines = ((load_config(root / "config" / "dev-model.yaml").get("paths") or {}).get("engines")
+               or "scripts").rstrip("/")
+    for path in (f"{engines}/lib/kitconfig.py", f"{engines}/check_record_prose.py"):
+        blob = subprocess.run(["git", "cat-file", "blob", f"{kit_rev}:{path}"], cwd=root,
+                              capture_output=True, check=False)
+        if blob.returncode != 0:
+            raise RunError(f"{path} at {kit_rev[:12]}: {blob.stderr.decode().strip()}")
+        subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=tree, input=blob.stdout,
+                       capture_output=True, check=True)
+
+
+def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subprocess.CompletedProcess:
+    """Run the lens in its own process group, and end the group before returning.
+
+    The round is retired as finished once this returns, so nothing the lens
+    command started may outlive it, whether it exited or timed out.
+    """
+    proc = subprocess.Popen(command, cwd=tree, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        stdout, stderr = proc.communicate(prompt, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _kill_group(proc.pid)
+        proc.communicate()
+        raise
+    finally:
+        _kill_group(proc.pid)
+    return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
+
+
+def _kill_group(pgid: int) -> None:
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(pgid, signal.SIGKILL)
+
+
+def prompt_args(root: Path, case: dict[str, Any], lens: str, runtime: str, tree: Path,
+                kit_rev: str) -> list[str]:
+    """``panel_prompt.py``'s arguments for one lens on one case.
+
+    ``--preflight-rev`` is required, not optional: a historical head predates the
+    preflight checker, so without it every real case fails to render.
+    """
+    return ["--root", str(root), "--lens", lens, "--head", case["head"], "--base", case["base"],
+            "--branch", BRANCH, "--scratch", str(tree), "--runtime", runtime,
+            "--preflight-rev", kit_rev]
 
 
 def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, command: list[str],
@@ -197,15 +274,10 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
     (work / f"{case['id']}-{lens}.round.json").write_text(json.dumps(record, sort_keys=True))
     tree = Path(record["path"]) / f"lens-{lens}-{case['head'][:7]}"
     try:
-        _git(root, "worktree", "add", "-q", "--detach", str(tree), case["head"])
-        prompt = _run_engine("panel_prompt.py", [
-            "--root", str(root), "--lens", lens, "--head", case["head"], "--base", case["base"],
-            "--branch", f"review-eval/{case['id']}", "--scratch", str(tree), "--runtime", runtime,
-            "--preflight-rev", kit_rev,
-        ], root)
+        _isolated_tree(root, tree, case, kit_rev)
+        prompt = _run_engine("panel_prompt.py", prompt_args(root, case, lens, runtime, tree, kit_rev), root)
         try:
-            proc = subprocess.run(command, cwd=tree, input=prompt, capture_output=True,
-                                  text=True, timeout=timeout, check=False)
+            proc = _run_lens(command, tree, prompt, timeout)
         except subprocess.TimeoutExpired as exc:
             raise RunError(f"{case['id']} {lens}: lens command timed out after {timeout}s") from exc
         except OSError as exc:
@@ -215,8 +287,7 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
                            f"{proc.stderr.strip()[:500]}")
         return proc.stdout
     finally:
-        if tree.exists():
-            _git(root, "worktree", "remove", "--force", str(tree))
+        shutil.rmtree(tree, ignore_errors=True)
         try:
             outcome = sweep_scratch.finish_review_round(record, settings, root, apply=True,
                                                         reviewers_finished=True)
@@ -278,7 +349,7 @@ def main(argv: list[str] | None = None) -> int:
         roster = [lens.get("name") for lens in
                   (((config.get("review") or {}).get("fallback_panel") or {}).get("lenses") or [])
                   if isinstance(lens, dict) and isinstance(lens.get("name"), str)]
-        lenses = args.lens or roster
+        lenses = list(dict.fromkeys(args.lens or roster))
         unknown = sorted(set(lenses) - set(roster))
         if not lenses or unknown:
             raise EvalError(f"lens(es) not in review.fallback_panel.lenses: {', '.join(unknown) or '(none configured)'}")

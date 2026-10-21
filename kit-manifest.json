@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/review-eval/reviewer-eval.md": {
       "role": "repo-only",
-      "sha256": "27a1757690c096ab71253de9223eb0b6964788dd3178fe12c2894dfeecb58bfb"
+      "sha256": "c2675982579f422089b7f7aaa5fccab650370422ef68e1a44971db2a4e36fdac"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
@@ -586,7 +586,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "b8d6458d988d5f9be5096bf7d45c414d809675d026816fdb4771e340045b4d7c"
+      "sha256": "e357110b61d6677a8888dbf7c58f2ed560a3746a572382a1e3610888e79cfbf5"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -598,7 +598,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "4fe6aa75094b9b66183803c81390475d52b3f3002afeda58e4c3adbfa921263b"
+      "sha256": "6eeda83e42bd36dc26d7407dc6f6705d6d5a9dd9283771cff68beaa674800196"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -709,7 +709,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "b9cef53494797be86cba33b8a259e5deb28d95e11acfbda82ff443a8d6f76ba9"
+      "sha256": "5fbaede7c6badc5e92665306995433557d34deb0dacd18a622f8392ead3518f4"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -741,7 +741,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "21ee683e41428fdc65ebc32db4d8241c3dcdc1160763fd2f26b7a6959f0ac950"
+      "sha256": "41aa1b24a6e182f7861fdd1aada40d0718a58234da6925a466f7747717b27822"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",

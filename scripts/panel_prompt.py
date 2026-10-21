@@ -1326,6 +1326,11 @@ def build(args: argparse.Namespace) -> str:
     command = _preflight_command(root, Path(o_scratch).resolve() if o_scratch else root,
                                  base, head, engine_rev=preflight_rev)
     narrative += f"\n\nPreflight invocation for this comparison:\n\n```sh\n{command}\n```\n"
+    if preflight_rev != head:
+        # The doctrine above says the candidate's checker is pinned; say when it is not.
+        narrative += (f"\nThis invocation pins the checker committed at `{preflight_rev}`, "
+                      "supplied with `--preflight-rev`, not the candidate's: its coverage is "
+                      "that revision's checker.\n")
 
     return render(
         lens=args.lens,

@@ -863,7 +863,9 @@ def test_last_reviewed_must_be_a_strict_ancestor_of_the_head(repo):
 def test_preflight_rev_runs_the_checker_committed_at_another_revision(repo):
     """#1156: the reviewer eval renders prompts for historical heads that predate the
     preflight checker, so it names the revision whose committed checker runs."""
-    base, _ = _revs(repo)
+    base, candidate = _revs(repo)
+    plain = _run(repo, "--lens", "adversarial", "--head", candidate, "--base", base, "--branch", "b")
+    assert plain.returncode == 0, plain.stderr
     checker = repo / "scripts/check_record_prose.py"
     source = checker.read_text()
     _git(repo, "rm", "-q", str(checker))
@@ -876,6 +878,9 @@ def test_preflight_rev_runs_the_checker_committed_at_another_revision(repo):
                "--preflight-rev", base)
     assert out.returncode == 0, out.stderr
     assert _git(repo, "rev-parse", f"{base}:scripts/check_record_prose.py") in out.stdout
+    # The prompt says the pin is not the candidate's, since the doctrine says it is.
+    assert f"pins the checker committed at `{base}`" in out.stdout
+    assert "pins the checker committed at" not in plain.stdout
 
 
 def test_preflight_rev_is_refused_where_no_preflight_renders(repo):

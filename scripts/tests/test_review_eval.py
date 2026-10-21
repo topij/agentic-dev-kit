@@ -163,8 +163,87 @@ def test_unknown_lenses_and_cases_are_refused(repo, tmp_path) -> None:
     assert "no such case" in _run(repo, _stub(tmp_path, ""), "--case", "nope").stderr
 
 
+def test_the_lens_tree_holds_only_the_case_history_and_a_neutral_branch(repo, tmp_path) -> None:
+    """The fix, the clean commit after the bug and the case file are not reachable."""
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import subprocess, sys\n"
+        "prompt = sys.stdin.read()\n"
+        "def git(*a):\n"
+        "    return subprocess.run(['git', *a], capture_output=True, text=True)\n"
+        f"later = git('cat-file', '-e', {repo['clean']!r}).returncode == 0\n"
+        "refs = git('for-each-ref').stdout.strip()\n"
+        "fetched = git('rev-parse', '-q', '--verify', 'FETCH_HEAD').returncode == 0\n"
+        "branch = [l for l in prompt.splitlines() if 'Branch:' in l][0]\n"
+        "print(f'later={later} refs={refs!r} fetched={fetched} {branch}')\n"
+    )
+    proc = _run(repo, f"{sys.executable} {probe}", "--lens", "adversarial", out=tmp_path / "out")
+    assert proc.returncode == 0, proc.stderr
+    report = (tmp_path / "out" / "divide-by-zero-adversarial.md").read_text()
+    assert report.startswith("later=False refs='' fetched=False"), report
+    assert "review-eval/case" in report and "divide-by-zero" not in report
+    clean = (tmp_path / "out" / "a-clean-note-adversarial.md").read_text()
+    assert "review-eval/case" in clean
+
+
+def test_the_prompt_pins_the_preflight_checker_at_the_kit_revision(repo, tmp_path) -> None:
+    """A historical head predates the checker, so the eval always names its own revision."""
+    case = {"base": repo["base"], "head": repo["bug"], "id": "divide-by-zero"}
+    args = review_eval.prompt_args(repo["root"], case, "adversarial", "claude", tmp_path, "c" * 40)
+    assert args[args.index("--preflight-rev") + 1] == "c" * 40
+    assert args[args.index("--branch") + 1] == review_eval.BRANCH
+
+
+def test_a_hit_on_an_unconfirmed_case_is_not_a_confirmed_hit(repo, tmp_path) -> None:
+    proc = _run(repo, _stub(tmp_path, "F1 LOW: bug.py:3 dead code\n"), "--lens", "adversarial")
+    assert proc.returncode == 0, proc.stderr
+    summary = json.loads(proc.stdout)["summary"]["adversarial"]
+    assert (summary["confirmed_hits"], summary["unconfirmed_hits"]) == (0, 1)
+
+
+def test_a_repeated_lens_runs_once(repo, tmp_path) -> None:
+    proc = _run(repo, _stub(tmp_path, "nothing\n"), "--lens", "adversarial", "--lens", "adversarial",
+                "--case", "divide-by-zero")
+    assert proc.returncode == 0, proc.stderr
+    assert len(json.loads(proc.stdout)["results"]) == 1
+
+
+def test_nothing_the_lens_started_outlives_it(repo, tmp_path) -> None:
+    marker = tmp_path / "late"
+    script = tmp_path / "spawn.py"
+    script.write_text(
+        "import subprocess, sys\nsys.stdin.read()\n"
+        f"subprocess.Popen(['sh', '-c', 'sleep 1; touch {marker}'], stdin=subprocess.DEVNULL,\n"
+        "                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\nprint('done')\n")
+    proc = _run(repo, f"{sys.executable} {script}", "--lens", "adversarial", "--case", "divide-by-zero")
+    assert proc.returncode == 0, proc.stderr
+    subprocess.run(["sleep", "2"], check=True)
+    assert not marker.exists()
+
+
+def test_a_lens_that_overruns_its_timeout_is_stopped_and_cleaned_up(repo, tmp_path) -> None:
+    script = tmp_path / "slow.py"
+    script.write_text("import sys, time\nsys.stdin.read()\ntime.sleep(60)\n")
+    proc = _run(repo, f"{sys.executable} {script}", "--lens", "adversarial", "--case", "divide-by-zero",
+                "--timeout", "1")
+    assert proc.returncode == 1 and "timed out" in proc.stderr
+    assert list(repo["scratch"].iterdir()) == []
+
+
+@pytest.mark.parametrize("report, count", [
+    ("F1 LOW: a.py:1 x\nF2 LOW: b.py:2 y\n", 2),
+    # An unnumbered report is counted by its distinct citations, not read as silent.
+    ("Finding: x.py:3 bad\n2. y.py:4 bad\nagain x.py:3\n", 2),
+    ("nothing found\n", 0),
+])
+def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
+    assert review_eval.score_clean(report)["candidate_false_alarms"] == count
+
+
 @pytest.mark.parametrize("report, hit", [
     ("see bug.py:1-2", True),
+    # A citation as wide as a file is not a finding.
+    ("see bug.py:1-99999", False),
     ("see src/bug.py:2", True),
     ("see bug.py:3", False),
     ("see other.py:2", False),

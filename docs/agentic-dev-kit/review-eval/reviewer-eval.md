@@ -28,9 +28,18 @@ caught. Use full shas from the protected branch's history, and the lines at the 
 
 The runner needs the kit's full history (`git fetch --unshallow` in a shallow clone)
 and an expanded `scratch.roots` entry. Per lens and case it allocates a review round,
-builds a detached tree at the case head, renders the same prompt a real round gets, runs
-your command in that tree with the prompt on stdin, keeps its stdout as the report, and
-retires the round.
+builds a fresh repository there holding only the case's base and head history, detached
+at the head, renders the same prompt a real round gets, runs your command in that tree
+with the prompt on stdin, keeps its stdout as the report, ends every process the command
+started, and retires the round.
+
+**The tree hides the answer, the sandbox does not.** A linked worktree would share the
+kit's refs and objects, so a lens could find the fix commits or this case file in its
+own history; the fresh repository has neither, and every case shows the lens the same
+branch name, `review-eval/case`. The runner does not confine the command, though: a lens
+that reads outside its tree can still open the kit checkout. Give the command a sandbox
+that keeps it in its working directory where the runtime has one, and read a hit whose
+report cites files outside the diff with that in mind.
 
 ```sh
 uv run <engine-dir>/review_eval.py --runtime claude \
@@ -52,7 +61,9 @@ lens run.
 
 `result.json` has a `summary` per lens: confirmed bug cases and hits, unconfirmed bug
 cases and hits, clean cases and their candidate false alarms. A hit means the report
-cited `path:line` overlapping a known finding's lines. That is a proxy. A report can
+cited `path:line` overlapping a known finding's lines, in a citation at most 40 lines
+wide. A clean case's candidate false alarms are its report's `F<n>` numbers, or, in a
+report that numbers none, its distinct citations. That is a proxy. A report can
 cite the right lines for the wrong reason, or describe the bug without a citation, so
 read each case's `matched_citations` and report before recording the score.
 
