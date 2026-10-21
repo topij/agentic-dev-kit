@@ -500,9 +500,14 @@ def test_prior_dispositions_render_as_a_pointer_read_after_the_pass(repo):
                    "--branch", "b", "--prior-dispositions", link)
     assert with_it.returncode == 0, with_it.stderr
     assert heading in with_it.stdout
-    section = with_it.stdout[with_it.stdout.index(heading):]
-    assert section.index(link) < section.index("## The contract every lens gets")
-    assert "only after your own" in section and "**No repeats**" in section
+    out = with_it.stdout
+    contract_at = out.index("## The contract every lens gets")
+    # Bounded at the contract heading: item **No repeats** says "only after your own"
+    # too, so a section running to the end of the prompt would pass on the contract.
+    section = out[out.index(heading):contract_at]
+    assert link in section
+    assert "**only after your own\npass is complete**, before you write your report" in section
+    assert "**No repeats**" in section
     # It is a pointer, not a coverage note or a draw: neither of those sections appears.
     assert "What prior rounds have and have not covered" not in with_it.stdout
     assert "The author's stated draws" not in with_it.stdout
@@ -512,10 +517,12 @@ def test_prior_dispositions_render_as_a_pointer_read_after_the_pass(repo):
     assert heading not in without.stdout
 
 
-@pytest.mark.parametrize("sep", ["\n", "\r"])
-def test_prior_dispositions_refuse_more_than_one_line(repo, sep):
-    """The pointer form is the whole defence: findings restated in the prompt frame
-    the pass, which #459 measured. One line cannot carry a list of them."""
+@pytest.mark.parametrize("sep", ["\n", "\r", "\x0b", "\x0c", "\x1c", "\x85", "\u2028", " "])
+def test_prior_dispositions_refuse_anything_but_one_token(repo, sep):
+    """Findings restated in the prompt frame the pass, which #459 measured. Every
+    Unicode line break is refused, not only CR and LF, and so is a space, which any
+    one-line summary carries. A whitespace-free token is still not proven a link;
+    the rendered instruction and the doctrine ask for one."""
     base, head = _revs(repo)
     out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
                "--prior-dispositions", f"https://example.test/pr/7{sep}F1: the guard is wrong")
@@ -524,8 +531,9 @@ def test_prior_dispositions_refuse_more_than_one_line(repo, sep):
 
 
 def test_the_contract_carries_the_convergence_items(repo):
-    """#1153, #1154 and #211 reach a lens through the quoted contract, not a second
-    copy in the script, so the prompt is where to check they arrived."""
+    """The four items #1153, #1154 and #211 added reach a lens through the quoted
+    contract, not a second copy in the script. This pins that each arrives by name;
+    their wording is the doctrine's, quoted verbatim by the contract tests above."""
     base, head = _revs(repo)
     out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b")
     assert out.returncode == 0, out.stderr
@@ -1126,7 +1134,7 @@ def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
     """#469: a lens hit the sandbox's `rm -rf` refusal after the Scratch namespace
     item's wording already told it not to (#459 round 2's correctness lens; round 1
     explicitly recorded none, so this was not every round, but it did recur) —
-    before it read that item, item 9 of 13 in a contract quoted at the very end of
+    before it read that item, deep in a contract quoted at the very end of
     the prompt. The doctrine's wording was already right; the carrier was not. So
     the operative sentence is now also stated near the top of the prompt, beside
     the tree the lens is handed, ahead of the full contract quote — not instead of

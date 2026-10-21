@@ -36,7 +36,7 @@ Four properties, each earned by a real failure:
    out of a full panel. Each draw has its own flag, and the LOW rule's repair boundary
    has ``--repair-boundary``, because one free-text block holding all three let a lens
    decide what counted as a draw (#921). ``--prior-dispositions`` is one more channel,
-   and the narrowest: one line pointing at where earlier rounds' findings and
+   and the narrowest: one link pointing at where earlier rounds' findings and
    dispositions are posted, which the lens reads only after its own pass (#463).
 
 This assembles the prompt. It does not launch lenses, build worktrees, or read reports:
@@ -575,7 +575,7 @@ def render(
     # still hit the sandbox's rm -rf refusal after that wording existed (#459 round 2's
     # correctness lens; round 1 explicitly recorded none, so this was not every round, but
     # it did recur). The wording was never wrong; the carrier was. A lens meets the refusal
-    # before it reaches item 9 of a 13-item contract quoted at the end of this prompt, so
+    # before it reaches that item, deep in a contract quoted at the end of this prompt, so
     # the operative sentence is repeated here too, right where a lens is already thinking
     # about a copy of its own. This is a restatement, not a duplicate rule: it says nothing
     # the item below does not, so nothing here can drift out of agreement with the
@@ -680,9 +680,10 @@ def render(
         )
     # #463: a lens not told what earlier rounds disposed of re-raises it, and a lens
     # handed the findings themselves is framed by them — on #459 a restatement drew a
-    # No framing finding and a pointer drew none. So this renders a pointer only (the
-    # CLI refuses more than one line), and tells the lens to follow it after its own
-    # pass, which is what the contract's No repeats item asks.
+    # No framing finding and a pointer drew none. The CLI refuses anything but one
+    # whitespace-free token, which keeps prose out but cannot prove the token is a
+    # link; the rendered text and the doctrine ask for one. The lens is told to
+    # follow it after its own pass, which is what the contract's No repeats item asks.
     prior = (
         "\n## Where earlier rounds' dispositions are\n\n"
         f"{prior_dispositions.strip()}\n\n"
@@ -948,11 +949,14 @@ def build(args: argparse.Namespace) -> str:
     o_scratch = _override("--scratch", args.scratch)
     o_carry = _override("--carry-forward", args.carry_forward)
     o_prior = _override("--prior-dispositions", args.prior_dispositions)
-    if o_prior is not None and any(c in o_prior.strip() for c in "\r\n"):
+    # One whitespace-free token, not merely one line: str.split() breaks on every
+    # Unicode whitespace character, so a vertical tab or U+2028 cannot smuggle a
+    # second line past it, and a one-line summary of findings has spaces in it.
+    if o_prior is not None and len(o_prior.split()) != 1:
         raise PromptError(
-            "--prior-dispositions takes one line naming where earlier rounds' findings "
-            "and dispositions are posted, such as a pull request link. Restating them "
-            "in the prompt frames the pass (#463)."
+            "--prior-dispositions takes one whitespace-free reference to where earlier "
+            "rounds' findings and dispositions are posted, such as a pull request "
+            "link. Restating them in the prompt frames the pass (#463)."
         )
     draws, o_repair = _delta_inputs(args)
     o_verify = _override("--verify-command", args.verify_command)
@@ -1067,9 +1071,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--prior-dispositions",
         default=None,
-        help="re-runs: ONE line naming where earlier rounds' findings and dispositions "
-        "are posted (a PR link), never the findings themselves; the lens reads it after "
-        "its own pass",
+        help="re-runs: ONE whitespace-free reference to where earlier rounds' findings "
+        "and dispositions are posted (a PR link), never the findings themselves; the "
+        "lens reads it after its own pass",
     )
     parser.add_argument(
         "--draw-prose-class",

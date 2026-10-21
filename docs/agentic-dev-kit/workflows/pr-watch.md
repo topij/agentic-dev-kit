@@ -251,7 +251,11 @@ Repeat until the report says **converged**:
 
    - **LOW/P3 finding:** use the delta-or-ticket rule above, including for a
      low-severity regression. Do not restart the full process.
-   - **Real finding** above LOW (a bug, a missing guard, a correctness/clarity issue): fix it in
+   - **Finding the reviewer classed pre-existing**, with the base revision cited: take
+     the panel doc's *Pre-existing findings* route at any severity, a ticket rather
+     than a fix round, and address it to the operator when it sits on a
+     `review.safety_critical_paths` file.
+   - **Real finding** above LOW and not pre-existing (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first. **Before that push, take
      the step after this list**, *Count the round before you fix it*: record the
      round and check the budget.

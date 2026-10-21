@@ -489,7 +489,7 @@ author re-reading their own diff. **Cite them by name, never by number.**
    round 2 of `#459`'s panel recorded one (the correctness lens, worked around
    by the fresh-path rule); round 1 explicitly recorded none, so this was not
    every round, but it recurred after the wording already existed. A lens
-   meets the `rm -rf` refusal before it reads this far into a 13-item contract
+   meets the `rm -rf` refusal before it reads this far into a contract
    quoted at the very end of its prompt. The gap was carrier, not wording
    (`#469`), so `panel_prompt.py` now also states the fresh-path rule once,
    early, beside the tree it hands each lens — ahead of the full contract
@@ -575,16 +575,18 @@ author re-reading their own diff. **Cite them by name, never by number.**
 14. **Name the bug class.** For each finding, name the class of defect it is one
     instance of, and say where else the same class occurs in the diff and in the
     code the diff calls or is called by — or that you searched and found none, and
-    how. The author fixes every instance in one round, not only the line you
-    pointed at. A class reported one instance per round is how a review chain
-    stops converging (`#1153`).
+    how. A class reported one instance per round is how a review chain stops
+    converging (`#1153`), so the author repairs every instance in one round, not
+    only the line you pointed at.
 15. **Classify against the base.** Say for each finding whether this pull request
     introduced it or it is *pre-existing*: the defective code exists, unchanged in
-    the respect that makes it wrong, at the base you were given. A pre-existing
-    finding cites that evidence — `git show <base>:<path>` and the lines it shows.
-    If you cannot show it at the base, the finding is the pull request's. Report it
-    at full severity either way: pre-existing says where the defect came from, not
-    how bad it is (*Pre-existing findings* below routes it).
+    the respect that makes it wrong, at the base you were given, and the change
+    does not make it reachable, worse, or newly relied on. A pre-existing finding
+    cites that evidence — `git show <base>:<path>` and the lines it shows. If you
+    cannot show it at the base, or the change makes it reachable, worse or newly
+    relied on, the finding is the pull request's. Report it at full severity
+    either way: pre-existing says where the defect came from, not how bad it is.
+    The panel doc's *Pre-existing findings* section routes it.
 16. **Expect the remediation to carry the next defect.** When your prompt names a
     delta, a repair boundary or earlier rounds, the fix is the surface most likely
     to be wrong, not the safest one. Ask of each check the fix added *what checks
@@ -901,8 +903,8 @@ corrected label, as the **Severity and regression** item does with a disputed
 imprecision.
 
 It stays the pull request's when the change makes the old defect reachable,
-worse, or newly relied on: that is a regression, at the severity the lens gave
-it.
+worse, or newly relied on, which **Classify against the base** asks the lens to
+check: that is a regression, at the severity the lens gave it.
 
 Dispose of it by the ticket route of *LOW findings: delta review or ticket*, at
 any severity: file it with its location, the reviewer's severity, the cited base
@@ -955,7 +957,8 @@ class, it is the first one.
 - **First class** — act on every finding, with the one carve-out defined below: a
   record-prose *imprecision below HIGH, as the lens marked it,* is logged
   rather than fixed. A
-  HIGH is acted on in every class; for record prose the act is deletion or
+  HIGH is acted on in every class (for a finding the lens classed
+  pre-existing, filing its ticket is the act, under *Pre-existing findings*); for record prose the act is deletion or
   shortening. Reply-with-reason stays what step 5 makes it, an answer to a
   nitpick, not a disposal route for something a lens called real.
 - **Second class** — act on HIGH, and at any severity on a finding the
@@ -1078,10 +1081,11 @@ was executed prose however narrative it reads, and deleting it is a
 behaviour-containing delta (the companion has the dropped-caveat
 measurement).
 
-**After the second full pass, a standard pull request's fix rounds take the
-delta pass at any severity.** The operator decided this on 2026-10-21 for
-`#1153`, after a team running agent reviewers on agent authors reported that
-diff-only re-review past the first few passes cut its long review chains. It
+**After the second full pass, a standard pull request's later rounds take the
+delta pass at any severity.** `#1153` asked for this decision and the operator
+made it on 2026-10-21, after a team running agent reviewers on agent authors
+reported that switching to diff-only re-review after its opening passes cut its
+long review chains. Two is the kit's declared point for that switch. It
 narrows the paragraph above, which still governs until two full passes have
 run on the pull request, and it applies only while all of these hold:
 
@@ -1104,6 +1108,13 @@ as `fallback:delta` with `--compose-parent`, as below. A finding above LOW from
 that pass is fixed and delta-reviewed again under this paragraph; it does not
 restore the full pass by itself. The round budget still stops the loop at the
 same point.
+
+**Nothing in the engine checks these conditions.** `pr_watch` accepts a composed
+`fallback:delta` receipt on a standard pull request whatever the reason it was
+taken, as it already did for record prose and LOW repairs, and it counts no full
+passes. So, like `--lenses` (`#32`), the route is the recording agent's claim: the
+pull request names the two full-pass receipts it counts and says the round added
+no unasked mechanism, where a reviewer can dispute both.
 
 Either form is isolated, fresh-context, drawn from the panel's configured
 lenses (`review.fallback_panel.lenses`), not minted for the occasion, and
