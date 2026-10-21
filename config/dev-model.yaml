@@ -347,11 +347,12 @@ review:
     # the CI that `require_ci` relies on, the hook scripts (the pre-push git hook
     # and the PostToolUse PR follow-up hook), and each runtime's hook
     # registration. Both runtimes' registrations are listed, so neither can be
-    # weakened under one lens. NOT the full set: the Makefile's test targets,
-    # init.sh's hook installer, ruff.toml, scripts/tests/conftest.py (#434), the
-    # lens agent definitions under .claude/agents/, .codex/config.toml and any
-    # review-bot config can weaken a check too and are not listed. Adding them is
-    # an operator decision about review cost.
+    # weakened under one lens. NOT the full set. Among what is not listed: the
+    # Makefile's test targets, init.sh's hook installer, ruff.toml,
+    # scripts/tests/conftest.py (#434), the checkers CI runs (kit_doctor.py,
+    # scripts/check_*), the lens agent definitions under .claude/agents/, other
+    # .github/ files, an adopter's .codex/config.toml, and any review-bot config.
+    # Adding them is an operator decision about review cost.
     - ".github/workflows/*"
     - "scripts/hooks/*"
     - "scripts/devkit/hooks/*"

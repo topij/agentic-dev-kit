@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "472b91015afba44e3ee972d901d6b34dd15c95446c43e0a9ef8216262847879b"
+      "sha256": "e0de23263e8a7c1fe09d953e000feea615efa926e305ce6b21e12ad510cd3dcf"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -621,7 +621,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "59c09113f66b5b5c70a0804ad3786f92feb7850ce9a4e1f11fdee5fc408c17f5"
+      "sha256": "1a9be35921eba95b99b6a0b352d6ba7b675025ce405788ad84b713f6a6e33a47"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
