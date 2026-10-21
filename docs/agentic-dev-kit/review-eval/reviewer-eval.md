@@ -46,9 +46,11 @@ removes an earlier run's `result.json` there before it starts.
 **The tree hides the answer, the sandbox does not.** A linked worktree would share the
 kit's refs and objects, so a lens could find the fix commits or this case file in its
 own history; the fresh repository has neither, and every case shows the lens the same
-branch name, `review-eval/case`. The runner does not confine the command, though: a lens
-that reads outside its tree can still open the kit checkout, and the prompt names the
-repository, so a lens with network access can look the fix up. Give the command a sandbox
+branch name, `review-eval/case`. The prompt's repository line is withheld, since a local
+origin would name the kit checkout itself. The runner does not confine the command,
+though: a lens that reads outside its tree can still open the kit checkout, and the
+preflight invocation names the kit revision, so a lens with network access can look the
+fix up. Give the command a sandbox
 that keeps it in its working directory where the runtime has one, and read a hit whose
 report cites files outside the diff with that in mind.
 
@@ -76,7 +78,9 @@ cited `path:line` overlapping a known finding's lines, in a citation at most 40 
 wide. A clean case's candidate false alarms are the `F<n>` numbers that open a line of
 its report, or, in a report that numbers none, its distinct citations. Neither count
 reads a section the lens contract has it write about what it checked (*Verified clean*,
-*What I reviewed*, *Executed* and the like), so a line it cleared is not a hit. That is a
+*What I reviewed*, *Executed* and the like), so a line it cleared is not a hit. Such a
+section runs to the next heading or to the next paragraph that opens with an `F<n>` number,
+so a finding listed after it without a heading of its own still counts. That is a
 proxy. A report can
 cite the right lines for the wrong reason, or describe the bug without a citation, so
 read each case's `matched_citations` and report before recording the score.

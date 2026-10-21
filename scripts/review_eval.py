@@ -68,12 +68,18 @@ _SHA = re.compile(r"[0-9a-f]{40}")
 _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 # `path:line` or `path:start-end`, the citation form the lens contract asks for.
 _CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
-# A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`.
-_FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*F(\d+)\b", re.MULTILINE)
-# The lens contract's own sections cite what was checked, not what is wrong.
-_NOT_FINDINGS = re.compile(r"verified clean|what i reviewed|executed|attestation|mutation|"
-                           r"earlier dispositions|disposition check|routes", re.IGNORECASE)
-_HEADING = re.compile(r"^[ \t]*(?:#{1,6}[ \t]+|\*\*)(?P<title>[^\n]*)$", re.MULTILINE)
+# A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`, `1. **F3**`.
+_FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b", re.MULTILINE)
+# The lens contract's own sections cite what was checked, not what is wrong. A
+# title names one only by opening with it: `### Finding 1 — Executed check ignored`
+# is a finding.
+_NOT_FINDINGS = re.compile(r"[*_ ]*(?:verified clean|what i reviewed|executed|attestation|mutation|"
+                           r"earlier dispositions|disposition check|routes)", re.IGNORECASE)
+# A heading is an ATX heading or a line that is bold from end to end; a bold lead-in
+# such as `**path:250** — wrong` is body text.
+_HEADING = re.compile(r"[ ]{0,3}(?:#{1,6}[ \t]+(?P<atx>.*?)[ \t#]*|\*\*(?P<bold>[^*]+)\*\*:?[ \t]*)")
+_REPO_LINE = re.compile(r"^(- \*\*Repo:\*\* ).*$", re.MULTILINE)
+_FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
 # The widest citation that still counts as a hit: wider is a file, not a finding.
 HIT_SPAN = 40
 # What the lens sees as the branch: the same for every case, so the name says
@@ -173,19 +179,30 @@ def load_cases(path: Path, root: Path) -> dict[str, list[dict[str, Any]]]:
 def findings_text(report: str) -> str:
     """``report`` without the sections that record what was checked.
 
-    A heading (``#`` or a line opening in ``**``) whose title names one of the
-    contract's report sections drops the text up to the next heading, so a cited
-    line the lens cleared is neither a hit nor a false alarm.
+    A heading whose title opens with one of the contract's report sections drops the
+    lines after it until the next heading or the next paragraph that opens with a
+    numbered finding, so a cited line the lens cleared is neither a hit nor a false alarm,
+    and a finding listed after such a section without a heading of its own is kept.
+    Fenced code is never a heading.
     """
-    kept, cut, start = [], False, 0
-    for heading in _HEADING.finditer(report):
+    kept, cut, fence, blank = [], False, None, True
+    for line in report.splitlines(keepends=True):
+        text = line.rstrip("\r\n")
+        if fence is not None:
+            closer = _FENCE.match(text)
+            if closer and closer.group(1)[0] == fence[0] and len(closer.group(1)) >= len(fence) \
+                    and not text[closer.end():].strip():
+                fence = None
+        elif (opener := _FENCE.match(text)) is not None:
+            fence = opener.group(1)
+        elif (heading := _HEADING.fullmatch(text)) is not None:
+            title = heading.group("atx") if heading.group("atx") is not None else heading.group("bold")
+            cut = bool(_NOT_FINDINGS.match(title)) and not re.match(r"[*_ ]*F\d+\b", title)
+        elif blank and _FINDING_NUMBER.match(text):
+            cut = False
+        blank = fence is None and not text.strip()
         if not cut:
-            kept.append(report[start:heading.start()])
-        title = heading.group("title")
-        cut = bool(_NOT_FINDINGS.search(title)) and not re.match(r"[*_ ]*F\d+\b", title)
-        start = heading.start()
-    if not cut:
-        kept.append(report[start:])
+            kept.append(line)
     return "".join(kept)
 
 
@@ -298,6 +315,16 @@ def prompt_args(root: Path, case: dict[str, Any], lens: str, runtime: str, tree:
             "--preflight-rev", kit_rev]
 
 
+def _withhold_repo(prompt: str) -> str:
+    """``prompt`` with its ``**Repo:**`` line emptied.
+
+    The line names ``--root``'s origin, which is a filesystem path to the kit
+    checkout, with the fix commits and the case file, when that origin is local. A
+    lens reviewing a case has no pull request to look up, so it loses nothing.
+    """
+    return _REPO_LINE.sub(r"\g<1>withheld by the reviewer eval", prompt)
+
+
 def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, command: list[str],
              scratch_root: str, kit_rev: str, work: Path, timeout: int) -> str:
     """One lens over one case; returns the report. The round is retired either way.
@@ -315,7 +342,8 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
     escaped = False
     try:
         _isolated_tree(root, tree, case, kit_rev)
-        prompt = _run_engine("panel_prompt.py", prompt_args(root, case, lens, runtime, tree, kit_rev), root)
+        prompt = _withhold_repo(
+            _run_engine("panel_prompt.py", prompt_args(root, case, lens, runtime, tree, kit_rev), root))
         try:
             proc = _run_lens(command, tree, prompt, timeout)
         except LensEscaped as exc:

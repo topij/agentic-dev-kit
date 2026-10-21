@@ -198,6 +198,19 @@ def test_the_prompt_pins_the_preflight_checker_at_the_kit_revision(repo, tmp_pat
     assert args[args.index("--branch") + 1] == review_eval.BRANCH
 
 
+def test_the_prompt_withholds_the_kit_checkout(repo, tmp_path) -> None:
+    """A local origin would name the checkout holding the fix commits and the case file."""
+    _git(repo["root"], "config", "remote.origin.url", str(repo["root"]))
+    probe = tmp_path / "probe.py"
+    probe.write_text("import sys\nsys.stdout.write(sys.stdin.read())\n")
+    proc = _run(repo, f"{sys.executable} {probe}", "--lens", "adversarial", "--case", "divide-by-zero",
+                out=tmp_path / "out")
+    assert proc.returncode == 0, proc.stderr
+    prompt = (tmp_path / "out" / "divide-by-zero-adversarial.md").read_text()
+    assert "- **Repo:** withheld by the reviewer eval" in prompt
+    assert str(repo["root"]) not in prompt
+
+
 def test_a_hit_on_an_unconfirmed_case_is_not_a_confirmed_hit(repo, tmp_path) -> None:
     proc = _run(repo, _stub(tmp_path, "F1 LOW: bug.py:3 dead code\n"), "--lens", "adversarial")
     assert proc.returncode == 0, proc.stderr
@@ -369,6 +382,14 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     ("**What I reviewed**\nbug.py:2\n**F1 (HIGH): divides by zero**\nbug.py:2", True),
     # A finding whose title names a report section is still a finding.
     ("### F1 (LOW): a mutation survives\nbug.py:2", True),
+    ("### Finding 1 — Executed check ignored\nbug.py:2", True),
+    # A finding listed after the contract's opening section needs no heading of its own.
+    ("## What I reviewed\n- bug.py:2 read\n\nF1 HIGH bug.py:2 divides by zero", True),
+    ("## What I reviewed\n- bug.py:2 read\n\n- F1: bug.py:2 divides by zero", True),
+    ("## What I reviewed\n- bug.py:2 read\n\n1. **F1** bug.py:2 divides by zero", True),
+    # A bold lead-in is body text, and a comment in fenced code is not a heading.
+    ("**bug.py:2** — divides by zero, executed on every call", True),
+    ("### F1\nother.py:1\n```sh\n# mutation executed here\n```\nbug.py:2 divides by zero", True),
 ])
 def test_a_hit_needs_an_overlapping_citation(report, hit) -> None:
     case = {"findings": [{"path": "bug.py", "lines": [2, 2]}]}
