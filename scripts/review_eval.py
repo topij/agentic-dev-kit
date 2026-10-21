@@ -67,8 +67,13 @@ RUNTIMES = ("claude", "codex")
 _SHA = re.compile(r"[0-9a-f]{40}")
 _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 # `path:line` or `path:start-end`, the citation form the lens contract asks for.
-_CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):(\d+)(?:[-–](\d+))?")
-_FINDING_NUMBER = re.compile(r"\bF(\d+)\b")
+_CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
+# A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`.
+_FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*F(\d+)\b", re.MULTILINE)
+# The lens contract's own sections cite what was checked, not what is wrong.
+_NOT_FINDINGS = re.compile(r"verified clean|what i reviewed|executed|attestation|mutation|"
+                           r"earlier dispositions|disposition check|routes", re.IGNORECASE)
+_HEADING = re.compile(r"^[ \t]*(?:#{1,6}[ \t]+|\*\*)(?P<title>[^\n]*)$", re.MULTILINE)
 # The widest citation that still counts as a hit: wider is a file, not a finding.
 HIT_SPAN = 40
 # What the lens sees as the branch: the same for every case, so the name says
@@ -165,9 +170,28 @@ def load_cases(path: Path, root: Path) -> dict[str, list[dict[str, Any]]]:
     return cases
 
 
+def findings_text(report: str) -> str:
+    """``report`` without the sections that record what was checked.
+
+    A heading (``#`` or a line opening in ``**``) whose title names one of the
+    contract's report sections drops the text up to the next heading, so a cited
+    line the lens cleared is neither a hit nor a false alarm.
+    """
+    kept, cut, start = [], False, 0
+    for heading in _HEADING.finditer(report):
+        if not cut:
+            kept.append(report[start:heading.start()])
+        title = heading.group("title")
+        cut = bool(_NOT_FINDINGS.search(title)) and not re.match(r"[*_ ]*F\d+\b", title)
+        start = heading.start()
+    if not cut:
+        kept.append(report[start:])
+    return "".join(kept)
+
+
 def citations(report: str) -> list[dict[str, Any]]:
     found = []
-    for match in _CITATION.finditer(report):
+    for match in _CITATION.finditer(findings_text(report)):
         start = int(match.group(2))
         end = int(match.group(3)) if match.group(3) else start
         found.append({"path": match.group(1), "lines": [start, max(start, end)]})
@@ -192,7 +216,7 @@ def score_bug(report: str, case: dict[str, Any]) -> dict[str, Any]:
 def score_clean(report: str) -> dict[str, Any]:
     """A clean case's findings: its ``F<n>`` numbers, or, in a report that numbers
     none, each distinct citation, so an unnumbered report is not read as silent."""
-    numbers = {int(n) for n in _FINDING_NUMBER.findall(report)}
+    numbers = {int(n) for n in _FINDING_NUMBER.findall(findings_text(report))}
     cited = citations(report)
     count = len(numbers) or len({(c["path"], *c["lines"]) for c in cited})
     return {"candidate_false_alarms": count, "citations": cited}
@@ -242,7 +266,7 @@ def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subp
     finished. One that left and closed its output is not seen at all.
     """
     proc = subprocess.Popen(command, cwd=tree, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, text=True, start_new_session=True)
+                            stderr=subprocess.PIPE, text=True, errors="replace", start_new_session=True)
     try:
         stdout, stderr = proc.communicate(prompt, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -364,6 +388,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    out = Path(args.out).resolve() if args.out else None
+    if out is not None:
+        # A result left by an earlier run must not read as this one's, whatever this
+        # run's exit.
+        (out / "result.json").unlink(missing_ok=True)
     try:
         root = Path(args.root).resolve() if args.root else ENGINE_DIR.parent
         command = shlex.split(args.lens_command)
@@ -391,10 +420,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    out = Path(args.out).resolve() if args.out else None
-    if out is not None:
-        # A result left by an earlier run must not read as this one's.
-        (out / "result.json").unlink(missing_ok=True)
 
     # The score is stamped with the kit's HEAD, so HEAD must be what produced it: a
     # lens's focus is read from --root's working tree, an untracked module included.
@@ -432,6 +457,9 @@ def main(argv: list[str] | None = None) -> int:
     except RunError as exc:
         failure = str(exc)
         print(f"error: {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 - keep the cases already scored, then report
+        failure = f"{type(exc).__name__}: {exc}"
+        print(f"error: {failure}", file=sys.stderr)
 
     result = {
         "schema": RESULT_SCHEMA,

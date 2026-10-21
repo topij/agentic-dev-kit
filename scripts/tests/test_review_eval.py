@@ -294,11 +294,62 @@ def test_a_run_that_stops_keeps_what_it_scored(repo, tmp_path) -> None:
     assert [r["case"] for r in result["results"]] == ["divide-by-zero", "unconfirmed-case"]
 
 
+def test_a_refused_invocation_still_drops_a_stale_result(repo, tmp_path) -> None:
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "result.json").write_text('{"complete": true}\n')
+    proc = _run(repo, _stub(tmp_path, ""), "--lens", "nosuch", out=out)
+    assert proc.returncode == 2 and not (out / "result.json").exists()
+
+
+def test_a_lens_writing_bytes_that_are_not_utf8_is_still_scored(repo, tmp_path) -> None:
+    script = tmp_path / "bytes.py"
+    script.write_text("import sys\nsys.stdin.read()\nsys.stdout.buffer.write(b'F1 LOW: bug.py:2 \\xff\\xfe\\n')\n")
+    proc = _run(repo, f"{sys.executable} {script}", "--lens", "adversarial", "--case", "divide-by-zero")
+    assert proc.returncode == 0, proc.stderr
+    assert json.loads(proc.stdout)["results"][0]["hit"] is True
+
+
+def test_any_error_keeps_what_was_scored(repo, tmp_path, monkeypatch) -> None:
+    calls = []
+    real = review_eval._isolated_tree
+
+    def flaky(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(review_eval, "_isolated_tree", flaky)
+    out = tmp_path / "out"
+    code = review_eval.main([
+        "--root", str(repo["root"]), "--cases", str(repo["cases"]), "--runtime", "claude",
+        "--lens-command", _stub(tmp_path, "nothing\n"), "--scratch-root", str(repo["scratch"]),
+        "--lens", "adversarial", "--out", str(out)])
+    assert code == 1
+    result = json.loads((out / "result.json").read_text())
+    assert result["complete"] is False and "disk full" in result["failure"]
+    assert [r["case"] for r in result["results"]] == ["divide-by-zero"]
+
+
+def test_a_round_sweep_keeps_is_a_failed_run(repo, tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(review_eval.sweep_scratch, "finish_review_round",
+                        lambda record, *a, **k: review_eval.sweep_scratch.Outcome(record["path"], "kept", "held"))
+    code = review_eval.main([
+        "--root", str(repo["root"]), "--cases", str(repo["cases"]), "--runtime", "claude",
+        "--lens-command", _stub(tmp_path, "nothing\n"), "--scratch-root", str(repo["scratch"]),
+        "--lens", "adversarial", "--case", "divide-by-zero"])
+    assert code == 1 and "review round kept" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("report, count", [
     ("F1 LOW: a.py:1 x\nF2 LOW: b.py:2 y\n", 2),
     # An unnumbered report is counted by its distinct citations, not read as silent.
     ("Finding: x.py:3 bad\n2. y.py:4 bad\nagain x.py:3\n", 2),
     ("nothing found\n", 0),
+    # Only a line that opens with F<n> numbers a finding.
+    ("F1 LOW: a.py:1 x\nas F1 says, and F2 of the contract\n", 1),
+    ("F1 LOW: a.py:1 x\n## Verified clean\nF2 checked b.py:2\n", 1),
 ])
 def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     assert review_eval.score_clean(report)["candidate_false_alarms"] == count
@@ -312,6 +363,12 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     ("see bug.py:3", False),
     ("see other.py:2", False),
     ("bug.py line 2, no citation", False),
+    ("see bug.py:L2", True),
+    # A line the lens checked and cleared is not a finding.
+    ("## Verified clean\n- bug.py:2 reviewed, no issue\n\nNo findings.", False),
+    ("**What I reviewed**\nbug.py:2\n**F1 (HIGH): divides by zero**\nbug.py:2", True),
+    # A finding whose title names a report section is still a finding.
+    ("### F1 (LOW): a mutation survives\nbug.py:2", True),
 ])
 def test_a_hit_needs_an_overlapping_citation(report, hit) -> None:
     case = {"findings": [{"path": "bug.py", "lines": [2, 2]}]}
