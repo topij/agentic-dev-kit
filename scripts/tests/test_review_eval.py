@@ -259,12 +259,25 @@ def test_a_lens_that_escapes_its_group_leaves_the_round_unretired(repo, tmp_path
     assert len(list(repo["scratch"].iterdir())) == 1
 
 
-def test_a_dirty_kit_checkout_is_refused(repo, tmp_path) -> None:
+@pytest.mark.parametrize("path", ["notes.md", "scripts/untracked.py"])
+def test_a_dirty_kit_checkout_is_refused(repo, tmp_path, path) -> None:
     """kit_revision must name what produced the score, and a lens's focus is read from the tree."""
-    (repo["root"] / "notes.md").write_text("an uncommitted edit\n")
-    proc = _run(repo, _stub(tmp_path, ""))
+    (repo["root"] / path).write_text("an uncommitted edit\n")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "result.json").write_text('{"complete": true}\n')  # an earlier run's
+    proc = _run(repo, _stub(tmp_path, ""), out=out)
     assert proc.returncode == 2 and "uncommitted" in proc.stderr
     assert list(repo["scratch"].iterdir()) == []
+    assert not (out / "result.json").exists()
+
+
+def test_engines_run_from_another_checkout_are_recorded(repo, tmp_path) -> None:
+    proc = _run(repo, _stub(tmp_path, "nothing\n"), "--lens", "adversarial", "--case", "divide-by-zero")
+    assert proc.returncode == 0, proc.stderr
+    engine = json.loads(proc.stdout)["engine_checkout"]
+    assert engine["revision"] == _git(REPO_ROOT, "rev-parse", "HEAD")
+    assert isinstance(engine["dirty"], bool)
 
 
 def test_a_run_that_stops_keeps_what_it_scored(repo, tmp_path) -> None:

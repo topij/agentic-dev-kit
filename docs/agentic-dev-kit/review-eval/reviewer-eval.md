@@ -35,10 +35,13 @@ group, and retires the round. A process that left the group (`setsid`) is out of
 of that kill: if one still holds the command's output, the run stops with exit 1 and
 leaves that round in place, unretired, for you to retire once the process ends.
 
-Run it from a kit checkout with no uncommitted changes: a lens's `focus` and the engines
-are read from the working tree, and the result is stamped with `HEAD`, so the runner
-refuses a dirty checkout. A run that stops on a case still writes `result.json` under
-`--out`, with `complete: false` and what it scored before the failure.
+Run it from a kit checkout with no uncommitted or untracked changes: a lens's `focus` is
+read from the working tree and the result is stamped with its `HEAD`, so the runner
+refuses a dirty checkout. The engines run from the checkout the script itself is in;
+when that is not `--root`, the result's `engine_checkout` records its revision and
+whether it was dirty. A run that stops on a case still writes `result.json` under
+`--out`, with `complete: false` and what it scored before the failure, and a run
+removes an earlier run's `result.json` there before it starts.
 
 **The tree hides the answer, the sandbox does not.** A linked worktree would share the
 kit's refs and objects, so a lens could find the fix commits or this case file in its

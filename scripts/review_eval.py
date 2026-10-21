@@ -391,15 +391,26 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
+    out = Path(args.out).resolve() if args.out else None
+    if out is not None:
+        # A result left by an earlier run must not read as this one's.
+        (out / "result.json").unlink(missing_ok=True)
+
     # The score is stamped with the kit's HEAD, so HEAD must be what produced it: a
-    # lens's focus and the engines are read from the working tree.
-    dirty = _git(root, "status", "--porcelain", "--untracked-files=no")
+    # lens's focus is read from --root's working tree, an untracked module included.
+    dirty = _git(root, "status", "--porcelain")
     if dirty:
         print("error: the kit checkout has uncommitted changes, so kit_revision would not name "
               "what produced the score; commit them first:\n" + dirty, file=sys.stderr)
         return 2
-
-    out = Path(args.out).resolve() if args.out else None
+    # The engines run from this script's own checkout. When that is not --root, its
+    # revision and state are recorded beside the score rather than refused, so the
+    # runner's tests can point it at a fixture from a checkout under edit.
+    engine_root = ENGINE_DIR.parent
+    engine = None
+    if engine_root.resolve() != root.resolve():
+        engine = {"revision": _git(engine_root, "rev-parse", "HEAD"),
+                  "dirty": bool(_git(engine_root, "status", "--porcelain"))}
     work = out or Path(_git(root, "rev-parse", "--absolute-git-dir")) / "review-eval"
     work.mkdir(parents=True, exist_ok=True)
     kit_rev = _git(root, "rev-parse", "HEAD")
@@ -427,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
         "runtime": args.runtime,
         "lens_command": args.lens_command,
         "kit_revision": kit_rev,
+        # null when the engines ran from --root itself, which is then clean.
+        "engine_checkout": engine,
         "cases_sha256": cases_sha256,
         # A run that stopped on a case keeps what it scored before it, marked partial.
         "complete": failure is None,
