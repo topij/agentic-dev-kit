@@ -144,7 +144,8 @@ declares the list owes what it owed before the class existed.
 **The full pass** is the review over the whole pull request that its class sets:
 the panel for a safety-critical pull request, one isolated lens for a standard one.
 An opening review is a full pass. So is the re-run after a fix round that changes
-behaviour.
+behaviour, until a standard pull request has had two full passes (*Re-running,
+and when to stop*).
 
 **Which lens a standard pull request takes is fixed, not chosen per pull
 request:** **correctness** when every path it changes is one of `paths.handoff`,
@@ -176,7 +177,8 @@ distinguishable on the audit trail from `fallback:panel` and `fallback:delta`.
 **The sanctioned single-lens passes each rest on a condition other than the
 author's own risk assessment:** a standard pull request's full pass; the **delta pass** for record prose or
 a reviewer-marked LOW repair, on a pull request outside the safety-critical class;
-and **Degraded mode** below, where the runtime cannot isolate a reviewer. On a
+the delta pass for any fix round on a standard pull request after its second full
+pass; and **Degraded mode** below, where the runtime cannot isolate a reviewer. On a
 safety-critical pull request only Degraded mode is left, and it leaves rule 2
 unmet, which the pull request must say; that class's record-prose deltas take the
 dual form. Running fewer lenses because a change looks smaller is still not on the
@@ -487,7 +489,7 @@ author re-reading their own diff. **Cite them by name, never by number.**
    round 2 of `#459`'s panel recorded one (the correctness lens, worked around
    by the fresh-path rule); round 1 explicitly recorded none, so this was not
    every round, but it recurred after the wording already existed. A lens
-   meets the `rm -rf` refusal before it reads this far into a 13-item contract
+   meets the `rm -rf` refusal before it reads this far into a contract
    quoted at the very end of its prompt. The gap was carrier, not wording
    (`#469`), so `panel_prompt.py` now also states the fresh-path rule once,
    early, beside the tree it hands each lens — ahead of the full contract
@@ -570,6 +572,34 @@ author re-reading their own diff. **Cite them by name, never by number.**
     than report a clean pass, because the two are otherwise indistinguishable.
     Non-empty is necessary and not sufficient: a diff against a stale base is
     large and wrong.
+14. **Name the bug class.** For each finding, name the class of defect it is one
+    instance of, and say where else the same class occurs in the diff and in the
+    code the diff calls or is called by — or that you searched and found none, and
+    how. A class reported one instance per round is how a review chain stops
+    converging (`#1153`), so the author repairs every instance in one round, not
+    only the line you pointed at.
+15. **Classify against the base.** Say for each finding whether this pull request
+    introduced it or it is *pre-existing*: the defective code exists, unchanged in
+    the respect that makes it wrong, at the base you were given, and the change
+    does not make it reachable, worse, or newly relied on. A pre-existing finding
+    cites that evidence — `git show <base>:<path>` and the lines it shows. If you
+    cannot show it at the base, or the change makes it reachable, worse or newly
+    relied on, the finding is the pull request's. Report it at full severity
+    either way: pre-existing says where the defect came from, not how bad it is.
+    The panel doc's *Pre-existing findings* section routes it.
+16. **Expect the remediation to carry the next defect.** When your prompt names a
+    delta, a repair boundary or earlier rounds, the fix is the surface most likely
+    to be wrong, not the safest one. Ask of each check the fix added *what checks
+    this new check?*, and of each stated fix *what did it claim that the code does
+    not deliver?* — then execute the answer, as **Execute, don't only read**
+    requires (`#211`).
+17. **No repeats.** When your prompt points you at earlier rounds' findings and
+    dispositions, finish your own pass first, then read them before you report.
+    Drop a finding a disposition already answered, unless you have evidence the
+    disposition did not have; then report it with that evidence and say why the
+    disposition fails. A disposed finding raised again without new evidence costs
+    a round and tells the author nothing. Reading them only after your own pass
+    is what keeps them from steering it (`#463`).
 
 ## Running it
 
@@ -640,15 +670,23 @@ author re-reading their own diff. **Cite them by name, never by number.**
    restoration evidence as well as the test result.
 4. Triage every finding against the *current* code — some go stale across
    rounds.
-5. Dispose of LOW findings by **LOW findings: delta review or ticket** below.
-   Fix other real findings, and reply-with-reason to the rest. A fix to executable
-   behaviour carries the positive construction and hostile mutation that *What the
-   author owes the loop* pairs with it.
+5. Dispose of LOW findings by **LOW findings: delta review or ticket** below, and
+   pre-existing ones by *Pre-existing findings*. Fix other real findings, and
+   reply-with-reason to the rest. Fix a finding at every instance of the class
+   **Name the bug class** reports, plus any the lens missed, in the same round. A
+   fix to executable behaviour carries the positive construction and hostile
+   mutation that *What the author owes the loop* pairs with it. Post each
+   disposition on the pull request: the next round's lenses are pointed there.
 6. **Re-run after the fix round.** Not optional — whether it is the full pass
    or a delta pass is decided below: apply the LOW rule first; otherwise use
    what the fix round's delta contains, then — for how many lenses the delta pass takes — by whether the
    change sits under `safety-critical-changes.md`, which never takes the
-   single-lens form.
+   single-lens form. Render every re-run's prompt with
+   `panel_prompt.py --prior-dispositions <link>`, naming where step 5's
+   dispositions are posted, so **No repeats** has something to read. Give a
+   link, never the findings themselves: the flag takes one `https://` link with no
+   whitespace, and the prompt
+   renders it as a pointer the lens reads after its own pass.
 7. Record the receipt with the lenses that actually ran. The panel:
 
    ```sh
@@ -854,6 +892,41 @@ round must not disguise a full restart as a requirement of its LOW findings.
 Unresolved formal change requests, failed required checks, missing review
 coverage and operator merge authority retain their existing gates.
 
+## Pre-existing findings
+
+**A real defect the pull request did not introduce is ticketed, not fixed in the
+round.** The lens supplies the class, under **Classify against the base**, with
+the base revision and the `git show <base>:<path>` lines that show the code
+already stood there. The author must not reclassify a finding as pre-existing
+to choose this route. A finding without that citation is the pull request's. If
+the author has base evidence the lens lacked, it goes back to the lens for a
+corrected label, as the **Severity and regression** item does with a disputed
+imprecision.
+
+It stays the pull request's when the change makes the old defect reachable,
+worse, or newly relied on, which **Classify against the base** asks the lens to
+check: that is a regression, at the severity the lens gave it.
+
+Dispose of it by the ticket route of *LOW findings: delta review or ticket*, at
+any severity: file it with its location, the reviewer's severity, the cited base
+revision and acceptance criteria, reuse a matching ticket, link it on the pull
+request, and treat a pending ticket write the same way that route does. A
+ticketed pre-existing finding makes no commit and needs no re-review. The author
+may still fix it in the pull request, but then it is an ordinary fix round under
+its own severity, not a free addition (`safety-critical-changes.md` rule 3).
+
+**On a safety-critical path, or at HIGH, it goes to the operator as well.** When
+the defect sits in a file `review.safety_critical_paths` matches, or the lens rated
+it HIGH, the comment that links the ticket is addressed to the operator, who decides
+whether the pull request merges with it open. An agent does not merge past it
+because a ticket exists. Nothing in the engine reads the pre-existing label or the
+base lines it cites: like `--lenses` (`#32`), the label is the lens's claim and the
+route is the author's, both on the pull request where a reviewer can dispute them.
+
+`post-merge-systemize` and `triage-friction-log` read the class: a pre-existing
+finding counts against the code it names, never against the pull request that
+reported it.
+
 ## Re-running, and when to stop
 
 `safety-critical-changes.md` requires re-review after fix rounds, with the
@@ -888,7 +961,8 @@ class, it is the first one.
 - **First class** — act on every finding, with the one carve-out defined below: a
   record-prose *imprecision below HIGH, as the lens marked it,* is logged
   rather than fixed. A
-  HIGH is acted on in every class; for record prose the act is deletion or
+  HIGH is acted on in every class (for a finding the lens classed
+  pre-existing, filing its ticket is the act, under *Pre-existing findings*); for record prose the act is deletion or
   shortening. Reply-with-reason stays what step 5 makes it, an answer to a
   nitpick, not a disposal route for something a lens called real.
 - **Second class** — act on HIGH, and at any severity on a finding the
@@ -992,7 +1066,8 @@ Sink 2 asked for — the companion records that gap.)
 
 **Outside the LOW rule, step 6's full pass is for a delta that contains behaviour.** A fix round
 that touched executable code or executed prose gets the full re-run,
-unchanged — including a fix a lens prescribed verbatim: measured across the
+unchanged, except on a standard pull request past its second full pass
+(below) — including a fix a lens prescribed verbatim: measured across the
 loop, a remediation is its most defect-dense surface, not its safest, so a
 lens-specified acceptance criterion is not self-validating (the companion
 holds that refutation). Whether a change sits under
@@ -1009,6 +1084,44 @@ executed prose — a caveat on an instruction, a precondition, a scope limit —
 was executed prose however narrative it reads, and deleting it is a
 behaviour-containing delta (the companion has the dropped-caveat
 measurement).
+
+**After the second full pass, a standard pull request's later rounds take the
+delta pass at any severity.** `#1153` asked for this decision; the operator made
+it on 2026-10-21, in the project's own discussion, and a comment on that issue
+(https://github.com/topij/agentic-dev-kit/issues/1153#issuecomment-6313254957)
+records it, after a team running agent reviewers on agent authors
+reported that switching to diff-only re-review after its opening passes cut its
+long review chains. Two is the kit's declared point for that switch. It
+narrows the paragraph above, which still governs until two full passes have
+run on the pull request, and it applies only while all of these hold:
+
+- the pull request's `review_class` is standard. A safety-critical pull request
+  keeps the full two-lens re-run for every fix round that contains behaviour;
+- the fix round adds no mechanism a finding did not ask for
+  (`safety-critical-changes.md` rule 3), and is not the redesign *Read repeated
+  findings in one place as design feedback* calls for. Either takes a full pass;
+- the delta lens is handed both draws, as every delta pass is: the prose class
+  drawn as executed, since the delta contains behaviour, and the
+  safety-critical boundary. A disputed boundary is handled as above, and the
+  full pass is owed.
+
+The pass is the single-lens delta form: the lens *How many lenses* fixes for
+the pull request, over
+`git diff <last-reviewed-sha>...<head>` and its commit messages, with the
+callers, invariants and tests needed to judge that diff, and the full diff
+still in scope. Render it with `--prior-dispositions` like any re-run; **Expect
+the remediation to carry the next defect** is what it is aimed with. Record it
+as `fallback:delta` with `--compose-parent`, as below. A finding above LOW from
+that pass is fixed and delta-reviewed again under this paragraph; it does not
+restore the full pass by itself. The round budget still stops the loop at the
+same point.
+
+**Nothing in the engine checks these conditions.** `pr_watch` accepts a composed
+`fallback:delta` receipt on a standard pull request whatever the reason it was
+taken, as it already did for record prose and LOW repairs, and it counts no full
+passes. So, like `--lenses` (`#32`), the route is the recording agent's claim: the
+pull request names the two full-pass receipts it counts and says the round added
+no unasked mechanism, where a reviewer can dispute both.
 
 Either form is isolated, fresh-context, drawn from the panel's configured
 lenses (`review.fallback_panel.lenses`), not minted for the occasion, and
@@ -1103,8 +1216,9 @@ what the recorded passes covered, not that the posted verdicts are honest. A
 logged disposition that produced no commit needs less
 still: there is no new head, so there is nothing to re-review. The
 single-lens form is one of the sanctioned single-lens passes *How many lenses*
-lists, conditioned on the record-prose boundary or a reviewer-marked LOW
-repair, not the author's own risk assessment; the dual form is two-lens. The
+lists, conditioned on the record-prose boundary, a reviewer-marked LOW
+repair or a standard pull request's two full passes, not the author's own
+risk assessment; the dual form is two-lens. The
 delta pass moves no floor in either form: a PR's initial review takes the
 full pass its class sets — or Degraded mode, only where isolation is
 impossible — never a delta pass. The author still draws the prose class, states
@@ -1120,7 +1234,9 @@ running this loop before they were named:
   or replied-with-reason, per the gates above. No commit means no new head,
   so the standing receipt survives and step 6 has nothing to re-review.
 - **A fix round lands, its proportionate re-check runs at the new head, and
-  that re-check yields no further commit** — the delta pass for a LOW repair; otherwise the full pass for a delta
+  that re-check yields no further commit** — the delta pass for a LOW repair, or
+  for any fix round on a standard pull request after its second full pass;
+  otherwise the full pass for a delta
   containing behaviour or the delta pass for record prose, single- or
   dual-lens by the class rule above. A re-check that finds something
   re-enters the loop: its findings are fixed (a new fix round) or disposed

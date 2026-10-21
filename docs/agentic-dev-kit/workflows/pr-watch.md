@@ -223,7 +223,8 @@ Repeat until the report says **converged**:
      the engine records it and shows it at merge time, but cannot verify it. If your
      runtime cannot isolate a reviewer, run `review.fallback_commands` instead
      and record it as `fallback:<runtime>` with the single lens named. A further
-     single-lens receipt is the **delta pass** for record prose or LOW repairs (the panel
+     single-lens receipt is the **delta pass** for record prose, LOW repairs, or a
+     standard PR's fix rounds after its second full pass (the panel
      doc's stopping section): an isolated lens over a fix round's delta,
      recorded as the literal `fallback:delta` with its one lens named — never
      `fallback:<runtime>`, which is reserved for the author-context degraded
@@ -250,7 +251,11 @@ Repeat until the report says **converged**:
 
    - **LOW/P3 finding:** use the delta-or-ticket rule above, including for a
      low-severity regression. Do not restart the full process.
-   - **Real finding** above LOW (a bug, a missing guard, a correctness/clarity issue): fix it in
+   - **Finding the reviewer classed pre-existing**, with the base revision cited: take
+     the panel doc's *Pre-existing findings* route at any severity, a ticket rather
+     than a fix round, and address it to the operator when it sits on a
+     `review.safety_critical_paths` file or the reviewer rated it HIGH.
+   - **Real finding** above LOW and not pre-existing (a bug, a missing guard, a correctness/clarity issue): fix it in
      the code, commit, push. Re-running the local gate first. **Before that push, take
      the step after this list**, *Count the round before you fix it*: record the
      round and check the budget.
@@ -482,6 +487,11 @@ Self-pace on a bounded cadence — don't busy-wait:
   - each open finding, with the severity and regression label its reviewer gave it,
     and what fixing it would touch;
   - the LOW findings already routed to tickets, linked;
+  - whether the design was re-examined, and what that found: say whether the
+    predicate or the ownership of what kept drawing findings was reconsidered, not
+    only which cases were added, as the panel doc's *Read repeated findings in one
+    place as design feedback* rule asks when one function draws findings round after
+    round;
   - the options: merge with the remaining findings ticketed, authorize a stated
     number of further rounds, split the change, or withdraw the repair that grew.
 
@@ -490,7 +500,9 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   Then report the PR as held for the operator and end the loop. The operator's answer
   goes on the PR. A go-ahead names how many further rounds it covers, and the poll keeps
-  printing the warning through them, because the count does not reset. A LOW finding
+  printing the warning through them, because the count does not reset. While
+  `review_rounds.spent` is true, each later round's disposition on the PR says again
+  whether the design was re-examined. A LOW finding
   needs no go-ahead to be ticketed; fixing it takes one, as below.
 
   *Round counting*, in `report-fields.md`, says when the count runs under or over

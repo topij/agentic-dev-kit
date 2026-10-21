@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "b8899b996674661cddf36b4a6f959402354e610f704983eb6fae6b2a1dac51df"
+      "sha256": "bcf544682f8a9ada663aedbadbee712478459ccc11c37290b704ee1f0d7d08c6"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -60,11 +60,11 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "1ff52def91d31c2975f4e9790d95fac48c58c409c0e0734d7d13256df970658c"
+      "sha256": "ae39efbd37b24238016d3afdc56002f18f8ba21aa120e71e53a6ddba20ee65b9"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "11e8c149605dd49177bd7e169acf0fd1f36fdee6037ec4f97bf44adda3a99b8d"
+      "sha256": "ed36c3be5c219813062c27b8022dcf6ffc92f544d1f36245cc890cafecde79e9"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -79,7 +79,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "53a8032b0efd5a4aa7e3e809b64698a5ec84d4c9f5c6813772e557e2390a7b13"
+      "sha256": "bfd94447800771ec9552b8cc7f5d654f452dbad212474ff5f59e31dc57931822"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
       "required_by": [
@@ -578,7 +578,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "6fcdd11b0643e2c472a2bba551a6153bf91cf69f07bfaf28a3e6d45d57c7f765"
+      "sha256": "144cf7e9c225240b790dfcf96318cfd71fc8daf941c829ab7838488c593ea010"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -621,7 +621,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "ddb8845e8521856c4ca39e42aaa7d3d918a5f2dfbde3f9707d151189356f4ad8"
+      "sha256": "98e1f510450cc74f75df42a668a6558fbc44d3fd3a0b98a0c6c18f8c20097b1d"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -697,7 +697,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "63246375dde2f8d8702df3f26f97e610a5d0942afdb61164afb9c2efd8e62247"
+      "sha256": "72ccd232af39121c5017efa362d34615e329a448937cea526906e73469d259df"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

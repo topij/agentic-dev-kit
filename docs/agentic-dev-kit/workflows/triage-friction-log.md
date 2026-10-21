@@ -408,6 +408,12 @@ value as report Markdown. Historical
 annotations are evidence for the operator to consider, not executable accounting
 instructions. Present the archive and park choices alongside the filing choice.
 
+An entry recording a review finding its reviewer classed *pre-existing* (the panel
+doc's *Pre-existing findings*) keeps the base revision it cites in the proposed
+payload, and attributes the defect to the code it names, not to the pull request that
+reported it. When the entry already links a ticket for it, present the archive choice
+first.
+
 Before computing proposal digests, classify each proposed ticket and include its
 execution-environment section and configured label according to
 [`ticket-execution-environment.md`](../ticket-execution-environment.md). Apply this

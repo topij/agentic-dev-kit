@@ -488,6 +488,94 @@ def test_carry_forward_reaches_the_prompt_when_given_and_is_absent_otherwise(rep
     assert "What prior rounds have and have not covered" not in without.stdout
 
 
+def test_prior_dispositions_render_as_a_pointer_read_after_the_pass(repo):
+    """#463: a re-run not told what earlier rounds disposed of re-raises it. The
+    pointer reaches the prompt under its own heading, before the contract, with the
+    instruction that keeps it from steering the pass; without the flag, no section.
+    """
+    base, head = _revs(repo)
+    link = "https://github.com/o/r/pull/7#issuecomment-1"
+    heading = "## Where earlier rounds' dispositions are"
+    with_it = _run(repo, "--lens", "adversarial", "--head", head, "--base", base,
+                   "--branch", "b", "--prior-dispositions", link)
+    assert with_it.returncode == 0, with_it.stderr
+    assert heading in with_it.stdout
+    out = with_it.stdout
+    contract_at = out.index("## The contract every lens gets")
+    # Bounded at the contract heading: item **No repeats** says "only after your own"
+    # too, so a section running to the end of the prompt would pass on the contract.
+    section = out[out.index(heading):contract_at]
+    assert link in section
+    assert "**only after your own\npass is complete**, before you write your report" in section
+    assert "**No repeats**" in section
+    # It is a pointer, not a coverage note or a draw: neither of those sections appears.
+    assert "What prior rounds have and have not covered" not in with_it.stdout
+    assert "The author's stated draws" not in with_it.stdout
+
+    without = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert without.returncode == 0, without.stderr
+    assert heading not in without.stdout
+
+
+@pytest.mark.parametrize("sep", ["\n", "\r", "\x0b", "\x0c", "\x1c", "\x85", "\u2028", " "])
+def test_prior_dispositions_refuse_anything_but_one_link(repo, sep):
+    """Findings restated in the prompt frame the pass, which #459 measured. Every
+    Unicode line break is refused, not only CR and LF, and so is a space, which any
+    one-line summary carries. A whitespace-free token is still not proven a link;
+    the rendered instruction and the doctrine ask for one."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--prior-dispositions", f"https://example.test/pr/7{sep}F1: the guard is wrong")
+    assert out.returncode == 2, out.stdout[:200]
+    assert "--prior-dispositions" in out.stderr and "#463" in out.stderr
+
+
+@pytest.mark.parametrize("value", [
+    "javascript:alert(1)", "../../etc/passwd", "http://example.test/pr/7",
+    "F1:the-guard-is-wrong", "\u200b",
+])
+def test_prior_dispositions_refuse_anything_but_an_https_link(repo, value):
+    """A lens is told to open what this names, so whitespace-free is not enough:
+    a non-link token renders as a target the lens would follow."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--prior-dispositions", value)
+    assert out.returncode == 2, out.stdout[:200]
+    assert "https://" in out.stderr
+
+
+def test_prior_dispositions_follow_the_coverage_notes_and_the_draws(repo):
+    """The pointer comes after what the pass is aimed with and before the contract,
+    so a lens meets it as a closing instruction, not as an aim. This pins the order
+    of these four headings only."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--carry-forward", "Round 1 covered the guards.", *DRAWS,
+               "--prior-dispositions", "https://example.test/pr/7#c1")
+    assert out.returncode == 0, out.stderr
+    text = out.stdout
+    order = [text.index(h) for h in (
+        "## What prior rounds have and have not covered",
+        "## The author's stated draws",
+        "## Where earlier rounds' dispositions are",
+        "## The contract every lens gets",
+    )]
+    assert order == sorted(order)
+
+
+def test_the_contract_carries_the_convergence_items(repo):
+    """The four items #1153, #1154, #211 and #463 asked for reach a lens through the
+    quoted contract, not a second copy in the script. This pins that each arrives by name;
+    their wording is the doctrine's, quoted verbatim by the contract tests above."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b")
+    assert out.returncode == 0, out.stderr
+    contract_part = out.stdout[out.stdout.index("## The contract every lens gets"):]
+    for name in ("Name the bug class", "Classify against the base",
+                 "Expect the remediation to carry the next defect", "No repeats"):
+        assert f"**{name}.**" in contract_part
+
+
 # --- the two kinds of framing are different channels (friction log, 2026-08-12) ---
 
 
@@ -1079,7 +1167,7 @@ def test_the_scratch_namespace_fresh_path_reminder_is_present_early(repo):
     """#469: a lens hit the sandbox's `rm -rf` refusal after the Scratch namespace
     item's wording already told it not to (#459 round 2's correctness lens; round 1
     explicitly recorded none, so this was not every round, but it did recur) —
-    before it read that item, item 9 of 13 in a contract quoted at the very end of
+    before it read that item, deep in a contract quoted at the very end of
     the prompt. The doctrine's wording was already right; the carrier was not. So
     the operative sentence is now also stated near the top of the prompt, beside
     the tree the lens is handed, ahead of the full contract quote — not instead of
@@ -1265,7 +1353,7 @@ def test_an_empty_base_override_is_refused_not_silently_remote_resolved(repo):
     [
         "--branch", "--base", "--base-branch", "--scratch", "--carry-forward",
         "--draw-prose-class", "--draw-safety-critical", "--repair-boundary",
-        "--verify-command",
+        "--prior-dispositions", "--verify-command",
     ],
 )
 def test_every_optional_override_refuses_an_empty_value(repo, flag):
@@ -1622,7 +1710,7 @@ def test_agent_definition_is_a_claude_surface_and_refuses_codex(repo):
     "flag, value",
     [("--head", "deadbeef"), ("--pr", "7"), ("--carry-forward", "x"), ("--delta-draws", "y"),
      ("--draw-prose-class", "y"), ("--draw-safety-critical", "y"), ("--repair-boundary", "y"),
-     ("--base", "abc"), ("--branch", "b"), ("--scratch", "/tmp/x"), ("--verify-command", "make test"),
+     ("--prior-dispositions", "y"), ("--base", "abc"), ("--branch", "b"), ("--scratch", "/tmp/x"), ("--verify-command", "make test"),
      ("--base-branch", "main")],
 )
 def test_agent_definition_refuses_prompt_only_flags(repo, flag, value):
