@@ -1,9 +1,10 @@
 # Safety-critical decision logic — review doctrine
 
 These files gate customer-facing sends, destructive operations, process
-kill/recovery paths, or the checks that guard a merge (CI workflows, git hooks and
-each runtime's hook registration, which can switch a check off without touching an
-engine). Four rules apply to any behavioral change here — each one earned
+kill/recovery paths, or some of the checks that guard a merge (CI workflows, the hook
+scripts and each runtime's hook registration, which can switch a check off without
+touching an engine). That second group is not every file that can weaken a check:
+`review.safety_critical_paths` is the list, and its comment names what it leaves out. Four rules apply to any behavioral change here — each one earned
 by a real shipped failure that CI-green + full unit tests did not catch (an
 approval-matcher inversion; a send-gate with holes found only in review; a destructive
 operation whose "safety" fix reintroduced the hazard; a kill-path that passed unit

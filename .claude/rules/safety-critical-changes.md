@@ -20,8 +20,9 @@ paths:
   - "scripts/devkit/pr_watch.py"
   - "scripts/sweep_scratch.py"
   - "scripts/devkit/sweep_scratch.py"
-  # Files that can switch a check off without touching an engine (#1150): CI,
-  # the git hooks, and both runtimes' hook registrations.
+  # Some files that can switch a check off without touching an engine (#1150):
+  # CI, the hook scripts, and both runtimes' hook registrations. The config
+  # comment names what this leaves out.
   - ".github/workflows/*"
   - "scripts/hooks/*"
   - "scripts/devkit/hooks/*"

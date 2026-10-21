@@ -15,7 +15,7 @@
 
 <!-- What breaks if this is wrong, and for whom. Say whether it touches a file
      under `review.safety_critical_paths` (a gate, a destructive operation, CI,
-     a git hook or a hook registration) or a contract adopters pin. -->
+     a hook script or a hook registration) or a contract adopters pin. -->
 
 ## How to revert
 
@@ -30,3 +30,4 @@
 - [ ] If I edited a file listed in `kit-manifest.json`, I ran
       `python3 scripts/kit_doctor.py --generate-manifest` and committed the result
 - [ ] If the change is observable to adopters, I added a `changelog.d/` fragment
+- [ ] If I touched a file under `review.safety_critical_paths`, I said so under Risk

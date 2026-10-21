@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
-      "sha256": "cb65ea1c73cb4260261aaa3ce3543404a199dae3dc3aff68a4b4525bb1690030"
+      "sha256": "472b91015afba44e3ee972d901d6b34dd15c95446c43e0a9ef8216262847879b"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -119,7 +119,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "ce9a4050763ae879791e314b077e08424ce719e3c85ce39a3fa90101fce36d0e"
+      "sha256": "19327f03f870ba3661536bd1212c6181468a584d89fd30af805f1eb4c6afb4b4"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -621,7 +621,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "eb58d454c2ab203132e0b20ea05a80c73425327b84a8179f5967046b83a71f8f"
+      "sha256": "59c09113f66b5b5c70a0804ad3786f92feb7850ce9a4e1f11fdee5fc408c17f5"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -701,7 +701,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "d3981acb70055198f8fb42af754f52e6855da3503d3c94b445e05379d7071a4d"
+      "sha256": "827764f2a2cbde3fc1caa4c73154d9ecf1a1e49734daec929ebd551070505120"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
