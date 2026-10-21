@@ -35,9 +35,11 @@ Four properties, each earned by a real failure:
    came to be handed its author's draws — the anchoring **No framing** exists to keep
    out of a full panel. Each draw has its own flag, and the LOW rule's repair boundary
    has ``--repair-boundary``, because one free-text block holding all three let a lens
-   decide what counted as a draw (#921). ``--prior-dispositions`` is one more channel,
-   and the narrowest: one link pointing at where earlier rounds' findings and
-   dispositions are posted, which the lens reads only after its own pass (#463).
+   decide what counted as a draw (#921). ``--prior-dispositions`` is one more channel:
+   one whitespace-free ``https://`` token, meant as a link to where earlier rounds'
+   findings and dispositions are posted, which the lens reads only after its own pass
+   (#463). ``--last-reviewed`` names a re-run's delta by its sha, so the delta needs
+   no free text at all (#1163).
 
 This assembles the prompt. It does not launch lenses, build worktrees, or parse reports:
 ``--lenses`` staying self-reported is #32, and this is what a real check would build on.
@@ -650,6 +652,7 @@ def render(
     delta_draws: dict[str, str] | None = None,
     repair_boundary: str | None = None,
     prior_dispositions: str | None = None,
+    last_reviewed: str | None = None,
     narrative_preflight: str = "",
 ) -> str:
     # An unconfigured runtime legitimately means "inherit the cockpit's compute"
@@ -719,6 +722,10 @@ def render(
         )
         repair = ""
         repair_rule = ""
+        # The LOW rule's dispute route is for a LOW repair only. Rendered on every delta
+        # pass, it told a later-round delta lens (#1153) that a dispute "calls for a
+        # ticket", which contradicts that pass's any-severity scope (#1163).
+        low_rule = ""
         if repair_boundary is not None and repair_boundary.strip():
             repair = (
                 "\n### The repair boundary\n\n"
@@ -731,6 +738,13 @@ def render(
             repair_rule = (
                 f"After them, add one line per repair named in the boundary, beginning\n"
                 f"`{REPAIR_VERDICT}:`, saying whether it is contained.\n"
+            )
+            low_rule = (
+                "This is a reviewer-marked LOW/P3 repair, so follow the shared LOW\n"
+                "delta-or-ticket rule: a containment dispute without severity escalation\n"
+                "calls for a ticket, not a full restart. Do not confirm coverage for\n"
+                "disputed code remaining in the candidate; the coordinator must withdraw\n"
+                "it and delta-review the removal, or hold it.\n"
             )
         draws = (
             "\n## The author's stated draws — dispute them\n\n"
@@ -750,17 +764,33 @@ def render(
             f"{repair_rule}"
             "Confirm a draw only if you checked\n"
             'it yourself — "confirmed" means every draw is confirmed. Report disputes\n'
-            "without changing their severity to fit a disposition. For a reviewer-marked\n"
-            "LOW/P3 repair, follow the shared LOW delta-or-ticket rule: a containment\n"
-            "dispute without severity escalation calls for a ticket, not a full restart.\n"
-            "Do not confirm coverage for disputed code remaining in the candidate; the\n"
-            "coordinator must withdraw it and delta-review the removal, or hold it.\n"
-            "Other disputes follow the shared panel policy for their severity and scope.\n"
+            "without changing their severity to fit a disposition.\n"
+            f"{low_rule}"
+            f"{'Other disputes' if low_rule else 'Disputes'} follow the shared panel "
+            "policy for their severity and scope.\n"
         )
+    # #1163: a standard PR's later rounds take a delta pass at any severity with the
+    # full diff in scope (#1153). Named by sha, so no free text carries the boundary,
+    # and kept apart from --repair-boundary, whose LOW wording says the opposite.
+    delta = (
+        "\n## The delta since the last reviewed head\n\n"
+        f"An earlier round reviewed `{last_reviewed}`. The fix round since then is:\n\n"
+        "```sh\n"
+        f"git diff {last_reviewed}...{head}\n"
+        f"git log {last_reviewed}..{head}\n"
+        "```\n\n"
+        "Read that diff and those commit messages first: the contract's **Expect the\n"
+        "remediation to carry the next defect** item says why. This names where to look\n"
+        "first, not a boundary: the whole diff above stays in scope, and a finding\n"
+        "anywhere in it is reported at its full severity.\n"
+        if last_reviewed is not None
+        else ""
+    )
     # #463: a lens not told what earlier rounds disposed of re-raises it, and a lens
     # handed the findings themselves is framed by them — on #459 a restatement drew a
     # No framing finding and a pointer drew none. The CLI refuses anything but one
-    # whitespace-free https link, which keeps prose out but cannot prove what the
+    # whitespace-free https token, which keeps out prose with spaces in it but not
+    # words joined into a URL path, and cannot prove what the
     # page says, so the lens is told to read it as data. The lens is told to
     # follow it after its own pass, which is what the contract's No repeats item asks.
     prior = (
@@ -803,7 +833,7 @@ Diffstat at assembly time: {diffstat}
 {verify}
 {narrative_preflight}
 Name the command that established any claim you make.
-{carry}{draws}{prior}
+{carry}{delta}{draws}{prior}
 ## The contract every lens gets
 
 {contract_text}
@@ -841,7 +871,8 @@ def render_verifier(
     in the quoted contract, so this renders it and adds no second copy. No flag text
     reaches it: ``build`` refuses every free-text flag, so there is no branch line and
     no verify line, the runtime selects a fixed carrier string or is refused, and the
-    scratch path is held to a charset that cannot leave its code span.
+    scratch path is held to a charset that cannot leave its code span. The repo slug
+    is not a flag: it comes from the checkout's git config, unvalidated.
     """
     compute_line = (
         "\nRun at: the cockpit's choice. No kit key declares verifier compute yet; "
@@ -1136,7 +1167,9 @@ def build(args: argparse.Namespace) -> str:
     # caller text at all rather than validating it: --verify-command and --branch are
     # refused (it checks against the head sha, and re-runs what the reports name), and
     # --runtime must be a key of VERIFIER_CARRIER, so only fixed strings render. The
-    # one caller value still rendered, the scratch path, is held to _SAFE_PATH below.
+    # one flag value still rendered, the scratch path, is held to _SAFE_PATH below. The
+    # repo slug also renders, from remote.origin.url in git config rather than a flag,
+    # and nothing here validates it (#1163).
     if args.verifier:
         stray = [
             flag
@@ -1148,6 +1181,7 @@ def build(args: argparse.Namespace) -> str:
                 ("--draw-prose-class", args.draw_prose_class),
                 ("--draw-safety-critical", args.draw_safety_critical),
                 ("--repair-boundary", args.repair_boundary),
+                ("--last-reviewed", args.last_reviewed),
                 ("--verify-command", args.verify_command),
                 ("--branch", args.branch),
             )
@@ -1181,6 +1215,15 @@ def build(args: argparse.Namespace) -> str:
             "request comment. Restating them in the prompt frames the pass (#463)."
         )
     draws, o_repair = _delta_inputs(args)
+    o_last = _override("--last-reviewed", args.last_reviewed)
+    # Any re-run may name the fix round's delta (the doctrine's "aim the re-run at the
+    # delta"); a later-round delta pass adds both draws, as every delta pass does. A
+    # LOW repair names its boundary through --repair-boundary instead (#1163).
+    if o_last is not None and o_repair is not None:
+        raise PromptError(
+            "--last-reviewed is the later-round delta at any severity; --repair-boundary "
+            "is the LOW rule's repair. Pass one: their scopes contradict each other."
+        )
     o_verify = _override("--verify-command", args.verify_command)
     o_runtime = _override("--runtime", args.runtime) or "claude"
     # Presence of --lens is checked above, for a lens prompt only; an empty value is
@@ -1200,6 +1243,14 @@ def build(args: argparse.Namespace) -> str:
         roster = _lens_roster(config, args.lens)
 
     head = _require_commit(root, args.head)
+    last = None
+    if o_last is not None:
+        last = _require_commit(root, o_last)
+        if last == head or not _run_ok(root, "merge-base", "--is-ancestor", last, head):
+            raise PromptError(
+                f"--last-reviewed {o_last} is not a strict ancestor of the head {head[:12]}, "
+                "so it names no fix round to review"
+            )
     if o_scratch is None:
         raise PromptError("a prompt requires --scratch: allocate a review round with sweep_scratch.py --create-review-round, then build a detached lens tree inside it")
     _require_scratch(o_scratch, head)
@@ -1281,6 +1332,7 @@ def build(args: argparse.Namespace) -> str:
         delta_draws=draws,
         repair_boundary=o_repair,
         prior_dispositions=o_prior,
+        last_reviewed=last,
         verify_command=o_verify,
         base_from_remote=base_from_remote,
         branch_from_checkout=o_branch is None,
@@ -1349,6 +1401,13 @@ def main(argv: list[str] | None = None) -> int:
         "the exact repair boundary; requires both draws",
     )
     parser.add_argument(
+        "--last-reviewed",
+        default=None,
+        help="re-runs: the sha the last round reviewed, named as the fix round's delta "
+        "to read first, with the full diff and every severity in scope; never with "
+        "--repair-boundary",
+    )
+    parser.add_argument(
         "--delta-draws",
         default=None,
         help="removed: refused with a pointer to --draw-prose-class, "
@@ -1394,6 +1453,7 @@ def main(argv: list[str] | None = None) -> int:
                     ("--draw-prose-class", args.draw_prose_class),
                     ("--draw-safety-critical", args.draw_safety_critical),
                     ("--repair-boundary", args.repair_boundary),
+                    ("--last-reviewed", args.last_reviewed),
                     ("--verify-command", args.verify_command),
                     ("--verifier", args.verifier or None),
                     ("--lens-report", args.lens_report or None),
