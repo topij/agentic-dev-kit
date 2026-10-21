@@ -343,6 +343,21 @@ review:
     - "scripts/devkit/pr_watch.py"
     - "scripts/sweep_scratch.py"
     - "scripts/devkit/sweep_scratch.py"
+    # Some files that can switch a check off without touching an engine (#1150):
+    # the CI that `require_ci` relies on, the hook scripts (the pre-push git hook
+    # and the PostToolUse PR follow-up hook), and each runtime's hook
+    # registration. Both runtimes' registrations are listed, so neither can be
+    # weakened under one lens. NOT the full set. Among what is not listed: the
+    # Makefile's test targets, init.sh's hook installer, ruff.toml,
+    # scripts/tests/conftest.py (#434), the checker CI runs (kit_doctor.py), the
+    # lens agent definitions under .claude/agents/, other .github/ files, an
+    # adopter's .codex/config.toml, and any review-bot config.
+    # Adding them is an operator decision about review cost.
+    - ".github/workflows/*"
+    - "scripts/hooks/*"
+    - "scripts/devkit/hooks/*"
+    - ".claude/settings.json"
+    - ".codex/hooks.json"
   # The independent pass to run when a configured bot can't review. TWO shapes,
   # and the difference is whether the reviewer is independent of the author:
   #

@@ -11629,6 +11629,38 @@ def test_a_case_variant_path_matches_a_declared_pattern(path: str, pattern: str)
     assert result["unclassified"] is None
 
 
+@pytest.mark.kit_repo_only("config/dev-model.yaml")
+@pytest.mark.parametrize(
+    "path",
+    [
+        # #1150: files that can switch a check off without touching an engine.
+        ".github/workflows/test.yml",
+        "scripts/hooks/pre-push",
+        "scripts/hooks/pr_followup_hook.py",
+        "scripts/devkit/hooks/pre-push",
+        ".claude/settings.json",
+        ".codex/hooks.json",
+    ],
+)
+def test_the_shipped_list_classes_check_switches_as_safety_critical(path: str) -> None:
+    import yaml
+
+    config = yaml.safe_load(
+        (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
+    )
+    pr_watch = _load_pr_watch()
+    with pytest.MonkeyPatch.context() as mp:
+        _classed(
+            pr_watch,
+            mp,
+            [path],
+            patterns=tuple(config["review"]["safety_critical_paths"]),
+        )
+        result = pr_watch.pr_review_class(CLASS_BASE, CLASS_HEAD)
+    assert result["class"] == "safety-critical"
+    assert result["matched_paths"] == [path]
+
+
 def test_a_case_variant_of_the_config_path_changes_the_config() -> None:
     """A case variant of the config checks out onto the config the engine reads."""
     pr_watch = _load_pr_watch()

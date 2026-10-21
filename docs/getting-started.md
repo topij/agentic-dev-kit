@@ -45,7 +45,8 @@ cp -r /path/to/agentic-dev-kit/. .
 the protected branch, your notification user key and your review bots, and stamps them
 into `config/dev-model.yaml`.
 That file arrives with `review.safety_critical_paths` listing only the kit's own gate
-files. Add your own send, destructive and kill/recovery paths to it, or delete the key:
+files, CI workflows, hook scripts and runtime hook registrations. Add your own send,
+destructive and kill/recovery paths to it, or delete the key:
 absent, every pull request keeps the two-lens fallback review, while a list that misses a
 gate file sends that file to one lens (#930).
 It renders the narrative docs and root entry points — `AGENTS.md`, which holds

@@ -16041,7 +16041,9 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert (
         "`scripts/pr_watch.py`, `scripts/dev_session.sh`, "
         "`scripts/launch_lane.py`, `scripts/sweep_scratch.py`, or the profile named by "
-        f"`{profile_key}` (`{configured_profile_path}` in this repository) "
+        f"`{profile_key}` (`{configured_profile_path}` in this repository), and to "
+        "the CI workflows, hook scripts and runtime hook registrations "
+        "(`.claude/settings.json`, `.codex/hooks.json`), "
         f"are safety-critical.** Read and apply `{doctrine}` completely before "
         "changing any gate, destructive operation, launch-authority, or merge-authority path."
         in root_binding_flat
@@ -16055,6 +16057,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "`{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/launch_lane.py`, "
         "`{{ENGINE_DIR}}/sweep_scratch.py`, or the "
         f"profile named by `{profile_key}` (shipped as `{shipped_profile_path}`), "
+        "the CI workflows, the hook scripts, the runtime hook registrations "
+        "(`.claude/settings.json`, `.codex/hooks.json`), "
         "along with customer-facing send paths, destructive operations, and "
         "kill/recovery paths, are governed by "
         f"[`{doctrine}`]({doctrine}); when the configured review bot cannot review, "
@@ -16071,7 +16075,9 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "and behavioral changes to the configured `<engine-dir>/pr_watch.py`, "
         "`<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, "
         "`<engine-dir>/sweep_scratch.py`, or the profile "
-        f"named by `{profile_key}` (shipped as `{shipped_profile_path}`), read and "
+        f"named by `{profile_key}` (shipped as `{shipped_profile_path}`), the CI "
+        "workflows, the hook scripts, or the runtime hook registrations "
+        "(`.claude/settings.json`, `.codex/hooks.json`), read and "
         f"apply `{doctrine}`. Green CI is necessary but not sufficient; require "
         "independent review and operator sign-off."
         in merge_binding_flat
@@ -16115,6 +16121,11 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         configured_profile_path,
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
+        ".github/workflows/*",
+        "scripts/hooks/*",
+        "scripts/devkit/hooks/*",
+        ".claude/settings.json",
+        ".codex/hooks.json",
     }
     claude_profile_comment = claude_rule.split(
         "  # This is the shipped", 1

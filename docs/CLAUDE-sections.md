@@ -120,9 +120,10 @@ illustrative):
   pre-flight, review-loop mechanics.
 - a data/state rule (`paths: state/**`, cache code) — shared cache catalog, config
   loading, dependency pre-flight.
-- `safety-critical-changes.md` (send-path / gate / kill-path scripts) — the review
-  doctrine from Principle #6: deterministic gate over matcher, dual-lens review,
-  adversarial-to-convergence, kill-path integration tests, operator-merge only.
+- `safety-critical-changes.md` (send-path / gate / kill-path scripts, CI workflows, hook
+  scripts and hook registrations) — the review doctrine from Principle #6:
+  deterministic gate over matcher, dual-lens review, adversarial-to-convergence,
+  kill-path integration tests, operator-merge only.
 
 List each active rule and its `paths:` scope in CLAUDE.md so a session can tell at a
 glance which rules exist without opening every file.

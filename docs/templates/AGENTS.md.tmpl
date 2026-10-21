@@ -25,7 +25,8 @@ doctrine into this runtime; it does not fork it.
   path-scoped rule.** Behavioral changes to `{{ENGINE_DIR}}/pr_watch.py`,
   `{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/launch_lane.py`,
   `{{ENGINE_DIR}}/sweep_scratch.py`, or the profile named by `parallel.claude_settings_profile` (shipped as
-  `config/claude-lane-settings.json`),
+  `config/claude-lane-settings.json`), the CI workflows, the hook scripts, the
+  runtime hook registrations (`.claude/settings.json`, `.codex/hooks.json`),
   along with customer-facing send paths,
   destructive operations, and kill/recovery paths, are governed by
   [`docs/agentic-dev-kit/safety-critical-changes.md`](docs/agentic-dev-kit/safety-critical-changes.md);

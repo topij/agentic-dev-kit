@@ -131,7 +131,8 @@ settled by the rules above.
 - **Behavioral changes to `scripts/pr_watch.py`, `scripts/dev_session.sh`,
   `scripts/launch_lane.py`, `scripts/sweep_scratch.py`, or the profile named by
   `parallel.claude_settings_profile` (`config/claude-lane-settings.json` in this
-  repository) are safety-critical.** Read and apply
+  repository), and to the CI workflows, hook scripts and runtime hook registrations
+  (`.claude/settings.json`, `.codex/hooks.json`), are safety-critical.** Read and apply
   `docs/agentic-dev-kit/safety-critical-changes.md` completely before changing any
   gate, destructive operation, launch-authority, or merge-authority path. This precise root instruction is
   the Codex binding; Claude's
