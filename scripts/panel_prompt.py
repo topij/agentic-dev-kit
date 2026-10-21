@@ -1275,6 +1275,14 @@ def build(args: argparse.Namespace) -> str:
     base_from_remote = o_base is None
     base = o_base if o_base is not None else resolve_base(root, base_branch)
     base = _require_base_object(root, base, base_branch, base_from_remote)
+    # A strict ancestor of the head can still predate the base, and then the rendered
+    # delta carries upstream commits under the name of this pull request's fix round
+    # (round 1 on #1165).
+    if last is not None and not _run_ok(root, "merge-base", "--is-ancestor", base, last):
+        raise PromptError(
+            f"--last-reviewed {o_last} does not descend from the base {base[:12]}, "
+            "so its delta would carry commits that are not this pull request's"
+        )
 
     diffstat = _git(root, "diff", "--shortstat", f"{base}...{head}")
     if not diffstat:

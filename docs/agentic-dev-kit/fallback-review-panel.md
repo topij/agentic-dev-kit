@@ -1283,9 +1283,10 @@ it on 2026-10-21, in the project's own discussion, and a comment on that issue
 records it, after a team running agent reviewers on agent authors
 reported that switching to diff-only re-review after its opening passes cut its
 long review chains. **Two is a constant, declared here:** it is not a
-`config/dev-model.yaml` key, and every other mention of "the second full pass" (in
-this file, `pr-watch.md` and the changelog) restates this sentence, so change it here
-and then find those by that phrase (`#1163`). It
+`config/dev-model.yaml` key. The other mentions in this file, `pr-watch.md` and
+`changelog.d/` restate it as "second full pass" or "two full passes", so change it
+here and then find them with `grep -rn -e 'second full pass' -e 'two full passes'`
+over those paths (`#1163`). It
 narrows the paragraph above, which still governs until two full passes have
 run on the pull request, and it applies only while all of these hold:
 

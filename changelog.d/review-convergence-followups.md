@@ -5,7 +5,8 @@ since `<sha>` (`git diff <sha>...<head>` and `git log <sha>..<head>`) as what a 
 reads first, with the full diff and every severity still in scope (#1163). Use it for a
 standard pull request's later-round delta pass, beside both draws, and to aim any
 re-run. It exits 2 with `--repair-boundary`, with `--verifier`, with
-`--agent-definition`, when empty, and when `<sha>` is not a strict ancestor of `--head`.
+`--agent-definition`, when empty, when `<sha>` is not a strict ancestor of `--head`,
+and when the base is not an ancestor of `<sha>`.
 
 CHANGED (report shape): a delta prompt renders the LOW delta-or-ticket dispute route
 ("calls for a ticket", withdraw disputed code) only when `--repair-boundary` is given.

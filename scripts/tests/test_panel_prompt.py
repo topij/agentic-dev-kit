@@ -860,6 +860,19 @@ def test_last_reviewed_must_be_a_strict_ancestor_of_the_head(repo):
     assert out.returncode == 2 and "strict ancestor" in out.stderr
 
 
+def test_last_reviewed_must_not_predate_the_base(repo):
+    """A strict ancestor of the head older than the base names a delta holding
+    upstream commits, which the prompt would call this pull request's fix round."""
+    older, base = _revs(repo)
+    (repo / "fix.txt").write_text("fix round\n")
+    _git(repo, "add", "fix.txt")
+    _git(repo, "commit", "-q", "-m", "fix round")
+    head = _git(repo, "rev-parse", "HEAD")
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--last-reviewed", older)
+    assert out.returncode == 2 and "does not descend from the base" in out.stderr
+
+
 def test_the_low_rule_renders_only_with_a_repair_boundary(repo):
     """A record-prose or later-round delta has no LOW repair, so the LOW dispute route
     must not reach it; a LOW delta still gets it."""
