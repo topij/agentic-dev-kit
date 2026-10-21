@@ -1247,7 +1247,8 @@ delta.** Each push invalidates the current-head receipt, so each new head
 costs another required review — a fix round landed as four pushes buys four
 times the review its content needs. Land the round's accepted fixes together,
 then hand the next round `git diff <last-reviewed-sha>...<head>` as its
-highest-risk surface with the full diff still in scope. Naming that boundary
+highest-risk surface with the full diff still in scope, through
+`panel_prompt.py --last-reviewed <last-reviewed-sha>`. Naming that boundary
 reveals what a prior round covered — anchoring of a kind, accepted
 deliberately because the full diff stays in scope, and bounded by taking
 `<last-reviewed-sha>` from the recorded receipt's `--head` rather than from
@@ -1281,7 +1282,10 @@ it on 2026-10-21, in the project's own discussion, and a comment on that issue
 (https://github.com/topij/agentic-dev-kit/issues/1153#issuecomment-6313254957)
 records it, after a team running agent reviewers on agent authors
 reported that switching to diff-only re-review after its opening passes cut its
-long review chains. Two is the kit's declared point for that switch. It
+long review chains. **Two is a constant, declared here:** it is not a
+`config/dev-model.yaml` key, and every other mention of "the second full pass" (in
+this file, `pr-watch.md` and the changelog) restates this sentence, so change it here
+and then find those by that phrase (`#1163`). It
 narrows the paragraph above, which still governs until two full passes have
 run on the pull request, and it applies only while all of these hold:
 
@@ -1299,8 +1303,12 @@ The pass is the single-lens delta form: the lens *How many lenses* fixes for
 the pull request, over
 `git diff <last-reviewed-sha>...<head>` and its commit messages, with the
 callers, invariants and tests needed to judge that diff, and the full diff
-still in scope. Render it with `--prior-dispositions` like any re-run; **Expect
-the remediation to carry the next defect** is what it is aimed with. Record it
+still in scope. Render it with `panel_prompt.py --last-reviewed <last-reviewed-sha>`
+beside both draws, and with `--prior-dispositions` like any re-run. `--last-reviewed`
+names that diff and its commit messages by sha and keeps the full diff and every
+severity in scope; never use `--repair-boundary` for it, whose LOW-rule wording tells
+the lens the opposite. **Expect the remediation to carry the next defect** is what it
+is aimed with. Record it
 as `fallback:delta` with `--compose-parent`, as below. A finding above LOW from
 that pass is fixed and delta-reviewed again under this paragraph; it does not
 restore the full pass by itself. The round budget still stops the loop at the
