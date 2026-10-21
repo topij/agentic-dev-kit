@@ -412,6 +412,43 @@ def _require_commit(root: Path, rev: str) -> str:
         raise PromptError(f"{rev} is not a commit in this repo: {exc}") from exc
 
 
+def _require_last_reviewed_in_branch(root: Path, given: str, last: str, base: str, head: str) -> None:
+    """Refuse a ``--last-reviewed`` sha the pull request's own history does not hold.
+
+    The delta renders as ``git diff <last>...<head>``, so every commit between the
+    two is called the fix round. That holds only when the branch's fork point,
+    ``git merge-base <base> <head>``, is an ancestor of ``last`` or equal to it.
+    Being an ancestor of ``head`` is not enough: a main commit from before the fork
+    passes that, and the delta then carries upstream commits (#1166). Requiring
+    ``base`` itself to be an ancestor of ``last`` is wrong the other way: ``base``
+    is the current remote tip, so once main moves past an un-rebased branch no
+    pull-request commit descends from it, and every normal fix round was refused
+    (#1165 round 2).
+
+    A branch that merged ``base`` after ``last`` has a fork point newer than
+    ``last`` and is refused too: its delta would carry the merged upstream
+    commits as the fix round. The remedy names the full pass, which does not
+    need a boundary.
+    """
+    fork = _git(root, "merge-base", base, head)
+    if fork == last or _run_ok(root, "merge-base", "--is-ancestor", fork, last):
+        return
+    if _run_ok(root, "merge-base", "--is-ancestor", last, fork):
+        raise PromptError(
+            f"--last-reviewed {given} is older than this branch's fork point {fork[:12]} "
+            f"(git merge-base <base> {head[:12]}): it is a base-branch commit from before "
+            "the pull request, so git diff <last-reviewed>...<head> would hand upstream "
+            "commits to the lens as the fix round. Pass the --head of the last recorded "
+            "receipt."
+        )
+    raise PromptError(
+        f"--last-reviewed {given} predates a merge of the base into this branch: the "
+        f"fork point {fork[:12]} (git merge-base <base> {head[:12]}) is newer than it, "
+        "so git diff <last-reviewed>...<head> would hand the merged upstream commits to "
+        "the lens as the fix round. Run a full pass without --last-reviewed."
+    )
+
+
 def _require_scratch(scratch: str, head: str) -> str:
     """Verify the supplied root's Git state, not checkout creation or contents.
 
@@ -1285,6 +1322,9 @@ def build(args: argparse.Namespace) -> str:
     base_from_remote = o_base is None
     base = o_base if o_base is not None else resolve_base(root, base_branch)
     base = _require_base_object(root, base, base_branch, base_from_remote)
+
+    if last is not None:
+        _require_last_reviewed_in_branch(root, o_last, last, base, head)
 
     diffstat = _git(root, "diff", "--shortstat", f"{base}...{head}")
     if not diffstat:

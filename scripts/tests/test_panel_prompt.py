@@ -894,6 +894,78 @@ def test_preflight_rev_is_refused_where_no_preflight_renders(repo):
     assert verifier.returncode == 2 and "--preflight-rev" in verifier.stderr
 
 
+def _commit_file(root: Path, name: str, text: str) -> str:
+    (root / name).write_text(text)
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", name)
+    return _git(root, "rev-parse", "HEAD")
+
+
+def _branch_off_main(root: Path) -> tuple[str, str, str]:
+    """main's tip as the fork point, then two pull-request commits on ``pr``."""
+    fork = _git(root, "rev-parse", "main")
+    _git(root, "checkout", "-q", "-b", "pr")
+    first = _commit_file(root, "pr1.txt", "one\n")
+    second = _commit_file(root, "pr2.txt", "two\n")
+    return fork, first, second
+
+
+def _delta(root: Path, head: str, base: str, last: str) -> subprocess.CompletedProcess:
+    return _run(root, "--lens", "adversarial", "--head", head, "--base", base,
+                "--branch", "pr", "--last-reviewed", last)
+
+
+def test_last_reviewed_on_a_linear_branch_is_accepted(repo):
+    """#1166: a pull-request commit after the fork point names a fix round."""
+    fork, first, second = _branch_off_main(repo)
+    out = _delta(repo, second, fork, first)
+    assert out.returncode == 0, out.stderr
+    assert f"git diff {first}...{second}" in out.stdout
+
+
+def test_last_reviewed_survives_main_moving_past_the_branch(repo):
+    """#1165 round 2: the base is the current remote tip, so once main moves ahead
+    of an un-rebased branch no pull-request commit descends from it. The fork point,
+    not the base, is what the reviewed sha must descend from."""
+    _, first, second = _branch_off_main(repo)
+    _git(repo, "checkout", "-q", "main")
+    moved = _commit_file(repo, "upstream.txt", "later\n")
+    _git(repo, "checkout", "-q", "pr")
+    out = _delta(repo, second, moved, first)
+    assert out.returncode == 0, out.stderr
+    assert f"git diff {first}...{second}" in out.stdout
+
+
+def test_last_reviewed_older_than_the_fork_point_is_refused(repo):
+    """#1166: a main commit from before the fork is an ancestor of the head, so the
+    strict-ancestor check passed it and the delta carried upstream commits."""
+    fork, _, second = _branch_off_main(repo)
+    before = _git(repo, "rev-parse", f"{fork}~1")
+    out = _delta(repo, second, fork, before)
+    assert out.returncode == 2, out.stdout[:200]
+    assert "older than this branch's fork point" in out.stderr
+    assert "--head of the last recorded receipt" in out.stderr
+
+
+def test_last_reviewed_before_a_merge_of_main_is_refused_with_a_full_pass_remedy(repo):
+    """The doctrine's merge case: the branch merged main after the last reviewed
+    head, so the delta would carry the merged upstream commits. Refused, and the
+    remedy is a full pass; a round after the merge has its delta again."""
+    _, first, _ = _branch_off_main(repo)
+    _git(repo, "checkout", "-q", "main")
+    moved = _commit_file(repo, "upstream.txt", "later\n")
+    _git(repo, "checkout", "-q", "pr")
+    _git(repo, "merge", "-q", "--no-edit", "main")
+    merged = _git(repo, "rev-parse", "HEAD")
+    out = _delta(repo, merged, moved, first)
+    assert out.returncode == 2, out.stdout[:200]
+    assert "predates a merge of the base" in out.stderr
+    assert "full pass without --last-reviewed" in out.stderr
+    after = _commit_file(repo, "pr3.txt", "three\n")
+    again = _delta(repo, after, moved, merged)
+    assert again.returncode == 0, again.stderr
+
+
 def test_the_low_rule_renders_only_with_a_repair_boundary(repo):
     """A record-prose or later-round delta has no LOW repair, so the LOW dispute route
     must not reach it; a LOW delta still gets it."""
