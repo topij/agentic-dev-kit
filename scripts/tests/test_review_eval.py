@@ -148,6 +148,14 @@ def test_a_failing_lens_command_is_exit_1_and_still_cleans_up(repo, tmp_path) ->
     assert _git(repo["root"], "worktree", "list").count("\n") == 0
 
 
+def test_an_empty_report_is_a_failed_case_not_a_clean_one(repo, tmp_path) -> None:
+    script = tmp_path / "silent.py"
+    script.write_text("import sys\nsys.stdin.read()\nsys.stdout.write('  \\n')\n")
+    proc = _run(repo, f"{sys.executable} {script}", "--case", "a-clean-note", "--lens", "adversarial")
+    assert proc.returncode == 1 and "printed no report" in proc.stderr
+    assert list(repo["scratch"].iterdir()) == []
+
+
 @pytest.mark.parametrize("edit, message", [
     (lambda t, r: t.replace(r["bug"], r["bug"][:12], 1), "full 40-hex sha"),
     (lambda t, r: t.replace(r["bug"], "f" * 40, 1), "is not a commit"),
@@ -305,7 +313,7 @@ def test_a_run_that_stops_keeps_what_it_scored(repo, tmp_path) -> None:
     script.write_text(
         "import subprocess, sys\nsys.stdin.read()\n"
         "head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()\n"
-        f"sys.exit(3 if head == {repo['clean']!r} else 0)\n")
+        f"print('nothing found')\nsys.exit(3 if head == {repo['clean']!r} else 0)\n")
     out = tmp_path / "out"
     proc = _run(repo, f"{sys.executable} {script}", "--lens", "adversarial", out=out)
     assert proc.returncode == 1 and proc.stdout == ""

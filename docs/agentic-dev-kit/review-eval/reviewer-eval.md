@@ -33,7 +33,9 @@ at the head, renders the same prompt a real round gets, runs your command in tha
 with the prompt on stdin, keeps its stdout as the report, kills the command's process
 group, and retires the round. A process that left the group (`setsid`) is out of reach
 of that kill: if one still holds the command's output, the run stops with exit 1 and
-leaves that round in place, unretired, for you to retire once the process ends.
+leaves that round in place, unretired, for you to retire once the process ends. A
+command that exits non-zero or prints no report also stops the run with exit 1, since an
+empty report would score as a clean case with no false alarms.
 
 Run it from a kit checkout with no uncommitted or untracked changes: a lens's `focus` is
 read from the working tree and the result is stamped with its `HEAD`, so the runner

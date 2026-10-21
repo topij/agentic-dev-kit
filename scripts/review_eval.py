@@ -32,7 +32,7 @@ clean case's findings are candidate false alarms, so the operator reads both bef
 score is recorded.
 
 Exit 0 prints the result JSON (and writes it with ``--out``); exit 1 is a case that
-could not be run, and ``--out`` then holds the partial result, ``complete: false``;
+could not be run (an empty report included, which would otherwise score as clean), and ``--out`` then holds the partial result, ``complete: false``;
 exit 2 is a rejected invocation, case file, or a kit checkout with uncommitted changes.
 """
 
@@ -74,7 +74,7 @@ _FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b",
 # heading names one when its title opens with that name as a word; a bold lead-in
 # followed by more text names one only when the label is that name, with at most an
 # `and ...` tail, a parenthetical and a colon, so `**Executed path skips guard** a.py:2`
-# is a finding. A title opening with `F<n>` is a finding either way.
+# is a finding.
 _SECTION_NAMES = (r"(?:verified clean|what i (?:reviewed|executed|checked)|execut(?:ed|ion)|attestation|"
                   r"scratch attestation|mutation(?:[ -]testing)?|earlier dispositions|disposition check|"
                   r"routes|reviewed)")
@@ -208,7 +208,7 @@ def findings_text(report: str) -> str:
             fence = opener.group(1)
         elif (heading := _ATX.fullmatch(text) or _BOLD_LINE.fullmatch(text.rstrip())) is not None:
             title = heading.group("atx") if "atx" in heading.re.groupindex else heading.group("bold")
-            cut = bool(_SECTION_HEADING.match(title or "")) and not re.match(r"[*_ ]*F\d+\b", title)
+            cut = bool(_SECTION_HEADING.match(title or ""))
         elif (lead := _BOLD_LEAD.match(text)) is not None and _SECTION_LABEL.fullmatch(lead.group("bold").strip()):
             drop = True
         elif blank and _FINDING_NUMBER.match(text):
@@ -370,6 +370,10 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
             raise RunError(f"{case['id']} {lens}: cannot run lens command: {exc}") from exc
         if proc.returncode != 0:
             raise RunError(f"{case['id']} {lens}: lens command exited {proc.returncode}: "
+                           f"{proc.stderr.strip()[:500]}")
+        if not proc.stdout.strip():
+            # An empty report would score as a perfect clean case.
+            raise RunError(f"{case['id']} {lens}: lens command printed no report: "
                            f"{proc.stderr.strip()[:500]}")
         return proc.stdout
     finally:
