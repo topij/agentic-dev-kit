@@ -119,11 +119,148 @@ def _finding(kind: str, comment: dict[str, Any], source: dict[str, str], *, path
         "severity": severity,
         "severity_mapped": mapped,
         "addressed": addressed,
+        "stance": None,
+        "reviewed_head": None,
+        "review_round": None,
         "guideline_citation": guideline_citation(body, citation_paths),
         "text": text,
         "text_truncated": truncated,
         "url": comment.get("url"),
     }
+
+
+# The fallback panel reaches a pull request only as the comment
+# `pr_watch.py --record-review --disposition` posts (#772). Its first lines are
+# fixed by that engine; the rest is the cockpit's prose, in which each finding is
+# one typed line (fallback-review-panel.md *Typed dispositions*). Only that line
+# grammar is read, only after the engine's header, and only from a trusted
+# author: neither the marker nor the prose makes a comment evidence by itself.
+_DISPOSITION_HEADER = re.compile(
+    r"<!-- pr-watch:disposition head=(?P<head>[0-9a-f]{7,40}) -->\n"
+    r"## Review disposition — [^\n]*\n"
+    r"\n"
+    r"- reviewed head: `(?P<reviewed>[0-9a-f]{7,40})`\n"
+    r"- review source: `(?P<source>[^`\n]*)`\n"
+    r"- lenses: (?P<lenses>[^\n]*)\n"
+)
+_DISPOSITION_LINE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?`?(?P<lens>[A-Za-z0-9_.-]+)(?: R(?P<round>[1-9][0-9]*))? F(?P<n>[1-9][0-9]*)"
+    r"(?: (?P<severity>[A-Za-z0-9-]+))?(?: (?P<regression>(?i:regression)))?"
+    r": (?P<stance>(?i:accept|dispute-evidence|dispute-concern))"
+    r"(?=[ :—`]|$)[^\n]*$",
+    re.MULTILINE,
+)
+# A CommonMark code fence: three or more backticks or tildes, optionally after a
+# list marker; it closes on a line of at least as many of the same character and
+# nothing else, and an unclosed fence runs to the end of the comment.
+_FENCE_OPEN = re.compile(r"^ {0,3}(?:(?:[-*+]|[0-9]{1,9}[.)])[ \t]+)?(`{3,}|~{3,})")
+STANCES = ("accept", "dispute-evidence", "dispute-concern")
+
+
+def unfenced(prose: str) -> str:
+    """``prose`` with every fenced block's lines and every HTML comment removed.
+
+    One pass in reading order, so a ``<!--`` inside a fence is code and a fence
+    inside a comment is hidden; an unclosed fence or comment runs to the end.
+    """
+    kept: list[str] = []
+    fence: str | None = None
+    commented = False
+    for line in prose.split("\n"):
+        if commented:
+            if "-->" not in line:
+                continue
+            line, commented = line.split("-->", 1)[1], False
+        if fence is not None:
+            if re.fullmatch(rf"[ \t]*{re.escape(fence[0])}{{{len(fence)},}}[ \t]*", line):
+                fence = None
+            continue
+        line = _HTML_COMMENT.sub("", line)
+        if "<!--" in line:
+            line, commented = line.split("<!--", 1)[0], True
+        opened = _FENCE_OPEN.match(line)
+        if opened and not (opened.group(1)[0] == "`" and "`" in line[opened.end():]):
+            fence = opened.group(1)
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def disposition_header(body: str) -> dict[str, Any] | None:
+    """The engine-written header of a disposition comment, or ``None``."""
+    match = _DISPOSITION_HEADER.match(body.replace("\r\n", "\n"))
+    if match is None or match.group("head") != match.group("reviewed"):
+        return None
+    lenses = [name.strip() for name in match.group("lenses").split(",") if name.strip()]
+    return {
+        "head": match.group("head"),
+        "review_source": match.group("source"),
+        "lenses": lenses,
+        "prose": body.replace("\r\n", "\n")[match.end():],
+    }
+
+
+def stance_addressed(stance: str, severity: str, *, known: bool = True, regression: bool = False) -> str:
+    """A typed disposition is the panel's addressed-state evidence (#772, #748).
+
+    Every stance answers the finding on the pull request, except that a HIGH or
+    CRITICAL finding, or a lens-marked regression, is never closed by
+    ``dispute-concern`` (fallback-review-panel.md *Typed dispositions*), so that
+    one stays unaddressed. A severity that is absent or not in the table is not
+    known to be below HIGH, so concern does not close it either.
+    """
+    if stance == "dispute-concern" and (regression or not known or RANK[severity] >= RANK["high"]):
+        return "unaddressed"
+    return "addressed"
+
+
+def disposition_findings(comment: dict[str, Any], source: dict[str, str],
+                         citation_paths: list[str]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """``(header, findings)`` for one trusted comment; ``(None, [])`` if it is not one.
+
+    A line inside a blockquote, a fenced block or an HTML comment is a quotation,
+    not this round's disposition, and a line naming a lens the header does not
+    list is not this round's finding. A lens numbers its findings afresh each
+    round, so a comment carrying several rounds tags each line ``R<k>``; a
+    repeated ``<lens> [R<k>] F<n>`` in one comment counts once, first line first.
+    """
+    header = disposition_header(comment.get("body") or "")
+    if header is None:
+        return None, []
+    findings: dict[tuple[str, str | None, str], dict[str, Any]] = {}
+    for match in _DISPOSITION_LINE.finditer(unfenced(header["prose"])):
+        lens, review_round, number = match.group("lens"), match.group("round"), match.group("n")
+        if lens not in header["lenses"] or (lens, review_round, number) in findings:
+            continue
+        stance = match.group("stance").lower()
+        label = match.group("severity")
+        regression = match.group("regression") is not None
+        if label is not None and label.lower() == "regression" and not regression:
+            # `F1 regression:` has no severity: the word is the marker, not a label.
+            label, regression = None, True
+        severity, mapped = normalize_severity(label)
+        line = match.group(0)
+        text, truncated = clean_text(line)
+        tag = f"R{review_round}:" if review_round else ""
+        findings[(lens, review_round, number)] = {
+            "id": f"disposition:{comment.get('id')}:{lens}:{tag}F{number}",
+            "source": {**source, "lens": lens, "review_source": header["review_source"]},
+            "path": None,
+            "line": None,
+            "source_severity": label,
+            "severity": severity,
+            "severity_mapped": mapped,
+            "addressed": stance_addressed(stance, severity,
+                                          known=label is not None and mapped, regression=regression),
+            "stance": stance,
+            "reviewed_head": header["head"],
+            "review_round": int(review_round) if review_round else None,
+            "guideline_citation": guideline_citation(line, citation_paths),
+            "text": text,
+            "text_truncated": truncated,
+            "url": comment.get("url"),
+        }
+    return header, list(findings.values())
 
 
 def pr_findings(pr: dict[str, Any], settings: Settings, citation_paths: list[str]) -> list[dict[str, Any]]:
@@ -146,7 +283,34 @@ def pr_findings(pr: dict[str, Any], settings: Settings, citation_paths: list[str
                 "review", review, source, path=None, line=None,
                 addressed="unevidenced", citation_paths=citation_paths,
             ))
+    findings.extend(panel_findings(pr, settings, citation_paths)[1])
     return findings
+
+
+def panel_findings(pr: dict[str, Any], settings: Settings,
+                   citation_paths: list[str]) -> tuple[list[str], list[dict[str, Any]]]:
+    """``(reviewed heads, findings)`` from the PR's trusted disposition comments.
+
+    The heads are distinct and in comment order: one per recorded round. A later
+    comment at the same head replaces an earlier one's findings for the same
+    ``<lens> [R<k>] F<n>``, because a correction is posted after what it corrects.
+    """
+    heads: list[str] = []
+    found: dict[tuple[str, str], dict[str, Any]] = {}
+    for comment in pr.get("issue_comments") or []:
+        source = _source(comment.get("author"), settings)
+        if source is None:
+            continue
+        header, findings = disposition_findings(comment, source, citation_paths)
+        if header is None:
+            continue
+        if header["head"] not in heads:
+            heads.append(header["head"])
+        for finding in findings:
+            key = (header["head"], finding["id"].split(":", 2)[2])
+            found.pop(key, None)
+            found[key] = finding
+    return heads, list(found.values())
 
 
 def _rank_key(entry: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -161,11 +325,66 @@ def derived(count: int, settings: Settings) -> dict[str, Any]:
     }
 
 
+ADDRESSED_STATES = ("addressed", "outdated", "unaddressed", "unevidenced")
+
+
+def _tally_key(finding: dict[str, Any]) -> str:
+    source = finding["source"]
+    if "lens" in source:
+        return f"lens:{source['lens']}"
+    return f"{source['kind']}:{normalize_login(source['login'])}"
+
+
+def reviewer_tally(findings: list[dict[str, Any]], rounds: list[dict[str, int]],
+                   settings: Settings) -> dict[str, Any]:
+    """Per-source precision and per-PR rounds over the whole window (#1157).
+
+    A lens finding carries a typed stance; a thread or review finding carries
+    only its addressed state, so its ``by_stance`` and ``refuted`` are null.
+    ``refuted`` counts ``dispute-evidence``: the author showed the finding wrong.
+    The flag is a report line and nothing more; no gate reads it.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for finding in findings:
+        grouped.setdefault(_tally_key(finding), []).append(finding)
+    sources = []
+    for key in sorted(grouped):
+        group = grouped[key]
+        typed = key.startswith("lens:")
+        by_stance = {s: sum(1 for f in group if f["stance"] == s) for s in STANCES} if typed else None
+        refuted = by_stance["dispute-evidence"] if by_stance is not None else None
+        sources.append({
+            "source": key,
+            "findings": len(group),
+            "by_addressed": {state: sum(1 for f in group if f["addressed"] == state) for state in ADDRESSED_STATES},
+            "by_stance": by_stance,
+            "refuted": refuted,
+            "refuted_flag": refuted is not None
+            and len(group) >= settings.refuted_flag_min_findings
+            and refuted * 100 >= settings.refuted_flag_percent * len(group),
+        })
+    return {
+        "refuted_flag_min_findings": settings.refuted_flag_min_findings,
+        "refuted_flag_percent": settings.refuted_flag_percent,
+        "sources": sources,
+        "rounds": rounds,
+    }
+
+
 def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) -> dict[str, Any]:
     run_id = raw["run_identity"]
     candidates = []
+    every_finding: list[dict[str, Any]] = []
+    rounds: list[dict[str, int]] = []
     for pr in raw.get("prs") or []:
+        heads, panel = panel_findings(pr, settings, citation_paths)
+        if heads:
+            # A round that leaves findings records no disposition comment, so the
+            # heads alone undercount; a line's R<k> tag names the round it came from.
+            tagged = max((f["review_round"] or 0 for f in panel), default=0)
+            rounds.append({"pr": pr["number"], "rounds": max(len(heads), tagged)})
         findings = pr_findings(pr, settings, citation_paths)
+        every_finding.extend(findings)
         if not findings:
             continue
         candidates.append({
@@ -206,6 +425,7 @@ def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) ->
         },
         **derived(len(kept), settings),
         "severity_limitations": limitations,
+        "reviewer_tally": reviewer_tally(every_finding, sorted(rounds, key=lambda r: r["pr"]), settings),
         "prs": kept,
     }
 
@@ -215,7 +435,7 @@ def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) ->
 VERIFIED_FIELDS = (
     "run_identity_digest", "window", "forge_repo", "protected_branch_head", "config_fingerprint",
     "batching", "input_cap", "findings_pr_count", "single_pass_recommended", "n_batches",
-    "window_start", "window_end", "severity_limitations",
+    "window_start", "window_end", "severity_limitations", "reviewer_tally",
 )
 
 

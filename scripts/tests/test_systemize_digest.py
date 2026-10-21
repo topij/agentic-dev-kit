@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -176,7 +177,7 @@ def test_verify_rejects_a_foreign_or_altered_header(settings) -> None:
 
 @pytest.mark.parametrize("field", [
     "id", "source", "path", "line", "source_severity", "severity", "severity_mapped",
-    "addressed", "guideline_citation", "url",
+    "addressed", "stance", "reviewed_head", "guideline_citation", "url",
 ])
 def test_verify_rejects_altered_or_missing_finding_evidence(settings, field) -> None:
     expected = normalize.build(_raw([_pr(1, ("🔴 Critical", False))], settings), settings, [])
@@ -232,3 +233,280 @@ def test_verify_rejects_boolean_counts_and_line_numbers(settings) -> None:
     candidate["findings_pr_count"] = True
     with pytest.raises(SystemizeError):
         normalize.verify(candidate, expected, "candidate")
+
+
+# --- fallback-panel dispositions (#772) and the reviewer tally (#1157) -----------
+
+SHA = "b" * 40
+LATER = "c" * 40
+
+
+def _disposition(head: str, prose: str, *, lenses: str = "adversarial, correctness",
+                 source: str = "fallback:panel") -> str:
+    """The comment `pr_watch.py --record-review --disposition` posts."""
+    return (f"<!-- pr-watch:disposition head={head} -->\n## Review disposition — {head[:7]}\n\n"
+            f"- reviewed head: `{head}`\n- review source: `{source}`\n- lenses: {lenses}\n\n"
+            f"{prose.strip()}\n")
+
+
+def _operator_settings(tmp_path: Path, **keys):
+    def edit(text: str) -> str:
+        text = text.replace("operator_logins: []", "operator_logins: [Operator]")
+        for key, value in keys.items():
+            text = text.replace("  pr_draft: false\n", f"  pr_draft: false\n  {key}: {value}\n")
+        return text
+    return load_settings(make_repo(tmp_path, config_edit=edit))
+
+
+def _panel_pr(number: int, *comments: tuple[int, str, str]) -> dict:
+    return {"number": number, "review_threads": [], "reviews": [], "issue_comments": [
+        {"id": cid, "author": author, "body": body, "url": f"https://x/c/{cid}"}
+        for cid, author, body in comments]}
+
+
+def test_the_parsed_header_is_the_one_pr_watch_writes() -> None:
+    """The header grammar is pinned to the engine that writes it, not restated."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("pr_watch_for_systemize", engine_dir(Path(__file__)) / "pr_watch.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    body = module.disposition_body(
+        {"head": SHA, "source": "fallback:panel", "lenses": ["adversarial", "correctness"]},
+        "adversarial F1 HIGH: accept — fixed in 1234567")
+    header = normalize.disposition_header(body)
+    assert header is not None
+    assert (header["head"], header["review_source"], header["lenses"]) == (
+        SHA, "fallback:panel", ["adversarial", "correctness"])
+
+
+def test_panel_dispositions_are_findings_with_lens_severity_stance_and_addressed_state(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    prose = """Round 1.
+
+- adversarial F1 HIGH: accept — fixed in 1234567
+- `correctness F1 LOW: dispute-evidence — scripts/x.py:12 already guards it`
+- correctness F2 high: dispute-concern — we think it is fine
+- adversarial F2 MEDIUM: dispute-concern — intentional
+"""
+    pr = _panel_pr(1, (10, "operator", _disposition(SHA, prose)))
+    found = {f["id"]: f for f in normalize.pr_findings(pr, settings, [])}
+    assert set(found) == {f"disposition:10:{k}" for k in (
+        "adversarial:F1", "correctness:F1", "correctness:F2", "adversarial:F2")}
+    first = found["disposition:10:adversarial:F1"]
+    assert first["source"] == {"kind": "operator", "login": "operator", "lens": "adversarial",
+                               "review_source": "fallback:panel"}
+    assert (first["source_severity"], first["severity"], first["stance"], first["addressed"],
+            first["reviewed_head"]) == ("HIGH", "high", "accept", "addressed", SHA)
+    assert found["disposition:10:correctness:F1"]["addressed"] == "addressed"
+    # A HIGH is never closed by dispute-concern; a MEDIUM is.
+    assert found["disposition:10:correctness:F2"]["addressed"] == "unaddressed"
+    assert found["disposition:10:adversarial:F2"]["addressed"] == "addressed"
+
+
+@pytest.mark.parametrize("line, label, severity, addressed", [
+    # Concern closes only a finding known to be below HIGH and not a regression.
+    ("adversarial F1 MEDIUM regression: dispute-concern — x", "MEDIUM", "normal", "unaddressed"),
+    ("adversarial F1 regression: dispute-concern — x", None, "normal", "unaddressed"),
+    ("adversarial F1: dispute-concern — x", None, "normal", "unaddressed"),
+    ("adversarial F1 HGH: dispute-concern — x", "HGH", "normal", "unaddressed"),
+    ("adversarial F1 P1: dispute-concern — x", "P1", "normal", "unaddressed"),
+    ("adversarial F1 MEDIUM: dispute-concern — x", "MEDIUM", "normal", "addressed"),
+    # The other stances close it whatever the label.
+    ("adversarial F1 HGH regression: dispute-evidence — a.py:1", "HGH", "normal", "addressed"),
+    ("adversarial F1: accept — fixed", None, "normal", "addressed"),
+])
+def test_concern_closes_only_a_finding_known_to_be_closable(tmp_path, line, label, severity, addressed) -> None:
+    settings = _operator_settings(tmp_path)
+    [found] = normalize.pr_findings(_panel_pr(1, (10, "operator", _disposition(SHA, line))), settings, [])
+    assert (found["source_severity"], found["severity"], found["addressed"]) == (label, severity, addressed)
+
+
+@pytest.mark.parametrize("author, body", [
+    # An untrusted author, however exact the comment.
+    ("someone", _disposition(SHA, "adversarial F1 HIGH: accept — x")),
+    # A trusted author's prose without the engine's header.
+    ("operator", "adversarial F1 HIGH: accept — x"),
+    # The marker alone, without the fixed header lines under it.
+    ("operator", f"<!-- pr-watch:disposition head={SHA} -->\nadversarial F1 HIGH: accept — x"),
+    # The header's two heads disagree.
+    ("operator", _disposition(SHA, "adversarial F1 HIGH: accept — x").replace(
+        f"reviewed head: `{SHA}`", f"reviewed head: `{LATER}`")),
+    # A quoted line is a quotation, not this round's disposition.
+    ("operator", _disposition(SHA, "> adversarial F1 HIGH: accept — x")),
+    # So is a line inside a fenced block, either fence.
+    ("operator", _disposition(SHA, "```text\nadversarial F1 HIGH: accept — x\n```")),
+    ("operator", _disposition(SHA, "~~~\nadversarial F1 HIGH: accept — x\n~~~")),
+    # An unclosed fence runs to the end of the comment.
+    ("operator", _disposition(SHA, "```\nadversarial F1 HIGH: accept — x")),
+    # A line with text after the fence characters does not close it.
+    ("operator", _disposition(SHA, "```\n``` text\nadversarial F1 HIGH: accept — x\n```")),
+    # A shorter run does not close a longer fence.
+    ("operator", _disposition(SHA, "````\n```\nadversarial F1 HIGH: accept — x\n````")),
+    # A fence opened behind a list marker.
+    ("operator", _disposition(SHA, "- ```\n  adversarial F1 HIGH: accept — x\n  ```")),
+    # An HTML comment is not rendered, so it is not a disposition either.
+    ("operator", _disposition(SHA, "<!--\nadversarial F1 HIGH: accept — x\n-->")),
+    # An unclosed one, like an unclosed fence, runs to the end of the comment.
+    ("operator", _disposition(SHA, "<!--\nadversarial F1 HIGH: accept — x")),
+    # An ordered-list marker opens a fence as a bullet does.
+    ("operator", _disposition(SHA, "1. ```\n   adversarial F1 HIGH: accept — x\n   ```")),
+    # A lens the header does not list.
+    ("operator", _disposition(SHA, "security F1 HIGH: accept — x")),
+    # Not a typed stance.
+    ("operator", _disposition(SHA, "adversarial F1 HIGH: fixed — x")),
+])
+def test_no_comment_is_panel_evidence_by_its_prose_alone(tmp_path, author, body) -> None:
+    settings = _operator_settings(tmp_path)
+    assert normalize.pr_findings(_panel_pr(1, (10, author, body)), settings, []) == []
+
+
+def test_an_empty_operator_list_trusts_no_disposition(settings) -> None:
+    pr = _panel_pr(1, (10, "operator", _disposition(SHA, "adversarial F1 HIGH: accept — x")))
+    assert normalize.pr_findings(pr, settings, []) == []
+
+
+def test_a_later_comment_at_the_same_head_corrects_an_earlier_one(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    pr = _panel_pr(
+        1,
+        (10, "operator", _disposition(SHA, "adversarial F1 HIGH: dispute-concern — no\nadversarial F2 LOW: accept — ok")),
+        (11, "operator", _disposition(SHA, "adversarial F1 HIGH: accept — fixed after all")),
+        (12, "operator", _disposition(LATER, "adversarial F1 LOW: accept — round two")),
+    )
+    found = {f["id"]: f["stance"] for f in normalize.pr_findings(pr, settings, [])}
+    assert found == {"disposition:10:adversarial:F2": "accept",
+                     "disposition:11:adversarial:F1": "accept",
+                     "disposition:12:adversarial:F1": "accept"}
+    assert normalize.panel_findings(pr, settings, [])[0] == [SHA, LATER]
+
+
+@pytest.mark.parametrize("prose", [
+    "```\nexample F1 HIGH: accept — x\n```\nadversarial F1 HIGH: accept — fixed",
+    # A comment opener inside a fence is code: it hides nothing after the fence.
+    "```\n<!--\n```\nadversarial F1 HIGH: accept — fixed\n-->",
+    # Four spaces of indentation make an indented code block, not a fence.
+    "Indented:\n\n    ```\nadversarial F1 HIGH: accept — fixed",
+    # Text after a closed comment on its own line is read.
+    "<!-- note --> adversarial F1 HIGH: accept — fixed",
+])
+def test_a_line_outside_every_fence_and_comment_is_read(tmp_path, prose) -> None:
+    settings = _operator_settings(tmp_path)
+    findings = normalize.pr_findings(_panel_pr(1, (10, "operator", _disposition(SHA, prose))), settings, [])
+    assert [f["id"] for f in findings] == ["disposition:10:adversarial:F1"]
+
+
+def test_the_marker_and_stance_are_read_in_any_case(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    body = _disposition(SHA, "adversarial F1 MEDIUM Regression: Dispute-Concern — x")
+    [found] = normalize.pr_findings(_panel_pr(1, (10, "operator", body)), settings, [])
+    assert (found["stance"], found["addressed"]) == ("dispute-concern", "unaddressed")
+
+
+def test_round_tags_keep_each_round_and_count_it(tmp_path) -> None:
+    """One comment at the final head carries every round, and a lens restarts at F1."""
+    settings = _operator_settings(tmp_path)
+    prose = ("adversarial R1 F1 HIGH: accept — fixed in 1234567\n"
+             "adversarial R2 F1 LOW: dispute-evidence — a.py:3\n"
+             "adversarial R3 F1 LOW: accept — fixed")
+    pr = _panel_pr(1, (10, "operator", _disposition(SHA, prose)))
+    found = {f["id"]: f["review_round"] for f in normalize.pr_findings(pr, settings, [])}
+    assert found == {"disposition:10:adversarial:R1:F1": 1, "disposition:10:adversarial:R2:F1": 2,
+                     "disposition:10:adversarial:R3:F1": 3}
+    digest = normalize.build(_raw([pr], settings), settings, [])
+    assert digest["reviewer_tally"]["rounds"] == [{"pr": 1, "rounds": 3}]
+
+
+def test_a_repeated_line_in_one_comment_counts_once(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    body = _disposition(SHA, "adversarial F1 HIGH: accept — fixed\nadversarial F1 LOW: dispute-concern — dup")
+    findings = normalize.pr_findings(_panel_pr(1, (10, "operator", body)), settings, [])
+    assert [(f["source_severity"], f["stance"]) for f in findings] == [("HIGH", "accept")]
+
+
+def test_a_panel_only_pr_reaches_the_digest(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    digest = normalize.build(_raw([
+        _panel_pr(1, (10, "operator", _disposition(SHA, "adversarial F1 HIGH: accept — fixed"))),
+        _panel_pr(2, (20, "operator", _disposition(SHA, "No findings."))),
+    ], settings), settings, [])
+    assert [p["number"] for p in digest["prs"]] == [1]
+    assert digest["prs"][0]["max_severity"] == "high"
+    # A clean round still counts as a round.
+    assert digest["reviewer_tally"]["rounds"] == [{"pr": 1, "rounds": 1}, {"pr": 2, "rounds": 1}]
+
+
+def test_the_tally_counts_each_source_over_the_uncapped_window(tmp_path) -> None:
+    settings = _operator_settings(tmp_path, refuted_flag_min_findings=2, refuted_flag_percent=50)
+    noisy = "adversarial F1 LOW: dispute-evidence — a:1\nadversarial F2 LOW: dispute-evidence — a:2\n" \
+            "correctness F1 HIGH: accept — fixed\ncorrectness F2 LOW: dispute-evidence — c:3"
+    prs = [
+        _panel_pr(1, (10, "operator", _disposition(SHA, noisy)),
+                  (11, "operator", _disposition(LATER, "adversarial F1 LOW: accept — fixed"))),
+        _pr(2, ("**High Severity**", True), ("_🟡 Minor_", False)),
+    ]
+    # One PR survives the cap; the tally still counts both.
+    digest = normalize.build(_raw(prs, settings), replace(settings, max_findings_prs_per_run=1), [])
+    assert len(digest["prs"]) == 1 and digest["input_cap"]["omitted_prs"]
+    tally = digest["reviewer_tally"]
+    by_source = {s["source"]: s for s in tally["sources"]}
+    assert list(by_source) == ["configured-reviewer:coderabbitai", "lens:adversarial", "lens:correctness"]
+    adversarial = by_source["lens:adversarial"]
+    assert adversarial["findings"] == 3
+    assert adversarial["by_stance"] == {"accept": 1, "dispute-evidence": 2, "dispute-concern": 0}
+    assert adversarial["refuted"] == 2 and adversarial["refuted_flag"] is True
+    correctness = by_source["lens:correctness"]
+    assert correctness["refuted"] == 1 and correctness["refuted_flag"] is True  # 1 of 2 is 50%
+    bot = by_source["configured-reviewer:coderabbitai"]
+    assert bot["by_stance"] is None and bot["refuted"] is None and bot["refuted_flag"] is False
+    assert bot["by_addressed"] == {"addressed": 1, "outdated": 0, "unaddressed": 1, "unevidenced": 0}
+    assert tally["rounds"] == [{"pr": 1, "rounds": 2}]
+    assert (tally["refuted_flag_min_findings"], tally["refuted_flag_percent"]) == (2, 50)
+
+
+def test_the_flag_needs_its_percent(tmp_path) -> None:
+    settings = _operator_settings(tmp_path, refuted_flag_min_findings=2, refuted_flag_percent=50)
+    prose = "\n".join(f"adversarial F{n} LOW: {stance} — a:{n}" for n, stance in
+                      enumerate(["dispute-evidence", "accept", "accept"], start=1))
+    tally = normalize.build(_raw([_panel_pr(1, (10, "operator", _disposition(SHA, prose)))], settings),
+                            settings, [])["reviewer_tally"]
+    assert tally["sources"][0]["refuted"] == 1 and tally["sources"][0]["refuted_flag"] is False
+
+
+def test_the_flag_needs_its_minimum_sample(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)  # the defaults: 5 findings, 50 percent
+    prose = "adversarial F1 LOW: dispute-evidence — a:1"
+    tally = normalize.build(_raw([_panel_pr(1, (10, "operator", _disposition(SHA, prose)))], settings),
+                            settings, [])["reviewer_tally"]
+    assert tally["sources"][0]["refuted"] == 1 and tally["sources"][0]["refuted_flag"] is False
+    assert (tally["refuted_flag_min_findings"], tally["refuted_flag_percent"]) == (5, 50)
+
+
+@pytest.mark.parametrize("key, value", [
+    ("refuted_flag_percent", 101), ("refuted_flag_percent", 0), ("refuted_flag_min_findings", 0),
+    ("refuted_flag_min_findings", "true"),
+])
+def test_the_flag_settings_are_validated(tmp_path, key, value) -> None:
+    with pytest.raises(SystemizeError, match=key):
+        _operator_settings(tmp_path, **{key: value})
+
+
+def test_verify_recomputes_panel_findings_and_the_tally(tmp_path) -> None:
+    settings = _operator_settings(tmp_path)
+    expected = normalize.build(_raw([
+        _panel_pr(1, (10, "operator", _disposition(SHA, "adversarial F1 HIGH: accept — fixed")))],
+        settings), settings, [])
+    normalize.verify(deepcopy(expected), expected, "same")
+    dropped = deepcopy(expected)
+    dropped["prs"] = []
+    with pytest.raises(SystemizeError, match="finding evidence"):
+        normalize.verify(dropped, expected, "candidate")
+    for field in ("stance", "reviewed_head", "review_round"):
+        altered = deepcopy(expected)
+        altered["prs"][0]["findings"][0][field] = "altered"
+        with pytest.raises(SystemizeError, match="finding evidence"):
+            normalize.verify(altered, expected, "candidate")
+    tallied = deepcopy(expected)
+    tallied["reviewer_tally"]["sources"][0]["refuted"] = 1
+    with pytest.raises(SystemizeError, match="reviewer_tally"):
+        normalize.verify(tallied, expected, "candidate")
