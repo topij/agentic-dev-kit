@@ -1,0 +1,104 @@
+# The reviewer eval's case set (#1156). Read by scripts/review_eval.py and
+# described in docs/agentic-dev-kit/review-eval/reviewer-eval.md.
+#
+# A bug case is a pull request's diff (base..head, both full shas in this
+# repository's history) that a review should have flagged, with the finding
+# known from its source issue. A lens hits the case when its report cites a
+# path:line inside one of the findings' ranges. A clean case is a diff no known
+# defect came from: every finding a lens reports there is a candidate false
+# alarm, which the operator reads before counting it.
+#
+# `confirmed` names who checked the case against its source and when. A case
+# nobody has confirmed is scored and reported apart from the confirmed set.
+
+schema: review-eval-cases-v1
+
+bug_cases:
+  - id: pr16-upgrade-mutates-before-branching
+    base: 3d8e2c2af3b5f68482b97d044ce467c1cd6cf4cb
+    head: e6798374561669d6924d6cbc12562ff1aab8b326
+    source: "#19"
+    evidence: >-
+      PR #16 merged on a fallback receipt recorded while CodeRabbit was queued;
+      its review landed after the merge with four valid findings, fixed in
+      #17 (f79bbb5). Findings 1 and 2 of #17 are the two logic bugs #19 names.
+    findings:
+      - path: .claude/commands/upgrade.md
+        lines: [64, 86]
+        description: >-
+          Step 2 runs ./init.sh, which rewrites config, installs hooks and
+          renders docs, before Step 3 creates the upgrade branch, so the
+          migration lands on whatever branch the operator is on.
+      - path: .claude/commands/upgrade.md
+        lines: [64, 70]
+        description: >-
+          Step 2 runs the target repository's existing init.sh rather than the
+          fetched kit's, so an upgrade reports success while applying none of
+          the new migrations.
+    confirmed: "#17 (f79bbb5) changes these lines for findings 1 and 2; read on 2026-10-21"
+
+  - id: pr-watch-check-description-outage-invisible
+    base: 8a4b59656d06215072b98a6335cc840cc65442e4
+    head: 6cb59e812c785ee2f9bc4f430aa4302f4deefb9c
+    source: "#23"
+    evidence: >-
+      This commit added review_unavailable_reason, which reads outage markers
+      from comment bodies only, beside a check summary that excludes the
+      review bot's own check as informational. On #22 CodeRabbit reported its
+      rate limit only as that check's description, and pr_watch reported the
+      pull request converged and clean. Fixed by #25 (cd15d3b).
+    findings:
+      - path: scripts/pr_watch.py
+        lines: [239, 280]
+        description: >-
+          The configured review bot's check is excluded from the blocking tally
+          as informational, so its description is never read.
+      - path: scripts/pr_watch.py
+        lines: [320, 324]
+        description: >-
+          Unavailability is detected in comment bodies only; an outage the bot
+          reports only as a check description reads as a clean review.
+    confirmed: "lines read at 6cb59e8 on 2026-10-21; first commit defining review_unavailable_reason"
+
+  - id: pr25-forgeable-check-cancels-pending-review
+    base: f0f41cf1f8f93cfab1cd8052c0ef1d99e1510e87
+    head: cd15d3bbd1708fb6b01e7a8d8a06d0312850c76a
+    source: "#95"
+    evidence: >-
+      PR #25 made a configured bot's check description load-bearing: an
+      unavailable-marker hit on a check whose name matches the bot cancels the
+      pending-review block. The match is an unanchored substring of a check
+      name, which a same-repo pull request's own workflow can create, so a
+      check named coderabbit-shim opens the gate while the real review is
+      pending. Found later by a lens on #91; fixed by #412 (247d2c8).
+    findings:
+      - path: scripts/pr_watch.py
+        lines: [782, 810]
+        description: >-
+          _match_bot matches check names as an unanchored substring on the
+          stated premise that check names are the repository's to control,
+          which a pull request's own workflow defeats.
+      - path: scripts/pr_watch.py
+        lines: [989, 1007]
+        description: >-
+          A check-surface unavailable marker on any check whose name merely
+          contains the bot key cancels the pending block for that bot.
+    confirmed: "lines read at cd15d3b on 2026-10-21; #412's message names this path as #95's"
+
+clean_cases:
+  - id: pr739-panel-doctrine-dependency-test
+    base: e6cd546bf2669e231e51d542fb21eb4e498c12f9
+    head: d094a5f63916e2fa99ad9a400a58661bddd8c767
+    source: "#739"
+    evidence: >-
+      A test-only change. No later commit message on main names #739.
+    confirmed: ""
+
+  - id: pr559-upgrade-refresh-destinations
+    base: 4739f01684e8108916e192f1f550e078e84e8aac
+    head: 8efdc9d4dadaf84d94776a784576545cb82db32a
+    source: "#559"
+    evidence: >-
+      A two-file doctrine fix to upgrade.md. No later commit message on main
+      names #559.
+    confirmed: ""

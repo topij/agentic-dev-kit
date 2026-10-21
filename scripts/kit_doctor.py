@@ -300,6 +300,10 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # disposable copy of the kit and writes a stamped observation record. Kit
     # maintenance like the verifier above, so it ships nowhere.
     ("scripts/runtime_smoke.py", REPO_ONLY_ROLE),
+    # The reviewer eval (#1156) scores lens changes against cases whose shas live
+    # in this repository's history, so neither it nor its case set means anything
+    # in an adopter's tree.
+    ("scripts/review_eval.py", REPO_ONLY_ROLE),
     # Assembles panel launch prompts by QUOTING the contract out of
     # docs/agentic-dev-kit/fallback-review-panel.md at run time (#214). That
     # coupling is why it is tracked beside the doctrine rather than left
@@ -386,6 +390,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_make_lint.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_parity_matrix.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_smoke.py", REPO_ONLY_ROLE),
+    ("scripts/tests/test_review_eval.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
     ("scripts/tests/test_adoption_fixtures.py", REPO_ONLY_ROLE),
@@ -475,6 +480,8 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/agentic-dev-kit/ticket-execution-environment.md", "doctrine"),
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
     ("docs/agentic-dev-kit/live-validation-evidence.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/review-eval/reviewer-eval.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/review-eval/cases.yaml", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an

@@ -860,6 +860,35 @@ def test_last_reviewed_must_be_a_strict_ancestor_of_the_head(repo):
     assert out.returncode == 2 and "strict ancestor" in out.stderr
 
 
+def test_preflight_rev_runs_the_checker_committed_at_another_revision(repo):
+    """#1156: the reviewer eval renders prompts for historical heads that predate the
+    preflight checker, so it names the revision whose committed checker runs."""
+    base, _ = _revs(repo)
+    checker = repo / "scripts/check_record_prose.py"
+    source = checker.read_text()
+    _git(repo, "rm", "-q", str(checker))
+    _git(repo, "commit", "-qm", "drop the checker")
+    head = _git(repo, "rev-parse", "HEAD")
+    checker.write_text(source)  # the cockpit's own checkout still carries it
+    without = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert without.returncode == 2 and "committed preflight source missing" in without.stderr
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--preflight-rev", base)
+    assert out.returncode == 0, out.stderr
+    assert _git(repo, "rev-parse", f"{base}:scripts/check_record_prose.py") in out.stdout
+
+
+def test_preflight_rev_is_refused_where_no_preflight_renders(repo):
+    base, head = _revs(repo)
+    definition = _agent_definition(repo, "--lens", "adversarial", "--preflight-rev", base)
+    assert definition.returncode == 2 and "--preflight-rev" in definition.stderr
+    report = repo.parent / "lens-report.md"
+    report.write_text("F1 HIGH: a.txt:1 wrong\n")
+    verifier = _run(repo, "--verifier", "--head", head, "--base", base,
+                    "--lens-report", f"adversarial={report}", "--preflight-rev", base)
+    assert verifier.returncode == 2 and "--preflight-rev" in verifier.stderr
+
+
 def test_the_low_rule_renders_only_with_a_repair_boundary(repo):
     """A record-prose or later-round delta has no LOW repair, so the LOW dispute route
     must not reach it; a LOW delta still gets it."""
