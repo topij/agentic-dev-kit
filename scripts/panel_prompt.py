@@ -173,6 +173,8 @@ DELTA_DRAWS: tuple[tuple[str, str], ...] = (
     ("--draw-safety-critical", "safety-critical"),
 )
 REPAIR_VERDICT = "repair"
+# What a verifier's --scratch path may contain; see build.
+_SAFE_PATH = re.compile(r"[A-Za-z0-9._/-]+")
 
 
 class PromptError(Exception):
@@ -838,7 +840,8 @@ def render_verifier(
     disagree without a citation made review worse than one reviewer. The grammar is
     in the quoted contract, so this renders it and adds no second copy. No flag text
     reaches it: ``build`` refuses every free-text flag, so there is no branch line and
-    no verify line, and the runtime selects a fixed carrier string or is refused.
+    no verify line, the runtime selects a fixed carrier string or is refused, and the
+    scratch path is held to a charset that cannot leave its code span.
     """
     compute_line = (
         "\nRun at: the cockpit's choice. No kit key declares verifier compute yet; "
@@ -1132,7 +1135,8 @@ def build(args: argparse.Namespace) -> str:
     # validator on a rendered free-text flag incomplete, so the verifier renders no
     # caller text at all rather than validating it: --verify-command and --branch are
     # refused (it checks against the head sha, and re-runs what the reports name), and
-    # --runtime must be a key of VERIFIER_CARRIER, so only fixed strings render.
+    # --runtime must be a key of VERIFIER_CARRIER, so only fixed strings render. The
+    # one caller value still rendered, the scratch path, is held to _SAFE_PATH below.
     if args.verifier:
         stray = [
             flag
@@ -1199,6 +1203,16 @@ def build(args: argparse.Namespace) -> str:
     if o_scratch is None:
         raise PromptError("a prompt requires --scratch: allocate a review round with sweep_scratch.py --create-review-round, then build a detached lens tree inside it")
     _require_scratch(o_scratch, head)
+    # The scratch path renders verbatim, and the verifier's prompt promises no flag
+    # carries author text into it: round 3 on #1164 broke out of the path's code span
+    # with a backtick and a newline in the tree's directory name. A path that keeps to
+    # this set cannot close the span or start a line.
+    if args.verifier and not _SAFE_PATH.fullmatch(o_scratch):
+        raise PromptError(
+            f"--scratch {o_scratch!r}: with --verifier the path may hold only letters, "
+            "digits, '.', '_', '-' and '/', because it renders verbatim in the verifier's "
+            "prompt"
+        )
     try:
         scratch_settings = sweep_scratch.load_settings(root / "config" / "dev-model.yaml", root=root)
         sweep_scratch.require_review_scratch(o_scratch, head, scratch_settings, root)

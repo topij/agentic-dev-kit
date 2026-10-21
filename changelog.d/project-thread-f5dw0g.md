@@ -6,7 +6,8 @@ verifier's prompt: the lens reports quoted verbatim under the doctrine's new *Th
 contract the verifier gets* (#1155, #613). With `--verifier` the command exits 2 on
 `--lens`, the draw flags, `--repair-boundary`, `--carry-forward`,
 `--prior-dispositions`, `--verify-command` or `--branch`, on a `--runtime` other than
-`claude` or `codex`, and on a report that is missing, empty, named twice or
+`claude` or `codex`, on a `--scratch` path holding anything but letters, digits, `.`,
+`_`, `-` and `/`, and on a report that is missing, empty, named twice or
 attributed to a lens outside `review.fallback_panel.lenses`. `--lens-report` without
 `--verifier` exits 2, and `--agent-definition` refuses both new flags.
 
