@@ -44,9 +44,9 @@ This assembles the prompt. It does not launch lenses, build worktrees, or parse 
 
 With ``--verifier`` it assembles the verifier's prompt instead (#1155): the lens reports
 named by ``--lens-report``, quoted verbatim and not parsed, under the verifier's own
-contract from the doctrine. No free-text channel reaches it: every draw flag,
-``--carry-forward``, ``--prior-dispositions`` and ``--verify-command`` is refused with it,
-and ``--branch`` must be a valid branch name.
+contract from the doctrine. No flag carries author text into it: every draw flag,
+``--carry-forward``, ``--prior-dispositions``, ``--verify-command`` and ``--branch`` is
+refused with it, and ``--runtime`` must name a runtime it knows.
 
 It also renders, with ``--agent-definition``, the Claude Code agent definition that
 makes ``review.fallback_panel.lens_compute.claude`` mechanical (see
@@ -286,14 +286,6 @@ def resolve_branch(root: Path, override: str | None, head: str) -> str:
                 "--branch HEAD names a placeholder, not a branch, and reproduces exactly "
                 "the render this function refuses on the ambient path. git does not allow "
                 "a branch by that name; pass the real one."
-            )
-        # The override renders verbatim, so free text with line breaks in it would
-        # read as instructions in the prompt (#1155 round 1). A real branch name
-        # cannot carry whitespace, so git's own check refuses nothing valid.
-        if not _run_ok(root, "check-ref-format", "--branch", override):
-            raise PromptError(
-                f"--branch {override!r} is not a valid branch name "
-                "(`git check-ref-format --branch` refuses it)"
             )
         return override
     name = _git(root, "rev-parse", "--abbrev-ref", "HEAD")
@@ -834,34 +826,26 @@ def render_verifier(
     contract_text: str,
     item_names: list[str],
     repo_slug: str,
-    branch: str,
     reports: list[tuple[str, str]],
     runtime: str = "claude",
     scratch: str | None = None,
     pr: int | None,
-    verify_command: str | None,
     base_from_remote: bool,
-    branch_from_checkout: bool = True,
 ) -> str:
-    """The verifier's prompt: the findings and the diff, and no author free text.
+    """The verifier's prompt: the findings and the diff, and no flag carrying author text.
 
     #613 records why the shape matters more than the step: a critic allowed to
     disagree without a citation made review worse than one reviewer. The grammar is
-    in the quoted contract, so this renders it and adds no second copy. No author
-    channel exists here, by construction: ``build`` refuses every framing flag.
+    in the quoted contract, so this renders it and adds no second copy. No flag text
+    reaches it: ``build`` refuses every free-text flag, so there is no branch line and
+    no verify line, and the runtime selects a fixed carrier string or is refused.
     """
-    carrier = VERIFIER_CARRIER.get(runtime)
     compute_line = (
-        f"\nRun at: the cockpit's choice. No kit key declares verifier compute yet; "
-        f"{carrier}.\n"
-        if carrier is not None
-        else f"\nRun at: the cockpit's choice. Runtime {runtime!r} has no kit-known "
-        "carrier for verifier compute.\n"
+        "\nRun at: the cockpit's choice. No kit key declares verifier compute yet; "
+        f"{VERIFIER_CARRIER[runtime]}.\n"
     )
-    branch_provenance, base_provenance, verify = _provenance(
-        branch_from_checkout=branch_from_checkout,
-        base_from_remote=base_from_remote,
-        verify_command=verify_command,
+    _, base_provenance, _ = _provenance(
+        branch_from_checkout=True, base_from_remote=base_from_remote, verify_command=None
     )
     pr_line = "" if pr is None else f"- **PR:** #{pr}\n"
     blocks = []
@@ -877,7 +861,6 @@ and you did NOT write the findings below.
 ## What you are checking
 
 - **Repo:** {repo_slug}
-- **Branch:** {branch}{branch_provenance}
 {pr_line}- **Head sha under review:** `{head}`
 - **Base:** `{base}` — {base_provenance}
 {_tree_block(scratch, "Re-run, don't trust", "role and revision (`verifier-<short-sha>`)")}
@@ -889,7 +872,7 @@ git show {head}:<path>
 ```
 
 Diffstat at assembly time: {diffstat}
-{verify}
+
 ## The lens reports
 
 Each report below is quoted verbatim from a file the cockpit named as that lens's
@@ -1145,9 +1128,11 @@ def build(args: argparse.Namespace) -> str:
     o_prior = _override("--prior-dispositions", args.prior_dispositions)
     # The verifier audits the lenses' findings and gets no author free text about
     # them (#1155): every free-text channel a lens prompt has is refused here, and a
-    # lens name with it, since the verifier is not a lens. --verify-command is one of
-    # them, since it renders verbatim; the verifier re-runs the commands the reports
-    # name. --branch stays, and resolve_branch holds it to a valid branch name.
+    # lens name with it, since the verifier is not a lens. Two #1164 rounds found a
+    # validator on a rendered free-text flag incomplete, so the verifier renders no
+    # caller text at all rather than validating it: --verify-command and --branch are
+    # refused (it checks against the head sha, and re-runs what the reports name), and
+    # --runtime must be a key of VERIFIER_CARRIER, so only fixed strings render.
     if args.verifier:
         stray = [
             flag
@@ -1160,9 +1145,15 @@ def build(args: argparse.Namespace) -> str:
                 ("--draw-safety-critical", args.draw_safety_critical),
                 ("--repair-boundary", args.repair_boundary),
                 ("--verify-command", args.verify_command),
+                ("--branch", args.branch),
             )
             if value is not None
         ]
+        if args.runtime not in VERIFIER_CARRIER:
+            raise PromptError(
+                f"--verifier needs --runtime {' or '.join(sorted(VERIFIER_CARRIER))}, not "
+                f"{args.runtime!r}: the verifier's prompt renders only fixed text"
+            )
         if stray:
             raise PromptError(
                 f"--verifier takes no lens or author framing flags; drop {', '.join(stray)}. "
@@ -1213,7 +1204,7 @@ def build(args: argparse.Namespace) -> str:
         sweep_scratch.require_review_scratch(o_scratch, head, scratch_settings, root)
     except (sweep_scratch.ConfigError, OSError, ValueError) as exc:
         raise PromptError(f"--scratch {o_scratch}: {exc}; allocate a fresh review round under scratch.roots for {head}") from exc
-    branch = resolve_branch(root, o_branch, head)
+    branch = None if args.verifier else resolve_branch(root, o_branch, head)
     base_branch = o_base_branch or get(config, "vcs.protected_branch", "main")
     # These two must agree, or the provenance label describes the wrong path.
     base_from_remote = o_base is None
@@ -1239,14 +1230,11 @@ def build(args: argparse.Namespace) -> str:
             contract_text=section,
             item_names=names,
             repo_slug=slug,
-            branch=branch,
             reports=reports,
             runtime=o_runtime,
             scratch=o_scratch,
             pr=args.pr,
-            verify_command=o_verify,
             base_from_remote=base_from_remote,
-            branch_from_checkout=o_branch is None,
         )
 
     section, names = contract(root / DOCTRINE)

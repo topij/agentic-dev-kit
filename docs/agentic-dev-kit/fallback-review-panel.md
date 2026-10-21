@@ -834,10 +834,12 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
 
    The prompt quotes *The contract the verifier gets* from this file and carries the
    reports verbatim. It refuses `--lens`, the draw flags, `--repair-boundary`,
-   `--carry-forward`, `--prior-dispositions` and `--verify-command`, and holds
-   `--branch` to a valid branch name, so no free text from the author reaches the
-   verifier. Nothing checks that the files you name are this round's reports, or all
-   of them: naming every lens that ran is yours.
+   `--carry-forward`, `--prior-dispositions`, `--verify-command` and `--branch`, and
+   takes only `--runtime claude` or `codex`, so no flag carries author text to the
+   verifier. That is all it promises: the lens reports themselves are quoted
+   verbatim, and the scratch path is rendered as the tree it verified. Nothing checks
+   that the files you name are this round's reports, or all of them: naming every
+   lens that ran is yours.
 4. Launch it isolated, the same way you launch a lens: a fresh-context subagent on
    Claude Code, `codex exec` on Codex. It is not a lens, so do not launch it as a lens's
    agent definition: those definitions tell the agent it is that lens.
