@@ -1,10 +1,10 @@
 ## Review convergence: prior dispositions, bug classes and pre-existing findings
 
 ADDED (engine CLI surface): `panel_prompt.py --prior-dispositions <link>` renders a
-one-line pointer to where earlier rounds' findings and dispositions are posted, under
-its own heading; the lens reads it after its own pass (#1153, #463). A value with more
-than one line exits 2, and `--agent-definition` refuses the flag like every other
-prompt flag. Pass it on every re-run's prompt; a first pass needs nothing.
+pointer to where earlier rounds' findings and dispositions are posted, under its own
+heading; the lens reads it after its own pass (#1153, #463). The value must be one
+`https://` link with no whitespace, or the command exits 2, and `--agent-definition`
+refuses the flag like every other prompt flag. Pass it on every re-run's prompt; a first pass needs nothing.
 
 CHANGED (gate semantics): the lens contract in `fallback-review-panel.md` gains
 **Name the bug class**, **Classify against the base**, **Expect the remediation to

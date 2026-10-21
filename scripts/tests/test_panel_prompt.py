@@ -518,7 +518,7 @@ def test_prior_dispositions_render_as_a_pointer_read_after_the_pass(repo):
 
 
 @pytest.mark.parametrize("sep", ["\n", "\r", "\x0b", "\x0c", "\x1c", "\x85", "\u2028", " "])
-def test_prior_dispositions_refuse_anything_but_one_token(repo, sep):
+def test_prior_dispositions_refuse_anything_but_one_link(repo, sep):
     """Findings restated in the prompt frame the pass, which #459 measured. Every
     Unicode line break is refused, not only CR and LF, and so is a space, which any
     one-line summary carries. A whitespace-free token is still not proven a link;
@@ -530,9 +530,41 @@ def test_prior_dispositions_refuse_anything_but_one_token(repo, sep):
     assert "--prior-dispositions" in out.stderr and "#463" in out.stderr
 
 
+@pytest.mark.parametrize("value", [
+    "javascript:alert(1)", "../../etc/passwd", "http://example.test/pr/7",
+    "F1:the-guard-is-wrong", "\u200b",
+])
+def test_prior_dispositions_refuse_anything_but_an_https_link(repo, value):
+    """A lens is told to open what this names, so whitespace-free is not enough:
+    a non-link token renders as a target the lens would follow."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--prior-dispositions", value)
+    assert out.returncode == 2, out.stdout[:200]
+    assert "https://" in out.stderr
+
+
+def test_prior_dispositions_follow_the_coverage_notes_and_the_draws(repo):
+    """The pointer is the last thing before the contract, after what the pass is
+    aimed with, so a lens meets it as a closing instruction, not as an aim."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--carry-forward", "Round 1 covered the guards.", *DRAWS,
+               "--prior-dispositions", "https://example.test/pr/7#c1")
+    assert out.returncode == 0, out.stderr
+    text = out.stdout
+    order = [text.index(h) for h in (
+        "## What prior rounds have and have not covered",
+        "## The author's stated draws",
+        "## Where earlier rounds' dispositions are",
+        "## The contract every lens gets",
+    )]
+    assert order == sorted(order)
+
+
 def test_the_contract_carries_the_convergence_items(repo):
-    """The four items #1153, #1154 and #211 added reach a lens through the quoted
-    contract, not a second copy in the script. This pins that each arrives by name;
+    """The four items #1153, #1154, #211 and #463 asked for reach a lens through the
+    quoted contract, not a second copy in the script. This pins that each arrives by name;
     their wording is the doctrine's, quoted verbatim by the contract tests above."""
     base, head = _revs(repo)
     out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b")

@@ -684,7 +684,8 @@ author re-reading their own diff. **Cite them by name, never by number.**
    single-lens form. Render every re-run's prompt with
    `panel_prompt.py --prior-dispositions <link>`, naming where step 5's
    dispositions are posted, so **No repeats** has something to read. Give a
-   link, never the findings themselves: the flag takes one line, and the prompt
+   link, never the findings themselves: the flag takes one `https://` link with no
+   whitespace, and the prompt
    renders it as a pointer the lens reads after its own pass.
 7. Record the receipt with the lenses that actually ran. The panel:
 
@@ -1082,8 +1083,8 @@ behaviour-containing delta (the companion has the dropped-caveat
 measurement).
 
 **After the second full pass, a standard pull request's later rounds take the
-delta pass at any severity.** `#1153` asked for this decision and the operator
-made it on 2026-10-21, after a team running agent reviewers on agent authors
+delta pass at any severity.** `#1153` asked for this decision; the operator made
+it on 2026-10-21, as a comment on that issue records, after a team running agent reviewers on agent authors
 reported that switching to diff-only re-review after its opening passes cut its
 long review chains. Two is the kit's declared point for that switch. It
 narrows the paragraph above, which still governs until two full passes have
@@ -1099,7 +1100,8 @@ run on the pull request, and it applies only while all of these hold:
   safety-critical boundary. A disputed boundary is handled as above, and the
   full pass is owed.
 
-The pass is the single-lens delta form: one configured lens over
+The pass is the single-lens delta form: the lens *How many lenses* fixes for
+the pull request, over
 `git diff <last-reviewed-sha>...<head>` and its commit messages, with the
 callers, invariants and tests needed to judge that diff, and the full diff
 still in scope. Render it with `--prior-dispositions` like any re-run; **Expect
