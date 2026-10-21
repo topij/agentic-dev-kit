@@ -359,6 +359,14 @@ hand. Fresh installs get it.
 **A lens does not need the judgment tier.** The measurement, and two cautions
 before you copy its numbers, are in the companion.
 
+**Where a reviewer eval exists, a change to `lens_compute` or to a lens's `focus`
+carries its score.** The kit's own repository keeps one, which is not installed,
+because its cases are shas in the kit's history. There, run it on both sides of the
+change, under each runtime whose key or lens it touches, and put both results in the
+pull request, each stamped with the runtime, the lens command, the kit revision and the
+date. Keep the change only when confirmed hits hold or rise and candidate false alarms,
+read, do not rise. The score covers the case set and nothing outside it (`#1156`).
+
 ## The contract every lens gets
 
 These are why the panel works. Drop any of them and it degrades toward the
@@ -804,8 +812,9 @@ regression**). A false positive costs a fix round, and with an agent author ever
 accepted nit is a commit and another review (`#1155`).
 
 **It is optional until it is measured.** Whether it improves the round is the
-reviewer eval's question (`#1156`), measured on the same cases with and without it.
-Until that lands, each round's cockpit chooses whether to run it, and a round that
+reviewer eval's question (`#1156`), measured on the same cases with and without it. The
+eval runs lenses only so far, so that comparison is still owed. Until it is made, each
+round's cockpit chooses whether to run it, and a round that
 skips it is disposed of exactly as before. The evidence for running it at all is one
 workshop paper (arXiv 2608.18167, recorded on `#613`) and a team report of the same
 practice (*How the Claude Code team does code review*, 2026-10-15), not a measurement

@@ -860,6 +860,46 @@ def test_last_reviewed_must_be_a_strict_ancestor_of_the_head(repo):
     assert out.returncode == 2 and "strict ancestor" in out.stderr
 
 
+def test_preflight_rev_runs_the_checker_committed_at_another_revision(repo):
+    """#1156: the reviewer eval renders prompts for historical heads that predate the
+    preflight checker, so it names the revision whose committed checker runs."""
+    base, candidate = _revs(repo)
+    plain = _run(repo, "--lens", "adversarial", "--head", candidate, "--base", base, "--branch", "b")
+    assert plain.returncode == 0, plain.stderr
+    checker = repo / "scripts/check_record_prose.py"
+    source = checker.read_text()
+    _git(repo, "rm", "-q", str(checker))
+    _git(repo, "commit", "-qm", "drop the checker")
+    head = _git(repo, "rev-parse", "HEAD")
+    checker.write_text(source)  # the cockpit's own checkout still carries it
+    without = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert without.returncode == 2 and "committed preflight source missing" in without.stderr
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--preflight-rev", base)
+    assert out.returncode == 0, out.stderr
+    assert _git(repo, "rev-parse", f"{base}:scripts/check_record_prose.py") in out.stdout
+    # The prompt says the pin is not the candidate's, since the doctrine says it is.
+    assert f"pins the checker committed at `{base}`" in out.stdout
+    assert "pins the checker committed at" not in plain.stdout
+    # A symbolic name is resolved, so the pin cannot move with the ref.
+    _git(repo, "tag", "pin-base", base)
+    tagged = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+                  "--preflight-rev", "pin-base")
+    assert tagged.returncode == 0, tagged.stderr
+    assert f"pins the checker committed at `{base}`" in tagged.stdout and "pin-base" not in tagged.stdout
+
+
+def test_preflight_rev_is_refused_where_no_preflight_renders(repo):
+    base, head = _revs(repo)
+    definition = _agent_definition(repo, "--lens", "adversarial", "--preflight-rev", base)
+    assert definition.returncode == 2 and "--preflight-rev" in definition.stderr
+    report = repo.parent / "lens-report.md"
+    report.write_text("F1 HIGH: a.txt:1 wrong\n")
+    verifier = _run(repo, "--verifier", "--head", head, "--base", base,
+                    "--lens-report", f"adversarial={report}", "--preflight-rev", base)
+    assert verifier.returncode == 2 and "--preflight-rev" in verifier.stderr
+
+
 def _commit_file(root: Path, name: str, text: str) -> str:
     (root / name).write_text(text)
     _git(root, "add", "-A")

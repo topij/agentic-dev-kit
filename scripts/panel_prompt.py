@@ -1145,15 +1145,24 @@ def _preflight_object(root: Path, head: str, path: str) -> tuple[str, bytes]:
     return oid.decode(), read("cat-file", "blob", oid.decode())
 
 
-def _preflight_command(root: Path, execution_root: Path, base: str, head: str) -> str:
-    _, config_bytes = _preflight_object(root, head, "config/dev-model.yaml")
+def _preflight_command(root: Path, execution_root: Path, base: str, head: str,
+                       *, engine_rev: str | None = None) -> str:
+    """The pinned preflight invocation, running the checker committed at ``engine_rev``.
+
+    ``engine_rev`` defaults to ``head``: a lens runs the checker as of the change it
+    reviews. The reviewer eval (#1156) passes the kit revision it runs from instead,
+    because its historical heads predate the checker; the blob is still read by its
+    object id and digest, never from a working tree.
+    """
+    engine_rev = engine_rev or head
+    _, config_bytes = _preflight_object(root, engine_rev, "config/dev-model.yaml")
     config = loads(config_bytes.decode())
     checker = _preflight_checker(root, get(config, "paths.engines", "scripts"))
     spec = []
     for name, path in [("kitconfig", checker.parent / "lib/kitconfig.py"),
                        ("__main__", checker)]:
         relative = path.relative_to(root).as_posix()
-        oid, source = _preflight_object(root, head, relative)
+        oid, source = _preflight_object(root, engine_rev, relative)
         spec.append((name, str(execution_root / relative), oid, hashlib.sha256(source).hexdigest()))
     # Bootstrap requirements come from the same committed checker whose bytes
     # will run, never from a dirty checkout or an independently maintained pin.
@@ -1221,6 +1230,7 @@ def build(args: argparse.Namespace) -> str:
                 ("--last-reviewed", args.last_reviewed),
                 ("--verify-command", args.verify_command),
                 ("--branch", args.branch),
+                ("--preflight-rev", args.preflight_rev),
             )
             if value is not None
         ]
@@ -1350,9 +1360,17 @@ def build(args: argparse.Namespace) -> str:
         raise PromptError("the doctrine is missing its Narrative preflight section")
     following = _NEXT_H2.search(doctrine, heading.end())
     narrative = doctrine[heading.start():following.start() if following else len(doctrine)].rstrip()
+    preflight_rev = head
+    if args.preflight_rev is not None:
+        preflight_rev = _require_commit(root, _override("--preflight-rev", args.preflight_rev))
     command = _preflight_command(root, Path(o_scratch).resolve() if o_scratch else root,
-                                 base, head)
+                                 base, head, engine_rev=preflight_rev)
     narrative += f"\n\nPreflight invocation for this comparison:\n\n```sh\n{command}\n```\n"
+    if preflight_rev != head:
+        # The doctrine above says the candidate's checker is pinned; say when it is not.
+        narrative += (f"\nThis invocation pins the checker committed at `{preflight_rev}`, "
+                      "supplied with `--preflight-rev`, not the candidate's: its coverage is "
+                      "that revision's checker.\n")
 
     return render(
         lens=args.lens,
@@ -1454,6 +1472,13 @@ def main(argv: list[str] | None = None) -> int:
         "--draw-safety-critical and --repair-boundary",
     )
     parser.add_argument(
+        "--preflight-rev",
+        default=None,
+        help="the commit whose committed checker and config the narrative preflight "
+        "runs (default: --head); the reviewer eval passes its own revision, because a "
+        "historical head predates the checker",
+    )
+    parser.add_argument(
         "--verifier",
         action="store_true",
         help="render the verifier's prompt instead of a lens prompt: it audits the "
@@ -1497,6 +1522,7 @@ def main(argv: list[str] | None = None) -> int:
                     ("--verify-command", args.verify_command),
                     ("--verifier", args.verifier or None),
                     ("--lens-report", args.lens_report or None),
+                    ("--preflight-rev", args.preflight_rev),
                 )
                 if value is not None
             ]
