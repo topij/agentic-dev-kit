@@ -455,6 +455,11 @@ mode, tick the configured heartbeat after each slice. A slice boundary never cha
 cluster membership; union distinct pull-request identities before comparing a cluster
 with `systemize.pattern_threshold`.
 
+A finding its reviewer classed *pre-existing* (the panel doc's *Pre-existing findings*)
+names a defect older than the pull request that carried it. Cluster it by the code it
+names, never as evidence about how that pull request was written. When the review already
+linked a ticket for it, the report cites that ticket rather than routing it again.
+
 Cluster by causal shape, not similar wording. For each cluster record:
 
 - a root-cause sentence;

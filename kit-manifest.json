@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "b8899b996674661cddf36b4a6f959402354e610f704983eb6fae6b2a1dac51df"
+      "sha256": "192658e3fc941827bf5ecb3c7908637017bc766d894e3aa34f76aec898d3522a"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -60,11 +60,11 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "1ff52def91d31c2975f4e9790d95fac48c58c409c0e0734d7d13256df970658c"
+      "sha256": "ae39efbd37b24238016d3afdc56002f18f8ba21aa120e71e53a6ddba20ee65b9"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "11e8c149605dd49177bd7e169acf0fd1f36fdee6037ec4f97bf44adda3a99b8d"
+      "sha256": "ebe00b82768501d30d267ddc9af4e36ee898068fbd12f8debdc5e7bb8eee3e01"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -79,7 +79,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "53a8032b0efd5a4aa7e3e809b64698a5ec84d4c9f5c6813772e557e2390a7b13"
+      "sha256": "bfd94447800771ec9552b8cc7f5d654f452dbad212474ff5f59e31dc57931822"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
       "required_by": [
@@ -578,7 +578,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "6fcdd11b0643e2c472a2bba551a6153bf91cf69f07bfaf28a3e6d45d57c7f765"
+      "sha256": "40924db0635d7bdda386e8f6c2655957205fcfdf7598efbbe779d33c2bbb9254"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -697,7 +697,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "63246375dde2f8d8702df3f26f97e610a5d0942afdb61164afb9c2efd8e62247"
+      "sha256": "b5f4c1bcdffbbdde18ba1ee79af5b94d1094b790115ca10c3ff95b1d1e3562e8"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

@@ -488,6 +488,53 @@ def test_carry_forward_reaches_the_prompt_when_given_and_is_absent_otherwise(rep
     assert "What prior rounds have and have not covered" not in without.stdout
 
 
+def test_prior_dispositions_render_as_a_pointer_read_after_the_pass(repo):
+    """#463: a re-run not told what earlier rounds disposed of re-raises it. The
+    pointer reaches the prompt under its own heading, before the contract, with the
+    instruction that keeps it from steering the pass; without the flag, no section.
+    """
+    base, head = _revs(repo)
+    link = "https://github.com/o/r/pull/7#issuecomment-1"
+    heading = "## Where earlier rounds' dispositions are"
+    with_it = _run(repo, "--lens", "adversarial", "--head", head, "--base", base,
+                   "--branch", "b", "--prior-dispositions", link)
+    assert with_it.returncode == 0, with_it.stderr
+    assert heading in with_it.stdout
+    section = with_it.stdout[with_it.stdout.index(heading):]
+    assert section.index(link) < section.index("## The contract every lens gets")
+    assert "only after your own" in section and "**No repeats**" in section
+    # It is a pointer, not a coverage note or a draw: neither of those sections appears.
+    assert "What prior rounds have and have not covered" not in with_it.stdout
+    assert "The author's stated draws" not in with_it.stdout
+
+    without = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+    assert without.returncode == 0, without.stderr
+    assert heading not in without.stdout
+
+
+@pytest.mark.parametrize("sep", ["\n", "\r"])
+def test_prior_dispositions_refuse_more_than_one_line(repo, sep):
+    """The pointer form is the whole defence: findings restated in the prompt frame
+    the pass, which #459 measured. One line cannot carry a list of them."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+               "--prior-dispositions", f"https://example.test/pr/7{sep}F1: the guard is wrong")
+    assert out.returncode == 2, out.stdout[:200]
+    assert "--prior-dispositions" in out.stderr and "#463" in out.stderr
+
+
+def test_the_contract_carries_the_convergence_items(repo):
+    """#1153, #1154 and #211 reach a lens through the quoted contract, not a second
+    copy in the script, so the prompt is where to check they arrived."""
+    base, head = _revs(repo)
+    out = _run(repo, "--lens", "correctness", "--head", head, "--base", base, "--branch", "b")
+    assert out.returncode == 0, out.stderr
+    contract_part = out.stdout[out.stdout.index("## The contract every lens gets"):]
+    for name in ("Name the bug class", "Classify against the base",
+                 "Expect the remediation to carry the next defect", "No repeats"):
+        assert f"**{name}.**" in contract_part
+
+
 # --- the two kinds of framing are different channels (friction log, 2026-08-12) ---
 
 
@@ -1265,7 +1312,7 @@ def test_an_empty_base_override_is_refused_not_silently_remote_resolved(repo):
     [
         "--branch", "--base", "--base-branch", "--scratch", "--carry-forward",
         "--draw-prose-class", "--draw-safety-critical", "--repair-boundary",
-        "--verify-command",
+        "--prior-dispositions", "--verify-command",
     ],
 )
 def test_every_optional_override_refuses_an_empty_value(repo, flag):
@@ -1622,7 +1669,7 @@ def test_agent_definition_is_a_claude_surface_and_refuses_codex(repo):
     "flag, value",
     [("--head", "deadbeef"), ("--pr", "7"), ("--carry-forward", "x"), ("--delta-draws", "y"),
      ("--draw-prose-class", "y"), ("--draw-safety-critical", "y"), ("--repair-boundary", "y"),
-     ("--base", "abc"), ("--branch", "b"), ("--scratch", "/tmp/x"), ("--verify-command", "make test"),
+     ("--prior-dispositions", "y"), ("--base", "abc"), ("--branch", "b"), ("--scratch", "/tmp/x"), ("--verify-command", "make test"),
      ("--base-branch", "main")],
 )
 def test_agent_definition_refuses_prompt_only_flags(repo, flag, value):
