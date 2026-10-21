@@ -600,6 +600,14 @@ author re-reading their own diff. **Cite them by name, never by number.**
     disposition fails. A disposed finding raised again without new evidence costs
     a round and tells the author nothing. Reading them only after your own pass
     is what keeps them from steering it (`#463`).
+18. **Cite your evidence.** Number your findings `F1`, `F2` and on, in the order
+    you report them, and give each one a citation a reader can check without you:
+    `path:line` at the head under review, or the commit and the line of its
+    message. Then give the evidence the finding rests on: the lines you read, or
+    the command you ran with its output and exit status. A finding without a
+    citation is a concern: nobody can confirm it without redoing your work, and a
+    verifier, when one runs, marks it `unverifiable` (*Verifying findings*,
+    `#1155`).
 
 ## Running it
 
@@ -666,17 +674,24 @@ author re-reading their own diff. **Cite them by name, never by number.**
    missing report, a progress update, or a running-session handle cannot satisfy
    the panel. Resume the lens to finish verification and report, or record the
    verification gap; do not issue a clean-review receipt from silence or an
-   incomplete report. For mutation claims, check the retained target diff and
-   restoration evidence as well as the test result.
+   incomplete report. A report that names a verification limit (a suite still
+   running, a command cut off by a timeout) is resumed to a terminal result
+   **before** the receipt is written wherever the runtime can resume it; record
+   the gap only when it cannot. A lens that amends its report after the receipt
+   takes *When a lens amends its report after the receipt* below (`#719`). For
+   mutation claims, check the retained target diff and restoration evidence as
+   well as the test result.
 4. Triage every finding against the *current* code — some go stale across
-   rounds.
+   rounds. Before triage you may run the verifier over the round's findings
+   (*Verifying findings* below); it is optional until it is measured.
 5. Dispose of LOW findings by **LOW findings: delta review or ticket** below, and
    pre-existing ones by *Pre-existing findings*. Fix other real findings, and
    reply-with-reason to the rest. Fix a finding at every instance of the class
    **Name the bug class** reports, plus any the lens missed, in the same round. A
    fix to executable behaviour carries the positive construction and hostile
    mutation that *What the author owes the loop* pairs with it. Post each
-   disposition on the pull request: the next round's lenses are pointed there.
+   disposition on the pull request, typed as *Typed dispositions* below sets
+   out: the next round's lenses are pointed there.
 6. **Re-run after the fix round.** Not optional — whether it is the full pass
    or a delta pass is decided below: apply the LOW rule first; otherwise use
    what the fix round's delta contains, then — for how many lenses the delta pass takes — by whether the
@@ -748,6 +763,169 @@ author re-reading their own diff. **Cite them by name, never by number.**
    buried in the record command's stdout — and it is worth exactly what an honest
    operator puts into it. Verifying coverage needs each lens to record its own
    receipt from its own context: issue #32, not this.
+
+## When a lens amends its report after the receipt
+
+A receipt is bound to one head and written once, and a round's receipt comes before
+its fixes (`#666`). So a lens can still be working when the receipt is written, and
+amend its report afterwards. On `#717`, a lens finished its suite after the round-1
+receipt and reported a failure that its earlier report had left open. Re-recording at
+the same head is not a correction route, and a receipt cannot be backdated to an older
+head (`#666`).
+
+So the correction goes on the pull request, and the receipt is left alone:
+
+- Post a comment that names the receipt it corrects, by its source and `--head`,
+  quotes the lens's amendment verbatim, and says what it changes in the round's
+  disposition. The receipt still records which lenses ran at which head, and the
+  amendment changes neither.
+- An amendment that only completes a verification the disposition already reported as
+  incomplete needs nothing beyond that comment.
+- An amendment that adds a finding, or turns a claim the disposition reported as
+  verified into a failure, is a finding at the reviewed head. Triage it against the
+  current code (step 4) and dispose of it by its severity like any other finding.
+- **After the final round, the merge waits for that disposition.** The merge gate reads
+  the receipt and not the comment, so it still reads as satisfied. This binds whoever
+  merges; the engine cannot see an amendment, which is `#32`'s self-reporting gap again.
+
+Step 3's rule, resuming a lens to a terminal result before the receipt, is what keeps
+this case rare. It cannot remove it, because a runtime cannot always resume a lens.
+
+## Verifying findings
+
+**A verifier is one more isolated reviewer that audits the round's findings, not the
+change.** It reads every lens report of the round and the diff at the reviewed head,
+and marks each finding `confirmed`, `refuted` or `unverifiable`, with the citation or
+executed probe that settles it. The author then disposes of each finding with the
+verifier's evidence in front of them. Without it, the only party auditing a lens's
+findings is the author, who has a stake in the cheaper answer (**Severity and
+regression**). A false positive costs a fix round, and with an agent author every
+accepted nit is a commit and another review (`#1155`).
+
+**It is optional until it is measured.** Whether it improves the round is the
+reviewer eval's question (`#1156`), measured on the same cases with and without it.
+Until that lands, each round's cockpit chooses whether to run it, and a round that
+skips it is disposed of exactly as before. The evidence for running it at all is one
+workshop paper (arXiv 2608.18167, recorded on `#613`) and a team report of the same
+practice (*How the Claude Code team does code review*, 2026-10-15), not a measurement
+on this kit.
+
+**Run the rendered prompt, never a free-text request.** In the paper's measurements a
+critic that could disagree without evidence made review worse than a single reviewer:
+the two converged on agreement nobody had checked. It helped only once every verdict
+had to carry a citation. The verdict grammar in the verifier's contract below is that
+requirement, so "check these findings" typed by hand is the configuration the paper
+measured as harmful.
+
+How to run it, after step 3 has confirmed each lens reviewed the right code:
+
+1. Retain each lens's terminal report as a file outside `<round>`, as step 7 already
+   requires.
+2. Build the verifier's own detached tree in the same round:
+   `git worktree add --detach <round>/verifier-<short-sha> <sha>`.
+3. Render its prompt. `--lens-report` takes `<lens>=<path>`, once per lens that ran:
+
+   ```sh
+   uv run <engine-dir>/panel_prompt.py --verifier --head <sha> \
+     --scratch <round>/verifier-<short-sha> \
+     --lens-report adversarial=<report-path> --lens-report correctness=<report-path>
+   ```
+
+   The prompt quotes *The contract the verifier gets* from this file and carries the
+   reports verbatim. It refuses `--lens`, the draw flags, `--repair-boundary`,
+   `--carry-forward` and `--prior-dispositions`. The verifier gets the findings and
+   nothing the author wrote about them.
+4. Launch it isolated, the same way you launch a lens: a fresh-context subagent on
+   Claude Code, `codex exec` on Codex. It is not a lens, so do not launch it as a lens's
+   agent definition: those definitions tell the agent it is that lens.
+5. Read its report against *Report what you reviewed, first* as step 3 does for a lens,
+   then post its verdict lines on the pull request verbatim, before any disposition.
+
+**What compute it gets is not declared yet.** No `config/dev-model.yaml` key sets it,
+and no agent definition carries it. On Claude Code the delegation tool's `model`
+parameter applies a model and the effort is the cockpit's; on Codex, `-m` and
+`-c model_reasoning_effort=<level>` on the `codex exec` argv apply both. Run it at no
+more than the lenses' compute, and name what ran in the disposition. A key and an agent
+definition wait for the measurement to say which tier is enough.
+
+**What the verdicts do.** A verdict is evidence for the disposition, never a
+disposition by itself:
+
+- `confirmed`: the finding stands. An author who disputes it answers the verifier's
+  citation as well as the lens's.
+- `refuted`: the author may dispute the finding with the verifier's evidence, after
+  reproducing it: a verifier's account of what ran is testimony, as a lens's is (*What
+  the author owes the loop*). **A refuted HIGH goes to the operator.** The verifier
+  cannot clear a HIGH on its own: the comment that posts the verdict is addressed to
+  the operator, and the finding stays open until the operator rules on it or the author
+  fixes it.
+- `unverifiable`, or no verdict line for the finding: nothing changes. Triage it as
+  step 4 does without a verifier.
+
+A refuted finding stays in the record, on the pull request with its verdict, so nothing
+is dropped silently. The verifier never changes a finding's severity, regression or
+pre-existing label: a label it disputes goes back to the lens, as **Severity and
+regression** does with a disputed imprecision.
+
+**It adds no coverage.** The verifier never appears in `--lenses`, takes no receipt
+literal, and replaces no re-run. What the gate counts is the lenses' review.
+
+## The contract the verifier gets
+
+The prompt quotes this section to the verifier verbatim. **Cite these items by name,
+never by number.**
+
+1. **Fresh context.** You did not watch the change being written, and you are not told
+   what its author thinks of the findings.
+2. **Not the author, not a lens.** You wrote neither the code nor the findings, and you
+   have no stake in either being right.
+3. **Audit the findings, not the change.** Your job is one verdict on each finding in
+   the lens reports. Do not hunt for new defects. If the evidence you gather for a
+   verdict shows a defect the finding did not name, say so in that verdict's reason.
+4. **Evidence or no verdict.** There are three verdicts. `confirmed` and `refuted` each
+   carry a citation: `path:line` at the head under review, a commit and the line of its
+   message, or a command you ran with its output and exit status. A disagreement you
+   cannot cite is `unverifiable`, never `refuted`, and so is a finding you could not
+   check. A reviewer that may disagree without evidence makes a review worse, not
+   better.
+5. **At the head under review.** Read cited lines with `git show <head>:<path>`. A
+   finding about code the head does not have is refuted only with that evidence. Say
+   whether it was wrong when it was made or has gone stale since.
+6. **Re-run, don't trust.** When a finding rests on something that was executed, run it
+   again yourself. A lens's output is testimony. Make any copy you need beside the tree
+   you were handed, inside the allocated review round, by a fresh path; never write in
+   the tree you were handed.
+7. **Severity is not yours.** Do not relabel a finding's severity, its regression
+   classification or its pre-existing label. Your verdict says whether the finding
+   holds. If you think a label is wrong, say so in the reason.
+8. **Report what you reviewed, first.** Give the repo path, the `HEAD` you were
+   actually placed at, the sha you checked against, your scratch path or that you wrote
+   nothing, and `git status --short` for the tree you were handed.
+9. **One verdict line per finding.** End your report with exactly one line for every
+   finding in every report, in the form `<lens> F<n>: confirmed|refuted|unverifiable —
+   <citation or reason>`. If a report does not number its findings, number them in the
+   order it reports them and say that you did. A finding with no line has no verdict.
+
+## Typed dispositions
+
+**Each disposition says which of three stances the author takes on the finding**,
+before the route that carries it out (`#613`):
+
+- `accept`: the finding holds. The disposition then names the route: the fix commit, the
+  delta pass, or the ticket for a LOW or pre-existing finding.
+- `dispute-evidence: <citation or executed probe>`: the finding does not hold, and here
+  is a `path:line`, a commit, or a command with its output that shows it. A verifier's
+  `refuted` evidence counts once the author has reproduced it.
+- `dispute-concern: <objection>`: the author disagrees and has no citation.
+
+**A HIGH or a lens-marked regression cannot be closed by `dispute-concern`.** Concern
+only means fix it, or escalate it to the operator. A reply-with-reason (step 5) is a
+typed dispute, and a logged record-prose imprecision is an `accept` whose route is the
+log. Write one line per finding, in the verifier's form: `<lens> F<n>: accept — <route>`.
+
+Nothing parses these lines yet. The grammar exists so a check can read them, which is
+`#604`'s disposition comment, and so a reviewer can see at a glance which dispute
+carries evidence.
 
 ## What the author owes the loop
 
