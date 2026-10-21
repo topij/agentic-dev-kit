@@ -70,17 +70,22 @@ _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
 # A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`, `1. **F3**`.
 _FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b", re.MULTILINE)
-# The lens contract's own sections cite what was checked, not what is wrong. A label
-# names one only when it is that name, with at most an `and ...` tail, a parenthetical
-# and a colon: `### Mutation of shared state` and `**Executed path skips guard**` are
-# findings.
-_NOT_FINDINGS = re.compile(r"(?:verified clean|what i reviewed|executed|attestation|mutation(?: testing)?|"
-                           r"earlier dispositions|disposition check|routes)"
-                           r"(?:[ \t]+and[ \t]+[\w ]+)?(?:[ \t]*\([^)]*\))?[ \t]*[:.]?[ \t]*", re.IGNORECASE)
+# The lens contract's own sections cite what was checked, not what is wrong. A
+# heading names one when its title opens with that name as a word; a bold lead-in
+# followed by more text names one only when the label is that name, with at most an
+# `and ...` tail, a parenthetical and a colon, so `**Executed path skips guard** a.py:2`
+# is a finding. A title opening with `F<n>` is a finding either way.
+_SECTION_NAMES = (r"(?:verified clean|what i (?:reviewed|executed|checked)|execut(?:ed|ion)|attestation|"
+                  r"scratch attestation|mutation(?:[ -]testing)?|earlier dispositions|disposition check|"
+                  r"routes|reviewed)")
+_SECTION_HEADING = re.compile(rf"[*_ ]*{_SECTION_NAMES}\b", re.IGNORECASE)
+_SECTION_LABEL = re.compile(rf"{_SECTION_NAMES}(?:[ \t]+and[ \t]+[\w ]+)?(?:[ \t]*\([^)]*\))?[ \t]*[:.]?",
+                            re.IGNORECASE)
 # A heading is an ATX heading or a line that is bold from end to end; a bold label
 # may sit after a list or quote marker. A bold lead-in followed by more text is body.
 _LEAD = r"[ ]{0,3}(?:[-*+>][ \t]+|\d{1,3}[.)][ \t]+)?(?P<mark>\*\*|__)(?P<bold>.+?)(?P=mark)"
-_HEADING = re.compile(rf"[ ]{{0,3}}#{{1,6}}[ \t]+(?P<atx>.*?)[ \t#]*|{_LEAD}[ \t]*:?[ \t]*")
+_ATX = re.compile(r"[ ]{0,3}#{1,6}(?:[ \t]+(?P<atx>.*))?")
+_BOLD_LINE = re.compile(rf"{_LEAD}[:]?")
 _BOLD_LEAD = re.compile(_LEAD)
 _REPO_LINE = re.compile(r"^(- \*\*Repo:\*\* ).*$", re.MULTILINE)
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
@@ -201,10 +206,10 @@ def findings_text(report: str) -> str:
                 fence = None
         elif (opener := _FENCE.match(text)) is not None:
             fence = opener.group(1)
-        elif (heading := _HEADING.fullmatch(text)) is not None:
-            title = heading.group("atx") if heading.group("atx") is not None else heading.group("bold")
-            cut = bool(_NOT_FINDINGS.fullmatch(title.strip("*_ ")))
-        elif (lead := _BOLD_LEAD.match(text)) is not None and _NOT_FINDINGS.fullmatch(lead.group("bold").strip()):
+        elif (heading := _ATX.fullmatch(text) or _BOLD_LINE.fullmatch(text.rstrip())) is not None:
+            title = heading.group("atx") if "atx" in heading.re.groupindex else heading.group("bold")
+            cut = bool(_SECTION_HEADING.match(title or "")) and not re.match(r"[*_ ]*F\d+\b", title)
+        elif (lead := _BOLD_LEAD.match(text)) is not None and _SECTION_LABEL.fullmatch(lead.group("bold").strip()):
             drop = True
         elif blank and _FINDING_NUMBER.match(text):
             cut = False
@@ -345,10 +350,10 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
         record = sweep_scratch.create_review_round(scratch_root, case["head"], settings, root)
     except (sweep_scratch.ConfigError, OSError, ValueError) as exc:
         raise RunError(f"{case['id']} {lens}: cannot allocate a review round: {exc}") from exc
-    (work / f"{case['id']}-{lens}.round.json").write_text(json.dumps(record, sort_keys=True))
     tree = Path(record["path"]) / f"lens-{lens}-{case['head'][:7]}"
     escaped = False
     try:
+        (work / f"{case['id']}-{lens}.round.json").write_text(json.dumps(record, sort_keys=True))
         _isolated_tree(root, tree, case, kit_rev)
         prompt = _withhold_repo(
             _run_engine("panel_prompt.py", prompt_args(root, case, lens, runtime, tree, kit_rev), root))

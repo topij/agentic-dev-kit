@@ -881,6 +881,12 @@ def test_preflight_rev_runs_the_checker_committed_at_another_revision(repo):
     # The prompt says the pin is not the candidate's, since the doctrine says it is.
     assert f"pins the checker committed at `{base}`" in out.stdout
     assert "pins the checker committed at" not in plain.stdout
+    # A symbolic name is resolved, so the pin cannot move with the ref.
+    _git(repo, "tag", "pin-base", base)
+    tagged = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b",
+                  "--preflight-rev", "pin-base")
+    assert tagged.returncode == 0, tagged.stderr
+    assert f"pins the checker committed at `{base}`" in tagged.stdout and "pin-base" not in tagged.stdout
 
 
 def test_preflight_rev_is_refused_where_no_preflight_renders(repo):

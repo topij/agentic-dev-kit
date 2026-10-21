@@ -211,6 +211,13 @@ def test_the_prompt_withholds_the_kit_checkout(repo, tmp_path) -> None:
     assert str(repo["root"]) not in prompt
 
 
+def test_section_matching_stays_linear_on_long_whitespace() -> None:
+    import time
+    start = time.monotonic()
+    review_eval.findings_text("## executed" + " " * 200_000 + "x\n" + "**a" + " " * 200_000 + "\n")
+    assert time.monotonic() - start < 5
+
+
 def test_a_hit_on_an_unconfirmed_case_is_not_a_confirmed_hit(repo, tmp_path) -> None:
     proc = _run(repo, _stub(tmp_path, "F1 LOW: bug.py:3 dead code\n"), "--lens", "adversarial")
     assert proc.returncode == 0, proc.stderr
@@ -399,7 +406,11 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     # A section name opening a finding's title does not make it a section.
     ("**Mutation of shared state in bug.py:2** — aliasing", True),
     ("**Executed path skips guard** bug.py:2 divides by zero", True),
-    ("## Mutation of state\nbug.py:2", True),
+    # A heading opening with a section name is that section, whatever follows the name.
+    ("## Mutation test\n- bug.py:2 cleared", False),
+    ("## Executed commands\n- bug.py:2 cleared", False),
+    ("## Routes allowed and refused\n- bug.py:2 cleared", False),
+    ("**Verified clean — what I checked**\n- bug.py:2 cleared", False),
     # An evidence label inside a finding drops its own line, not the finding.
     ("F1 HIGH divides by zero\n**Executed:** ran it\nbug.py:2 raises ZeroDivisionError", True),
     ("**Verified clean:** a.py:1\n\n**bug.py:2** — divides by zero", True),
