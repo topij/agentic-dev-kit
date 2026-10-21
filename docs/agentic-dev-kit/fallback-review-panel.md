@@ -1323,8 +1323,11 @@ still in scope. Render it with `panel_prompt.py --last-reviewed <last-reviewed-s
 beside both draws, and with `--prior-dispositions` like any re-run. `--last-reviewed`
 names that diff and its commit messages by sha and keeps the full diff and every
 severity in scope; never use `--repair-boundary` for it, whose LOW-rule wording tells
-the lens the opposite. **Expect the remediation to carry the next defect** is what it
-is aimed with. Record it
+the lens the opposite. It refuses a sha older than the branch's fork point,
+`git merge-base <base> <head>`, whose delta would carry upstream commits as the fix
+round (`#1166`). A branch that merged the base after the last reviewed head is in that
+case too, and its next round is a full pass; the round after that has its delta again.
+**Expect the remediation to carry the next defect** is what it is aimed with. Record it
 as `fallback:delta` with `--compose-parent`, as below. A finding above LOW from
 that pass is fixed and delta-reviewed again under this paragraph; it does not
 restore the full pass by itself. The round budget still stops the loop at the
