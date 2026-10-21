@@ -779,11 +779,12 @@ So the correction goes on the pull request, and the receipt is left alone:
   quotes the lens's amendment verbatim, and says what it changes in the round's
   disposition. The receipt still records which lenses ran at which head, and the
   amendment changes neither.
-- An amendment that only completes a verification the disposition already reported as
-  incomplete needs nothing beyond that comment.
-- An amendment that adds a finding, or turns a claim the disposition reported as
-  verified into a failure, is a finding at the reviewed head. Triage it against the
-  current code (step 4) and dispose of it by its severity like any other finding.
+- An amendment that completes a verification the disposition reported as incomplete,
+  and **passes**, needs nothing beyond that comment.
+- Any other amendment is a finding at the reviewed head: one that adds a finding, one
+  whose completed verification **fails** (the `#717` case), and one that turns a claim
+  the disposition reported as verified into a failure. Triage it against the current
+  code (step 4) and dispose of it by its severity like any other finding.
 - **After the final round, the merge waits for that disposition.** The merge gate reads
   the receipt and not the comment, so it still reads as satisfied. This binds whoever
   merges; the engine cannot see an amendment, which is `#32`'s self-reporting gap again.
@@ -833,8 +834,10 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
 
    The prompt quotes *The contract the verifier gets* from this file and carries the
    reports verbatim. It refuses `--lens`, the draw flags, `--repair-boundary`,
-   `--carry-forward` and `--prior-dispositions`. The verifier gets the findings and
-   nothing the author wrote about them.
+   `--carry-forward`, `--prior-dispositions` and `--verify-command`, and holds
+   `--branch` to a valid branch name, so no free text from the author reaches the
+   verifier. Nothing checks that the files you name are this round's reports, or all
+   of them: naming every lens that ran is yours.
 4. Launch it isolated, the same way you launch a lens: a fresh-context subagent on
    Claude Code, `codex exec` on Codex. It is not a lens, so do not launch it as a lens's
    agent definition: those definitions tell the agent it is that lens.
@@ -893,8 +896,10 @@ never by number.**
    whether it was wrong when it was made or has gone stale since.
 6. **Re-run, don't trust.** When a finding rests on something that was executed, run it
    again yourself. A lens's output is testimony. Make any copy you need beside the tree
-   you were handed, inside the allocated review round, by a fresh path; never write in
-   the tree you were handed.
+   you were handed, inside the allocated review round, at a fresh path namespaced by
+   role and revision (`verifier-<short-sha>-copy`). Never reach it by removing and
+   recreating a path: a sandbox refusing `rm -rf` is refusing the wrong route. Never
+   write in the tree you were handed.
 7. **Severity is not yours.** Do not relabel a finding's severity, its regression
    classification or its pre-existing label. Your verdict says whether the finding
    holds. If you think a label is wrong, say so in the reason.
@@ -902,9 +907,14 @@ never by number.**
    actually placed at, the sha you checked against, your scratch path or that you wrote
    nothing, and `git status --short` for the tree you were handed.
 9. **One verdict line per finding.** End your report with exactly one line for every
-   finding in every report, in the form `<lens> F<n>: confirmed|refuted|unverifiable —
-   <citation or reason>`. If a report does not number its findings, number them in the
-   order it reports them and say that you did. A finding with no line has no verdict.
+   finding in every report, in this form:
+
+   ```text
+   <lens> F<n>: confirmed|refuted|unverifiable — <citation or reason>
+   ```
+
+   If a report does not number its findings, number them in the order it reports them
+   and say that you did. A finding with no line has no verdict.
 
 ## Typed dispositions
 
