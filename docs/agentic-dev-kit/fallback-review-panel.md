@@ -933,11 +933,23 @@ before the route that carries it out (`#613`):
 **A HIGH or a lens-marked regression cannot be closed by `dispute-concern`.** Concern
 only means fix it, or escalate it to the operator. A reply-with-reason (step 5) is a
 typed dispute, and a logged record-prose imprecision is an `accept` whose route is the
-log. Write one line per finding, in the verifier's form: `<lens> F<n>: accept — <route>`.
+log. Write one line per finding, in the verifier's form plus the lens's severity:
 
-Nothing parses these lines yet. The grammar exists so a check can read them, which is
-`#604`'s disposition comment, and so a reviewer can see at a glance which dispute
-carries evidence.
+```text
+<lens> F<n> <SEVERITY>: accept — <route>
+<lens> F<n> <SEVERITY>: dispute-evidence — <citation or executed probe>
+<lens> F<n> <SEVERITY>: dispute-concern — <objection>
+```
+
+Put the lines in the prose `pr_watch.py --record-review --disposition` posts, unquoted,
+one per finding of every lens the receipt names, with the lens's own name and finding
+number. `post-merge-systemize` reads them from that comment, and only from it, as the
+panel's findings: a lens's severity, the stance, and whether a typed disposition
+answered it (`#772`), tallied per lens with the round count (`#1157`). The workflow's
+Step 1 has the exact reading. A line in another comment, in a blockquote, naming a lens
+the receipt does not, or without a stance is not read, so a finding disposed of that way
+is missing from the tally. A clean round still posts its disposition: the tally counts
+it as a round.
 
 ## What the author owes the loop
 

@@ -119,11 +119,101 @@ def _finding(kind: str, comment: dict[str, Any], source: dict[str, str], *, path
         "severity": severity,
         "severity_mapped": mapped,
         "addressed": addressed,
+        "stance": None,
+        "reviewed_head": None,
         "guideline_citation": guideline_citation(body, citation_paths),
         "text": text,
         "text_truncated": truncated,
         "url": comment.get("url"),
     }
+
+
+# The fallback panel reaches a pull request only as the comment
+# `pr_watch.py --record-review --disposition` posts (#772). Its first lines are
+# fixed by that engine; the rest is the cockpit's prose, in which each finding is
+# one typed line (fallback-review-panel.md *Typed dispositions*). Only that line
+# grammar is read, only after the engine's header, and only from a trusted
+# author: neither the marker nor the prose makes a comment evidence by itself.
+_DISPOSITION_HEADER = re.compile(
+    r"<!-- pr-watch:disposition head=(?P<head>[0-9a-f]{7,40}) -->\n"
+    r"## Review disposition — [^\n]*\n"
+    r"\n"
+    r"- reviewed head: `(?P<reviewed>[0-9a-f]{7,40})`\n"
+    r"- review source: `(?P<source>[^`\n]*)`\n"
+    r"- lenses: (?P<lenses>[^\n]*)\n"
+)
+_DISPOSITION_LINE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?`?(?P<lens>[A-Za-z0-9_.-]+) F(?P<n>[1-9][0-9]*)"
+    r"(?: (?P<severity>[A-Za-z]+))?: (?P<stance>accept|dispute-evidence|dispute-concern)"
+    r"(?=[ :—`]|$)[^\n]*$",
+    re.MULTILINE,
+)
+STANCES = ("accept", "dispute-evidence", "dispute-concern")
+
+
+def disposition_header(body: str) -> dict[str, Any] | None:
+    """The engine-written header of a disposition comment, or ``None``."""
+    match = _DISPOSITION_HEADER.match(body.replace("\r\n", "\n"))
+    if match is None or match.group("head") != match.group("reviewed"):
+        return None
+    lenses = [name.strip() for name in match.group("lenses").split(",") if name.strip()]
+    return {
+        "head": match.group("head"),
+        "review_source": match.group("source"),
+        "lenses": lenses,
+        "prose": body.replace("\r\n", "\n")[match.end():],
+    }
+
+
+def stance_addressed(stance: str, severity: str) -> str:
+    """A typed disposition is the panel's addressed-state evidence (#772, #748).
+
+    Every stance answers the finding on the pull request, except that a HIGH or
+    CRITICAL finding is never closed by ``dispute-concern``
+    (fallback-review-panel.md *Typed dispositions*), so that one stays unaddressed.
+    """
+    if stance == "dispute-concern" and RANK[severity] >= RANK["high"]:
+        return "unaddressed"
+    return "addressed"
+
+
+def disposition_findings(comment: dict[str, Any], source: dict[str, str],
+                         citation_paths: list[str]) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+    """``(header, findings)`` for one trusted comment; ``(None, [])`` if it is not one.
+
+    A line inside a blockquote is a quotation, not this round's disposition, and
+    a line naming a lens the header does not list is not this round's finding.
+    A repeated ``<lens> F<n>`` in one comment counts once, first line first.
+    """
+    header = disposition_header(comment.get("body") or "")
+    if header is None:
+        return None, []
+    findings: dict[tuple[str, str], dict[str, Any]] = {}
+    for match in _DISPOSITION_LINE.finditer(header["prose"]):
+        lens, number = match.group("lens"), match.group("n")
+        if lens not in header["lenses"] or (lens, number) in findings:
+            continue
+        label = match.group("severity")
+        severity, mapped = normalize_severity(label)
+        line = match.group(0)
+        text, truncated = clean_text(line)
+        findings[(lens, number)] = {
+            "id": f"disposition:{comment.get('id')}:{lens}:F{number}",
+            "source": {**source, "lens": lens, "review_source": header["review_source"]},
+            "path": None,
+            "line": None,
+            "source_severity": label,
+            "severity": severity,
+            "severity_mapped": mapped,
+            "addressed": stance_addressed(match.group("stance"), severity),
+            "stance": match.group("stance"),
+            "reviewed_head": header["head"],
+            "guideline_citation": guideline_citation(line, citation_paths),
+            "text": text,
+            "text_truncated": truncated,
+            "url": comment.get("url"),
+        }
+    return header, list(findings.values())
 
 
 def pr_findings(pr: dict[str, Any], settings: Settings, citation_paths: list[str]) -> list[dict[str, Any]]:
@@ -146,7 +236,34 @@ def pr_findings(pr: dict[str, Any], settings: Settings, citation_paths: list[str
                 "review", review, source, path=None, line=None,
                 addressed="unevidenced", citation_paths=citation_paths,
             ))
+    findings.extend(panel_findings(pr, settings, citation_paths)[1])
     return findings
+
+
+def panel_findings(pr: dict[str, Any], settings: Settings,
+                   citation_paths: list[str]) -> tuple[list[str], list[dict[str, Any]]]:
+    """``(reviewed heads, findings)`` from the PR's trusted disposition comments.
+
+    The heads are distinct and in comment order: one per recorded round. A later
+    comment at the same head replaces an earlier one's findings for the same
+    ``<lens> F<n>``, because a correction is posted after what it corrects.
+    """
+    heads: list[str] = []
+    found: dict[tuple[str, str], dict[str, Any]] = {}
+    for comment in pr.get("issue_comments") or []:
+        source = _source(comment.get("author"), settings)
+        if source is None:
+            continue
+        header, findings = disposition_findings(comment, source, citation_paths)
+        if header is None:
+            continue
+        if header["head"] not in heads:
+            heads.append(header["head"])
+        for finding in findings:
+            key = (header["head"], finding["id"].split(":", 2)[2])
+            found.pop(key, None)
+            found[key] = finding
+    return heads, list(found.values())
 
 
 def _rank_key(entry: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -161,11 +278,63 @@ def derived(count: int, settings: Settings) -> dict[str, Any]:
     }
 
 
+ADDRESSED_STATES = ("addressed", "outdated", "unaddressed", "unevidenced")
+
+
+def _tally_key(finding: dict[str, Any]) -> str:
+    source = finding["source"]
+    if "lens" in source:
+        return f"lens:{source['lens']}"
+    return f"{source['kind']}:{normalize_login(source['login'])}"
+
+
+def reviewer_tally(findings: list[dict[str, Any]], rounds: list[dict[str, int]],
+                   settings: Settings) -> dict[str, Any]:
+    """Per-source precision and per-PR rounds over the whole window (#1157).
+
+    A lens finding carries a typed stance; a thread or review finding carries
+    only its addressed state, so its ``by_stance`` and ``refuted`` are null.
+    ``refuted`` counts ``dispute-evidence``: the author showed the finding wrong.
+    The flag is a report line and nothing more; no gate reads it.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for finding in findings:
+        grouped.setdefault(_tally_key(finding), []).append(finding)
+    sources = []
+    for key in sorted(grouped):
+        group = grouped[key]
+        typed = key.startswith("lens:")
+        by_stance = {s: sum(1 for f in group if f["stance"] == s) for s in STANCES} if typed else None
+        refuted = by_stance["dispute-evidence"] if by_stance is not None else None
+        sources.append({
+            "source": key,
+            "findings": len(group),
+            "by_addressed": {state: sum(1 for f in group if f["addressed"] == state) for state in ADDRESSED_STATES},
+            "by_stance": by_stance,
+            "refuted": refuted,
+            "refuted_flag": refuted is not None
+            and len(group) >= settings.refuted_flag_min_findings
+            and refuted * 100 >= settings.refuted_flag_percent * len(group),
+        })
+    return {
+        "refuted_flag_min_findings": settings.refuted_flag_min_findings,
+        "refuted_flag_percent": settings.refuted_flag_percent,
+        "sources": sources,
+        "rounds": rounds,
+    }
+
+
 def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) -> dict[str, Any]:
     run_id = raw["run_identity"]
     candidates = []
+    every_finding: list[dict[str, Any]] = []
+    rounds: list[dict[str, int]] = []
     for pr in raw.get("prs") or []:
+        heads, _ = panel_findings(pr, settings, citation_paths)
+        if heads:
+            rounds.append({"pr": pr["number"], "rounds": len(heads)})
         findings = pr_findings(pr, settings, citation_paths)
+        every_finding.extend(findings)
         if not findings:
             continue
         candidates.append({
@@ -206,6 +375,7 @@ def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) ->
         },
         **derived(len(kept), settings),
         "severity_limitations": limitations,
+        "reviewer_tally": reviewer_tally(every_finding, sorted(rounds, key=lambda r: r["pr"]), settings),
         "prs": kept,
     }
 
@@ -215,7 +385,7 @@ def build(raw: dict[str, Any], settings: Settings, citation_paths: list[str]) ->
 VERIFIED_FIELDS = (
     "run_identity_digest", "window", "forge_repo", "protected_branch_head", "config_fingerprint",
     "batching", "input_cap", "findings_pr_count", "single_pass_recommended", "n_batches",
-    "window_start", "window_end", "severity_limitations",
+    "window_start", "window_end", "severity_limitations", "reviewer_tally",
 )
 
 

@@ -37,7 +37,10 @@ Every value used below comes from that merged configuration:
   `systemize.digest_engine`, `systemize.heartbeat_engine`,
   `systemize.commit_subject`, and `systemize.pr_draft`, plus — in engine-backed
   mode only — `systemize.heartbeat_job` and `systemize.heartbeat_pattern`. Their
-  values are not restated here.
+  values are not restated here. `systemize.refuted_flag_min_findings` and
+  `systemize.refuted_flag_percent` are optional, like `subprocess_timeout_seconds`:
+  a configuration that omits them reads `5` and `50`, and the digest records the
+  values it applied.
 - A workflow invocation means the current runtime's native adapter: `/name` in Claude
   Code or `$name` in Codex.
 
@@ -57,6 +60,8 @@ Validate values as well as presence:
 - `backfill_days` is at least `lookback_days`; `batch_size` is no greater than
   `single_pass_max_prs`, which is no greater than `max_findings_prs_per_run`; and
   `pattern_threshold` is no greater than `max_findings_prs_per_run`.
+- `refuted_flag_min_findings` and `refuted_flag_percent`, when present, are positive
+  integers, not booleans, and `refuted_flag_percent` is at most `100`.
 - `tracker_severity` is one of the canonical severities defined in Step 1.
 - `operator_logins` is a sequence of unique, non-empty forge logins. Normalize by
   trimming ASCII whitespace and lowercasing ASCII letters while preserving every other
@@ -343,9 +348,10 @@ findings, operator review findings, file paths, source text, source identity, se
 when the source supplies one, addressed state, and originating tracker
 references. Plain discussion without a review finding is not evidence for a cluster.
 
-A finding is the root comment of a review thread, or the non-empty body of a review
-object, whose author is a trusted source; replies and pull-request discussion comments
-are context, not findings. **Addressed state comes from the forge's thread resolution,
+A finding is the root comment of a review thread, the non-empty body of a review
+object, or a typed line of a fallback-panel disposition comment (below), whose author is
+a trusted source. Replies and other pull-request discussion comments are context, not
+findings. **Addressed state comes from the forge's thread resolution,
 never from reply text.** A thread the forge reports resolved is `addressed`; an
 unresolved thread the forge reports outdated is `outdated`, which is inconclusive and
 stays distinct; any other unresolved thread is `unaddressed`; a review-object body has
@@ -354,6 +360,40 @@ unaddressed finding count below. Reply text such as "fixed in `<sha>`" is not
 evidence: it misses resolutions made without a reply and decays as threads go outdated.
 Classify a collected finding as operator or configured-reviewer evidence only after its
 source identity exactly matches the trusted set established during preflight.
+
+**Fallback-panel findings** reach the pull request only as the discussion comment
+`pr_watch.py --record-review --disposition` posts, so they are read from there (`#772`).
+A comment is a disposition comment only when its author is a trusted source *and* its
+body begins with the header that engine writes, line for line: the
+`<!-- pr-watch:disposition head=<sha> -->` marker, the `## Review disposition — `
+heading, a blank line, then `- reviewed head:` naming the marker's sha in backticks,
+`- review source:` in backticks, and `- lenses:` as a comma-separated list. The marker
+or the heading alone makes nothing evidence, and neither does any prose. In the prose
+after the header, each finding is one line of the grammar
+[Typed dispositions](../fallback-review-panel.md#typed-dispositions) sets:
+
+```text
+<lens> F<n> <SEVERITY>: <stance> — <route, citation or objection>
+```
+
+The line may sit behind a `- ` or `* ` bullet or open with a backtick. `<stance>` is
+`accept`, `dispute-evidence` or `dispute-concern`, and `<SEVERITY>` is the lens's label,
+kept as the source severity and normalized by the table below; a line without one has
+an absent label. A line is skipped when it is quoted (`>`), when its lens is not in the
+header's `- lenses:` list, when its stance is anything else, or when its `<lens> F<n>`
+already appeared earlier in the same comment. Across comments at the same reviewed
+head, a later line for the same `<lens> F<n>` replaces the earlier one, because a
+correction is posted after what it corrects. Each such finding records its `stance`, its
+`reviewed_head`, and a source carrying the comment author's trust class plus the `lens`
+and the header's `review_source`; its path and line are null, its id is
+`disposition:<comment-id>:<lens>:F<n>`, and its text is the line.
+
+A disposition's addressed state is its stance, under the same rule thread resolution
+follows: evidence the author answered the finding on the pull request. `accept` and
+`dispute-evidence` are `addressed`. `dispute-concern` is `addressed` below `high` and
+`unaddressed` at `high` or `critical`, which concern alone never closes. The line
+carries no regression mark, so a regression is read by its severity alone. Thread and
+review findings carry a null `stance` and `reviewed_head`.
 
 Normalize every source severity before ranking, capping, or routing. Preserve the
 source label beside the normalized value. The canonical order is
@@ -383,6 +423,20 @@ below:
   finding names an active instruction or shared-workflow path or carries the reviewer's
   own guideline marker, with the matched evidence recorded;
 - input-cap state and the configured batching values;
+- `reviewer_tally` (`#1157`), computed over every finding in the fetched window, not
+  only the capped `prs[]`:
+  - `sources[]`, one per source sorted by key: `lens:<lens>` for a panel finding,
+    otherwise `<trust class>:<normalized login>`. Each has `findings`, `by_addressed`
+    counting all four addressed states, `by_stance` counting the three stances (null
+    for a source without typed stances), `refuted` (the `dispute-evidence` count, or
+    null) and `refuted_flag`. The flag is true when `refuted` is not null, `findings`
+    is at least `refuted_flag_min_findings`, and `refuted × 100` is at least
+    `refuted_flag_percent × findings`.
+  - `rounds[]`, sorted by pull request: `{pr, rounds}` for each pull request with at
+    least one trusted disposition comment, where `rounds` counts its distinct reviewed
+    heads, a clean round included. A merged pull request passed, so this is its
+    rounds-to-pass.
+  - the two flag values applied.
 - `findings_pr_count = len(prs)` after the cap,
   `single_pass_recommended = (findings_pr_count <=
   systemize.single_pass_max_prs)`, and `n_batches =
@@ -396,8 +450,8 @@ cannot select its own evidence or working-set policy. A cap is a bounded analysi
 permission to describe the whole window as reviewed.
 
 Verification compares every finding's identity and non-text evidence, including source,
-severity, addressed state and citation evidence, plus the pull request's counts and
-references. Only cleaned `text` and its `text_truncated` flag may differ; both retain
+severity, addressed state, stance, reviewed head and citation evidence, plus the pull
+request's counts and references and the whole `reviewer_tally`. Only cleaned `text` and its `text_truncated` flag may differ; both retain
 their schema types. Removing, adding or altering finding evidence stops verification.
 
 If the fetched bundle contains no merged pull request, write a complete report saying
@@ -573,7 +627,11 @@ report and do not claim an identifier.
 
 ## Step 4 — Report, notify, and stop
 
-Finalize the report with the actual routes and unresolved actions. If notification is
+Finalize the report with the actual routes and unresolved actions, and a *Reviewer
+tally* section restating `reviewer_tally`: each source's counts, each pull request's
+rounds, and a line naming every source whose `refuted_flag` is true as mostly refuted in
+this window. The flag is a report line. It changes no gate, route or threshold, and a
+change to a lens or bot it prompts goes through its own pull request. If notification is
 available, send a concise summary containing the window, evidence scope, cluster routes,
 created identifiers, degraded capabilities, cap disclosure, and report location, and
 send it under the dispatch order in *External dispatch records*. Prefix the

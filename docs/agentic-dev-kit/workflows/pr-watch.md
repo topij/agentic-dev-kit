@@ -271,7 +271,11 @@ Repeat until the report says **converged**:
      being dropped.
    - Type each disposition `accept`, `dispute-evidence` or `dispute-concern`
      ([Typed dispositions](../fallback-review-panel.md#typed-dispositions)). A HIGH
-     or a reviewer-marked regression is never closed by `dispute-concern`.
+     or a reviewer-marked regression is never closed by `dispute-concern`. For a
+     fallback round, write each as one line,
+     `<lens> F<n> <SEVERITY>: <stance> — <route, citation or objection>`, in the
+     `--record-review --disposition` prose: `post-merge-systemize` reads only that
+     line, from that comment, to count the panel's findings.
 
 1. **Count the round before you fix it.** A review that leaves findings to fix
    records no receipt yet, so record the round itself, against the head that was
