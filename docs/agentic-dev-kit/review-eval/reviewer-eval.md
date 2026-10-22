@@ -52,12 +52,15 @@ branch name, `review-eval/case`. The prompt's repository line is withheld, since
 origin would name the kit checkout itself. The runner does not confine the command,
 though: a lens that reads outside its tree can still open the kit checkout, and the
 preflight invocation names the kit revision, so a lens with network access can look the
-fix up. Give the command a sandbox that keeps it in its working directory and off the
-network where the runtime has one, and read a hit whose report cites files outside the
-diff with that in mind. On Codex,
-`--sandbox workspace-write -c sandbox_workspace_write.network_access=false` does both.
-In the first recorded Codex run, a lens that had network fetched the current `main` into
-its scratch copy.
+fix up. Give the command a sandbox that keeps it off the network where the runtime has
+one, and read a hit whose report cites files outside the diff with that in mind. On
+Codex, `--sandbox workspace-write -c sandbox_workspace_write.network_access=false` limits
+writes to the working directory and turns the network off; it does not confine reads,
+and the setting was not yet tried in an eval run when this was written. In the first
+recorded Codex run (#1156, 2026-10-22), a lens with network fetched the current `main`
+into its scratch copy. An absolute `path:line` counts only inside the lens's own tree
+(`lens-<lens>-<short sha>/`), since the kit checkout holds the fixed file at the same
+relative path.
 
 ```sh
 uv run <engine-dir>/review_eval.py --runtime claude \

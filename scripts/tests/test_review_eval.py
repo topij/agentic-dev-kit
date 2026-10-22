@@ -394,7 +394,9 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     ("see bug.py:L2", True),
     # Codex cites a file in its tree by absolute path, often as a link target.
     ("[guard](/private/tmp/claude-502/-Users-x-kit/review-1/lens-adversarial-abc1234/bug.py:2) fails", True),
-    ("see /tmp/r/lens-x/other.py:2", False),
+    ("see /tmp/r/lens-adversarial-abc1234/other.py:2", False),
+    # An absolute path outside the lens's tree may be the kit checkout's fixed copy.
+    ("see /home/user/agentic-dev-kit/bug.py:2", False),
     # A line the lens checked and cleared is not a finding.
     ("## Verified clean\n- bug.py:2 reviewed, no issue\n\nNo findings.", False),
     ("**What I reviewed**\nbug.py:2\n**F1 (HIGH): divides by zero**\nbug.py:2", True),
