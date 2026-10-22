@@ -232,6 +232,8 @@ def citations(report: str) -> list[dict[str, Any]]:
             if not trees:
                 continue
             path = path[trees[-1].end():]
+            if ".." in path.split("/"):
+                continue  # resolves outside the lens's tree
         start = int(match.group(2))
         end = int(match.group(3)) if match.group(3) else start
         found.append({"path": path, "lines": [start, max(start, end)]})

@@ -219,6 +219,11 @@ def test_the_prompt_withholds_the_kit_checkout(repo, tmp_path) -> None:
     assert str(repo["root"]) not in prompt
 
 
+def test_an_absolute_citation_is_recorded_by_its_path_in_the_lens_tree() -> None:
+    found = review_eval.citations("see /tmp/r/lens-adversarial-abc1234/scripts/x.py:3")
+    assert found == [{"path": "scripts/x.py", "lines": [3, 3]}]
+
+
 def test_section_matching_stays_linear_on_long_whitespace() -> None:
     import time
     start = time.monotonic()
@@ -397,6 +402,7 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     ("see /tmp/r/lens-adversarial-abc1234/other.py:2", False),
     # An absolute path outside the lens's tree may be the kit checkout's fixed copy.
     ("see /home/user/agentic-dev-kit/bug.py:2", False),
+    ("see /r/lens-adversarial-abc1234/../../bug.py:2", False),
     # A line the lens checked and cleared is not a finding.
     ("## Verified clean\n- bug.py:2 reviewed, no issue\n\nNo findings.", False),
     ("**What I reviewed**\nbug.py:2\n**F1 (HIGH): divides by zero**\nbug.py:2", True),
