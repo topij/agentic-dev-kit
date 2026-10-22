@@ -25,8 +25,9 @@
 - **Scratch retention:** [#1186](https://github.com/topij/agentic-dev-kit/pull/1186)
   merged as `0b5d226e`. `--finish-review-round` on a verified round no longer keeps it
   for a bare repository, a `--separate-git-dir` target whose `.git` pointer is in the
-  round, or a `.git` file that does not start with `gitdir:`. Anything an outside tree
-  depends on stays kept, and the age sweep is unchanged.
+  round, or a `.git` file that does not start with `gitdir:`. A dependency recorded
+  outside the round stays kept; the engine docstring lists the limits, among them a
+  decoy in-round pointer (#1189). The age sweep is unchanged.
 - **Decided:** the operator chose #997's option A (receipt-owned rounds) and filed option
   B (unowned entries) as #1185. A follow-up ticket was chosen over widening #1186 for
   the sweep suite's own deliberately unprovable fixtures (#1188). The round-2 LOW
@@ -38,12 +39,13 @@
 - **Not established:** that a round whose lens ran `test_sweep_scratch.py` can be
   retired. #1186's own round-1 allocation `review-72a279dd…` is still on disk, kept by
   those fixtures (#1188).
-- **Tracker pass:** closed #1079, #1102 and #507 with evidence comments (#507 as not
-  planned, superseded by changelog fragments). #1026 and #1120 had already closed on
-  2026-10-21. Filed #1185, #1188 and #1189; added an occurrence to #1144.
-- Closed workstream Changelog fragments: #1026 closed. Closed workstream Record-prose
-  report limits: #1120 closed. Closed workstream Panel prompt test fixtures: #1079
-  closed. Closed workstream Headless lane manifest refresh: #1102 closed.
+- **Tracker pass:** #1079 and #1102 were marked completed and #507 not planned
+  (superseded by changelog fragments), each with an evidence comment; #1026 and #1120
+  were already complete on 2026-10-21. Filed #1185, #1188 and #1189; added an
+  occurrence to #1144.
+- Retired workstreams, on the operator's decision because each one's issue is
+  complete: Changelog fragments, Record-prose report limits, Panel prompt test
+  fixtures, Headless lane manifest refresh.
 
 ______________________________________________________________________
 
@@ -225,8 +227,10 @@ still keep them (#1185). #1189 holds #1186's residual LOWs.
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
 ▶ Next: #1188 — make `scripts/tests/test_sweep_scratch.py` remove each test's
-temporary tree at teardown, then retire the kept round `review-72a279dd…`; its receipt
-is in the main checkout's ignored `state/review-rounds/`.
+temporary tree at teardown, so later rounds retire. That does not clear the fixtures
+already in the kept round `review-72a279dd…` (receipt in the main checkout's ignored
+`state/review-rounds/`); removing that round is the operator's call. #1185 (unowned
+entries) remains an operator design decision.
 
 ### Reviewer profiles
 

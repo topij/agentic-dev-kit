@@ -26,10 +26,10 @@
 
 ## 2026-10-22
 
-- **A PR poll from outside the suite failed a `make test` stamp.** Severity L, kept for
-  accumulation. During #1186's run at `82a867e8`, `state/pr-watch/1186.json` was written
-  in the branch's worktree while the review lenses were running, and the #428 leak check
-  exited 2. The writer was not identified, and the run was repeated with no lens running.
+- **An unidentified `pr_watch` write failed a `make test` stamp.** Severity L, kept for
+  accumulation. During #1186's run at `82a867e8`, with review lenses running,
+  `state/pr-watch/1186.json` appeared in the branch's worktree; pytest failed on the
+  #428 guard and `make` exited 2. The run was repeated with no lens running.
 
 ## 2026-10-21
 
