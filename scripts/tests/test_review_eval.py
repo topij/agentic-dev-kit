@@ -115,7 +115,8 @@ def test_a_cited_bug_is_a_hit_and_clean_findings_are_candidate_false_alarms(repo
     assert result["kit_revision"] == repo["clean"]
     by_case = {r["case"]: r for r in result["results"]}
     assert by_case["divide-by-zero"]["hit"] is True
-    assert by_case["divide-by-zero"]["matched_citations"] == [{"finding": 0, "path": "bug.py", "lines": [2, 2]}]
+    assert by_case["divide-by-zero"]["matched_citations"] == [
+        {"finding": 0, "path": "bug.py", "lines": [2, 2], "number": 1}]
     assert by_case["unconfirmed-case"]["hit"] is False
     assert by_case["a-clean-note"]["candidate_false_alarms"] == 2
     assert result["summary"] == {"adversarial": {
@@ -221,7 +222,7 @@ def test_the_prompt_withholds_the_kit_checkout(repo, tmp_path) -> None:
 
 def test_an_absolute_citation_is_recorded_by_its_path_in_the_lens_tree() -> None:
     found = review_eval.citations("see /tmp/r/lens-adversarial-abc1234/scripts/x.py:3")
-    assert found == [{"path": "scripts/x.py", "lines": [3, 3]}]
+    assert found == [{"path": "scripts/x.py", "lines": [3, 3], "number": None}]
 
 
 def test_section_matching_stays_linear_on_long_whitespace() -> None:
@@ -438,6 +439,113 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
 def test_a_hit_needs_an_overlapping_citation(report, hit) -> None:
     case = {"findings": [{"path": "bug.py", "lines": [2, 2]}]}
     assert review_eval.score_bug(report, case)["hit"] is hit
+
+
+def _verifier(tmp_path: Path, body: str) -> str:
+    """A verifier that records where it ran and which lens reports it was handed."""
+    path = tmp_path / "verifier.py"
+    log = tmp_path / "verifier.py.log"
+    path.write_text(
+        "import subprocess, sys\n"
+        "prompt = sys.stdin.read()\n"
+        "head = subprocess.run(['git', 'rev-parse', 'HEAD'], capture_output=True, text=True).stdout.strip()\n"
+        f"open({str(log)!r}, 'a').write(head + ' ' + prompt.split('Lenses reporting: ')[1].split('\\n')[0].rstrip('.') + '\\n')\n"
+        f"sys.stdout.write({body!r})\n"
+    )
+    return f"{sys.executable} {path}"
+
+
+def test_a_refuted_finding_is_taken_out_of_the_after_verifier_score(repo, tmp_path) -> None:
+    lens = _stub(tmp_path, "F1 HIGH: bug.py:2 divides by zero\nF2 LOW: notes.md:1 typo\n")
+    verifier = _verifier(tmp_path, "Reviewed it.\n- **adversarial F1: refuted** — bug.py:2 is fine\n"
+                                   "adversarial F2: confirmed — notes.md:1\n")
+    out = tmp_path / "out"
+    proc = _run(repo, lens, "--lens", "adversarial", "--verifier-command", verifier, out=out)
+    assert proc.returncode == 0, proc.stderr
+    result = json.loads(proc.stdout)
+    assert result["verifier_command"] == verifier and result["reports_from"] is None
+    by_case = {r["case"]: r for r in result["results"]}
+    bug = by_case["divide-by-zero"]
+    assert bug["hit"] is True and bug["hit_after_verifier"] is False
+    assert bug["verdicts"] == {"F1": "refuted", "F2": "confirmed"}
+    assert by_case["a-clean-note"]["candidate_false_alarms_after_verifier"] == 1
+    summary = result["summary"]["adversarial"]
+    assert summary["confirmed_hits"] == 1 and summary["confirmed_hits_after_verifier"] == 0
+    assert summary["candidate_false_alarms"] == 2 and summary["candidate_false_alarms_after_verifier"] == 1
+    assert summary["verdicts"] == {"confirmed": 3, "refuted": 3, "unverifiable": 0, "missing": 0}
+    assert (out / "divide-by-zero-verifier.md").read_text().startswith("Reviewed it.")
+    # The verifier ran once per case, at its head, handed that case's lens reports.
+    log = (tmp_path / "verifier.py.log").read_text().split("\n")
+    assert [line for line in log if line] == [f"{repo['bug']} adversarial", f"{repo['bug']} adversarial",
+                                             f"{repo['clean']} adversarial"]
+    assert list(repo["scratch"].iterdir()) == []
+
+
+def test_reused_reports_are_verified_without_running_the_lenses(repo, tmp_path) -> None:
+    lens = _stub(tmp_path, "F1 HIGH: bug.py:2 divides by zero\n")
+    first = tmp_path / "first"
+    assert _run(repo, lens, "--case", "divide-by-zero", out=first).returncode == 0
+    lens_runs = (tmp_path / "lens.py.log").read_text()
+    verifier = _verifier(tmp_path, "correctness F1: unverifiable — not checked\n")
+    proc = subprocess.run(
+        [sys.executable, str(ENGINE), "--root", str(repo["root"]), "--cases", str(repo["cases"]),
+         "--runtime", "codex", "--reuse-reports", str(first), "--verifier-command", verifier,
+         "--scratch-root", str(repo["scratch"]), "--case", "divide-by-zero"],
+        capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, proc.stderr
+    assert (tmp_path / "lens.py.log").read_text() == lens_runs
+    result = json.loads(proc.stdout)
+    assert result["lens_command"] is None and result["runtime"] == "codex"
+    assert result["reports_from"] == {"dir": str(first), "run": {
+        "runtime": "claude", "lens_command": lens, "kit_revision": repo["clean"], "complete": True}}
+    by_lens = {r["lens"]: r for r in result["results"]}
+    assert by_lens["adversarial"]["verdicts"] == {"F1": "missing"}
+    assert by_lens["adversarial"]["hit_after_verifier"] is True
+    assert by_lens["correctness"]["verdicts"] == {"F1": "unverifiable"}
+    assert [line for line in (tmp_path / "verifier.py.log").read_text().split("\n") if line] == [
+        f"{repo['bug']} adversarial, correctness"]
+
+
+def test_reused_reports_must_all_be_there(repo, tmp_path) -> None:
+    first = tmp_path / "first"
+    first.mkdir()
+    (first / "divide-by-zero-adversarial.md").write_text("F1 LOW: bug.py:2\n")
+    (first / "divide-by-zero-correctness.md").write_text("  \n")
+    base = [sys.executable, str(ENGINE), "--root", str(repo["root"]), "--cases", str(repo["cases"]),
+            "--runtime", "claude", "--reuse-reports", str(first), "--scratch-root", str(repo["scratch"]),
+            "--case", "divide-by-zero"]
+    proc = subprocess.run(base, capture_output=True, text=True, check=False)
+    assert proc.returncode == 2 and "divide-by-zero-correctness.md" in proc.stderr
+    (first / "result.json").write_text("{}\n")
+    proc = subprocess.run([*base, "--out", str(first)], capture_output=True, text=True, check=False)
+    assert proc.returncode == 2 and "must not be the --reuse-reports" in proc.stderr
+    assert (first / "result.json").exists()
+    proc = subprocess.run([*base, "--lens-command", "true"], capture_output=True, text=True, check=False)
+    assert proc.returncode == 2 and "not allowed with" in proc.stderr
+
+
+def test_a_citation_is_attributed_to_the_finding_it_falls_under() -> None:
+    report = "Intro a.py:1\n### F1 HIGH\nsee b.py:2\n\nmore c.py:3\n**F2 LOW** d.py:4\n"
+    assert [(c["path"], c["number"]) for c in review_eval.citations(report)] == [
+        ("a.py", None), ("b.py", 1), ("c.py", 1), ("d.py", 2)]
+
+
+def test_verdict_lines_are_read_per_lens_and_finding() -> None:
+    report = ("1. `adversarial F1: confirmed` — a.py:1\n> correctness F2: **Refuted** — b.py:2\n"
+              "nosuch F1: refuted — x\nadversarial F1 is confirmed, I said\n"
+              "adversarial F3: unverifiable — no tree\nadversarial F3: refuted — a.py:9\n")
+    assert review_eval.verdicts(report, ["adversarial", "correctness"]) == {
+        ("adversarial", 1): "confirmed", ("correctness", 2): "refuted", ("adversarial", 3): "refuted"}
+
+
+def test_a_citation_under_no_finding_number_is_never_taken_out() -> None:
+    entry = {"lens": "adversarial", "kind": "bug", "findings": [1],
+             "matched_citations": [{"finding": 0, "path": "a.py", "lines": [1, 1], "number": None}]}
+    review_eval.apply_verdicts(entry, {("adversarial", 1): "refuted"})
+    assert entry["hit_after_verifier"] is True
+    clean = {"lens": "adversarial", "kind": "clean", "findings": [], "candidate_false_alarms": 2}
+    review_eval.apply_verdicts(clean, {("adversarial", 1): "refuted"})
+    assert clean["candidate_false_alarms_after_verifier"] == 2 and clean["verdicts"] == {}
 
 
 def test_the_shipped_case_set_names_the_issues_the_ticket_requires() -> None:

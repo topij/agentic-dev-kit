@@ -95,13 +95,47 @@ with an earlier finding's number to clear it. That is a proxy. A report can cite
 right lines for the wrong reason, or describe the bug without a citation, so
 read each case's `matched_citations` and report before recording the score.
 
+## With the verifier
+
+`--verifier-command` runs the panel's verifier (*Verifying findings* in
+[`fallback-review-panel.md`](../fallback-review-panel.md)) after each case's lenses. It
+gets a round and an isolated tree of its own, at `verifier-<short sha>`, and the prompt
+`panel_prompt.py --verifier` renders from the case's lens reports. Its report is kept as
+`<case>-verifier.md`, and its `<lens> F<n>: verdict` lines are read back onto each lens
+result as `verdicts`, with `missing` for a finding it gave no line.
+
+Each result then gains an after-verifier score: a bug case's hit stands only while one
+of its matched citations sits under a finding the verifier did not refute, and a clean
+case's candidate false alarms drop its refuted findings. `confirmed` and `unverifiable`
+leave a finding where it was, as the panel's dispositions do. A citation belongs to the
+last `F<n>` that opened a line above it, so one under no number, and every finding of a
+clean report that numbers none, is never taken out. The summary adds
+`confirmed_hits_after_verifier`, `candidate_false_alarms_after_verifier` and the verdict
+counts. A verifier earns its place when it takes false alarms out and leaves the hits.
+
+`--reuse-reports <dir>` reads each `<case>-<lens>.md` from an earlier run's `--out`
+instead of running the lenses, so the comparison runs on the reports the lenses were
+scored on, and `--lens-command` is then not given. `--runtime` names the verifier's
+runtime, which may differ from the lenses': the result's `reports_from` records the
+directory and, from its `result.json`, the runtime, command and revision that wrote
+them. `--out` must be a different directory.
+
+```sh
+uv run <engine-dir>/review_eval.py --runtime claude \
+  --scratch-root <expanded scratch.roots entry> --out <new dir outside the repo> \
+  --reuse-reports <an earlier run's --out> \
+  --verifier-command '<command that runs the verifier>'
+```
+
+The verifier has no compute key yet (`#1155`), so the command chooses its model and
+effort, and the result records it verbatim.
+
 A score is a reading. Record it where the change is decided, in the pull request that
 changes a lens, stamped with the runtime, the command, `kit_revision` and the date.
 
 ## What it does not do yet
 
-- It runs no verifier. Whether the verifier (*Verifying findings*) improves a round is
-  measured by running the same cases with and without it, and that comparison is still
-  owed (`#1155`, `#1156`).
+- It does not read a refuted HIGH as the operator's call, as a round does: the
+  after-verifier score takes every refuted finding out.
 - It does not judge false alarms. The clean cases' counts are candidates until someone
   reads them.

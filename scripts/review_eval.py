@@ -31,6 +31,16 @@ describe the bug without a citation. The result keeps every matched citation, an
 clean case's findings are candidate false alarms, so the operator reads both before a
 score is recorded.
 
+**The verifier is scored by what it removes** (#1155). With ``--verifier-command``, the
+case's lens reports go to the panel's verifier, rendered by ``panel_prompt.py
+--verifier`` and run in its own round and tree. Its ``<lens> F<n>: verdict`` lines are
+read back, and each result gains an after-verifier score: a hit whose finding was
+refuted is no hit, and a clean case's refuted finding is no false alarm. A finding is
+the ``F<n>`` its citation falls under; a citation under no number is never removed.
+``--reuse-reports`` reads the lens reports an earlier ``--out`` kept instead of running
+the lenses again, so the verifier is compared on the same reports the lenses were
+scored on, and may run under the other runtime.
+
 Exit 0 prints the result JSON (and writes it with ``--out``); exit 1 is a case that
 could not be run (an empty report included, which would otherwise score as clean), and ``--out`` then holds the partial result, ``complete: false``;
 exit 2 is a rejected invocation, case file, or a kit checkout with uncommitted changes.
@@ -49,6 +59,7 @@ import shutil
 import signal
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -93,6 +104,11 @@ _BOLD_LINE = re.compile(rf"{_LEAD}[:]?")
 _BOLD_LEAD = re.compile(_LEAD)
 _REPO_LINE = re.compile(r"^(- \*\*Repo:\*\* ).*$", re.MULTILINE)
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
+# The verifier contract's verdict line, `<lens> F<n>: confirmed|refuted|unverifiable — ...`,
+# allowing the list, quote and emphasis marks a report wraps it in.
+_VERDICT = re.compile(r"^[ \t>*_`-]*(?:\d{1,3}[.)][ \t]+[*_`]*)?(?P<lens>[a-z][a-z0-9-]*)[ \t]+F(?P<n>\d+)[*_`]*[ \t]*:[ \t]*[*_`]*"
+                      r"(?P<verdict>confirmed|refuted|unverifiable)\b", re.MULTILINE | re.IGNORECASE)
+VERDICTS = ("confirmed", "refuted", "unverifiable")
 # The widest citation that still counts as a hit: wider is a file, not a finding.
 HIT_SPAN = 40
 # What the lens sees as the branch: the same for every case, so the name says
@@ -224,20 +240,32 @@ def findings_text(report: str) -> str:
 
 
 def citations(report: str) -> list[dict[str, Any]]:
-    found = []
-    for match in _CITATION.finditer(findings_text(report)):
-        path = match.group(1)
-        if path.startswith("/"):
-            trees = list(_LENS_TREE.finditer(path))
-            if not trees:
-                continue
-            path = path[trees[-1].end():]
-            if ".." in path.split("/"):
-                continue  # resolves outside the lens's tree
-        start = int(match.group(2))
-        end = int(match.group(3)) if match.group(3) else start
-        found.append({"path": path, "lines": [start, max(start, end)]})
+    """Each citation in the report's findings, with the ``F<n>`` it falls under.
+
+    ``number`` is the last finding number opened on a line at or before it, or
+    ``None`` before the first, so a verdict on that finding can be applied to it.
+    """
+    found, number = [], None
+    for line in findings_text(report).splitlines():
+        if (opened := _FINDING_NUMBER.match(line)) is not None:
+            number = int(opened.group(1))
+        for match in _CITATION.finditer(line):
+            path = match.group(1)
+            if path.startswith("/"):
+                trees = list(_LENS_TREE.finditer(path))
+                if not trees:
+                    continue
+                path = path[trees[-1].end():]
+                if ".." in path.split("/"):
+                    continue  # resolves outside the lens's tree
+            start = int(match.group(2))
+            end = int(match.group(3)) if match.group(3) else start
+            found.append({"path": path, "lines": [start, max(start, end)], "number": number})
     return found
+
+
+def finding_numbers(report: str) -> list[int]:
+    return sorted({int(n) for n in _FINDING_NUMBER.findall(findings_text(report))})
 
 
 def _same_path(cited: str, known: str) -> bool:
@@ -252,16 +280,44 @@ def score_bug(report: str, case: dict[str, Any]) -> dict[str, Any]:
                     and _same_path(cited["path"], known["path"])
                     and cited["lines"][0] <= known["lines"][1] and known["lines"][0] <= cited["lines"][1]):
                 matched.append({"finding": index, **cited})
-    return {"hit": bool(matched), "matched_citations": matched}
+    return {"hit": bool(matched), "matched_citations": matched, "findings": finding_numbers(report)}
 
 
 def score_clean(report: str) -> dict[str, Any]:
     """A clean case's findings: its ``F<n>`` numbers, or, in a report that numbers
     none, each distinct citation, so an unnumbered report is not read as silent."""
-    numbers = {int(n) for n in _FINDING_NUMBER.findall(findings_text(report))}
+    numbers = finding_numbers(report)
     cited = citations(report)
     count = len(numbers) or len({(c["path"], *c["lines"]) for c in cited})
-    return {"candidate_false_alarms": count, "citations": cited}
+    return {"candidate_false_alarms": count, "citations": cited, "findings": numbers}
+
+
+def verdicts(report: str, lenses: list[str]) -> dict[tuple[str, int], str]:
+    """The verifier's verdict on each ``(lens, F<n>)``; a later line wins."""
+    found = {}
+    for match in _VERDICT.finditer(report):
+        lens = match.group("lens").lower()
+        if lens in lenses:
+            found[(lens, int(match.group("n")))] = match.group("verdict").lower()
+    return found
+
+
+def apply_verdicts(entry: dict[str, Any], found: dict[tuple[str, int], str]) -> None:
+    """Add the after-verifier score to one lens's result.
+
+    A refuted finding is taken out; ``confirmed`` and ``unverifiable`` leave it, as the
+    panel's dispositions do. A citation under no ``F<n>``, and an unnumbered clean
+    report's citations, cannot be named by a verdict and so are never taken out.
+    """
+    mine = {n: v for (lens, n), v in found.items() if lens == entry["lens"]}
+    entry["verdicts"] = {f"F{n}": mine.get(n, "missing") for n in entry["findings"]}
+    refuted = {n for n, v in mine.items() if v == "refuted"}
+    if entry["kind"] == "bug":
+        entry["hit_after_verifier"] = any(m["number"] not in refuted for m in entry["matched_citations"])
+    elif entry["findings"]:
+        entry["candidate_false_alarms_after_verifier"] = len(set(entry["findings"]) - refuted)
+    else:
+        entry["candidate_false_alarms_after_verifier"] = entry["candidate_false_alarms"]
 
 
 def _run_engine(name: str, args: list[str], root: Path) -> str:
@@ -352,7 +408,35 @@ def _withhold_repo(prompt: str) -> str:
 
 def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, command: list[str],
              scratch_root: str, kit_rev: str, work: Path, timeout: int) -> str:
-    """One lens over one case; returns the report. The round is retired either way.
+    """One lens over one case; returns the report. The round is retired either way."""
+    return _run_in_round(root, case, f"lens-{lens}", f"{case['id']} {lens}", command=command,
+                         scratch_root=scratch_root, kit_rev=kit_rev, work=work, timeout=timeout,
+                         render=lambda tree: prompt_args(root, case, lens, runtime, tree, kit_rev))
+
+
+def run_verifier(root: Path, case: dict[str, Any], reports: dict[str, Path], *, runtime: str,
+                 command: list[str], scratch_root: str, kit_rev: str, work: Path, timeout: int) -> str:
+    """The verifier over one case's lens reports; returns its report.
+
+    It gets a round and an isolated tree of its own, as the lenses do, and a prompt
+    rendered by ``panel_prompt.py --verifier``, which takes no ``--preflight-rev``.
+    """
+    def render(tree: Path) -> list[str]:
+        args = ["--root", str(root), "--verifier", "--head", case["head"], "--base", case["base"],
+                "--scratch", str(tree), "--runtime", runtime]
+        for lens, path in reports.items():
+            args += ["--lens-report", f"{lens}={path}"]
+        return args
+
+    return _run_in_round(root, case, "verifier", f"{case['id']} verifier", command=command,
+                         scratch_root=scratch_root, kit_rev=kit_rev, work=work, timeout=timeout,
+                         render=render)
+
+
+def _run_in_round(root: Path, case: dict[str, Any], role: str, label: str, *, command: list[str],
+                  scratch_root: str, kit_rev: str, work: Path, timeout: int,
+                  render: Callable[[Path], list[str]]) -> str:
+    """Run ``command`` in a fresh tree at ``<round>/<role>-<short head>``; returns its report.
 
     The round goes through ``sweep_scratch``'s own allocation and retirement, as a
     real round does, with the allocation receipt kept outside the round.
@@ -361,38 +445,36 @@ def run_case(root: Path, case: dict[str, Any], lens: str, *, runtime: str, comma
         settings = sweep_scratch.load_settings(root / "config" / "dev-model.yaml", root=root)
         record = sweep_scratch.create_review_round(scratch_root, case["head"], settings, root)
     except (sweep_scratch.ConfigError, OSError, ValueError) as exc:
-        raise RunError(f"{case['id']} {lens}: cannot allocate a review round: {exc}") from exc
-    tree = Path(record["path"]) / f"lens-{lens}-{case['head'][:7]}"
+        raise RunError(f"{label}: cannot allocate a review round: {exc}") from exc
+    tree = Path(record["path"]) / f"{role}-{case['head'][:7]}"
+    name = role.removeprefix("lens-")
     escaped = False
     try:
-        (work / f"{case['id']}-{lens}.round.json").write_text(json.dumps(record, sort_keys=True))
+        (work / f"{case['id']}-{name}.round.json").write_text(json.dumps(record, sort_keys=True))
         _isolated_tree(root, tree, case, kit_rev)
-        prompt = _withhold_repo(
-            _run_engine("panel_prompt.py", prompt_args(root, case, lens, runtime, tree, kit_rev), root))
+        prompt = _withhold_repo(_run_engine("panel_prompt.py", render(tree), root))
         try:
             proc = _run_lens(command, tree, prompt, timeout)
         except LensEscaped as exc:
             escaped = True
-            raise RunError(f"{case['id']} {lens}: lens command timed out after {timeout}s and a process it "
+            raise RunError(f"{label}: command timed out after {timeout}s and a process it "
                            f"started left its group and still holds its output; the round is left at "
                            f"{record['path']} to retire once that process ends") from exc
         except subprocess.TimeoutExpired as exc:
-            raise RunError(f"{case['id']} {lens}: lens command timed out after {timeout}s") from exc
+            raise RunError(f"{label}: command timed out after {timeout}s") from exc
         except OSError as exc:
-            raise RunError(f"{case['id']} {lens}: cannot run lens command: {exc}") from exc
+            raise RunError(f"{label}: cannot run command: {exc}") from exc
         if proc.returncode != 0:
-            raise RunError(f"{case['id']} {lens}: lens command exited {proc.returncode}: "
-                           f"{proc.stderr.strip()[:500]}")
+            raise RunError(f"{label}: command exited {proc.returncode}: {proc.stderr.strip()[:500]}")
         if not proc.stdout.strip():
-            # An empty report would score as a perfect clean case.
-            raise RunError(f"{case['id']} {lens}: lens command printed no report: "
-                           f"{proc.stderr.strip()[:500]}")
+            # An empty report would score as a perfect clean case, or verify nothing.
+            raise RunError(f"{label}: command printed no report: {proc.stderr.strip()[:500]}")
         return proc.stdout
     finally:
-        # A process that escaped the lens's group may still be working in the tree,
-        # so that round is neither removed nor called finished.
+        # A process that escaped the group may still be working in the tree, so that
+        # round is neither removed nor called finished.
         if not escaped:
-            _retire(root, record, settings, tree, f"{case['id']} {lens}")
+            _retire(root, record, settings, tree, label)
 
 
 def _retire(root: Path, record: dict[str, Any], settings: Any, tree: Path, label: str) -> None:
@@ -420,7 +502,35 @@ def summarize(results: list[dict[str, Any]], lenses: list[str]) -> dict[str, Any
             "clean_cases": len(clean),
             "candidate_false_alarms": sum(r["candidate_false_alarms"] for r in clean),
         }
+        if mine and all("verdicts" in r for r in mine):
+            summary[lens].update({
+                "confirmed_hits_after_verifier": sum(
+                    1 for r in bugs if r["confirmed"] and r["hit_after_verifier"]),
+                "unconfirmed_hits_after_verifier": sum(
+                    1 for r in bugs if not r["confirmed"] and r["hit_after_verifier"]),
+                "candidate_false_alarms_after_verifier": sum(
+                    r["candidate_false_alarms_after_verifier"] for r in clean),
+                "verdicts": {v: sum(list(r["verdicts"].values()).count(v) for r in mine)
+                             for v in (*VERDICTS, "missing")},
+            })
     return summary
+
+
+def _readable_report(path: Path) -> bool:
+    try:
+        return bool(path.read_text(errors="replace").strip())
+    except OSError:
+        return False
+
+
+def _earlier_run(reused: Path) -> dict[str, Any] | None:
+    try:
+        earlier = json.loads((reused / "result.json").read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(earlier, dict):
+        return None
+    return {key: earlier.get(key) for key in ("runtime", "lens_command", "kit_revision", "complete")}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -429,9 +539,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--cases", default=None, help=f"case file (default: <root>/{CASES})")
     parser.add_argument("--runtime", required=True, choices=RUNTIMES,
                         help="the runtime the lens command runs under; the score is per runtime")
-    parser.add_argument("--lens-command", required=True,
-                        help="shell-quoted command run in the lens tree with the prompt on stdin; "
-                        "its stdout is the report, and it applies the compute")
+    reports = parser.add_mutually_exclusive_group(required=True)
+    reports.add_argument("--lens-command",
+                         help="shell-quoted command run in the lens tree with the prompt on stdin; "
+                         "its stdout is the report, and it applies the compute")
+    reports.add_argument("--reuse-reports", default=None,
+                         help="read each <case>-<lens>.md from this earlier --out instead of "
+                         "running the lenses")
+    parser.add_argument("--verifier-command", default=None,
+                        help="shell-quoted command run as the verifier over each case's lens "
+                        "reports, as --lens-command is run; adds the after-verifier score")
     parser.add_argument("--scratch-root", required=True,
                         help="an expanded scratch.roots entry to allocate review rounds under")
     parser.add_argument("--lens", action="append", default=None,
@@ -446,15 +563,22 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     out = Path(args.out).resolve() if args.out else None
+    if out is not None and args.reuse_reports is not None and out == Path(args.reuse_reports).resolve():
+        # This run's result would replace the one that names the run that wrote them.
+        print("error: --out must not be the --reuse-reports directory", file=sys.stderr)
+        return 2
     if out is not None:
         # A result left by an earlier run must not read as this one's, whatever this
         # run's exit.
         (out / "result.json").unlink(missing_ok=True)
     try:
         root = Path(args.root).resolve() if args.root else ENGINE_DIR.parent
-        command = shlex.split(args.lens_command)
-        if not command:
+        command = shlex.split(args.lens_command) if args.lens_command is not None else None
+        if command == []:
             raise EvalError("--lens-command is empty")
+        verifier = shlex.split(args.verifier_command) if args.verifier_command is not None else None
+        if verifier == []:
+            raise EvalError("--verifier-command is empty")
         if args.timeout < 1:
             raise EvalError("--timeout must be positive")
         cases_path = Path(args.cases) if args.cases else root / CASES
@@ -473,6 +597,13 @@ def main(argv: list[str] | None = None) -> int:
             if missing:
                 raise EvalError(f"no such case: {', '.join(missing)}")
             selected = [(k, c) for k, c in selected if c["id"] in args.case]
+        reused = None
+        if args.reuse_reports is not None:
+            reused = Path(args.reuse_reports).resolve()
+            absent = [f"{c['id']}-{lens}.md" for _, c in selected for lens in lenses
+                      if not _readable_report(reused / f"{c['id']}-{lens}.md")]
+            if absent:
+                raise EvalError(f"--reuse-reports {reused}: no report, or an empty one: {', '.join(absent)}")
     except EvalError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -501,16 +632,32 @@ def main(argv: list[str] | None = None) -> int:
     failure = None
     try:
         for kind, case in selected:
+            paths, entries = {}, []
             for lens in lenses:
-                report = run_case(root, case, lens, runtime=args.runtime, command=command,
-                                  scratch_root=args.scratch_root, kit_rev=kit_rev, work=work,
-                                  timeout=args.timeout)
-                if out is not None:
-                    (out / f"{case['id']}-{lens}.md").write_text(report)
+                path = work / f"{case['id']}-{lens}.md"
+                if reused is not None:
+                    report = (reused / path.name).read_text(errors="replace")
+                else:
+                    report = run_case(root, case, lens, runtime=args.runtime, command=command,
+                                      scratch_root=args.scratch_root, kit_rev=kit_rev, work=work,
+                                      timeout=args.timeout)
+                if reused is None or path.resolve() != (reused / path.name).resolve():
+                    path.write_text(report)
+                paths[lens] = path
                 entry = {"case": case["id"], "kind": kind, "lens": lens,
-                         "source": case["source"], "confirmed": case["confirmed"]}
+                         "source": case["source"], "confirmed": case["confirmed"],
+                         "report_sha256": hashlib.sha256(report.encode()).hexdigest()}
                 entry.update(score_bug(report, case) if kind == "bug" else score_clean(report))
-                results.append(entry)
+                entries.append(entry)
+            if verifier is not None:
+                checked = run_verifier(root, case, paths, runtime=args.runtime, command=verifier,
+                                       scratch_root=args.scratch_root, kit_rev=kit_rev, work=work,
+                                       timeout=args.timeout)
+                (work / f"{case['id']}-verifier.md").write_text(checked)
+                found = verdicts(checked, lenses)
+                for entry in entries:
+                    apply_verdicts(entry, found)
+            results.extend(entries)
     except RunError as exc:
         failure = str(exc)
         print(f"error: {exc}", file=sys.stderr)
@@ -522,6 +669,10 @@ def main(argv: list[str] | None = None) -> int:
         "schema": RESULT_SCHEMA,
         "runtime": args.runtime,
         "lens_command": args.lens_command,
+        # With --reuse-reports, the lenses ran earlier: the run that wrote them, as its
+        # result.json recorded it, or null when it kept none.
+        "reports_from": None if reused is None else {"dir": str(reused), "run": _earlier_run(reused)},
+        "verifier_command": args.verifier_command,
         "kit_revision": kit_rev,
         # null when the engines ran from --root itself, which is then clean.
         "engine_checkout": engine,

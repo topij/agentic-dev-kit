@@ -813,7 +813,7 @@ accepted nit is a commit and another review (`#1155`).
 
 **It is optional until it is measured.** Whether it improves the round is the
 reviewer eval's question (`#1156`), measured on the same cases with and without it. The
-eval runs lenses only so far, so that comparison is still owed. Until it is made, each
+eval can run it, and no comparison is recorded yet. Until one is, each
 round's cockpit chooses whether to run it, and a round that
 skips it is disposed of exactly as before. The evidence for running it at all is one
 workshop paper (arXiv 2608.18167, recorded on `#613`) and a team report of the same
