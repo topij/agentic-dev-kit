@@ -32,17 +32,17 @@
   [#1181](https://github.com/topij/agentic-dev-kit/pull/1181) (`a72034b`) scores a
   verifier stage over reused lens reports.
   [#1183](https://github.com/topij/agentic-dev-kit/pull/1183) (`901daad`) declares
-  `review.fallback_panel.verifier_compute`, which closed #1155.
+  `review.fallback_panel.verifier_compute` for #1155.
 - **Decided:** the operator chose the cheap tier for the verifier and kept the key
   optional until measured. The verifier comparison on #1156 found no run that refuted
   a hit; the case set is too small to rank tiers. The operator ran the Codex verifier
   locally, because a cloud session has no Codex.
 - **Review proportionality:**
   [#1167](https://github.com/topij/agentic-dev-kit/pull/1167) (`4248942`) refuses a
-  `--last-reviewed` sha that is not on the branch past its fork point, which closed #1166.
+  `--last-reviewed` sha that is not on the branch past its fork point (#1166).
 - Each PR body names its `make test` run; failures known to come from the cloud sandbox
   were left to CI. This session filed #1180, #1182
-  and #1184 for review findings it did not fix. Its workstream assignment was not
+  and #1184 for review findings it left open. Its workstream assignment was not
   confirmed by the operator.
 
 ______________________________________________________________________
