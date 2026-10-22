@@ -84,7 +84,10 @@ lens run.
 cases and hits, clean cases and their candidate false alarms. A hit means the report
 cited `path:line` overlapping a known finding's lines, in a citation at most 40 lines
 wide. A clean case's candidate false alarms are the `F<n>` numbers that open a line of
-its report, or, in a report that numbers none, its distinct citations. Neither count
+its report, or, in a report that numbers none, its distinct citations. A number opens a
+finding only when emphasis, punctuation, a severity or the line's end follows it
+(`F3 HIGH`, `**F3**`, `### F3 —`), so a line in a finding's body that opens
+`F3 is the same class` is not counted as F3. Neither count
 reads a section the lens contract has it write about what it checked (*Verified clean*,
 *What I reviewed*, *Executed* and the like), so a line it cleared is not a hit. A
 heading whose title opens with that name opens such a section, and a bold label that
@@ -102,7 +105,11 @@ read each case's `matched_citations` and report before recording the score.
 gets a round and an isolated tree of its own, at `verifier-<short sha>`, and the prompt
 `panel_prompt.py --verifier` renders from the case's lens reports. Its report is kept as
 `<case>-verifier.md`, and its `<lens> F<n>: verdict` lines are read back onto each lens
-result as `verdicts`, with `missing` for a finding it gave no line.
+result as `verdicts`, with `missing` for a finding it gave no line. Only the trailing
+block is read: the verdict lines that end the report, as the contract asks, fenced or
+not. A verdict-shaped line above the report's last line of prose, or in a quote, is
+read as an echo of a lens report and ignored, and the verdict word must end at a space,
+a dash or the line's end, so `refuted-ish` is no verdict.
 
 Each result then gains an after-verifier score: a bug case's hit stands only while one
 of its matched citations sits under a finding the verifier did not refute, and a clean
@@ -118,7 +125,11 @@ instead of running the lenses, so the comparison runs on the reports the lenses 
 scored on, and `--lens-command` is then not given. `--runtime` names the verifier's
 runtime, which may differ from the lenses': the result's `reports_from` records the
 directory and, from its `result.json`, the runtime, command and revision that wrote
-them. `--out` must be a different directory.
+them. `--out` must be a different directory. Each reused report must be one that
+`result.json` scored, for the case's current head, and unchanged since: a directory
+without a `result.json`, a report from a run that stopped before it, one scored at
+another head, or one edited since, is refused with exit 2. A result written before
+results recorded each case's head is accepted only with the same case file.
 
 ```sh
 uv run <engine-dir>/review_eval.py --runtime claude \

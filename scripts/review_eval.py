@@ -39,7 +39,9 @@ refuted is no hit, and a clean case's refuted finding is no false alarm. A findi
 the ``F<n>`` its citation falls under; a citation under no number is never removed.
 ``--reuse-reports`` reads the lens reports an earlier ``--out`` kept instead of running
 the lenses again, so the verifier is compared on the same reports the lenses were
-scored on, and may run under the other runtime.
+scored on, and may run under the other runtime. Each report must be the one that run's
+``result.json`` scored, for the same case head, unchanged since. Only the verifier's
+trailing block of verdict lines is read.
 
 Exit 0 prints the result JSON (and writes it with ``--out``); exit 1 is a case that
 could not be run (an empty report included, which would otherwise score as clean), and ``--out`` then holds the partial result, ``complete: false``;
@@ -84,7 +86,11 @@ _CITATION = re.compile(r"(?<![\w./-])(/?(?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?
 # and then by the part after it: the kit checkout holds the fixed file at the same tail.
 _LENS_TREE = re.compile(r"(?:^|/)lens-[\w-]+-[0-9a-f]{7}/")
 # A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`, `1. **F3**`.
-_FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b", re.MULTILINE)
+# The number must be followed by emphasis, punctuation, a severity or the line's end,
+# so a line in a finding's body that opens `F3 is the same class` opens nothing (#1182).
+_FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b"
+                             r"(?=[*_`]|[ \t]*(?:$|[:.)(\[—–-]|(?i:critical|high|medium|med|low|info|nit)\b))",
+                             re.MULTILINE)
 # The lens contract's own sections cite what was checked, not what is wrong. A
 # heading names one when its title opens with that name as a word; a bold lead-in
 # followed by more text names one only when the label is that name, with at most an
@@ -105,9 +111,11 @@ _BOLD_LEAD = re.compile(_LEAD)
 _REPO_LINE = re.compile(r"^(- \*\*Repo:\*\* ).*$", re.MULTILINE)
 _FENCE = re.compile(r"[ ]{0,3}(`{3,}|~{3,})")
 # The verifier contract's verdict line, `<lens> F<n>: confirmed|refuted|unverifiable — ...`,
-# allowing the list, quote and emphasis marks a report wraps it in.
-_VERDICT = re.compile(r"^[ \t>*_`-]*(?:\d{1,3}[.)][ \t]+[*_`]*)?(?P<lens>[a-z][a-z0-9-]*)[ \t]+F(?P<n>\d+)[*_`]*[ \t]*:[ \t]*[*_`]*"
-                      r"(?P<verdict>confirmed|refuted|unverifiable)\b", re.MULTILINE | re.IGNORECASE)
+# allowing the list and emphasis marks a report wraps it in. A quoted (`>`) line is an
+# echo, and the verdict word must end at whitespace, a dash or the line's end, so
+# `refuted-ish` is no verdict.
+_VERDICT = re.compile(r"[ \t*_`-]*(?:\d{1,3}[.)][ \t]+[*_`]*)?(?P<lens>[a-z][a-z0-9-]*)[ \t]+F(?P<n>\d+)[*_`]*[ \t]*:[ \t]*[*_`]*"
+                      r"(?P<verdict>confirmed|refuted|unverifiable)[*_`]*(?=[ \t]|—|–|$)", re.IGNORECASE)
 VERDICTS = ("confirmed", "refuted", "unverifiable")
 # The widest citation that still counts as a hit: wider is a file, not a finding.
 HIT_SPAN = 40
@@ -246,7 +254,7 @@ def citations(report: str) -> list[dict[str, Any]]:
     ``None`` before the first, so a verdict on that finding can be applied to it. A
     finding opens by the same rule ``finding_numbers`` counts it by, so every
     number a citation carries is one the verdicts are read for. A line inside a
-    finding that opens ``F2 is the same class`` opens F2 under both (#1182).
+    finding that opens ``F2 is the same class`` opens nothing under either (#1182).
     """
     found, number = [], None
     for line in findings_text(report).splitlines():
@@ -296,9 +304,23 @@ def score_clean(report: str) -> dict[str, Any]:
 
 
 def verdicts(report: str, lenses: list[str]) -> dict[tuple[str, int], str]:
-    """The verifier's verdict on each ``(lens, F<n>)``; a later line wins."""
+    """The verifier's verdict on each ``(lens, F<n>)``; a later line wins.
+
+    Only the trailing verdict block is read: the verdict lines that end the report,
+    with blank lines and fence delimiters between them skipped, since a verifier
+    often fences the block. The contract asks it to end the report so (*One verdict
+    line per finding*). A verdict-shaped line above the last line of prose, such as
+    one echoed from a lens report, is not read (#1182).
+    """
+    block = []
+    for line in reversed(report.splitlines()):
+        if not line.strip() or _FENCE.match(line):
+            continue
+        if (match := _VERDICT.match(line)) is None:
+            break
+        block.append(match)
     found = {}
-    for match in _VERDICT.finditer(report):
+    for match in reversed(block):
         lens = match.group("lens").lower()
         if lens in lenses:
             found[(lens, int(match.group("n")))] = match.group("verdict").lower()
@@ -526,14 +548,45 @@ def _readable_report(path: Path) -> bool:
         return False
 
 
-def _earlier_run(reused: Path) -> dict[str, Any] | None:
+def _earlier_run(earlier: dict[str, Any]) -> dict[str, Any]:
+    return {key: earlier.get(key) for key in ("runtime", "lens_command", "kit_revision", "complete")}
+
+
+def check_reused(reused: Path, selected: list[tuple[str, dict[str, Any]]], lenses: list[str],
+                 cases_sha256: str) -> dict[str, Any]:
+    """The earlier run's result, once every report to be reused is shown to be its own.
+
+    Each selected case and lens needs an entry in that run's ``result.json``, scored
+    on the same case head, whose ``report_sha256`` is the report's bytes now. A report
+    from another case set, another head, a run that stopped before it, or one edited
+    since, is refused rather than scored as this run's (#1182). An entry from before
+    results recorded the case head is matched by the whole case file's hash instead.
+    """
     try:
         earlier = json.loads((reused / "result.json").read_text())
-    except (OSError, ValueError):
-        return None
-    if not isinstance(earlier, dict):
-        return None
-    return {key: earlier.get(key) for key in ("runtime", "lens_command", "kit_revision", "complete")}
+    except (OSError, ValueError) as exc:
+        raise EvalError(f"--reuse-reports {reused}: no readable result.json naming the run "
+                        f"that wrote the reports: {exc}") from exc
+    if not isinstance(earlier, dict) or earlier.get("schema") != RESULT_SCHEMA \
+            or not isinstance(earlier.get("results"), list):
+        raise EvalError(f"--reuse-reports {reused}: result.json is not a {RESULT_SCHEMA} result")
+    scored = {(r.get("case"), r.get("lens")): r for r in earlier["results"] if isinstance(r, dict)}
+    refused = []
+    for _, case in selected:
+        for lens in lenses:
+            name = f"{case['id']}-{lens}.md"
+            entry = scored.get((case["id"], lens))
+            if entry is None:
+                refused.append(f"{name} (not scored by that run)")
+            elif "head" in entry and entry["head"] != case["head"]:
+                refused.append(f"{name} (scored at head {str(entry['head'])[:12]}, the case is at {case['head'][:12]})")
+            elif "head" not in entry and earlier.get("cases_sha256") != cases_sha256:
+                refused.append(f"{name} (that run read a different case file)")
+            elif entry.get("report_sha256") != hashlib.sha256((reused / name).read_bytes()).hexdigest():
+                refused.append(f"{name} (changed since that run scored it)")
+    if refused:
+        raise EvalError(f"--reuse-reports {reused}: not that run's report for this case: {', '.join(refused)}")
+    return earlier
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -600,13 +653,15 @@ def main(argv: list[str] | None = None) -> int:
             if missing:
                 raise EvalError(f"no such case: {', '.join(missing)}")
             selected = [(k, c) for k, c in selected if c["id"] in args.case]
-        reused = None
+        cases_sha256 = hashlib.sha256(cases_path.read_bytes()).hexdigest()
+        reused = earlier = None
         if args.reuse_reports is not None:
             reused = Path(args.reuse_reports).resolve()
             absent = [f"{c['id']}-{lens}.md" for _, c in selected for lens in lenses
                       if not _readable_report(reused / f"{c['id']}-{lens}.md")]
             if absent:
                 raise EvalError(f"--reuse-reports {reused}: no report, or an empty one: {', '.join(absent)}")
+            earlier = check_reused(reused, selected, lenses, cases_sha256)
     except EvalError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -630,7 +685,6 @@ def main(argv: list[str] | None = None) -> int:
     work = out or Path(_git(root, "rev-parse", "--absolute-git-dir")) / "review-eval"
     work.mkdir(parents=True, exist_ok=True)
     kit_rev = _git(root, "rev-parse", "HEAD")
-    cases_sha256 = hashlib.sha256(cases_path.read_bytes()).hexdigest()
     results = []
     failure = None
     try:
@@ -640,18 +694,22 @@ def main(argv: list[str] | None = None) -> int:
             paths, entries = {}, []
             for lens in lenses:
                 path = work / f"{case['id']}-{lens}.md"
+                # The hash is of the bytes kept, which a reused report keeps verbatim,
+                # so it matches the file even where it is not UTF-8.
                 if reused is not None:
-                    report = (reused / path.name).read_text(errors="replace")
+                    kept = (reused / path.name).read_bytes()
+                    report = kept.decode("utf-8", errors="replace")
                 else:
                     report = run_case(root, case, lens, runtime=args.runtime, command=command,
                                       scratch_root=args.scratch_root, kit_rev=kit_rev, work=work,
                                       timeout=args.timeout)
+                    kept = report.encode("utf-8")
                 if reused is None or path.resolve() != (reused / path.name).resolve():
-                    path.write_text(report, encoding="utf-8")
+                    path.write_bytes(kept)
                 paths[lens] = path
-                entry = {"case": case["id"], "kind": kind, "lens": lens,
+                entry = {"case": case["id"], "kind": kind, "lens": lens, "head": case["head"],
                          "source": case["source"], "confirmed": case["confirmed"],
-                         "report_sha256": hashlib.sha256(report.encode("utf-8")).hexdigest()}
+                         "report_sha256": hashlib.sha256(kept).hexdigest()}
                 entry.update(score_bug(report, case) if kind == "bug" else score_clean(report))
                 entries.append(entry)
                 results.append(entry)
@@ -675,8 +733,8 @@ def main(argv: list[str] | None = None) -> int:
         "runtime": args.runtime,
         "lens_command": args.lens_command,
         # With --reuse-reports, the lenses ran earlier: the run that wrote them, as its
-        # result.json recorded it, or null when it kept none.
-        "reports_from": None if reused is None else {"dir": str(reused), "run": _earlier_run(reused)},
+        # result.json recorded it.
+        "reports_from": None if earlier is None else {"dir": str(reused), "run": _earlier_run(earlier)},
         "verifier_command": args.verifier_command,
         "kit_revision": kit_rev,
         # null when the engines ran from --root itself, which is then clean.
