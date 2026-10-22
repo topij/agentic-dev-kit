@@ -66,8 +66,10 @@ RESULT_SCHEMA = "review-eval-result-v1"
 RUNTIMES = ("claude", "codex")
 _SHA = re.compile(r"[0-9a-f]{40}")
 _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
-# `path:line` or `path:start-end`, the citation form the lens contract asks for.
-_CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
+# `path:line` or `path:start-end`, the citation form the lens contract asks for. The
+# path may be absolute, as Codex writes it for a file in its tree; `_same_path`
+# matches it by its tail.
+_CITATION = re.compile(r"(?<![\w./-])/?((?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
 # A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`, `1. **F3**`.
 _FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b", re.MULTILINE)
 # The lens contract's own sections cite what was checked, not what is wrong. A
