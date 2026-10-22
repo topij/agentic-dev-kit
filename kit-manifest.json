@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "80e73ce06fad560395d5408d756df5e3b975deaa29a94d9a2376f525f6a787ff"
+      "sha256": "ffb6d4f39eee5b53e88e14e68ddc96993170142ccdea384d766df4e9dab75b90"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "15afded298b6ca50bfbc8a06263fc89c37469cfa3019eb0a74d584e628c6a1ca"
+      "sha256": "5ecb60d1fdaf30d9f7c7757ab43c9d8527734da895b04aae01b58c9ae4fbc953"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -151,7 +151,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "4811455cfa004f2dd910725ccfd05b18c8c70a01440efa50ffdef32a956bbe10"
+      "sha256": "48e5d21f511fb181fd6f70df20ad90ba9c1c29eb231f708174a5a22d1ee4f6b5"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -586,7 +586,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "78bfc5de14c7e73af729ff0a121816481843e8eb3a18cccf5967b95ca3e1b7be"
+      "sha256": "e586d53caa4aebdc3f990018a0dfb11a27da44fa57536fa553748313e1af9155"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -633,7 +633,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "92617a64259f7b8eb6976a5d8164d2038af6e26b72fa872bdb49abf14c899aef"
+      "sha256": "528fee5f3a598ced5566ab4085d0566c6e5bcae1108247477547b538078ecd6e"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -709,7 +709,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "89f978f0cd6a451840c59522b9df76596e38338cc58052d1a4d29305eace74c4"
+      "sha256": "0e4dc1ba73d2a3e52777d38944e463bf6aad15207b5ead53395858855413994a"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

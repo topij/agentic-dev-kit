@@ -855,12 +855,15 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
 5. Read its report against *Report what you reviewed, first* as step 3 does for a lens,
    then post its verdict lines on the pull request verbatim, before any disposition.
 
-**What compute it gets is not declared yet.** No `config/dev-model.yaml` key sets it,
-and no agent definition carries it. On Claude Code the delegation tool's `model`
-parameter applies a model and the effort is the cockpit's; on Codex, `-m` and
-`-c model_reasoning_effort=<level>` on the `codex exec` argv apply both. Run it at no
-more than the lenses' compute, and name what ran in the disposition. A key and an agent
-definition wait for the measurement to say which tier is enough.
+**What compute it gets.** `review.fallback_panel.verifier_compute.<runtime>` declares
+it, with the same optional `model` and `effort` as `lens_compute`, and the prompt's
+`Run at:` line restates it. No agent definition carries it, so apply it at launch: on
+Claude Code pass its `model` to the delegation tool, whose effort is the cockpit's; on
+Codex put `-m` and `-c model_reasoning_effort=<level>` on the `codex exec` argv. Keep it
+at no more than the lenses' compute, and name what ran in the disposition. The kit sets
+it at the cheap tier, because the reviewer eval's first comparison (`#1156`) found no
+gain at the lenses' tier. With no key for a runtime, the compute is the cockpit's
+choice.
 
 **What the verdicts do.** A verdict is evidence for the disposition, never a
 disposition by itself:
