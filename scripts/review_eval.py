@@ -242,17 +242,16 @@ def findings_text(report: str) -> str:
 def citations(report: str) -> list[dict[str, Any]]:
     """Each citation in the report's findings, with the ``F<n>`` it falls under.
 
-    ``number`` is the last finding number that opened a paragraph at or before it,
-    or ``None`` before the first, so a verdict on that finding can be applied to it.
-    A paragraph start is the rule ``findings_text`` reopens a section by: a line
-    inside a finding that opens ``F2 is the same class`` does not move its citations
-    to F2.
+    ``number`` is the last finding number that opened a line at or before it, or
+    ``None`` before the first, so a verdict on that finding can be applied to it. A
+    finding opens by the same rule ``finding_numbers`` counts it by, so every
+    number a citation carries is one the verdicts are read for. A line inside a
+    finding that opens ``F2 is the same class`` opens F2 under both (#1182).
     """
-    found, number, blank = [], None, True
+    found, number = [], None
     for line in findings_text(report).splitlines():
-        if blank and (opened := _FINDING_NUMBER.match(line)) is not None:
+        if (opened := _FINDING_NUMBER.match(line)) is not None:
             number = int(opened.group(1))
-        blank = not line.strip()
         for match in _CITATION.finditer(line):
             path = match.group(1)
             if path.startswith("/"):

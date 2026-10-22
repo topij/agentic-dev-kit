@@ -541,10 +541,21 @@ def test_reused_reports_must_all_be_there(repo, tmp_path) -> None:
 
 
 def test_a_citation_is_attributed_to_the_finding_it_falls_under() -> None:
-    report = ("Intro a.py:1\n\n### F1 HIGH\nsee b.py:2\n\nmore c.py:3\nF3 is the same class, see e.py:5\n"
-              "\n**F2 LOW** d.py:4\n")
-    assert [(c["path"], c["number"]) for c in review_eval.citations(report)] == [
-        ("a.py", None), ("b.py", 1), ("c.py", 1), ("e.py", 1), ("d.py", 2)]
+    report = ("Intro a.py:1\n### F1 HIGH\nsee b.py:2\n\nmore c.py:3\n- F3 LOW e.py:5\n**F2 LOW** d.py:4\n"
+              "## Verified clean\nchecked f.py:6\n\nF4 LOW g.py:7\n")
+    found = review_eval.citations(report)
+    assert [(c["path"], c["number"]) for c in found] == [
+        ("a.py", None), ("b.py", 1), ("c.py", 1), ("e.py", 3), ("d.py", 2), ("g.py", 4)]
+    # Every number a citation carries is a finding the verdicts are read for.
+    assert {c["number"] for c in found} - {None} <= set(review_eval.finding_numbers(report))
+
+
+@pytest.mark.parametrize("verdict, hit", [("refuted", False), ("unverifiable", True), ("confirmed", True)])
+def test_only_a_refuted_verdict_takes_a_hit_out(verdict, hit) -> None:
+    entry = {"lens": "adversarial", "kind": "bug", "findings": [1],
+             "matched_citations": [{"finding": 0, "path": "a.py", "lines": [1, 1], "number": 1}]}
+    review_eval.apply_verdicts(entry, {("adversarial", 1): verdict})
+    assert entry["hit_after_verifier"] is hit and entry["verdicts"] == {"F1": verdict}
 
 
 def test_the_after_verifier_summary_waits_for_every_result_of_a_lens() -> None:
