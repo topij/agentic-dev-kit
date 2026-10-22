@@ -735,11 +735,15 @@ author re-reading their own diff. **Cite them by name, never by number.**
 
    `--reviewers-finished` is the cockpit's attestation of completed processes and
    retained evidence; the engine cannot discover or terminate them. It exempts
-   only the identity-matched allocation from the age gate and retains dependency
-   and filesystem refusals. A `kept` result or interrupted cleanup is unfinished
+   only the identity-matched allocation from the age gate and retains filesystem
+   refusals and every dependency refusal except the fixture shapes named below.
+   A `kept` result or interrupted cleanup is unfinished
    cleanup: report the exact residual path and reason. Do not bypass a refusal,
-   reset timestamps or broaden `scratch.roots`. Bare fixture repositories remain
-   protected (#997). On an interrupted review, preserve its receipt and resume
+   reset timestamps or broaden `scratch.roots`. Test fixtures a lens's suite left
+   in the round do not keep it: bare repositories, separated git dirs whose
+   pointer is in the round, and `.git` files that do not start with `gitdir:`. A git
+   dir that an outside
+   tree depends on still does (#997). On an interrupted review, preserve its receipt and resume
    its process/report accounting before retirement. A normal age sweep cannot
    reclaim a fresh round because it retains the configured grace window.
 
