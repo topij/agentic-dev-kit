@@ -5,6 +5,70 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-16 (ticket-creation region snapshots; split-workflow placement and citation pins; REST review-read gap decision, in a Claude Code cloud session)
+
+- **Ticket execution environments:** [#1114](https://github.com/topij/agentic-dev-kit/pull/1114)
+  (`9a3473df`) pins the ticket-creation instructions of `triage-friction-log`,
+  `post-merge-systemize` and `wrap-up` by region snapshots under
+  `scripts/tests/fixtures/ticket-creation-regions/`, and checks that `wrap-up` declares
+  environment metadata before a ticket is presented and inside the approved payload.
+  Its changelog fragment is `changelog.d/project-thread-na11fx.md`. Not established: a
+  contradiction written outside a region, or an agent's classification.
+- **Skills and instruction files:** [#1115](https://github.com/topij/agentic-dev-kit/pull/1115)
+  (`738d1b2e`) gives the split-workflow heading-placement and summary-citation
+  assertions a mutation case each that only it rejects, and mutates every reference
+  file's opening tail clause. #1058 stays open for the operator.
+- **pr-watch REST backend:** the operator kept #94 rows 7 and 9 as a documented gap
+  while REST cannot authorize a merge; the `&page=N` design for when cloud merge is
+  revived is [on #94](https://github.com/topij/agentic-dev-kit/issues/94#issuecomment-6213171824).
+- Both PRs were merged from the cloud session through the GitHub MCP on the operator's
+  word. Their `--record-review fallback:panel` commands could not run there (#951) and
+  are in each squash message for a local run.
+- Verification: `make test` in `/home/user/agentic-dev-kit` (cloud, root) at
+  `71d04d3efe6ceb15b34c41989e3f46d313c8e386` on 2026-10-16 printed
+  `7 failed, 5004 passed, 38 skipped`; every failure is in the cloud-environment set
+  `CLAUDE.md` names. CI `Test` was green on each merged head.
+- The friction-log triage was not run: the skill is operator-invoked only, so a
+  delegated session on the operator's device could not start it.
+- Closed workstream Ticket execution environments: #1114 covers #1040, closed on the
+  operator's word.
+- Closed workstream pr-watch REST backend: nothing moves until cloud merge is revived;
+  #94 and #951 hold the detail.
+
+### 2026-10-16 (triage repository identity redesigned and merged; shared-hook install merged; residual review findings filed, in Claude Code)
+
+- **Triage outcome receipts** (renamed from *Triage repository identity and outcome
+  receipts*): [#1111](https://github.com/topij/agentic-dev-kit/pull/1111) merged as
+  `62e0ffaa` on the operator's request, pinned to the reviewed head `7a59669e`.
+  - Shipped: linked worktrees name the main worktree. A recorded identity matches by
+    string comparison only: it equals the current one, or equals it with the invoking
+    checkout's own root, so a session a linked worktree recorded before #1111
+    continues from that worktree's path. A checkout whose main worktree cannot be
+    proven names itself, including every checkout on a Git older than 2.31; #1116
+    names one `--separate-git-dir` layout whose linked worktrees name a phantom root
+    instead. Results
+    carry `disposition` / `waiting_on` / `refusal_code`. An unverified tracker or forge
+    write waits on `reconciliation`, except an unsettled forge `pr-watch` or
+    `merge-read-back`, which waits on `finalize`.
+  - Decided: the invocation-bound outcome receipt is out of #1111 (operator's option C).
+    Its code is on branch `feat/triage-outcome-receipts` at `fabed73e`, and #1103
+    stays open for it. Membership probing of recorded roots was replaced by equality,
+    on the operator's call, after its rounds kept finding edges in that probing.
+  - Review: the two-lens round at `7a59669e` left no finding above LOW; each round's
+    disposition is on #1111. Residual LOW findings: #1116.
+  - Verification: `make test` at `7a59669e0e3d6c64387354e6825f791bfbe6bfac` on
+    2026-10-16, in `/Users/topi/Coding/agentic-dev-kit-wt/triage-worktree-identity`,
+    printed `5099 passed, 1 skipped`.
+- **Shared hook installation:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112)
+  merged as `aff05641`, pinned to `cf1a5402`, after a round with nothing above LOW.
+  Residual LOW findings: #1117. `kit_doctor`'s hook advice from a linked worktree is
+  noted on #61.
+- **Consumer upgrades:** no consumer was upgraded. cs-toolkit's scheduled triage
+  needs #1111 installed there.
+- **Filed this session:** #1116, #1117; comments on #1103 (receipt branch) and #61.
+- **Assignment:** confirmed by the operator. The three workstream entries drop their
+  `assignment unconfirmed` markers, and the triage entry is renamed for what remains.
+
 ### 2026-10-15 (triage linked-worktree identity and outcome receipts; shared-hook install from linked worktrees; consumer-upgrade assessment, in Claude Code)
 
 - **Triage repository identity and outcome receipts:** [#1111](https://github.com/topij/agentic-dev-kit/pull/1111)

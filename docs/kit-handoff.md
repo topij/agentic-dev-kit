@@ -20,6 +20,33 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-22 (reviewer measurement and verifier compute, in a Claude Code cloud session)
+
+- **Reviewer measurement:**
+  [#1168](https://github.com/topij/agentic-dev-kit/pull/1168) (`e0b6a7b`) has
+  `post-merge-systemize` read fallback-panel dispositions as findings and tally
+  reviewer precision (#772, #1157).
+  [#1169](https://github.com/topij/agentic-dev-kit/pull/1169) (`e68871b`) and
+  [#1179](https://github.com/topij/agentic-dev-kit/pull/1179) (`a00eeed`) shipped
+  `scripts/review_eval.py` and its case set (#1156).
+  [#1181](https://github.com/topij/agentic-dev-kit/pull/1181) (`a72034b`) scores a
+  verifier stage over reused lens reports.
+  [#1183](https://github.com/topij/agentic-dev-kit/pull/1183) (`901daad`) declares
+  `review.fallback_panel.verifier_compute` for #1155.
+- **Decided:** the operator chose the cheap tier for the verifier and kept the key
+  optional until measured. The verifier comparison on #1156 found no run that refuted
+  a hit; the case set is too small to rank tiers. The operator ran the Codex verifier
+  locally, because a cloud session has no Codex.
+- **Review proportionality:**
+  [#1167](https://github.com/topij/agentic-dev-kit/pull/1167) (`4248942`) refuses a
+  `--last-reviewed` sha that is not on the branch past its fork point (#1166).
+- Each PR body names its `make test` run; failures known to come from the cloud sandbox
+  were left to CI. This session filed #1180, #1182
+  and #1184 for review findings it left open. Its workstream assignment was not
+  confirmed by the operator.
+
+______________________________________________________________________
+
 ## Session — 2026-10-21 (changelog lookup and record-prose report limits)
 
 - **Changelog fragments:** [#1147](https://github.com/topij/agentic-dev-kit/pull/1147)
@@ -119,74 +146,6 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Session — 2026-10-16 (ticket-creation region snapshots; split-workflow placement and citation pins; REST review-read gap decision, in a Claude Code cloud session)
-
-- **Ticket execution environments:** [#1114](https://github.com/topij/agentic-dev-kit/pull/1114)
-  (`9a3473df`) pins the ticket-creation instructions of `triage-friction-log`,
-  `post-merge-systemize` and `wrap-up` by region snapshots under
-  `scripts/tests/fixtures/ticket-creation-regions/`, and checks that `wrap-up` declares
-  environment metadata before a ticket is presented and inside the approved payload.
-  Its changelog fragment is `changelog.d/project-thread-na11fx.md`. Not established: a
-  contradiction written outside a region, or an agent's classification.
-- **Skills and instruction files:** [#1115](https://github.com/topij/agentic-dev-kit/pull/1115)
-  (`738d1b2e`) gives the split-workflow heading-placement and summary-citation
-  assertions a mutation case each that only it rejects, and mutates every reference
-  file's opening tail clause. #1058 stays open for the operator.
-- **pr-watch REST backend:** the operator kept #94 rows 7 and 9 as a documented gap
-  while REST cannot authorize a merge; the `&page=N` design for when cloud merge is
-  revived is [on #94](https://github.com/topij/agentic-dev-kit/issues/94#issuecomment-6213171824).
-- Both PRs were merged from the cloud session through the GitHub MCP on the operator's
-  word. Their `--record-review fallback:panel` commands could not run there (#951) and
-  are in each squash message for a local run.
-- Verification: `make test` in `/home/user/agentic-dev-kit` (cloud, root) at
-  `71d04d3efe6ceb15b34c41989e3f46d313c8e386` on 2026-10-16 printed
-  `7 failed, 5004 passed, 38 skipped`; every failure is in the cloud-environment set
-  `CLAUDE.md` names. CI `Test` was green on each merged head.
-- The friction-log triage was not run: the skill is operator-invoked only, so a
-  delegated session on the operator's device could not start it.
-- Closed workstream Ticket execution environments: #1114 covers #1040, closed on the
-  operator's word.
-- Closed workstream pr-watch REST backend: nothing moves until cloud merge is revived;
-  #94 and #951 hold the detail.
-
-______________________________________________________________________
-
-## Session — 2026-10-16 (triage repository identity redesigned and merged; shared-hook install merged; residual review findings filed, in Claude Code)
-
-- **Triage outcome receipts** (renamed from *Triage repository identity and outcome
-  receipts*): [#1111](https://github.com/topij/agentic-dev-kit/pull/1111) merged as
-  `62e0ffaa` on the operator's request, pinned to the reviewed head `7a59669e`.
-  - Shipped: linked worktrees name the main worktree. A recorded identity matches by
-    string comparison only: it equals the current one, or equals it with the invoking
-    checkout's own root, so a session a linked worktree recorded before #1111
-    continues from that worktree's path. A checkout whose main worktree cannot be
-    proven names itself, including every checkout on a Git older than 2.31; #1116
-    names one `--separate-git-dir` layout whose linked worktrees name a phantom root
-    instead. Results
-    carry `disposition` / `waiting_on` / `refusal_code`. An unverified tracker or forge
-    write waits on `reconciliation`, except an unsettled forge `pr-watch` or
-    `merge-read-back`, which waits on `finalize`.
-  - Decided: the invocation-bound outcome receipt is out of #1111 (operator's option C).
-    Its code is on branch `feat/triage-outcome-receipts` at `fabed73e`, and #1103
-    stays open for it. Membership probing of recorded roots was replaced by equality,
-    on the operator's call, after its rounds kept finding edges in that probing.
-  - Review: the two-lens round at `7a59669e` left no finding above LOW; each round's
-    disposition is on #1111. Residual LOW findings: #1116.
-  - Verification: `make test` at `7a59669e0e3d6c64387354e6825f791bfbe6bfac` on
-    2026-10-16, in `/Users/topi/Coding/agentic-dev-kit-wt/triage-worktree-identity`,
-    printed `5099 passed, 1 skipped`.
-- **Shared hook installation:** [#1112](https://github.com/topij/agentic-dev-kit/pull/1112)
-  merged as `aff05641`, pinned to `cf1a5402`, after a round with nothing above LOW.
-  Residual LOW findings: #1117. `kit_doctor`'s hook advice from a linked worktree is
-  noted on #61.
-- **Consumer upgrades:** no consumer was upgraded. cs-toolkit's scheduled triage
-  needs #1111 installed there.
-- **Filed this session:** #1116, #1117; comments on #1103 (receipt branch) and #61.
-- **Assignment:** confirmed by the operator. The three workstream entries drop their
-  `assignment unconfirmed` markers, and the triage entry is renamed for what remains.
-
-______________________________________________________________________
-
 > Older session entries (below the live blocks above) live in [`kit-handoff-history.md`](kit-handoff-history.md).
 > Continuations are not kept in them: each workstream's next step lives in its entry under "Workstreams".
 
@@ -205,6 +164,7 @@ deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was 
 archive sweep rewrites (friction archive; #1139). #1096 (`8beee9a1`) pins its candidate bound
 with a positional test.
 #921 owns the cockpit check of verdict-line names.
+#1167 (`4248942`) refuses a `--last-reviewed` sha outside the branch (#1166).
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
 [#921](https://github.com/topij/agentic-dev-kit/issues/921),
 [#1089](https://github.com/topij/agentic-dev-kit/issues/1089); related #403,
@@ -371,6 +331,22 @@ the hooks every checkout shares. #1117 holds its residual LOW findings. #990's i
 [#1117](https://github.com/topij/agentic-dev-kit/issues/1117).
 
 ▶ Next: #990 item 1 — render the lens agent definitions from the adopter's config rather than the kit's.
+
+### Reviewer measurement
+
+**Status:** #1168 (`e0b6a7b`) tallies reviewer precision from fallback-panel
+dispositions. #1169 (`e68871b`), #1179 (`a00eeed`) and #1181 (`a72034b`) ship
+`scripts/review_eval.py`, which scores lens and verifier changes against known-bug and
+clean cases. #1183 (`901daad`) declares the optional verifier compute key. The
+comparison runs are recorded on #1156; making the lens panel the primary reviewer
+is #1159. **Owner:** [#1156](https://github.com/topij/agentic-dev-kit/issues/1156),
+[#1159](https://github.com/topij/agentic-dev-kit/issues/1159); follow-ups
+[#1180](https://github.com/topij/agentic-dev-kit/issues/1180),
+[#1182](https://github.com/topij/agentic-dev-kit/issues/1182),
+[#1184](https://github.com/topij/agentic-dev-kit/issues/1184).
+
+▶ Next: #1156 — judge the clean-case findings every verifier confirmed (real defect
+or false alarm) and grow the case set before ranking verifier tiers.
 
 ### Consumer upgrades
 
