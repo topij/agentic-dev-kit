@@ -24,6 +24,13 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-22
+
+- **A PR poll from outside the suite failed a `make test` stamp.** Severity L, kept for
+  accumulation. During #1186's run at `82a867e8`, `state/pr-watch/1186.json` was written
+  in the branch's worktree while the review lenses were running, and the #428 leak check
+  exited 2. The writer was not identified, and the run was repeated with no lens running.
+
 ## 2026-10-21
 
 - **Headless verification hit the runtime limit again.** Severity M, kept for
