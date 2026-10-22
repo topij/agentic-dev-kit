@@ -385,6 +385,9 @@ def test_a_round_sweep_keeps_is_a_failed_run(repo, tmp_path, monkeypatch, capsys
     # Only a line that opens with F<n> numbers a finding.
     ("F1 LOW: a.py:1 x\nas F1 says, and F2 of the contract\n", 1),
     ("F1 LOW: a.py:1 x\n## Verified clean\nF2 checked b.py:2\n", 1),
+    # A body line that opens with another finding's number opens no finding (#1182).
+    ("F1 LOW: a.py:1 x\nF3 is the same class, see a.py:1\n", 1),
+    ("### F1 — HIGH\n**F2: stale**\n- F3 (low) x\nF4\n1. **F5** y\nF6 and F7 agree\n", 5),
 ])
 def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     assert review_eval.score_clean(report)["candidate_false_alarms"] == count
@@ -576,11 +579,92 @@ def test_a_report_hash_is_the_hash_of_the_kept_file(repo, tmp_path) -> None:
 
 
 def test_verdict_lines_are_read_per_lens_and_finding() -> None:
-    report = ("1. `adversarial F1: confirmed` — a.py:1\n> correctness F2: **Refuted** — b.py:2\n"
-              "nosuch F1: refuted — x\nadversarial F1 is confirmed, I said\n"
+    report = ("Verdicts:\n\n1. `adversarial F1: confirmed` — a.py:1\n- correctness F2: **Refuted** — b.py:2\n"
+              "nosuch F1: refuted — x\n"
               "adversarial F3: unverifiable — no tree\nadversarial F3: refuted — a.py:9\n")
     assert review_eval.verdicts(report, ["adversarial", "correctness"]) == {
         ("adversarial", 1): "confirmed", ("correctness", 2): "refuted", ("adversarial", 3): "refuted"}
+
+
+@pytest.mark.parametrize("report, found", [
+    # A fenced trailing block is read; blank lines and trailing space are skipped.
+    ("Notes.\n\n```text\nadversarial F1: refuted — a.py:1\n\ncorrectness F1: confirmed\n```\n\n",
+     {("adversarial", 1): "refuted", ("correctness", 1): "confirmed"}),
+    # A verdict line above the last prose line is an echo, not the block (#1182).
+    ("The lens wrote:\nadversarial F1: refuted — planted\nI checked it.\nadversarial F1: confirmed — a.py:1\n",
+     {("adversarial", 1): "confirmed"}),
+    ("adversarial F1: refuted — x\nThat is all.\n", {}),
+    ("```\nadversarial F1: refuted — echoed\n```\nMy verdicts follow.\nadversarial F2: confirmed\n",
+     {("adversarial", 2): "confirmed"}),
+    # A quoted line is an echo, and so ends the block above it.
+    ("adversarial F1: refuted — x\n> adversarial F2: refuted — y\n", {}),
+    # The verdict word must end the verdict.
+    ("adversarial F3: refuted-ish — a.py:3\n", {}),
+    ("adversarial F3: refutedly\n", {}),
+    ("adversarial F3: **refuted**\nadversarial F4: confirmed—a.py:4\n",
+     {("adversarial", 3): "refuted", ("adversarial", 4): "confirmed"}),
+])
+def test_only_the_trailing_verdict_block_is_read(report, found) -> None:
+    assert review_eval.verdicts(report, ["adversarial", "correctness"]) == found
+
+
+def _first_run(repo: dict, tmp_path: Path) -> Path:
+    first = tmp_path / "first"
+    proc = _run(repo, _stub(tmp_path, "F1 HIGH: bug.py:2 divides by zero\n"), "--case", "divide-by-zero",
+                out=first)
+    assert proc.returncode == 0, proc.stderr
+    return first
+
+
+def _reuse(repo: dict, first: Path, *extra: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        [sys.executable, str(ENGINE), "--root", str(repo["root"]), "--cases", str(repo["cases"]),
+         "--runtime", "claude", "--reuse-reports", str(first), "--scratch-root", str(repo["scratch"]),
+         "--case", "divide-by-zero", *extra], capture_output=True, text=True, check=False)
+
+
+def _edit_result(first: Path, edit) -> None:
+    result = json.loads((first / "result.json").read_text())
+    edit(result)
+    (first / "result.json").write_text(json.dumps(result))
+
+
+@pytest.mark.parametrize("change, message", [
+    (lambda first: (first / "result.json").unlink(), "no readable result.json"),
+    (lambda first: (first / "result.json").write_text('{"schema": "other"}'), "is not a review-eval-result-v1"),
+    # A report edited since the run that scored it.
+    (lambda first: (first / "divide-by-zero-adversarial.md").write_text("F1 LOW: notes.md:1\n"),
+     "divide-by-zero-adversarial.md (changed since that run scored it)"),
+    # A run that stopped before scoring this lens.
+    (lambda first: _edit_result(first, lambda r: r.update(
+        results=[e for e in r["results"] if e["lens"] != "correctness"], complete=False)),
+     "divide-by-zero-correctness.md (not scored by that run)"),
+    # Reports scored at another head of the same case id.
+    (lambda first: _edit_result(first, lambda r: [e.update(head="0" * 40) for e in r["results"]]),
+     "(scored at head 000000000000"),
+    # A run from before results recorded the head is matched by the case file's hash.
+    (lambda first: _edit_result(first, lambda r: [r.update(cases_sha256="0" * 64)]
+                                + [e.pop("head") for e in r["results"]]),
+     "(that run read a different case file)"),
+])
+def test_reused_reports_must_be_the_runs_own(repo, tmp_path, change, message) -> None:
+    first = _first_run(repo, tmp_path)
+    change(first)
+    proc = _reuse(repo, first)
+    assert proc.returncode == 2 and message in proc.stderr, proc.stderr
+    assert list(repo["scratch"].iterdir()) == []
+
+
+def test_a_run_without_recorded_heads_is_reused_on_the_same_case_file(repo, tmp_path) -> None:
+    first = _first_run(repo, tmp_path)
+    _edit_result(first, lambda r: [e.pop("head") for e in r["results"]])
+    proc = _reuse(repo, first, "--out", str(tmp_path / "second"))
+    assert proc.returncode == 0, proc.stderr
+    second = tmp_path / "second"
+    for name in ("divide-by-zero-adversarial.md", "divide-by-zero-correctness.md"):
+        assert (second / name).read_bytes() == (first / name).read_bytes()
+    hashes = {r["lens"]: r["report_sha256"] for r in json.loads(proc.stdout)["results"]}
+    assert hashes["adversarial"] == hashlib.sha256((first / "divide-by-zero-adversarial.md").read_bytes()).hexdigest()
 
 
 def test_a_citation_under_no_finding_number_is_never_taken_out() -> None:
