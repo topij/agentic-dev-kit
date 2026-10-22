@@ -6,6 +6,10 @@ a real scratch directory. The engine deletes files, so the refusals listed in
 ``--apply`` and a twin that neutralises the guard and asserts the same fixture is
 then removed — proof the first test discriminates. The mount-point refusals are
 not pinned here: building a mount needs privileges a test run does not have.
+
+Each test's ``tmp_path`` is removed at teardown (#1188). The fixtures are built to
+be what the engine cannot prove harmless, so a kept basetemp holds git dirs that
+make ``--finish-review-round`` answer ``kept`` for any round this module ran in.
 """
 
 from __future__ import annotations
@@ -13,8 +17,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import shutil
+import stat
 import subprocess
 import sys
+import textwrap
 import time
 from pathlib import Path
 from types import ModuleType
@@ -77,6 +84,40 @@ def _mtime_only(request, monkeypatch):
     by mtime alone here; a test whose name holds ``ctime`` keeps the real stamp."""
     if "ctime" not in request.node.name:
         monkeypatch.setattr(sweep, "_stamp", lambda st: st.st_mtime)
+
+
+def _make_removable(path: str) -> None:
+    """Give the owner rwx on ``path`` and every directory under it, so ``rmtree``
+    can list and unlink what a test locked. A symlink is never followed, so
+    nothing outside the tree is touched; files keep their mode, since unlinking
+    one needs only its directory's permissions."""
+    st = os.lstat(path)
+    if not stat.S_ISDIR(st.st_mode):
+        return
+    os.chmod(path, stat.S_IMODE(st.st_mode) | stat.S_IRWXU)
+    with os.scandir(path) as entries:
+        for entry in entries:
+            if entry.is_dir(follow_symlinks=False):
+                _make_removable(entry.path)
+
+
+@pytest.fixture(autouse=True)
+def _remove_test_tree(tmp_path: Path, monkeypatch):
+    """Remove the test's whole ``tmp_path`` once it ends, pass or fail (#1188).
+
+    Autouse, so it is set up before the fixtures a test requests and torn down
+    after them: nothing builds into the tree once this runs. Some tests patch
+    ``os`` itself (``sweep.os`` is the ``os`` module), so the patches are undone
+    first rather than at monkeypatch's own, later, teardown. A failure here is
+    raised, not ignored: a silent leftover is the defect this exists to stop."""
+    yield
+    monkeypatch.undo()
+    path = os.path.realpath(tmp_path)
+    if not os.path.lexists(path):
+        return
+    _make_removable(path)
+    shutil.rmtree(path)
+    assert not os.path.lexists(path), f"test tree survived teardown: {path}"
 
 
 @pytest.fixture
@@ -1606,3 +1647,53 @@ def test_retirement_refuses_unsafe_allocation_markers(root, repo, kind):
         sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     assert external.read_bytes() == original
     assert path.exists()
+
+
+# --------------------------------------------------------------------------- #
+# a run leaves no fixture behind (#1188)
+# --------------------------------------------------------------------------- #
+
+_LEFTOVER_TEST = '''
+import os
+from pathlib import Path
+
+from test_sweep_scratch import _remove_test_tree  # noqa: F401 — the autouse fixture under test
+
+
+def test_builds_what_the_engine_keeps(tmp_path: Path):
+    entry = tmp_path / "we ird\\nnl"
+    (entry / "fixture.git" / "worktrees" / "x").mkdir(parents=True)
+    (entry / ".git").write_bytes(b"gitdir: /tmp/a\\0b\\n")
+    os.mkfifo(entry / "fixture.git" / "worktrees" / "x" / "gitdir")
+    (entry / "escape").symlink_to(os.environ["OUTSIDE"])
+    locked_file = entry / "locked-file"
+    locked_file.write_text("x")
+    locked_file.chmod(0)
+    (entry / "fixture.git" / "worktrees").chmod(0)
+    entry.chmod(0o500)
+'''
+
+
+def test_teardown_removes_every_fixture_the_engine_would_keep(base: Path):
+    """Run a test that leaves an unreadable dir, a FIFO ``gitdir``, a NUL-bearing
+    ``.git`` file and an odd-named entry under ``--basetemp``, and require none of
+    it to survive the run, nor the target of its outward symlink to change."""
+    outside = base / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep\n", encoding="utf-8")
+    outside.chmod(0o500)
+    tests = base / "tests"
+    tests.mkdir()
+    (tests / "test_leftover.py").write_text(textwrap.dedent(_LEFTOVER_TEST), encoding="utf-8")
+    basetemp = base / "basetemp"
+    env = {**os.environ, "OUTSIDE": str(outside), "PYTHONPATH": str(Path(__file__).resolve().parent)}
+    done = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
+         f"--basetemp={basetemp}", str(tests / "test_leftover.py")],
+        capture_output=True, text=True, timeout=120, cwd=tests, env=env,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    left = [os.path.join(d, n) for d, dirs, files in os.walk(basetemp) for n in dirs + files]
+    assert left == []
+    assert stat.S_IMODE(os.lstat(outside).st_mode) == 0o500
+    assert (outside / "keep.txt").read_text(encoding="utf-8") == "keep\n"
