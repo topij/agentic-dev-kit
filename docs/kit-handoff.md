@@ -20,6 +20,35 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-22 (owned review rounds retire fixture git dirs; workstream tracker pass)
+
+- **Scratch retention:** [#1186](https://github.com/topij/agentic-dev-kit/pull/1186)
+  merged as `0b5d226e`. `--finish-review-round` on a verified round no longer keeps it
+  for a bare repository, a `--separate-git-dir` target whose `.git` pointer is in the
+  round, or a `.git` file that does not start with `gitdir:`. A dependency recorded
+  outside the round stays kept; the engine docstring lists the limits, among them a
+  decoy in-round pointer (#1189). The age sweep is unchanged.
+- **Decided:** the operator chose #997's option A (receipt-owned rounds) and filed option
+  B (unowned entries) as #1185. A follow-up ticket was chosen over widening #1186 for
+  the sweep suite's own deliberately unprovable fixtures (#1188). The round-2 LOW
+  findings were ticketed as #1189 rather than taking a third review round.
+- **Review:** a full panel at `82a867e8`, then a dual-lens delta at `49dc15d8`. The PR's
+  dispositions record both. `make test` at `49dc15d8`, in
+  `.claude/worktrees/owned-round`, on 2026-10-22 printed `5492 passed, 1 skipped` and
+  exited 0.
+- **Not established:** that a round whose lens ran `test_sweep_scratch.py` can be
+  retired. #1186's own round-1 allocation `review-72a279dd…` is still on disk, kept by
+  those fixtures (#1188).
+- **Tracker pass:** #1079 and #1102 were marked completed and #507 not planned
+  (superseded by changelog fragments), each with an evidence comment; #1026 and #1120
+  were already complete on 2026-10-21. Filed #1185, #1188 and #1189; added an
+  occurrence to #1144.
+- Retired workstreams, on the operator's decision because each one's issue is
+  complete: Changelog fragments, Record-prose report limits, Panel prompt test
+  fixtures, Headless lane manifest refresh.
+
+______________________________________________________________________
+
 ## Session — 2026-10-22 (reviewer measurement and verifier compute, in a Claude Code cloud session)
 
 - **Reviewer measurement:**
@@ -179,25 +208,29 @@ is recorded.
 **Status:** `scripts/sweep_scratch.py` and the `scratch:` config block shipped in
 #986 (`dff111ae`). Its documented limits are in the engine docstring. #1005 (`f508d220`)
 judges root and entry containment by filesystem identity as well as by path string (#1000).
-#1034 (`79d33fb9`) preserves unquoted alternate path whitespace and filesystem bytes (#1032). #997 owns
-reclaiming session entries that bare fixture repos pin. #996 holds the unpinned
+#1034 (`79d33fb9`) preserves unquoted alternate path whitespace and filesystem bytes (#1032). #996 holds the unpinned
 guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up from
 #1122. #1122 (`dd089388`) shipped #900: allocated review rounds, prompt enforcement,
 explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
 protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retirement time.
-#997 owns bare fixture retention; the friction archive records the uv-cache marker
-case. #1134 (`b739bc46`) delivered empty-marker handling. Fixture dependencies remain protected.
+#1134 (`b739bc46`) delivered empty-marker handling. #1186 (`0b5d226e`) retires
+fixture git dirs in a receipt-owned round (#997, narrowed to rounds); unowned entries
+still keep them (#1185). #1189 holds #1186's residual LOWs.
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
+[#1185](https://github.com/topij/agentic-dev-kit/issues/1185),
+[#1188](https://github.com/topij/agentic-dev-kit/issues/1188),
+[#1189](https://github.com/topij/agentic-dev-kit/issues/1189),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
-▶ Next: #997 — choose how a session entry whose only git dirs are test fixtures
-becomes sweepable without reopening the outside-dependent fail-open (an operator
-design decision). Keep empty-cache-marker handling separate from the fixture
-dependency decision.
+▶ Next: #1188 — make `scripts/tests/test_sweep_scratch.py` remove each test's
+temporary tree at teardown, so a round whose only pins are that module's fixtures
+retires. That does not clear the fixtures already in the kept round `review-72a279dd…`
+(receipt in the main checkout's ignored `state/review-rounds/`); removing that round is
+the operator's call. #1185 carries the unowned-entry case.
 
 ### Reviewer profiles
 
@@ -238,22 +271,6 @@ shape check in `model.py` stays until cs-toolkit's completed LIVE state, which c
 ▶ Next: once cs-toolkit's scheduled triage draft has retired its completed LIVE state,
 confirm no state root holds a `proposal_correction`, then remove the shim (#979).
 
-### Changelog fragments
-
-**Status:** #1147 (`f98cc100a9527fcc0f908e89683d11ec5556ca0a`) delivered the lookup
-fixtures and naming follow-up. The fragment design remains in #1020 (`f9146c5f`).
-**Owner:** [#1026](https://github.com/topij/agentic-dev-kit/issues/1026).
-
-▶ Next: review #1026 against the delivered lookup changes and decide its tracker disposition.
-
-### Record-prose report limits
-
-**Status:** #1146 (`f1999dfb56db0bd38624feb72bd5f228adc3c401`) delivered the rendered
-move-bound values and assertions; assignment unconfirmed — may belong to Review proportionality.
-**Owner:** [#1120](https://github.com/topij/agentic-dev-kit/issues/1120).
-
-▶ Next: review #1120 against the delivered report wording and decide its tracker disposition.
-
 ### Handoff workstream naming
 
 **Status:** #1028 (`50145a23`) names workstreams by subject and files a batch per pull request; cs-toolkit's batch-named entries were folded by in-parallel-oy/cs-toolkit#2609. #1030 holds the residual single-workstream wording, the half-pinned clauses, the run-mode carve-out, and a kept entry that cannot be named.
@@ -285,23 +302,6 @@ for #1058, which stays open for the operator. #1132
 [#1075](https://github.com/topij/agentic-dev-kit/issues/1075).
 
 ▶ Next: operator selection after #1132; the previous #1098 implementation step shipped.
-
-### Panel prompt test fixtures
-
-**Status:** #1099 (`1666e247`) routed tampering tests through `_loose_object` and
-turned fixture auto-gc off. #1107 (`fc35fbe8`) added git-stderr provenance coverage
-and narrowed the missing-object wording. Workstream assignment confirmed.
-**Owner:** [#1079](https://github.com/topij/agentic-dev-kit/issues/1079).
-
-▶ Next: review #1079 against the delivered fixture changes and decide its tracker disposition.
-
-### Headless lane manifest refresh
-
-**Status:** #1106 (`2276c153`) documented `uv run scripts/kit_doctor.py --generate-manifest`
-for the headless lane profile.
-**Owner:** [#1102](https://github.com/topij/agentic-dev-kit/issues/1102).
-
-▶ Next: review #1102 against the delivered lane guidance and decide its tracker disposition.
 
 ### Triage outcome receipts
 

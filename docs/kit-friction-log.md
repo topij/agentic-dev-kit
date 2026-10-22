@@ -24,6 +24,13 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-22
+
+- **An unidentified `pr_watch` write failed a `make test` stamp.** Severity L, kept for
+  accumulation. During #1186's run at `82a867e8`, with review lenses running,
+  `state/pr-watch/1186.json` appeared in the branch's worktree; pytest failed on the
+  #428 guard and `make` exited 2. The run was repeated with no lens running.
+
 ## 2026-10-21
 
 - **Headless verification hit the runtime limit again.** Severity M, kept for
