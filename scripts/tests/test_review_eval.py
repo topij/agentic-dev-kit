@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import signal
@@ -540,9 +541,27 @@ def test_reused_reports_must_all_be_there(repo, tmp_path) -> None:
 
 
 def test_a_citation_is_attributed_to_the_finding_it_falls_under() -> None:
-    report = "Intro a.py:1\n### F1 HIGH\nsee b.py:2\n\nmore c.py:3\n**F2 LOW** d.py:4\n"
+    report = ("Intro a.py:1\n\n### F1 HIGH\nsee b.py:2\n\nmore c.py:3\nF3 is the same class, see e.py:5\n"
+              "\n**F2 LOW** d.py:4\n")
     assert [(c["path"], c["number"]) for c in review_eval.citations(report)] == [
-        ("a.py", None), ("b.py", 1), ("c.py", 1), ("d.py", 2)]
+        ("a.py", None), ("b.py", 1), ("c.py", 1), ("e.py", 1), ("d.py", 2)]
+
+
+def test_the_after_verifier_summary_waits_for_every_result_of_a_lens() -> None:
+    verified = {"lens": "adversarial", "kind": "bug", "confirmed": True, "hit": True,
+                "hit_after_verifier": False, "verdicts": {"F1": "refuted"}}
+    unverified = {"lens": "adversarial", "kind": "bug", "confirmed": True, "hit": True}
+    summary = review_eval.summarize([verified, unverified], ["adversarial"])["adversarial"]
+    assert summary["confirmed_hits"] == 2 and "confirmed_hits_after_verifier" not in summary
+
+
+def test_a_report_hash_is_the_hash_of_the_kept_file(repo, tmp_path) -> None:
+    out = tmp_path / "out"
+    proc = _run(repo, _stub(tmp_path, "F1 LOW: bug.py:2 divides by zéro \u2014 see\n"), "--lens", "adversarial",
+                "--case", "divide-by-zero", out=out)
+    assert proc.returncode == 0, proc.stderr
+    kept = (out / "divide-by-zero-adversarial.md").read_bytes()
+    assert json.loads(proc.stdout)["results"][0]["report_sha256"] == hashlib.sha256(kept).hexdigest()
 
 
 def test_verdict_lines_are_read_per_lens_and_finding() -> None:
