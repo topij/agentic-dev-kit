@@ -28,7 +28,9 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     transitively. An unreadable ``.git`` file, a nonempty ``.git`` file the engine
     cannot parse, or an unreadable or unparseable ``worktrees`` record also lands
     here: kept, as if live. Empty regular ``.git`` files do not name a dependency.
-    An unreadable or quoted ``alternates`` file is an exit 2.
+    An unreadable or quoted ``alternates`` file is an exit 2. A review round retired
+    by its receipt is judged with two exceptions to this class, described under
+    review-round retirement below.
 ``in-grace``
     Something anywhere inside the entry was modified within
     ``scratch.grace_window``. The newest timestamp over the whole tree decides,
@@ -113,7 +115,8 @@ refusal except two that the round's ownership settles (#997): a git dir not besi
 its own work tree is disposable when it is bare (``core.bare = true``) or when the
 ``.git`` file naming it sits inside the round, and in either case only when none of
 its ``worktrees`` records names a worktree outside the round; and a nonempty
-``.git`` file that is not a ``gitdir:`` pointer names nothing to protect. Test
+``.git`` file that does not start with ``gitdir:``, which git refuses to follow,
+names nothing to protect. Test
 fixtures a reviewer's suite leaves under an in-round pytest basetemp are both
 shapes. An age sweep, which knows no owner, still keeps either. A kept round
 exits 1 and must be reported, not silently abandoned or retried with weaker guards.
@@ -539,8 +542,8 @@ def _linked_gitdir_reason(
     """A ``.git`` file whose git dir exists outside the entry is someone's live worktree.
 
     ``inner`` collects the git dirs inside the entry that a pointer names. With
-    ``owned`` (a retiring review round), a file that is not a ``gitdir:`` pointer
-    names no git dir, so nothing outside can be orphaned by removing it.
+    ``owned`` (a retiring review round), a file that does not start with
+    ``gitdir:`` is one git refuses to follow, so removing it orphans nothing.
     """
     try:
         with open(git_file, encoding="utf-8", errors="replace") as handle:
@@ -556,12 +559,22 @@ def _linked_gitdir_reason(
         return None
     lines = text.strip().splitlines()
     if len(text) > _GIT_FILE_MAX or len(lines) != 1 or not lines[0].startswith("gitdir:"):
-        # Inputs that reach here: a fixture's garbage, a whitespace-only file, a
-        # multi-line or oversized file, a pointer missing its `gitdir:` prefix.
-        # Git cannot follow any of them either, so none is a working link to a
-        # git dir. Unreadable files returned above and a pointer whose target
-        # cannot be resolved (below) stay protected even in an owned round.
-        return None if owned else f"unparseable .git file {git_file}"
+        # Inputs that reach here, and what an owned round does with each:
+        # - not starting with `gitdir:` (a fixture's garbage, a whitespace-only
+        #   or multi-line file, no prefix at all): exempt. Git follows a .git
+        #   file only when it starts with exactly `gitdir: ` and answers
+        #   "invalid gitfile format" otherwise (git 2.50.1, probed 2026-10-22),
+        #   so none of these is a working link. A single pointer line behind
+        #   leading blanks never reaches here: the strip above parses it as a
+        #   pointer, which keeps it more strictly than git would;
+        # - starting with `gitdir:` but multi-line or over the read cap: kept.
+        #   Git strips trailing newlines, so a pointer padded past the cap still
+        #   reaches its git dir, which may be outside the round.
+        # Unreadable files returned above and a pointer whose target cannot be
+        # resolved (below) stay protected in an owned round too.
+        if owned and not text.startswith("gitdir:"):
+            return None
+        return f"unparseable .git file {git_file}"
     target = lines[0][len("gitdir:"):].strip()
     if not os.path.isabs(target):
         target = os.path.join(os.path.dirname(git_file), target)
@@ -597,7 +610,8 @@ def _is_bare(git_dir: str) -> bool:
 
     A bare repository has no main work tree, so nothing outside can point at it
     as one. Any failure answers False, which keeps the git dir. ``--file`` does not
-    follow ``include.path``, and the stripped environment drops GIT_CONFIG_*.
+    follow ``include.path`` and ignores GIT_CONFIG_* overrides; stripping GIT_* is
+    defensive, as in the other git calls here.
     """
     config = os.path.join(git_dir, "config")
     try:
@@ -627,7 +641,13 @@ def _owned_detached_reason(git_dir: str, entry: str, inner: set[str]) -> str | N
     - a ``--separate-git-dir`` target whose main work tree is outside: kept. Its
       config says ``bare = false`` and records no work tree, so only the
       in-round pointer can clear it;
-    - a git dir whose config is missing, unreadable or not a regular file: kept;
+    - a decoy: an in-round ``.git`` file naming a separated git dir whose real
+      main work tree is outside: removed. It needs a reviewer to have copied or
+      written a pointer, as the cases below need a reviewer to have written
+      outside its round;
+    - a git dir with no in-round pointer whose config is missing, unreadable, not
+      a regular file or not ``bare = true``: kept. A git dir an in-round pointer
+      names is cleared without reading its config;
     - a bare repository another one borrows from through ``alternates``, or one
       driven as ``git --git-dir=<it> --work-tree=<elsewhere>``: removed. Neither
       leaves a record inside it; the first is the limit ordinary clones already

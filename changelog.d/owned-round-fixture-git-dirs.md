@@ -7,11 +7,13 @@ two kinds of git dir no longer keep it:
 
 - a bare repository, or a `--separate-git-dir` target whose `.git` pointer is also in
   the round, in either case with no `worktrees` record naming a tree outside it;
-- a nonempty `.git` file that is not a `gitdir:` pointer.
+- a nonempty `.git` file that does not start with `gitdir:`, which git refuses to
+  follow.
 
 A git dir that something outside the round depends on is still kept. So is a git dir
-whose config cannot be read as a regular file. The age sweep (`--apply --older-than`)
-is unchanged and still keeps all of them.
+that no in-round pointer names and whose config cannot be read as a regular file, and
+so is a `.git` file that starts with `gitdir:` but is multi-line or oversized. The age
+sweep (`--apply --older-than`) is unchanged and still keeps all of them.
 
 Refresh `scripts/sweep_scratch.py` and its tests. If you assert that a round holding a
 pytest basetemp of fixture repositories is `kept`, it is now `removed`.

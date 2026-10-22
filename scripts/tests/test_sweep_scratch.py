@@ -1328,6 +1328,62 @@ def test_age_sweep_still_keeps_fixture_git_dirs_in_a_round(root, repo, kind):
     assert path.exists()
 
 
+@pytest.mark.parametrize("padding", ["\n" * 5000, "\nextra\n"], ids=["oversized", "multi-line"])
+def test_finished_round_keeps_a_padded_pointer_git_still_follows(root, repo, base, padding):
+    # Git strips trailing newlines, so a pointer past the read cap still links a
+    # worktree in the round to a git dir outside it.
+    settings, receipt, path = _round(root, repo)
+    other = base / "other-repo"
+    _git(repo, "clone", "--no-hardlinks", str(repo), str(other))
+    wt = path / "outside-linked"
+    _git(other, "worktree", "add", "--detach", str(wt))
+    git_file = wt / ".git"
+    git_file.write_text(git_file.read_text().rstrip("\n") + padding)
+    if padding.startswith("\n" * 2):
+        subprocess.run(["git", "rev-parse", "--git-dir"], cwd=wt, check=True, capture_output=True)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "unparseable .git file" in result.reason
+    assert wt.exists()
+
+
+def test_finished_round_keeps_an_outside_dependency_beside_a_removable_fixture(root, repo, base):
+    # A walk-time keep must survive the detached git dirs judged after the walk.
+    # The linked worktree sits inside the bare fixture's directory, so the walk
+    # queues the bare repository before it finds the keep, whatever the order
+    # the filesystem lists siblings in.
+    settings, receipt, path = _round(root, repo)
+    bare = path / "fixture.git"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(bare))
+    other = base / "other-repo"
+    _git(repo, "clone", "--no-hardlinks", str(repo), str(other))
+    _git(other, "worktree", "add", "--detach", str(bare / "nested" / "outside-linked"))
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "linked worktree" in result.reason
+    assert path.exists()
+
+
+@pytest.mark.parametrize("kind", ["unreadable", "impossible-target"])
+def test_finished_round_keeps_a_git_file_it_cannot_read_or_resolve(root, repo, kind):
+    settings, receipt, path = _round(root, repo)
+    (path / "other").mkdir()
+    git_file = path / "other" / ".git"
+    if kind == "unreadable":
+        if os.geteuid() == 0:
+            pytest.skip("root reads a 000 file")
+        git_file.write_text(f"gitdir: {repo / '.git'}\n")
+        git_file.chmod(0)
+    else:
+        git_file.write_bytes(b"gitdir: /tmp/a\x00b\n")
+    try:
+        result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    finally:
+        git_file.chmod(0o600)
+    assert result.action == "kept"
+    assert path.exists()
+
+
 @pytest.mark.parametrize("kind", ["config-symlink", "config-missing", "not-bare"])
 def test_finished_round_keeps_a_detached_git_dir_it_cannot_read_as_bare(root, repo, kind):
     settings, receipt, path = _round(root, repo)
