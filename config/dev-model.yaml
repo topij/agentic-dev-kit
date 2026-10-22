@@ -469,9 +469,9 @@ review:
     # #1156; review_eval.py at 89937c8 on 2026-10-22): at sonnet the verifier
     # changed no score, and at haiku it took out two hedged LOW findings and no
     # hit. No agent definition carries it: on Claude Code the cockpit passes
-    # `model` to the delegation tool and the effort is the cockpit's, so set no
-    # claude.effort; on Codex both go on the `codex exec` argv. Read by
-    # panel_prompt.py --verifier.
+    # `model` to the delegation tool and the effort is the cockpit's, so
+    # panel_prompt.py --verifier, which reads this, refuses a claude.effort; on
+    # Codex both go on the `codex exec` argv.
     verifier_compute:
       # Mechanical through the delegation tool's `model` parameter.
       # runtime-status: mechanical

@@ -899,7 +899,7 @@ def render_verifier(
     repo_slug: str,
     reports: list[tuple[str, str]],
     runtime: str = "claude",
-    compute: dict | None = None,
+    compute: list[str] | None = None,
     scratch: str | None = None,
     pr: int | None,
     base_from_remote: bool,
@@ -914,7 +914,7 @@ def render_verifier(
     scratch path is held to a charset that cannot leave its code span. The repo slug
     is not a flag: it comes from the checkout's git config, unvalidated.
     """
-    parts = verifier_compute(compute or {}, runtime)
+    parts = compute or []
     if parts:
         compute_line = (
             f"\nRun at: {', '.join(parts)}. This line restates "
@@ -978,16 +978,33 @@ say so rather than confirming or refuting a finding.
 """
 
 
-def verifier_compute(compute: dict, runtime: str) -> list[str]:
+def verifier_compute(config: dict, runtime: str) -> list[str]:
     """``verifier_compute.<runtime>`` as ``["effort <e>", "model <m>"]``, refusing what
     would not render as one plain word.
 
     The verifier's prompt renders no free text (see ``build``), and this value comes
     from config rather than a flag, so it is held to the charset a model name or an
-    effort level uses instead of being echoed.
+    effort level uses instead of being echoed. Only an absent key reads as unset: a
+    section or value of the wrong shape, an empty one included, is refused rather
+    than taken for the cockpit's choice. ``claude.effort`` is refused too, since no
+    carrier applies it: the delegation tool takes no effort.
     """
+    panel = get(config, "review.fallback_panel", {})
+    section = panel.get("verifier_compute") if isinstance(panel, dict) else None
+    if section is None:
+        return []
+    if not isinstance(section, dict):
+        raise PromptError(f"review.fallback_panel.verifier_compute is {section!r}, not a map")
+    compute = section.get(runtime)
+    if compute is None:
+        return []
     if not isinstance(compute, dict):
         raise PromptError(f"review.fallback_panel.verifier_compute.{runtime} is {compute!r}, not a map")
+    if runtime == "claude" and "effort" in compute:
+        raise PromptError(
+            "review.fallback_panel.verifier_compute.claude.effort is set, and nothing applies it: "
+            "the delegation tool takes a model and no effort, so the verifier runs at the cockpit's"
+        )
     parts = []
     for key in ("effort", "model"):
         value = compute.get(key)
@@ -1382,7 +1399,7 @@ def build(args: argparse.Namespace) -> str:
             repo_slug=slug,
             reports=reports,
             runtime=o_runtime,
-            compute=get(config, f"review.fallback_panel.verifier_compute.{o_runtime}", {}) or {},
+            compute=verifier_compute(config, o_runtime),
             scratch=o_scratch,
             pr=args.pr,
             base_from_remote=base_from_remote,
