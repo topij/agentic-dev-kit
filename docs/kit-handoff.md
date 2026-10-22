@@ -227,10 +227,10 @@ still keep them (#1185). #1189 holds #1186's residual LOWs.
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
 ▶ Next: #1188 — make `scripts/tests/test_sweep_scratch.py` remove each test's
-temporary tree at teardown, so later rounds retire. That does not clear the fixtures
-already in the kept round `review-72a279dd…` (receipt in the main checkout's ignored
-`state/review-rounds/`); removing that round is the operator's call. #1185 (unowned
-entries) remains an operator design decision.
+temporary tree at teardown, so a round whose only pins are that module's fixtures
+retires. That does not clear the fixtures already in the kept round `review-72a279dd…`
+(receipt in the main checkout's ignored `state/review-rounds/`); removing that round is
+the operator's call. #1185 carries the unowned-entry case.
 
 ### Reviewer profiles
 
