@@ -66,8 +66,12 @@ RESULT_SCHEMA = "review-eval-result-v1"
 RUNTIMES = ("claude", "codex")
 _SHA = re.compile(r"[0-9a-f]{40}")
 _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
-# `path:line` or `path:start-end`, the citation form the lens contract asks for.
-_CITATION = re.compile(r"(?<![\w./-])((?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
+# `path:line` or `path:start-end`, the citation form the lens contract asks for. The
+# path may be absolute, as Codex writes it for a file in its tree.
+_CITATION = re.compile(r"(?<![\w./-])(/?(?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
+# An absolute path counts only inside the lens's own tree (`lens-<lens>-<short sha>/`),
+# and then by the part after it: the kit checkout holds the fixed file at the same tail.
+_LENS_TREE = re.compile(r"(?:^|/)lens-[\w-]+-[0-9a-f]{7}/")
 # A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`, `1. **F3**`.
 _FINDING_NUMBER = re.compile(r"^[ \t#>*_-]*(?:\d{1,3}[.)][ \t]+[*_]*)?F(\d+)\b", re.MULTILINE)
 # The lens contract's own sections cite what was checked, not what is wrong. A
@@ -222,9 +226,17 @@ def findings_text(report: str) -> str:
 def citations(report: str) -> list[dict[str, Any]]:
     found = []
     for match in _CITATION.finditer(findings_text(report)):
+        path = match.group(1)
+        if path.startswith("/"):
+            trees = list(_LENS_TREE.finditer(path))
+            if not trees:
+                continue
+            path = path[trees[-1].end():]
+            if ".." in path.split("/"):
+                continue  # resolves outside the lens's tree
         start = int(match.group(2))
         end = int(match.group(3)) if match.group(3) else start
-        found.append({"path": match.group(1), "lines": [start, max(start, end)]})
+        found.append({"path": path, "lines": [start, max(start, end)]})
     return found
 
 
