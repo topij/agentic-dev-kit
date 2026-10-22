@@ -79,7 +79,8 @@ disposable:
 - The other direction costs reclaimed space: any bare-looking git dir keeps its
   whole entry, so a session scratchpad holding a pytest basetemp with fixture
   repositories (an ``origin.git``, say) is never swept. The reason names the git
-  dir that kept it.
+  dir that kept it. A review round retired through ``--finish-review-round`` is
+  the exception described below.
 - A root over some other directory of repositories is refused only when it holds
   the home directory or a configured worktree repo. An idle sibling repository
   with no linked worktree is otherwise judged by age like anything else.
@@ -107,7 +108,14 @@ every reviewer and descendant process, saves the terminal reports outside it,
 and removes its registered worktrees before attesting ``--reviewers-finished``.
 The engine cannot infer process completion or verify a review receipt. It verifies
 allocation and directory identity, then exempts ONLY that round from the age gate.
-Every repository-dependency and filesystem refusal still applies. A kept round
+Every filesystem refusal still applies, and so does every repository-dependency
+refusal except two that the round's ownership settles (#997): a git dir not beside
+its own work tree is disposable when it is bare (``core.bare = true``) or when the
+``.git`` file naming it sits inside the round, and in either case only when none of
+its ``worktrees`` records names a worktree outside the round; and a nonempty
+``.git`` file that is not a ``gitdir:`` pointer names nothing to protect. Test
+fixtures a reviewer's suite leaves under an in-round pytest basetemp are both
+shapes. An age sweep, which knows no owner, still keeps either. A kept round
 exits 1 and must be reported, not silently abandoned or retried with weaker guards.
 The caller must not allow concurrent writes during retirement; this is not a
 security boundary against a writer with the same filesystem access. An interrupted
@@ -525,8 +533,15 @@ def _target_state(path: str) -> str:
     return "present"
 
 
-def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
-    """A ``.git`` file whose git dir exists outside the entry is someone's live worktree."""
+def _linked_gitdir_reason(
+    git_file: str, entry: str, *, owned: bool = False, inner: set[str] | None = None
+) -> str | None:
+    """A ``.git`` file whose git dir exists outside the entry is someone's live worktree.
+
+    ``inner`` collects the git dirs inside the entry that a pointer names. With
+    ``owned`` (a retiring review round), a file that is not a ``gitdir:`` pointer
+    names no git dir, so nothing outside can be orphaned by removing it.
+    """
     try:
         with open(git_file, encoding="utf-8", errors="replace") as handle:
             text = handle.read(_GIT_FILE_MAX + 1)
@@ -541,7 +556,12 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
         return None
     lines = text.strip().splitlines()
     if len(text) > _GIT_FILE_MAX or len(lines) != 1 or not lines[0].startswith("gitdir:"):
-        return f"unparseable .git file {git_file}"
+        # Inputs that reach here: a fixture's garbage, a whitespace-only file, a
+        # multi-line or oversized file, a pointer missing its `gitdir:` prefix.
+        # Git cannot follow any of them either, so none is a working link to a
+        # git dir. Unreadable files returned above and a pointer whose target
+        # cannot be resolved (below) stay protected even in an owned round.
+        return None if owned else f"unparseable .git file {git_file}"
     target = lines[0][len("gitdir:"):].strip()
     if not os.path.isabs(target):
         target = os.path.join(os.path.dirname(git_file), target)
@@ -550,7 +570,9 @@ def _linked_gitdir_reason(git_file: str, entry: str) -> str | None:
     except (OSError, ValueError):
         return f"unparseable .git file {git_file}"
     if target.startswith(entry + os.sep):
-        return None  # a submodule whose git dir lives inside the same entry
+        if inner is not None:
+            inner.add(target)
+        return None  # a submodule, or a separated git dir, inside the same entry
     state = _target_state(target)
     if state == "unknown":
         return f"cannot stat the git dir {target} named by {git_file}"
@@ -568,6 +590,56 @@ def _looks_like_git_dir(path: str) -> bool:
     except OSError:
         return False
     return stat.S_ISREG(head.st_mode) and stat.S_ISDIR(objects.st_mode) and stat.S_ISDIR(refs.st_mode)
+
+
+def _is_bare(git_dir: str) -> bool:
+    """True only when git reads ``core.bare = true`` from the git dir's own config.
+
+    A bare repository has no main work tree, so nothing outside can point at it
+    as one. Any failure answers False, which keeps the git dir. ``--file`` does not
+    follow ``include.path``, and the stripped environment drops GIT_CONFIG_*.
+    """
+    config = os.path.join(git_dir, "config")
+    try:
+        if not stat.S_ISREG(os.lstat(config).st_mode):
+            return False  # never read a FIFO or follow a link
+        result = subprocess.run(
+            ["git", "config", "--file", config, "--type=bool", "--get", "core.bare"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+        )
+    except OSError:
+        return False
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def _owned_detached_reason(git_dir: str, entry: str, inner: set[str]) -> str | None:
+    """Whether a retiring round may remove a git dir not beside its own work tree.
+
+    Inputs that share this shape inside a round, and what each gets:
+    - a bare fixture (``origin.git``) with no worktree records: removed;
+    - a bare repository with a linked worktree outside the round: kept, by its
+      ``worktrees`` record;
+    - a ``--separate-git-dir`` target whose main work tree is in the round (the
+      ``.git`` file naming it was found inside): removed;
+    - a ``--separate-git-dir`` target whose main work tree is outside: kept. Its
+      config says ``bare = false`` and records no work tree, so only the
+      in-round pointer can clear it;
+    - a git dir whose config is missing, unreadable or not a regular file: kept;
+    - a bare repository another one borrows from through ``alternates``, or one
+      driven as ``git --git-dir=<it> --work-tree=<elsewhere>``: removed. Neither
+      leaves a record inside it; the first is the limit ordinary clones already
+      carry, and both mean a reviewer wrote outside its round.
+    The entry itself being a git dir is decided in ``scan`` and stays kept.
+    """
+    reason = _main_repo_reason(git_dir, entry)
+    if reason:
+        return reason
+    if os.path.realpath(git_dir) in inner or _is_bare(git_dir):
+        return None
+    return _detached_git_dir(git_dir)
 
 
 def _detached_git_dir(path: str) -> str:
@@ -646,13 +718,21 @@ def _usage(st: os.stat_result) -> int:
     return blocks * 512 if blocks is not None else st.st_size
 
 
-def scan(entry: str, top: os.stat_result) -> _Scan:
-    """Size and newest timestamp over the whole tree, never following a symlink."""
+def scan(entry: str, top: os.stat_result, *, owned: bool = False) -> _Scan:
+    """Size and newest timestamp over the whole tree, never following a symlink.
+
+    ``owned`` is set only for a review round being retired by its allocation
+    receipt; see ``_owned_detached_reason`` for what it changes.
+    """
     result = _Scan(size=_usage(top), newest=_stamp(top))
     if not stat.S_ISDIR(top.st_mode):
         return result
     if _looks_like_git_dir(entry):
         result.linked = _detached_git_dir(entry)  # the entry is itself a git dir
+    # An owned round judges its detached git dirs after the walk, once every
+    # in-round `.git` pointer to them has been seen.
+    inner: set[str] = set()
+    detached: list[str] = []
 
     def onerror(exc: OSError) -> None:
         result.problems.append(f"unreadable {exc.filename}: {exc.strerror}")
@@ -673,7 +753,7 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
                     dirnames.remove(name)
             if result.linked is None:
                 if name == ".git" and stat.S_ISREG(st.st_mode):
-                    result.linked = _linked_gitdir_reason(child, entry)
+                    result.linked = _linked_gitdir_reason(child, entry, owned=owned, inner=inner)
                 elif stat.S_ISDIR(st.st_mode) and name == ".git":
                     # An ordinary clone's git dir may hold worktree records naming
                     # trees elsewhere.
@@ -687,7 +767,14 @@ def scan(entry: str, top: os.stat_result) -> _Scan:
                     # worktree of a --separate-git-dir repository holds the only
                     # pointer, outside. A git dir inside a `.git` (a submodule's,
                     # under modules/) belongs to the clone around it.
-                    result.linked = _detached_git_dir(child)
+                    if owned:
+                        detached.append(child)
+                    else:
+                        result.linked = _detached_git_dir(child)
+    for git_dir in detached:
+        if result.linked is not None:
+            break
+        result.linked = _owned_detached_reason(git_dir, entry, inner)
     return result
 
 
@@ -700,6 +787,7 @@ def classify(
     grace_seconds: int,
     now: float,
     stores: list[str],
+    owned: bool = False,
 ) -> Entry:
     """One owner class for one direct child of a root. Fails closed to ``unclassified``.
 
@@ -716,7 +804,7 @@ def classify(
         return Entry(entry, UNCLASSIFIED, reason="neither a file nor a directory", identity=identity)
     if top.st_dev != device:
         return Entry(entry, UNCLASSIFIED, reason="a mount point", identity=identity)
-    found = scan(entry, top)
+    found = scan(entry, top, owned=owned)
     age = max(0, int(now - found.newest))
     reason = configured_root_reason(entry, roots)
     if reason:
@@ -881,9 +969,10 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
 
     The age exemption applies only to an allocated, identity-matched round whose
     caller attests reviewers and descendant processes have ended. Unowned session
-    entries, reused paths, live worktrees, borrowed stores, bare fixture repos,
-    aliases and unreadable entries are NOT exempt. In particular this does not
-    address #997 by guessing that a bare repository is a disposable fixture.
+    entries, reused paths, live worktrees, borrowed stores, git dirs something
+    outside the round depends on, aliases and unreadable entries are NOT exempt.
+    Bare fixture repos and in-round separated git dirs are not protected here;
+    ``_owned_detached_reason`` lists what is (#997).
     """
     if apply and not reviewers_finished:
         raise ConfigError("--apply retirement requires --reviewers-finished after all processes end and evidence is retained")
@@ -892,7 +981,7 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
     stores = repository_stores(worktrees)
     entry = classify(record["path"], device=record["root_identity"][0], worktrees=worktrees,
                      stores=stores, roots=[r for r in roots if r != record["root"]],
-                     grace_seconds=0, now=time.time())
+                     grace_seconds=0, now=time.time(), owned=True)
     if entry.owner != STALE:
         return Outcome(record["path"], "kept", f"{entry.owner}: {entry.reason}")
     if not apply:
@@ -908,7 +997,7 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
         return Outcome(record["path"], "kept", str(exc))
     fresh = classify(record["path"], device=record["root_identity"][0], worktrees=worktrees,
                      stores=stores, roots=[r for r in roots if r != record["root"]],
-                     grace_seconds=0, now=time.time())
+                     grace_seconds=0, now=time.time(), owned=True)
     if fresh.owner != STALE:
         return Outcome(record["path"], "kept", f"now {fresh.owner}: {fresh.reason}")
     validate_review_round(record, settings, repo)

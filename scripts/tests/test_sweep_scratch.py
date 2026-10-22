@@ -1253,33 +1253,110 @@ def test_finished_round_reclaims_uv_cache_with_empty_git_marker(root, repo):
     assert not path.exists()
 
 
-@pytest.mark.parametrize("kind", ["linked", "bare", "malformed"])
+def _outside_dependency(kind, path, repo, base):
+    """A git dir in the round that something outside it still depends on."""
+    if kind == "linked":
+        other = base / "other-repo"
+        _git(repo, "clone", "--no-hardlinks", str(repo), str(other))
+        _git(other, "worktree", "add", "--detach", str(path / "outside-linked"))
+    elif kind == "bare-outside-worktree":
+        _git(repo, "clone", "--bare", str(repo), str(path / "fixture.git"))
+        _git(path / "fixture.git", "worktree", "add", "--detach", str(base / "outside-wt"))
+    elif kind == "separate-outside-main":
+        _seeded(base / "outside-main", f"--separate-git-dir={path / 'gd'}")
+    else:
+        raise AssertionError(kind)
+
+
+@pytest.mark.parametrize("kind", ["linked", "bare-outside-worktree", "separate-outside-main"])
 def test_empty_git_marker_does_not_exempt_other_dependencies(root, repo, base, kind):
     settings, receipt, path = _round(root, repo)
     cache = path / "uv-cache" / "sdists-v9"
     cache.mkdir(parents=True)
     (cache / ".git").touch()
-    if kind == "linked":
-        other = base / "other-repo"
-        _git(repo, "clone", "--no-hardlinks", str(repo), str(other))
-        _git(other, "worktree", "add", "--detach", str(path / "outside-linked"))
-    elif kind == "bare":
-        _git(repo, "clone", "--bare", str(repo), str(path / "fixture.git"))
-    else:
-        (path / "other").mkdir()
-        (path / "other" / ".git").write_text("garbage\n")
+    _outside_dependency(kind, path, repo, base)
     result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     assert result.action == "kept"
     assert path.exists()
 
 
-@pytest.mark.parametrize("kind", ["registered", "bare", "borrowed", "nested-root"])
-def test_finished_round_keeps_dependency_and_root_protections(root, repo, kind):
+def _round_fixture(kind, path, repo):
+    """Git dirs a reviewer's test suite leaves under an in-round pytest basetemp."""
+    case = path / "basetemp" / "test_case0"
+    case.mkdir(parents=True)
+    if kind == "bare":
+        _git(repo, "clone", "-q", "--bare", str(repo), str(case / "origin.git"))
+    elif kind == "separated":
+        _seeded(case / "project", f"--separate-git-dir={case / 'separate.git'}")
+    elif kind == "separated-relative":
+        _seeded(case / "project", f"--separate-git-dir={case / 'separate.git'}")
+        (case / "project" / ".git").write_text("gitdir: ../separate.git\n")
+    elif kind == "malformed":
+        (case / "other").mkdir()
+        (case / "other" / ".git").write_text("garbage\n")
+    elif kind == "whitespace":
+        (case / "other").mkdir()
+        (case / "other" / ".git").write_text("  \n")
+    else:
+        raise AssertionError(kind)
+
+
+ROUND_FIXTURES = ["bare", "separated", "separated-relative", "malformed", "whitespace"]
+
+
+@pytest.mark.parametrize("kind", ROUND_FIXTURES)
+def test_finished_round_reclaims_test_fixture_git_dirs(root, repo, kind):
+    # #997: the fixtures a lens's suite leaves in its round depend on nothing
+    # outside it, so the round's owner may retire them with it.
+    settings, receipt, path = _round(root, repo)
+    _round_fixture(kind, path, repo)
+    assert sweep.finish_review_round(receipt, settings, repo).action == "eligible"
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "removed"
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("kind", ROUND_FIXTURES)
+def test_age_sweep_still_keeps_fixture_git_dirs_in_a_round(root, repo, kind):
+    # Ownership is proven only by the receipt; a sweep that has none keeps them.
+    settings, _receipt, path = _round(root, repo)
+    _round_fixture(kind, path, repo)
+    _set_age(path, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {path.name: sweep.LIVE}
+    assert outcomes == []
+    assert path.exists()
+
+
+@pytest.mark.parametrize("kind", ["config-symlink", "config-missing", "not-bare"])
+def test_finished_round_keeps_a_detached_git_dir_it_cannot_read_as_bare(root, repo, kind):
+    settings, receipt, path = _round(root, repo)
+    bare = path / "fixture.git"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(bare))
+    config = bare / "config"
+    if kind == "config-symlink":
+        copy = path / "config-copy"
+        copy.write_bytes(config.read_bytes())
+        config.unlink()
+        config.symlink_to(copy)
+    elif kind == "config-missing":
+        config.unlink()
+    else:
+        _git(bare, "config", "core.bare", "false")
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "not beside its own work tree" in result.reason
+    assert path.exists()
+
+
+@pytest.mark.parametrize("kind", ["registered", "bare-outside-worktree", "separate-outside-main",
+                                  "borrowed", "nested-root"])
+def test_finished_round_keeps_dependency_and_root_protections(root, repo, base, kind):
     settings, receipt, path = _round(root, repo)
     if kind == "registered":
         _git(repo, "worktree", "add", "--detach", str(path / "lens"))
-    elif kind == "bare":
-        _git(repo, "clone", "--bare", str(repo), str(path / "fixture.git"))
+    elif kind in ("bare-outside-worktree", "separate-outside-main"):
+        _outside_dependency(kind, path, repo, base)
     elif kind == "borrowed":
         _git(repo, "clone", "--no-hardlinks", str(repo), str(path / "source"))
         outside = root.parent / "borrower"
@@ -1374,7 +1451,10 @@ def test_retirement_rechecks_dependencies_after_scan(root, repo, monkeypatch, ki
                 _git(repo, "clone", "--shared", str(source), str(outside))
                 settings.repos.append(outside)
             elif kind == "bare":
+                # A bare clone alone is a disposable fixture in a round; the
+                # late dependency is the worktree it gains outside.
                 _git(repo, "clone", "--bare", str(repo), str(source))
+                _git(source, "worktree", "add", "--detach", str(root.parent / "late-wt"))
             elif kind == "nested-root":
                 source.mkdir()
                 settings.roots.append(str(source))
