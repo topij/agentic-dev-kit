@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "e79cf1d1eab13a25eb2630142b3ac7856903eb643dbc371352316ac1e115c052"
+      "sha256": "80e5241bb02e1a504966c80031eb30349425e123017a70a6a38a3b3fe1ab8014"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -40,11 +40,11 @@
     },
     "docs/agentic-dev-kit/review-eval/reviewer-eval.md": {
       "role": "repo-only",
-      "sha256": "09f5d9aa92ee1b77668ed19a33bfac6f94d4e0421e22659e2d6ea0a50293e24c"
+      "sha256": "b7b06186bad960c00787cc4f8ee8565e16e5c3607e467864e506058f9a21406a"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "15afded298b6ca50bfbc8a06263fc89c37469cfa3019eb0a74d584e628c6a1ca"
+      "sha256": "7309a95933f419206ed2841d6e6c078a6e7fbb1e4fe3ff7d1ab8469c465ffabc"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -151,7 +151,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "4811455cfa004f2dd910725ccfd05b18c8c70a01440efa50ffdef32a956bbe10"
+      "sha256": "22928b67dbecc9cb75d70c18a0200efaa96ba30a1c41551ad0168a8f2b744666"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -586,7 +586,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "78bfc5de14c7e73af729ff0a121816481843e8eb3a18cccf5967b95ca3e1b7be"
+      "sha256": "935a90dfa3ff01c5f554c3b0de86363de3449b7887e4d573a2e43c4311ce22eb"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -633,7 +633,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "92617a64259f7b8eb6976a5d8164d2038af6e26b72fa872bdb49abf14c899aef"
+      "sha256": "e950aa737a30ee7f11e9043df168febefd2d06a8ca0c868bee25263af447bbb0"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -709,7 +709,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "89f978f0cd6a451840c59522b9df76596e38338cc58052d1a4d29305eace74c4"
+      "sha256": "560f7d2d2bd339593238d7d743241a99667638f7a081800e242d13408db52b20"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

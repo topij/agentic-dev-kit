@@ -1443,6 +1443,27 @@ migrate_kit_schema() {
       codex:
         model: gpt-5.6-sol
         effort: medium
+    # Compute for the verifier (*Verifying findings* in
+    # docs/agentic-dev-kit/fallback-review-panel.md), keyed by runtime as
+    # lens_compute is, with the same optional `model` and `effort`. Omit a runtime
+    # and its verifier runs at the cockpit'"'"'s choice. The verifier stays optional.
+    # Set at the cheap tier from the reviewer eval'"'"'s first comparison (#1155,
+    # #1156; review_eval.py at 89937c8 on 2026-10-22): at sonnet the verifier
+    # changed no score, and at haiku it took out two hedged LOW findings and no
+    # hit. That run used Claude verifiers only: the Codex value is the same tier by
+    # analogy, unmeasured as a verifier. No agent definition carries it: on Claude Code the cockpit passes
+    # `model` to the delegation tool and the effort is the cockpit'"'"'s, so
+    # panel_prompt.py --verifier, which reads this, refuses a claude.effort; on
+    # Codex both go on the `codex exec` argv.
+    verifier_compute:
+      # Mechanical through the delegation tool'"'"'s `model` parameter.
+      # runtime-status: mechanical
+      claude:
+        model: haiku
+      # runtime-status: mechanical
+      codex:
+        model: gpt-5.6-sol
+        effort: low
     lenses:
       - name: adversarial
         focus: "assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards"

@@ -813,9 +813,10 @@ accepted nit is a commit and another review (`#1155`).
 
 **It is optional until it is measured.** Whether it improves the round is the
 reviewer eval's question (`#1156`), measured on the same cases with and without it. The
-eval can run it, and no comparison is recorded yet. Until one is, each
-round's cockpit chooses whether to run it, and a round that
-skips it is disposed of exactly as before. The evidence for running it at all is one
+first comparison, recorded on `#1156` on 2026-10-22, changed no hit at either tier it
+tried and took out two hedged LOW findings at the cheaper one, over a case set too
+small to settle the question. Until a larger one does, each round's cockpit chooses
+whether to run it, and a round that skips it is disposed of exactly as before. The evidence for running it at all is one
 workshop paper (arXiv 2608.18167, recorded on `#613`) and a team report of the same
 practice (*How the Claude Code team does code review*, 2026-10-15), not a measurement
 on this kit.
@@ -855,12 +856,16 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
 5. Read its report against *Report what you reviewed, first* as step 3 does for a lens,
    then post its verdict lines on the pull request verbatim, before any disposition.
 
-**What compute it gets is not declared yet.** No `config/dev-model.yaml` key sets it,
-and no agent definition carries it. On Claude Code the delegation tool's `model`
-parameter applies a model and the effort is the cockpit's; on Codex, `-m` and
-`-c model_reasoning_effort=<level>` on the `codex exec` argv apply both. Run it at no
-more than the lenses' compute, and name what ran in the disposition. A key and an agent
-definition wait for the measurement to say which tier is enough.
+**What compute it gets.** `review.fallback_panel.verifier_compute.<runtime>` declares
+it, with the same optional `model` and `effort` as `lens_compute`, and the prompt's
+`Run at:` line restates it. No agent definition carries it, so apply it at launch: on
+Claude Code pass its `model` to the delegation tool, whose effort is the cockpit's; on
+Codex put `-m` and `-c model_reasoning_effort=<level>` on the `codex exec` argv. Keep it
+at no more than the lenses' compute, and name what ran in the disposition. The kit sets
+it at the cheap tier, because the reviewer eval's first comparison (`#1156`) found no
+gain at the lenses' tier. That comparison ran Claude verifiers only, so the Codex value
+is the same tier by analogy. With no key for a runtime, the compute is the cockpit's
+choice.
 
 **What the verdicts do.** A verdict is evidence for the disposition, never a
 disposition by itself:

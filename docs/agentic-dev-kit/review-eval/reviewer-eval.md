@@ -127,8 +127,9 @@ uv run <engine-dir>/review_eval.py --runtime claude \
   --verifier-command '<command that runs the verifier>'
 ```
 
-The verifier has no compute key yet (`#1155`), so the command chooses its model and
-effort, and the result records it verbatim.
+The command applies the verifier's compute, as `--lens-command` applies a lens's.
+`review.fallback_panel.verifier_compute` declares the compute a real round uses, and
+the result records the command verbatim.
 
 A score is a reading. Record it where the change is decided, in the pull request that
 changes a lens, stamped with the runtime, the command, `kit_revision` and the date.

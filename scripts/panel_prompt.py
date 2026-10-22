@@ -151,10 +151,10 @@ COMPUTE_CARRIER: dict[str, str] = {
     ),
 }
 
-# The verifier has no kit-owned compute key or agent definition yet (#1155): which
-# tier is enough waits for the reviewer eval (#1156). So its prompt names only the
-# controls each runtime offers a plain isolated launch, as observed in the
-# COMPUTE_CARRIER record above, and asks the cockpit to record what ran.
+# The verifier's compute is `review.fallback_panel.verifier_compute.<runtime>`
+# (#1155), and no agent definition carries it. So its prompt names the controls each
+# runtime offers a plain isolated launch, as observed in the COMPUTE_CARRIER record
+# above, beside the configured value, and asks the cockpit to record what ran.
 VERIFIER_CARRIER: dict[str, str] = {
     "claude": (
         "on Claude Code the delegation tool's `model` parameter applies a model and the "
@@ -177,6 +177,8 @@ DELTA_DRAWS: tuple[tuple[str, str], ...] = (
 REPAIR_VERDICT = "repair"
 # What a verifier's --scratch path may contain; see build.
 _SAFE_PATH = re.compile(r"[A-Za-z0-9._/-]+")
+# What a verifier_compute value may contain; see verifier_compute.
+_COMPUTE_VALUE = re.compile(r"[A-Za-z0-9._-]+")
 
 
 class PromptError(Exception):
@@ -897,6 +899,7 @@ def render_verifier(
     repo_slug: str,
     reports: list[tuple[str, str]],
     runtime: str = "claude",
+    compute: list[str] | None = None,
     scratch: str | None = None,
     pr: int | None,
     base_from_remote: bool,
@@ -911,10 +914,18 @@ def render_verifier(
     scratch path is held to a charset that cannot leave its code span. The repo slug
     is not a flag: it comes from the checkout's git config, unvalidated.
     """
-    compute_line = (
-        "\nRun at: the cockpit's choice. No kit key declares verifier compute yet; "
-        f"{VERIFIER_CARRIER[runtime]}.\n"
-    )
+    parts = compute or []
+    if parts:
+        compute_line = (
+            f"\nRun at: {', '.join(parts)}. This line restates "
+            f"`review.fallback_panel.verifier_compute.{runtime}` and enforces nothing; "
+            f"{VERIFIER_CARRIER[runtime]}.\n"
+        )
+    else:
+        compute_line = (
+            f"\nRun at: the cockpit's choice. No `review.fallback_panel.verifier_compute.{runtime}` "
+            f"is configured; {VERIFIER_CARRIER[runtime]}.\n"
+        )
     _, base_provenance, _ = _provenance(
         branch_from_checkout=True, base_from_remote=base_from_remote, verify_command=None
     )
@@ -965,6 +976,47 @@ The contract above is quoted verbatim from `{DOCTRINE}` and carries \
 If you cannot show a non-empty diff at the named sha, you have NOT checked anything:
 say so rather than confirming or refuting a finding.
 """
+
+
+def verifier_compute(config: dict, runtime: str) -> list[str]:
+    """``verifier_compute.<runtime>`` as ``["effort <e>", "model <m>"]``, refusing what
+    would not render as one plain word.
+
+    The verifier's prompt renders no free text (see ``build``), and this value comes
+    from config rather than a flag, so it is held to the charset a model name or an
+    effort level uses instead of being echoed. An absent or null key reads as unset;
+    a section or value of another shape, an empty string or list included, is
+    refused rather than taken for the cockpit's choice. ``claude.effort`` is refused too, since no
+    carrier applies it: the delegation tool takes no effort.
+    """
+    panel = get(config, "review.fallback_panel", {})
+    section = panel.get("verifier_compute") if isinstance(panel, dict) else None
+    if section is None:
+        return []
+    if not isinstance(section, dict):
+        raise PromptError(f"review.fallback_panel.verifier_compute is {section!r}, not a map")
+    compute = section.get(runtime)
+    if compute is None:
+        return []
+    if not isinstance(compute, dict):
+        raise PromptError(f"review.fallback_panel.verifier_compute.{runtime} is {compute!r}, not a map")
+    if runtime == "claude" and "effort" in compute:
+        raise PromptError(
+            "review.fallback_panel.verifier_compute.claude.effort is set, and nothing applies it: "
+            "the delegation tool takes a model and no effort, so the verifier runs at the cockpit's"
+        )
+    parts = []
+    for key in ("effort", "model"):
+        value = compute.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not _COMPUTE_VALUE.fullmatch(value):
+            raise PromptError(
+                f"review.fallback_panel.verifier_compute.{runtime}.{key} is {value!r}; it must be "
+                "one word of letters, digits, '.', '_' or '-'"
+            )
+        parts.append(f"{key} {value}")
+    return parts
 
 
 def _roster(config: dict) -> dict[str, str]:
@@ -1347,6 +1399,7 @@ def build(args: argparse.Namespace) -> str:
             repo_slug=slug,
             reports=reports,
             runtime=o_runtime,
+            compute=verifier_compute(config, o_runtime),
             scratch=o_scratch,
             pr=args.pr,
             base_from_remote=base_from_remote,
