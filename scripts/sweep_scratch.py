@@ -565,11 +565,15 @@ def _linked_gitdir_reason(
         #   file only when it starts with exactly `gitdir: ` and answers
         #   "invalid gitfile format" otherwise (git 2.50.1, probed 2026-10-22),
         #   so none of these is a working link. A single pointer line behind
-        #   leading blanks never reaches here: the strip above parses it as a
-        #   pointer, which keeps it more strictly than git would;
-        # - starting with `gitdir:` but multi-line or over the read cap: kept.
-        #   Git strips trailing newlines, so a pointer padded past the cap still
-        #   reaches its git dir, which may be outside the round.
+        #   leading blanks reaches here only when the file is over the read
+        #   cap; within the cap the strip above parses it as a pointer, which
+        #   keeps it more strictly than git would;
+        # - starting with `gitdir:` but over the read cap: kept. Git strips
+        #   trailing newlines, so a pointer padded past the cap still reaches
+        #   its git dir, which may be outside the round;
+        # - starting with `gitdir:` but multi-line within the cap: kept,
+        #   conservatively. Git reads the extra lines as part of the path and
+        #   answers "not a git repository", so this links nothing.
         # Unreadable files returned above and a pointer whose target cannot be
         # resolved (below) stay protected in an owned round too.
         if owned and not text.startswith("gitdir:"):
