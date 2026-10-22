@@ -468,7 +468,8 @@ review:
     # Set at the cheap tier from the reviewer eval's first comparison (#1155,
     # #1156; review_eval.py at 89937c8 on 2026-10-22): at sonnet the verifier
     # changed no score, and at haiku it took out two hedged LOW findings and no
-    # hit. No agent definition carries it: on Claude Code the cockpit passes
+    # hit. That run used Claude verifiers only: the Codex value is the same tier by
+    # analogy, unmeasured as a verifier. No agent definition carries it: on Claude Code the cockpit passes
     # `model` to the delegation tool and the effort is the cockpit's, so
     # panel_prompt.py --verifier, which reads this, refuses a claude.effort; on
     # Codex both go on the `codex exec` argv.

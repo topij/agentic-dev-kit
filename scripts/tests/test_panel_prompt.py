@@ -730,6 +730,14 @@ def test_a_verifier_compute_value_that_is_not_one_word_is_refused(repo, tmp_path
     assert "verifier_compute.claude" in out.stderr and message in out.stderr
 
 
+@pytest.mark.parametrize("block", ["      claude:\n", "\n"])
+def test_a_null_or_empty_verifier_compute_reads_as_unset(repo, tmp_path, block):
+    _with_verifier_compute(repo, block if block.startswith("  ") else "null\n")
+    out = _verifier(repo, tmp_path, "--runtime", "claude")
+    assert out.returncode == 0, out.stderr
+    assert "Run at: the cockpit's choice" in out.stdout
+
+
 def test_a_verifier_compute_section_that_is_not_a_map_is_refused(repo, tmp_path):
     _with_verifier_compute(repo, "haiku\n")
     out = _verifier(repo, tmp_path, "--runtime", "codex")

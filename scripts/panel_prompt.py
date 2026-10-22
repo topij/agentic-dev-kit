@@ -984,9 +984,9 @@ def verifier_compute(config: dict, runtime: str) -> list[str]:
 
     The verifier's prompt renders no free text (see ``build``), and this value comes
     from config rather than a flag, so it is held to the charset a model name or an
-    effort level uses instead of being echoed. Only an absent key reads as unset: a
-    section or value of the wrong shape, an empty one included, is refused rather
-    than taken for the cockpit's choice. ``claude.effort`` is refused too, since no
+    effort level uses instead of being echoed. An absent or null key reads as unset;
+    a section or value of another shape, an empty string or list included, is
+    refused rather than taken for the cockpit's choice. ``claude.effort`` is refused too, since no
     carrier applies it: the delegation tool takes no effort.
     """
     panel = get(config, "review.fallback_panel", {})

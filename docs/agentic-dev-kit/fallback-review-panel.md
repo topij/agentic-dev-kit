@@ -863,7 +863,8 @@ Claude Code pass its `model` to the delegation tool, whose effort is the cockpit
 Codex put `-m` and `-c model_reasoning_effort=<level>` on the `codex exec` argv. Keep it
 at no more than the lenses' compute, and name what ran in the disposition. The kit sets
 it at the cheap tier, because the reviewer eval's first comparison (`#1156`) found no
-gain at the lenses' tier. With no key for a runtime, the compute is the cockpit's
+gain at the lenses' tier. That comparison ran Claude verifiers only, so the Codex value
+is the same tier by analogy. With no key for a runtime, the compute is the cockpit's
 choice.
 
 **What the verdicts do.** A verdict is evidence for the disposition, never a

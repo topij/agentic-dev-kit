@@ -9,8 +9,8 @@ verifier's `Run at:` line still names the cockpit's choice.
 
 CHANGED (engine CLI surface): `panel_prompt.py --verifier` exits 2 in these cases:
 
-- `verifier_compute`, or its value for the runtime, is present but not a map. This
-  includes an empty value.
+- `verifier_compute`, or its value for the runtime, is a string, list or other non-map,
+  an empty string or list included. A null value still reads as unset.
 - The value holds a `model` or `effort` that is not one word of letters, digits, `.`,
   `_` or `-`.
 - It sets `claude.effort`, which no carrier applies.
