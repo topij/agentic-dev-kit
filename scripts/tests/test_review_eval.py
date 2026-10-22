@@ -506,6 +506,21 @@ def test_reused_reports_are_verified_without_running_the_lenses(repo, tmp_path) 
         f"{repo['bug']} adversarial, correctness"]
 
 
+def test_a_failed_verifier_keeps_the_lens_scores_of_its_case(repo, tmp_path) -> None:
+    script = tmp_path / "bad-verifier.py"
+    script.write_text("import sys\nsys.stdin.read()\nsys.exit(3)\n")
+    out = tmp_path / "out"
+    proc = _run(repo, _stub(tmp_path, "F1 HIGH: bug.py:2 divides by zero\n"), "--case", "divide-by-zero",
+                "--verifier-command", f"{sys.executable} {script}", out=out)
+    assert proc.returncode == 1 and "divide-by-zero verifier: command exited 3" in proc.stderr
+    result = json.loads((out / "result.json").read_text())
+    assert result["complete"] is False
+    assert [(r["lens"], r["hit"], "verdicts" in r) for r in result["results"]] == [
+        ("adversarial", True, False), ("correctness", True, False)]
+    assert "confirmed_hits_after_verifier" not in result["summary"]["adversarial"]
+    assert list(repo["scratch"].iterdir()) == []
+
+
 def test_reused_reports_must_all_be_there(repo, tmp_path) -> None:
     first = tmp_path / "first"
     first.mkdir()

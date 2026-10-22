@@ -632,6 +632,8 @@ def main(argv: list[str] | None = None) -> int:
     failure = None
     try:
         for kind, case in selected:
+            # Each lens's entry is kept as soon as it is scored, so a later lens or the
+            # verifier failing leaves it in the partial result, without its verdicts.
             paths, entries = {}, []
             for lens in lenses:
                 path = work / f"{case['id']}-{lens}.md"
@@ -642,22 +644,22 @@ def main(argv: list[str] | None = None) -> int:
                                       scratch_root=args.scratch_root, kit_rev=kit_rev, work=work,
                                       timeout=args.timeout)
                 if reused is None or path.resolve() != (reused / path.name).resolve():
-                    path.write_text(report)
+                    path.write_text(report, encoding="utf-8")
                 paths[lens] = path
                 entry = {"case": case["id"], "kind": kind, "lens": lens,
                          "source": case["source"], "confirmed": case["confirmed"],
-                         "report_sha256": hashlib.sha256(report.encode()).hexdigest()}
+                         "report_sha256": hashlib.sha256(report.encode("utf-8")).hexdigest()}
                 entry.update(score_bug(report, case) if kind == "bug" else score_clean(report))
                 entries.append(entry)
+                results.append(entry)
             if verifier is not None:
                 checked = run_verifier(root, case, paths, runtime=args.runtime, command=verifier,
                                        scratch_root=args.scratch_root, kit_rev=kit_rev, work=work,
                                        timeout=args.timeout)
-                (work / f"{case['id']}-verifier.md").write_text(checked)
+                (work / f"{case['id']}-verifier.md").write_text(checked, encoding="utf-8")
                 found = verdicts(checked, lenses)
                 for entry in entries:
                     apply_verdicts(entry, found)
-            results.extend(entries)
     except RunError as exc:
         failure = str(exc)
         print(f"error: {exc}", file=sys.stderr)
