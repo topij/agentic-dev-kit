@@ -106,6 +106,12 @@ source that failed on the retry.
 | Config drift     | your host config-apply step, if you have one (e.g. a `verify --json`-style check comparing committed config against applied host state) — drop this bullet entirely if it doesn't generalize to your setup |
 | Narrative archives | `<handoff-history>` + `<friction-log-archive>` — deliberately **not** part of the gather and never read whole; grepped per-candidate in *Remediation check*, and only for a candidate you are about to promote to 🔴 |
 
+When `scratch.session_registry` is configured, also read
+`<engine-dir>/session_cleanup.py list` from the repository root. Its shared Git
+registry discovers session-owned rounds even after their task checkout disappears.
+Report incomplete inventories and their last keep reasons; do not apply cleanup
+during session-start. The recovery contract is [session-cleanup.md](../session-cleanup.md).
+
 ### 0 · Gather (run in parallel)
 
 Fire these together — they're independent.

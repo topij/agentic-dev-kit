@@ -646,6 +646,14 @@ author re-reading their own diff. **Cite them by name, never by number.**
    receipt and reviewer outputs outside the round. Allocation prints JSON;
    retain it before launching anything and read its `path` as `<round>`:
 
+   When `scratch.session_registry` is configured, use
+   [`session-cleanup.md`](session-cleanup.md)'s `start` and `allocate` commands
+   instead of the standalone allocation below. They persist the same receipt
+   outside disposable checkouts before a lens starts. Use that workflow's seal,
+   preview and approved apply for retirement, retaining this panel's process and
+   evidence obligations. The standalone commands remain available for installations
+   that have not opted into the registry.
+
    ```sh
    uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
    ```

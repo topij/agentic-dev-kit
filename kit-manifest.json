@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "6ba64d47fa9bc58f929ed8678356bd8cf9ceb711c01c2ad73995cc81eb1e3bb9"
+      "sha256": "025a180aab8b0e9ab9d53a00ee2febc6a573b711f78038bec2dd68725f47383e"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -49,6 +49,10 @@
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
       "sha256": "e0de23263e8a7c1fe09d953e000feea615efa926e305ce6b21e12ad510cd3dcf"
+    },
+    "docs/agentic-dev-kit/session-cleanup.md": {
+      "role": "doctrine",
+      "sha256": "ff0255b71eab738fb995fca4ed10af03398b282f195541c3df072208c15fb29b"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -83,7 +87,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "7ffcb8f113c80b5acc58f7748eed73bfa4b593a590dbf1788a11236275f22d7c"
+      "sha256": "d9d6da93ea5a501b07c780a7a89964bc5e612c987793dd33214033c1f40dda4d"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -123,11 +127,11 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "33054191b85479349a8992ff21893060092bbe351b4b33422378505e755450d4"
+      "sha256": "2039c068d69cd387da8c7e06b825619af87c17a3474f33e515650fcdda5295d7"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "a829a41a75ff03d9d270759f37599b651b862eafa6e744806962bfa7b1bbd611"
+      "sha256": "35cdc438f517828c9e02f00b9dd987e360f674b185205d7df7350e7b721954b0"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -206,7 +210,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "6bf720a803f69541cdb7075c6a0f2715463d18e525608b30f2d0e3e2f183ec02"
+      "sha256": "534d53a006cf6583baa951ffc346fa881803a9279b95609f2263d730bedf4bc4"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -301,6 +305,7 @@
         "scripts/lib/triage/model.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
+        "scripts/session_cleanup.py",
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
@@ -608,12 +613,17 @@
       "role": "repo-only",
       "sha256": "8706d6522167ffa54d3a7f783c99c46fa3af22ee2dd4a03ccd9a64fc5fe171a6"
     },
+    "scripts/session_cleanup.py": {
+      "role": "engine",
+      "sha256": "80966ae84a28149b92cbe0b2070c3c4eae403be4238e26424266e674b712aaca"
+    },
     "scripts/sweep_scratch.py": {
       "required_by": [
-        "scripts/panel_prompt.py"
+        "scripts/panel_prompt.py",
+        "scripts/session_cleanup.py"
       ],
       "role": "engine",
-      "sha256": "eb3b8d295c6775b2e269b6a0df92f57bf9b874a0d492d3dd22e32e381fa85e5c"
+      "sha256": "1b9f58af507001b9c33c813d72ccd3ea64196789b6c88bef83cb486c326ce3fe"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -750,6 +760,10 @@
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
       "sha256": "f031085e5bb481fc71d63c286d03cb61931df6d03838a20a330d549e40c37919"
+    },
+    "scripts/tests/test_session_cleanup.py": {
+      "role": "test",
+      "sha256": "1ca352c08309e7ef5c864d265c702dff265f22ef7e02fa32a187792d3d220173"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
