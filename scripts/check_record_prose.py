@@ -534,7 +534,8 @@ def main(argv: list[str] | None = None) -> int:
         report = {"status": "unavailable", "error": str(exc), "limits": LIMITS,
                   "unavailable": [{"check": "input", "source": "input", "line": 0,
                                    "detail": str(exc)}]}
-    # unchecked_paths is absent when the read failed before the scope was known.
+    # An unavailable report carries no unchecked_paths: it supplies no coverage
+    # at all, so it names no partial scan either.
     report = {"findings": [], "unavailable": [], "stamps": [], **report}
     if args.json:
         print(json.dumps(report, ensure_ascii=False))

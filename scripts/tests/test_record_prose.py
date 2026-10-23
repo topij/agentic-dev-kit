@@ -503,7 +503,7 @@ def test_invalid_cli_inputs_are_explicitly_unavailable(repo, extra):
     assert report["status"] == "unavailable"
     assert report["error"]
     assert report["unavailable"][0]["detail"] == report["error"]
-    # A failed read never learned the scope, so it claims no unchecked set.
+    # An unavailable report supplies no coverage, so it claims no unchecked set.
     assert "unchecked_paths" not in report
 
 
