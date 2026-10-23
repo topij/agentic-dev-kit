@@ -543,6 +543,22 @@ def test_a_mixed_change_scans_only_its_narrative_paths(repo):
     assert report["findings"] == []
 
 
+def test_text_report_names_each_unchecked_path(repo):
+    require_kit_paths(ENGINE_REL)
+    root, base = repo
+    save(root, "docs/plan.md", "# Plan\n\nNew record.\n")
+    save(root, "code.py", "pass\n")
+    head = commit(root)
+    result = subprocess.run(
+        ["uv", "run", str(ENGINE), "--root", str(root), "--base", base, "--head", head],
+        capture_output=True, text=True, timeout=90,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Record preflight: passed\n" in result.stdout
+    assert "code.py: unchecked: not a configured narrative path\n" in result.stdout
+    assert "docs/plan.md: unchecked" not in result.stdout
+
+
 def test_text_moved_from_an_unchecked_path_is_not_a_move(repo):
     root, _ = repo
     save(root, "code.py", f"fixes {LOCAL_REF}\n")

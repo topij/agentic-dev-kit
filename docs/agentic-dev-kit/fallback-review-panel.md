@@ -227,7 +227,9 @@ reference, across intervening text and markup, including heading/list boundaries
 Review each pairing rather than treating a separator as protection from forge
 automation; exact intent declarations apply to the reference that was paired.
 An exit status alone is not the result: read `status`, `findings`, `unavailable`,
-`stamps` and `limits`. `not-applicable` means the comparison touches none of
+`stamps`, `limits` and `unchecked_paths`. `passed` covers the files in `paths`
+alone: with a non-empty `unchecked_paths` it says nothing about those files,
+which stay with the full review. `not-applicable` means the comparison touches none of
 the narrative paths, and supplies no preflight coverage. An unavailable read
 supplies no passing check. Resolve a failed check before recording review
 coverage; for an unavailable check, establish it independently and retain the
