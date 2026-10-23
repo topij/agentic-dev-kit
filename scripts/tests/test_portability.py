@@ -21594,16 +21594,21 @@ def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
             _assert_parallel_files_lanes_by_subject(mutated)
 
 
+def _assert_pr_watch_handoff_test_ordering(text: str) -> None:
+    flattened = " ".join(text.split())
+    assert (
+        "**A session's last pull request runs `wrap-up`'s handoff test before its "
+        "opening review is requested**"
+    ) in flattened
+
+
 def test_pr_watch_runs_the_handoff_test_before_the_opening_review() -> None:
     # A session's record rides its own PR into its opening review, not after it.
     text = (
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
     ).read_text(encoding="utf-8")
-    needle = (
-        "**A session's last pull request runs `wrap-up`'s handoff test before its "
-        "opening review is requested**"
-    )
-    assert needle in " ".join(text.split())
+    _assert_pr_watch_handoff_test_ordering(text)
     mutated = text.replace("handoff test before its opening", "handoff test after its opening", 1)
     assert mutated != text
-    assert needle not in " ".join(mutated.split())
+    with pytest.raises(AssertionError):
+        _assert_pr_watch_handoff_test_ordering(mutated)

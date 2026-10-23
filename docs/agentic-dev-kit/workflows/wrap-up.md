@@ -649,10 +649,12 @@ failure makes the overall outcome `incomplete-resumable`.
    closing-keyword rule before the review starts.
 
    **A wrap-up run before review is not complete when it hands back.** Its
-   `forge-pr-write` is done once the record is pushed; its `pr-watch`,
+   `forge-pr-write` is done once the record is committed on the session's branch
+   and pushed with it, whether or not the pull request is open yet; its `pr-watch`,
    `merge-authority` and `forge-merge-write` are the session pull request's own
    watch loop, and until that settles the honest outcome is `incomplete-resumable`
-   naming the pull request and its head, with that watch loop as the resume step.
+   naming the pull request and its head (or, before it is opened, the branch and
+   commit), with opening it and that watch loop as the resume step.
 
    **A separate wrap-up pull request is the exception, and costs its own review.**
    It is the route only when the test above left something to hand over and no
