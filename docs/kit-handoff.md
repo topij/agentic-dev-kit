@@ -90,13 +90,14 @@ guards, wording, and the `.git`-gone exit 2, including the CLI-help follow-up fr
 explicit retirement and disk/scratch reporting. Retirement retains Git-dependency
 protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retirement time.
 #1134 (`b739bc46`) delivered empty-marker handling. #1186 (`0b5d226e`) retires
-fixture git dirs in a receipt-owned round (#997, narrowed to rounds); unowned entries
-still keep them (#1185). #1193 (`043f61f2`) delivered #1186's residual LOWs (#1189),
+fixture git dirs in a receipt-owned round (#997, narrowed to rounds), and #1185 has the
+age sweep judge them the same way in unowned entries; a nonempty `.git` file that does
+not start with `gitdir:` still keeps an unowned entry. #1193 (`043f61f2`) delivered #1186's residual LOWs (#1189),
 and #1192 (`5b50b225`) has `test_sweep_scratch.py` remove each test's tree at
 teardown (#1188). Not established: that a round in which a lens probes `.git` files can be
-retired. On 2026-10-23 the kept rounds `review-72a279dd…` (#1186), `review-6dec9387…`
-(#1193) and `review-0714c186…` (#1195's round 1) were still on disk; removing them is
-the operator's call (friction log, 2026-10-23).
+retired. On 2026-10-23, `sweep_scratch.py --json` at `d07cf199` in report mode
+kept `cb1751f8…`, `review-72a279dd…` and `review-a2d753b4…` for an unparseable `.git`
+file each; removing them is the operator's call (friction log, 2026-10-23).
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -105,8 +106,9 @@ the operator's call (friction log, 2026-10-23).
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
-▶ Next: #1185 — let the age sweep drop fixture git dirs in an unowned entry when every
-dependent is accounted for.
+▶ Next: the 2026-10-23 friction entry's question — whether lens `.git` probes go
+outside the round, or the engine treats a multi-line `gitdir:` pointer as linking
+nothing, as git does.
 
 ### Reviewer profiles
 
