@@ -216,6 +216,14 @@ preference to a same-named command and installing one would silently replace the
 equal what its renderer produces, or the command refuses: a broken generator cannot
 classify an adopter by comparing it with itself.
 
+When a description changed, the report also compares the installed skill with a
+known rendered form at the adopter manifest's `kit_commit`. This needs that commit
+and its ancestry in the source kit checkout; a shallow clone may not contain them.
+A per-path `baseline unavailable` detail means preserve the adapter and inspect the
+missing evidence. Fetch the recorded commit's history into `$KIT` and rerun the
+report before deciding whether it is stale. Historical code is never executed;
+unknown historical template bodies and authored additions remain `adopter-owned`.
+
 A Codex `agents/openai.yaml` row beside an `adopter-owned` `SKILL.md` is also
 `adopter-owned`, even when the interface is absent: do not install kit policy for
 an adopter-authored skill. Otherwise, rows for the explicit-only skills inspect
