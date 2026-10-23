@@ -4532,6 +4532,11 @@ Approval commands: `approve TRI-01 TRI-02 TRI-05 TRI-08 TRI-11 TRI-20`, `archive
   operator's choice to read every reference file unconditionally removed the class, and
   the next pass found only LOW items.
 
+- **Each #1063 lens pass found a LOW in the author's own claims about its tests.**
+  Severity L, kept for accumulation. The
+  full pass and the delta pass each found a changelog fragment or commit message saying
+  the tests caught more than they did.
+
 ## 2026-10-10
 
 - **The repair-and-review chain shape recurred in the record-prose preflight.**
@@ -4652,6 +4657,11 @@ Approval commands: `approve TRI-01 TRI-03 TRI-05 TRI-10 TRI-12 TRI-13`, `archive
   a receipt and required corrected evidence. Original and amended review logs are under
   `/private/tmp/devkit-overnight-20261014-01a13bcb/reviews/`: `review-1108-ownership.log` and `review-1108-ownership-amended.log`.
 
+- **A review lens ran a global `pkill -f "pytest scripts/tests"`.** Severity L, kept for
+  accumulation. The round-2 correctness lens on #1111 used it to stop its own stray run,
+  and it could have killed another lens's suite in the same session. No collateral
+  failure was observed.
+
 ## 2026-10-14
 
 - **Headless lanes used a denied manifest-refresh spelling during the 2026-10-13 batch.**
@@ -4679,3 +4689,87 @@ Approval commands: `approve TRI-01 TRI-03 TRI-05 TRI-10 TRI-12 TRI-13`, `archive
   2026-10-10 history blocks. The preflight then paired a GitHub keyword in the moved
   text with the next issue reference, at `docs/kit-handoff-history.md:72`. The text
   stays as exact bytes, per the 2026-10-12 decision.
+
+- **`make test` outruns a headless lane's Bash time limit.** Severity M. Kept for
+  accumulation, because the remedy is not established.
+  - In the same batch, the first `make test` of the #1089, #1070 and #1079 lanes was
+    killed at the background time limit, as each lane reported. The durations of the
+    full runs are in each PR's `make test` stamp comment (#1096, #1097, #1099, #1100).
+  - The #1089 lane then ended on a denied call before committing.
+  - Whether the lane contract should prescribe a longer foreground timeout, or the lanes
+    should stop before the stamp and leave it to the cockpit, was not decided.
+
+## 2026-10-20 — Backlog migrated by triage session 7858b0190c764ac3af1d3d1002463f7f
+
+Engine mode: `engine-backed`.
+
+Filed [#1137](https://github.com/topij/agentic-dev-kit/issues/1137) from TRI-01, the `2026-10-18` entry `Review mutation overlapped a full-suite run again.`.
+
+Filed [#1138](https://github.com/topij/agentic-dev-kit/issues/1138) from TRI-05, the `2026-10-15` entry `A review lens rewrote the kit's shared pre-push hook from a copied worktree.`.
+
+Filed [#1139](https://github.com/topij/agentic-dev-kit/issues/1139) from TRI-15, the `2026-10-14` entry `The archive sweep's moved-pairing case recurred, as in the 2026-10-12 entry below.`.
+
+Filed [#1140](https://github.com/topij/agentic-dev-kit/issues/1140) from TRI-19, the `2026-10-09` entry `A field-limited backlog read still exceeded the tool output limit.`.
+
+Archived without filing: TRI-02, the `2026-10-18` entry `The uv-cache retirement refusal recurred.`.
+
+Archived without filing: TRI-03, the `2026-10-18` entry `Allocated review rounds retained uv-cache Git markers.`.
+
+Archived without filing: TRI-07, the `2026-10-15` entry `Backgrounded lens suites failed SIGINT tests again.`.
+
+Archived without filing: TRI-11, the `2026-10-15` entry `Review claimed post-restoration verification despite overlap.`.
+
+Archived without filing: TRI-12, the `2026-10-14` entry `Headless lanes used a denied manifest-refresh spelling during the 2026-10-13 batch.`.
+
+Archived without filing: TRI-14, the `2026-10-14` entry `The #1080 repair-chain shape recurred on LOW-only test-helper repairs.`.
+
+Archived without filing: TRI-16, the `2026-10-12` entry `A handoff archive sweep still trips the record-prose preflight after #1088.`.
+
+Archived without filing: TRI-18, the `2026-10-10` entry `Archival preservation met the new narrative preflight's conservative lexer.`.
+
+Approval commands: `approve TRI-01 TRI-05 TRI-15 TRI-19`, `archive TRI-02 TRI-03 TRI-07 TRI-11 TRI-12 TRI-14 TRI-16 TRI-18`, `park TRI-04 TRI-06 TRI-08 TRI-09 TRI-10 TRI-13 TRI-17 TRI-20`. Approver: `topij`.
+
+## 2026-10-23
+
+- **A lens's own `.git` probes keep its review round.** Severity M, kept for
+  accumulation; no remedy is proposed yet. #1193's adversarial lens left
+  `probe-adv-5b27b0ba/w/multi/.git`, a multi-line `gitdir:` pointer, in its round.
+  `--finish-review-round --apply --reviewers-finished` answered `kept`. The reason was
+  the conservative multi-line keep that #1193's engine comment documents, not an
+  unresolvable target: a single-line pointer whose target does not exist is already
+  removable in an owned round. #1188's report records a probe of the same family from
+  #1186's lens, and #1195's round-1 correctness lens left
+  `probe-corr-a330dcd5/entry/.git`, which was kept as unparseable too. Each kept
+  round waits for the operator to remove it by hand. The open question is whether the
+  lens contract should place git probes outside the round, or the engine should treat a
+  multi-line pointer as linking nothing, as git does.
+
+## 2026-10-22
+
+- **An unidentified `pr_watch` write failed a `make test` stamp.** Severity L, kept for
+  accumulation. During #1186's run at `82a867e8`, with review lenses running,
+  `state/pr-watch/1186.json` appeared in the branch's worktree; pytest failed on the
+  #428 guard and `make` exited 2. The run was repeated with no lens running.
+
+## 2026-10-21
+
+- **Headless verification hit the runtime limit again.** Severity M, kept for
+  accumulation with the 2026-10-14 entry. The changelog and report-limit lanes'
+  `make test` processes were killed before a pytest summary. The cockpit stopped
+  those launchers and took over verification at the unchanged candidate heads.
+  [#1147](https://github.com/topij/agentic-dev-kit/pull/1147) and
+  [#1146](https://github.com/topij/agentic-dev-kit/pull/1146) retain the command,
+  revision, directory, date and terminal results. The launcher wrote interrupted
+  receipts, which were not used as completion evidence. No timeout remedy was selected.
+
+## 2026-10-20
+
+- **A reviewer ran verification in its handed linked tree.** Severity L, kept for
+  accumulation with #1078. On 2026-10-20 the correctness review of #1142 at
+  `b7182eda2b6756316222b786c863b5e318de5f51` ran `make test` from its handed
+  detached checkout, writing ignored bytecode and test/lint caches. Its report said
+  it had skipped private-copy creation because there was no executable mutation
+  branch. The cockpit retained the violation, required source/provenance checks
+  from an independent clone, and required a fresh review with read-only source
+  permissions. No shared reviewer-copy enforcement change was selected; the
+  [review record](https://github.com/topij/agentic-dev-kit/pull/1142) retains the limits.
