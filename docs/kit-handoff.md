@@ -20,6 +20,30 @@
 > this file crosses its line budget (`scripts/check_doc_budget.py`). The Workstreams
 > section is never swept.
 
+## Session — 2026-10-23 (review-round retirement: sweep test teardown and #1189's follow-ups)
+
+- **Scratch retention:**
+  - [#1192](https://github.com/topij/agentic-dev-kit/pull/1192) merged as `5b50b225`. `test_sweep_scratch.py` now removes each test's tree at teardown, so a round in which a lens ran the module can be retired (#1188).
+  - [#1193](https://github.com/topij/agentic-dev-kit/pull/1193) merged as `043f61f2` on the operator's merge. It covers #1189's findings and #1192's lens findings:
+    - engine comments only (the AST is identical to the base);
+    - fixtures that pin the `gitdir:` prefix boundary;
+    - teardown on the unresolved `tmp_path`;
+    - child-pytest pins that remove their own basetemp.
+- **Review:**
+  - #1192 had one adversarial lens at `27f99c6a`. On the operator's choice, two of its LOW findings were routed to #1189; the third was disputed as the intended trade-off.
+  - #1193 had the two-lens panel at `5b27b0ba`, which reported no findings.
+- **Verification:**
+  - `make test` at `27f99c6a`, in `.claude/worktrees/sweep-test-teardown`, on 2026-10-22 printed `5493 passed, 1 skipped`.
+  - `make test` at `5b27b0ba`, in `.claude/worktrees/sweep-1189`, on 2026-10-22 printed `5516 passed, 1 skipped`.
+  - #1188's retirement criterion: a round allocated at `00eeda8d` in which the module ran was `removed` by `--finish-review-round --apply --reviewers-finished` on 2026-10-22.
+- **Not established:** that a round in which a lens probes `.git` files, or mutation-tests the teardown across the whole module, can be retired. The engine kept both lens rounds of this session, and the operator removed them by hand. This is parked in the friction log.
+- **Tracker:**
+  - Filed #1194.
+  - Added #1192's lens LOW findings to #1189, then closed it as completed with an evidence comment.
+  - #1188 closed through #1192's squash message.
+
+______________________________________________________________________
+
 ## Session — 2026-10-22 (owned review rounds retire fixture git dirs; workstream tracker pass)
 
 - **Scratch retention:** [#1186](https://github.com/topij/agentic-dev-kit/pull/1186)
@@ -215,22 +239,21 @@ explicit retirement and disk/scratch reporting. Retirement retains Git-dependenc
 protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retirement time.
 #1134 (`b739bc46`) delivered empty-marker handling. #1186 (`0b5d226e`) retires
 fixture git dirs in a receipt-owned round (#997, narrowed to rounds); unowned entries
-still keep them (#1185). #1189 holds #1186's residual LOWs.
+still keep them (#1185). #1192 (`5b50b225`) makes the sweep suite remove its own
+fixtures at teardown (#1188). #1193 (`043f61f2`) delivered #1189's follow-ups. A lens's
+own `.git` probes in its round still keep it (friction log, 2026-10-23). The kept
+round `review-72a279dd…` from #1186 was still on disk on 2026-10-23; removing it is the
+operator's call.
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#1185](https://github.com/topij/agentic-dev-kit/issues/1185),
-[#1188](https://github.com/topij/agentic-dev-kit/issues/1188),
-[#1189](https://github.com/topij/agentic-dev-kit/issues/1189),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
-▶ Next: #1188 — make `scripts/tests/test_sweep_scratch.py` remove each test's
-temporary tree at teardown, so a round whose only pins are that module's fixtures
-retires. That does not clear the fixtures already in the kept round `review-72a279dd…`
-(receipt in the main checkout's ignored `state/review-rounds/`); removing that round is
-the operator's call. #1185 carries the unowned-entry case.
+▶ Next: #1185 — let the age sweep drop fixture git dirs in an unowned entry when every
+dependent is accounted for.
 
 ### Reviewer profiles
 
