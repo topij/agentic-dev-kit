@@ -763,11 +763,14 @@ scratch:
   # that system's Claude Code temp directory. A review lens's copies are covered
   # when they sit in the session scratchpad, as fallback-review-panel.md's Scratch
   # namespace item requires; a copy made directly under the system temp dir is not.
-  # Allocate each review round with sweep_scratch.py --create-review-round under
-  # an expanded root below. panel_prompt.py requires a lens tree inside that round.
+  # With session_registry configured, allocate through session_cleanup.py allocate
+  # under an expanded root below; it persists the sweeper's ownership receipt.
+  # Without the registry, use sweep_scratch.py --create-review-round.
+  # panel_prompt.py requires a lens tree inside that round.
   # Keep the allocation receipt and final evidence outside the disposable round;
-  # --finish-review-round retires that caller-owned allocation after all reviewer
-  # processes end. It retains dependency protections while exempting that exact
+  # Use the registry's seal/preview/approved apply lifecycle, or standalone
+  # --finish-review-round without the registry, after all reviewer processes end.
+  # Retirement retains dependency protections while exempting that exact
   # allocation from the age gate. Ordinary age sweeps still use grace_window.
   #
   # To add a root, append a line. Add only a directory whose every child is
