@@ -57,26 +57,28 @@ before merge. Adopt the pieces incrementally; each stands on its own.
 
 ## How it fits together
 
-One session runs the inner loop — **session-start → work → pr-watch → wrap-up** —
+One session runs the inner loop — **session-start → work → wrap-up → pr-watch** —
 while the **friction flywheel** turns underneath it, feeding tickets and new rules
 back into the next session's briefing.
 
 ```mermaid
 flowchart TD
-    A([session start]) --> B["session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI"]
+    A([session start]) --> B["session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI<br/>+ recent merges"]
     B --> C{"pick next work<br/>by urgency"}
     C -->|self-contained| D["parallel<br/>isolated worktree lanes<br/>· suggested model tier"]
     C -->|judgment / interactive| E["cockpit<br/>work inline"]
     D --> F["open PR"]
     E --> F
-    F --> G["pr-watch<br/>poll · fix · reply<br/>until green and clean"]
+    F --> K{"wrap-up<br/>anything PRs + tracker<br/>don't record?"}
+    K -->|yes| K2["commit it to the handoff<br/>on this PR"]
+    K -->|no| G
+    K2 --> G["pr-watch<br/>poll · fix · reply<br/>until green and clean"]
     G --> H{"risky change?<br/>send-gate · destructive · kill-path"}
     H -->|yes| I["safety-critical review<br/>deterministic gate · dual-lens<br/>· operator sign-off"]
     H -->|no| J["merge"]
     I --> J
-    J --> K["wrap-up<br/>update handoff + log friction"]
+    J --> L([session end])
     J -. review evidence .-> R[(merged PR reviews)]
-    K --> L([session end])
 
     K -. friction accrues .-> M[(friction-log)]
     M -. cadence .-> N["triage-friction-log<br/>frozen inbox · exact decisions"]
@@ -88,7 +90,9 @@ flowchart TD
     S -. binds next session .-> B
 ```
 
-Solid arrows are one session's flow; dotted arrows are the asynchronous flywheel
+`wrap-up` runs before the session's last PR goes to review, so a handoff edit is
+reviewed with the change it describes. When the PRs, commits and tracker already say
+everything, it commits nothing. Solid arrows are one session's flow; dotted arrows are the asynchronous flywheel
 (**down** through approved tracker filing and **up** through recurring-pattern
 rule proposals).
 
@@ -280,7 +284,7 @@ Each piece maps to one or more of the ten principles in
 
 | Piece | Principle(s) | Purpose |
 |---|---|---|
-| `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan — read at session start, updated at session end. Older sessions sweep to the history file once it crosses a line budget. |
+| `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan: one entry per open workstream, read at session start and updated at wrap-up only for what no PR, commit or tracker issue records. Dated session entries from the earlier layout sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
 | `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads a `CLAUDE.md` instead of `AGENTS.md` once one exists) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
@@ -355,7 +359,10 @@ classified; forge readiness includes unfiltered review evidence rather than list
 or locally acknowledged comments alone, and detached HEAD is named instead of rendered
 as a blank branch. Only explicitly
 unconfigured or untriggered declarations may be omitted.
-Wrap-up requires the configured document-budget engine, preserves
+Wrap-up first decides whether the session left anything its pull requests, commits and
+tracker issues do not record; when it left nothing, the run is a no-op with no commit,
+pull request or review. Otherwise its record rides the session's own pull request
+before review. Wrap-up requires the configured document-budget engine, preserves
 operator-owned changes, sends an interactive issue-shaped finding through tracker search
 and an exact-payload decision before parking, and reserves the friction log for incomplete
 or accumulating findings and unavailable, declined, or ambiguous tracker routes. Its

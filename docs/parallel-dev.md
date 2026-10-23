@@ -190,8 +190,9 @@ watch `list --watch` from the cockpit — each flipping its own PR ready as it
 finishes, so the review bots pick them up at different times. Interactive lanes
 hand their PRs back for an operator merge decision; `dev_session.sh merge` is for
 autonomous self-class lanes with project and current-request authority.
-Reconcile the lanes and update the handoff (`paths.handoff`) from the cockpit with
-what actually shipped and what remains held.
+Reconcile the lanes from the cockpit, then run the joint wrap-up: the merged PRs
+record what shipped, so the handoff (`paths.handoff`) only gains what remains held or
+parked, in the entry of each workstream it belongs to.
 
 ## See also
 

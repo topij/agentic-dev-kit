@@ -10,7 +10,7 @@ Workflow names are runtime-neutral below. Invoke them as `/name` in Claude Code 
 
 The loop you're setting up:
 
-> **`session-start` → work → `pr-watch` → `wrap-up`**, with the **friction
+> **`session-start` → work → `wrap-up` → `pr-watch`**, with the **friction
 > flywheel** (`triage-friction-log`, `post-merge-systemize`) turning underneath.
 
 See the [README diagram](../README.md#how-it-fits-together) for the whole picture.
@@ -150,7 +150,8 @@ let a cheaper tier do the mechanical building.
 ## 4 · Open a PR and watch it — `pr-watch`
 
 Every change goes through a branch and a PR — and opening the PR is *not* the end
-of the task:
+of the task. If this is the session's last PR, run `wrap-up` (section 5) before you
+start watching it, so any handoff edit rides this PR and is reviewed with it. Then:
 
 ```text
 /pr-watch 42          # Claude; `$pr-watch 42` in Codex
@@ -169,19 +170,16 @@ raises the bar: prefer a deterministic gate over a fuzzy matcher, use more than
 one review lens, and require an operator sign-off before merge. Those never
 self-merge.
 
-## 5 · Close the loop — `wrap-up`
+## 5 · Hand off — `wrap-up`
 
-At the end of the session, `wrap-up` updates `docs/handoff.md`. It adds a session
-entry saying what happened, and updates the next step of the workstream the session
-worked on. Other workstreams' next steps stay as they were…
+Once the session's last PR is open and before its review, `wrap-up` asks whether the session left anything
+its pull requests, commits and tracker issues do not already record. When the
+answer is no, it commits nothing. When there is something — a decision, an
+abandoned approach, a next step with no ticket — it updates the entry of the
+workstream the session worked on in `docs/handoff.md`, on the session's own pull
+request before its review. Other workstreams' next steps stay as they were…
 
 ```markdown
-## Session — 2026-01-05 (password-reset endpoint)
-
-- Endpoint + token-expiry check shipped in #42; rate-limit deferred.
-
-…
-
 ## Workstreams
 
 ### Password reset
@@ -287,7 +285,7 @@ friction-routing step is being skipped — not that triage is overdue.
 ## That's the loop
 
 ```text
-session-start → work (inline or parallel) → pr-watch → wrap-up
+session-start → work (inline or parallel) → wrap-up → pr-watch
                                                                │
                         friction-log ──weekly──► triage + systemize
                                                                │

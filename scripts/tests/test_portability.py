@@ -3549,7 +3549,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             in flattened
         )
         assert (
-            "**the most recent one is not an instruction to this session**"
+            "**the most recent merge is not an instruction to this session**"
             in flattened
         )
         assert (
@@ -3678,8 +3678,8 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Park the full finding in <friction-log> or preserve the existing status artifact, then complete the repository path while reporting the degraded capability.",
             ),
             "successful-noop": (
-                "The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred.",
-                "Say so and create no commit or pull request.",
+                "The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred — including a session whose handoff test found nothing to hand over.",
+                "Say so, name what the handoff test found already recorded elsewhere, and create no commit or pull request.",
             ),
             "incomplete-resumable": (
                 "A changed repository artifact has not reached an authoritative terminal state because branch/push/pull-request creation is unavailable or ambiguous, pr-watch is unavailable or unsettled, or an authorized merge failed or remains ambiguous after read-back.",
@@ -3732,7 +3732,13 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "**With no operator to confirm**, update an existing entry only when "
             "the session's work is on that entry's own plan or issue"
         ) in flattened
-        assert "**It carries no `▶ Next:`**" in flattened
+        assert "**A wrap-up writes no session entry.**" in flattened
+        assert "**Decide whether there is anything to hand over.**" in flattened
+        assert "If nothing is left, the handoff is not edited." in flattened
+        assert (
+            "**The default home is the session's own pull request, before its review.**"
+            in flattened
+        )
         # A workstream is a subject, and a batch is filed per pull request.
         assert (
             "**A workstream is named for its subject, never for a date, a run mode, "
@@ -3777,10 +3783,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "When the operator keeps an entry as its own workstream, drop its "
             "`assignment unconfirmed` marker"
         ) in flattened
-        assert "Do not rename or edit earlier session entries" in flattened
+        assert "leave its entries as they are, and the archive sweep moves them" in flattened
         assert "**Leave every other workstream's entry alone.**" in flattened
         assert (
-            "If the falsified line is that entry's `▶ Next:`, ask the operator "
+            "If the falsified line is an entry's `▶ Next:`, ask the operator "
             "rather than rewriting it"
         ) in flattened
         assert "**Closing a workstream is the operator's decision.**" in flattened
@@ -3791,7 +3797,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         )
         assert "and never keep one side's `▶ Next:` silently" in flattened
         assert "`## Workstreams` is a standing section and is never swept" in flattened
-        assert "for the workstream this session worked on, never in the session entry" in flattened
+        assert (
+            "the `▶ Next:` line in the entry for the workstream this session worked on."
+            in flattened
+        )
         assert (
             "Closing a workstream is not among them: it is the operator's call"
             in flattened
@@ -4350,7 +4359,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "**the most recently updated entry is promoted**", 1
         )),
         ("session-start", session, session.replace(
-            "**the most recent one is not", "**the most recent one is", 1
+            "**the most recent merge is not an", "**the most recent merge is an", 1
         )),
         ("session-start", session, session.replace(
             "context, that is the pick.", "context, it is one candidate.", 1
@@ -4473,11 +4482,11 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "entry whenever the session's work looks related to it;", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "**It carries no `▶ Next:`**", "**It carries the `▶ Next:`**", 1
+            "writes no session entry.**", "writes a session entry.**", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "Do not rename or edit earlier session entries",
-            "Rename earlier session entries as needed", 1
+            "leave its entries as they are,",
+            "rename its entries as needed,", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "**Leave every other workstream's entry alone.**",
@@ -4507,7 +4516,15 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "is swept with the oldest entries", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "worked on, never in the session entry", "worked on, and in the session entry", 1
+            "the `▶ Next:` line in the entry\n", "the `▶ Next:` line in the session entry\n", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "If nothing is left, the handoff is not edited.",
+            "If nothing is left, add a session entry anyway.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**The default home is the session's own pull request, before its review.**",
+            "**The default home is a separate wrap-up pull request.**", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Closing a workstream is not among them",

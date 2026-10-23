@@ -148,7 +148,9 @@ settled by the rules above.
   `session-start` uses it to choose work compatible with its current environment.
 - All configuration lives in `config/dev-model.yaml`; skills and engines read it from
   there. Never hardcode a value that belongs in it.
-- The living plan is `docs/kit-handoff.md` — read at session start, updated at wrap-up.
+- The living plan is `docs/kit-handoff.md` — read at session start, updated at wrap-up
+  only for what no pull request, commit or tracker issue already records, on the
+  session's own pull request before its review.
   New friction is recorded in `docs/kit-friction-log.md`.
 - **If a change is observable, the PR that makes it adds its own changelog fragment** —
   a new `<slug>.md` file directly in `changelog.d/`, named for the part of its branch

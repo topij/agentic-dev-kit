@@ -18,7 +18,7 @@ configured `paths.engines` directory in an adopted repository.
 | Fresh repository made from the template | Run `./init.sh`, then inspect `config/dev-model.yaml`. | [Getting started](getting-started.md) |
 | Existing repository with its own agent rules, config, or CI | Invoke `adopt` and review its selective install plan before it writes. | [Adopt workflow](agentic-dev-kit/workflows/adopt.md) |
 | Repository that already has the kit | Invoke `upgrade` to inspect drift, migrate config, and refresh kit-owned files. | [Upgrade workflow](agentic-dev-kit/workflows/upgrade.md) |
-| A normal development session | Invoke `session-start`, work on a branch, watch the PR, then invoke `wrap-up`. | [Session loop](#run-a-development-session) |
+| A normal development session | Invoke `session-start`, work on a branch, invoke `wrap-up` before review, then watch the PR. | [Session loop](#run-a-development-session) |
 
 Do not use `cp -r` on a mature repository: it can overwrite the files whose
 ownership `adopt` must inspect. Re-running `init.sh` migrates config and renders
@@ -44,24 +44,29 @@ unclaimed templates; it does not replace the drift inspection and file refresh i
    run `make test` with a long enough tool timeout to receive the pytest summary.
    Its `check-syntax` target has the limitation recorded in [AGENTS.md](../AGENTS.md);
    inspect changed shell scripts separately until that gap is repaired.
-4. Open completed work ready for review. Invoke `pr-watch` for the exact PR, and
-   continue through CI and review findings. Ready status starts review; it does
-   not grant merge authority. Follow the project's merge policy for the final act.
-5. Invoke `wrap-up` after a meaningful session. It records what shipped, routes
-   friction, checks document budgets, and leaves the next action in the configured
-   handoff. Tracker writes need a decision on their exact payload.
+4. Open completed work ready for review, and invoke `wrap-up` before its review
+   starts. It asks whether the session left anything the PR, its commits and the
+   tracker do not already record — a decision, an abandoned approach, a next step
+   with no ticket. If so, it commits that to the workstream's entry in the
+   configured handoff on the same PR, so one review covers both; if not, it commits
+   nothing. It also routes friction. Tracker writes need a decision on their exact
+   payload.
+5. Invoke `pr-watch` for the exact PR, and continue through CI and review findings.
+   Ready status starts review; it does not grant merge authority. Follow the
+   project's merge policy for the final act.
 
 ```mermaid
 flowchart LR
     Brief["session-start<br/>briefing"] --> Branch["branch and work"]
     Branch --> Verify["project verification"]
     Verify --> PR["ready PR"]
-    PR --> Watch["pr-watch<br/>CI and review"]
+    PR --> Wrap{"wrap-up<br/>anything to hand over?"}
+    Wrap -->|yes| Record["commit handoff edit<br/>on this PR"]
+    Wrap -->|no| Watch
+    Record --> Watch["pr-watch<br/>CI and review"]
     Watch --> Authority{"merge authority?"}
     Authority -->|authorized| Merge["merge and read back"]
-    Authority -->|operator held| Handoff["hold exact PR head"]
-    Merge --> Wrap["wrap-up"]
-    Handoff --> Wrap
+    Authority -->|operator held| Hold["hold exact PR head"]
 ```
 
 For the full first-session walkthrough, use [Getting started](getting-started.md).

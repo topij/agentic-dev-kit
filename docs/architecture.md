@@ -82,6 +82,10 @@ sequenceDiagram
     Agent-->>Developer: briefing with gaps and recommendation
     Developer->>Agent: choose work
     Agent->>Forge: push branch and open ready PR
+    Agent->>Records: wrap-up handoff test
+    opt Something no PR, commit or tracker issue records
+        Agent->>Forge: commit the handoff edit on the same PR
+    end
     loop Until review and CI settle
         Agent->>Forge: pr-watch poll
         Forge-->>Agent: checks and findings
@@ -89,13 +93,16 @@ sequenceDiagram
     end
     Agent->>Developer: exact-head merge decision when required
     Developer-->>Agent: authorize or hold
-    Agent->>Records: wrap-up and next action
 ```
 
 `session-start` makes no content edits or acknowledgements; its pr-watch read may
 record the settle baseline. `pr-watch` checks the exact PR head and review
-evidence; opening a PR is not completion. `wrap-up` writes the configured handoff
-and routes friction, then follows the repository PR path for changed artifacts.
+evidence; opening a PR is not completion. `wrap-up` runs before the session's last
+PR goes to review. It writes the configured handoff only for what that PR, the
+session's commits and the tracker do not already record, and commits it on that PR so
+one review covers both; when nothing is left, it commits nothing. It also routes
+friction. A separate wrap-up PR is only for a session whose PRs are already reviewed
+or merged, or that had none.
 Merge authority is separate from review readiness. For a non-lane PR without a
 project merge policy, the [wrap-up contract](agentic-dev-kit/workflows/wrap-up.md#authority-contract)
 holds the merge for an exact operator decision.

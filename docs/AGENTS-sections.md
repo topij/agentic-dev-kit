@@ -24,9 +24,11 @@ status in the configured handoff, not in `AGENTS.md`.
   `docs/agentic-dev-kit/workflows/pr-watch.md`.
 - Use `parallel` only for lanes with disjoint source-file footprints. The cockpit
   owns the configured handoff and friction log; lanes report through their PR bodies.
-- At the end of every meaningful session, use `wrap-up` to update the configured
-  handoff, capture workflow friction, and leave one clear next step on the
-  workstream the session worked on.
+- Before a session's last pull request goes to review, use `wrap-up`. It decides
+  whether the session left anything its pull requests, commits and tracker issues
+  do not already record, commits only that to the configured handoff on that pull
+  request, captures workflow friction, and keeps the next step of the workstream
+  the session worked on. A session that left nothing commits nothing.
 - For customer-facing gates, destructive operations, recovery paths, security work,
   and behavioral changes to the configured `<engine-dir>/pr_watch.py`,
   `<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`,
