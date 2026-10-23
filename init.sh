@@ -1441,7 +1441,7 @@ migrate_kit_schema() {
         effort: high
       # runtime-status: mechanical
       codex:
-        model: gpt-5.6-sol
+        model: gpt-6.1-sol
         effort: medium
     # Compute for the verifier (*Verifying findings* in
     # docs/agentic-dev-kit/fallback-review-panel.md), keyed by runtime as
@@ -1462,7 +1462,7 @@ migrate_kit_schema() {
         model: haiku
       # runtime-status: mechanical
       codex:
-        model: gpt-5.6-sol
+        model: gpt-6.1-sol
         effort: low
     lenses:
       - name: adversarial
