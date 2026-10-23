@@ -32,7 +32,7 @@ status in the configured handoff, not in `AGENTS.md`.
 - For customer-facing gates, destructive operations, recovery paths, security work,
   and behavioral changes to the configured `<engine-dir>/pr_watch.py`,
   `<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`,
-  `<engine-dir>/sweep_scratch.py`, or the profile named by `parallel.claude_settings_profile` (shipped as
+  `<engine-dir>/sweep_scratch.py`, `<engine-dir>/session_cleanup.py`, or the profile named by `parallel.claude_settings_profile` (shipped as
   `config/claude-lane-settings.json`), the CI workflows, the hook scripts, or the runtime
   hook registrations (`.claude/settings.json`, `.codex/hooks.json`), read and apply
   `docs/agentic-dev-kit/safety-critical-changes.md`. Green CI is necessary but not
