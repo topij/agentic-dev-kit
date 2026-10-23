@@ -161,6 +161,9 @@ Usage (``<engine-dir>`` is ``paths.engines`` in config/dev-model.yaml, default
                                                     # classify runtime bindings by
                                                     # their rendered form
 
+The Codex model-cache advisory is informational, including missing pins and an
+unavailable cache; it never contributes to these exit codes.
+
 Exit codes:
     0 — every kit-owned file is `unchanged`, or absent without being a finding:
         `declined` (intentionally absent), `missing` (absent, intent unknown),
@@ -1084,6 +1087,7 @@ class Report:
     registrations: list[RegistrationStatus] = field(default_factory=list)
     lens_definitions: list[LensDefinitionStatus] = field(default_factory=list)
     files: list[FileStatus] = field(default_factory=list)
+    codex_models: dict = field(default_factory=dict)
 
     @property
     def drifted(self) -> list[FileStatus]:
@@ -2859,6 +2863,77 @@ def inspect_lens_definitions(
     return statuses
 
 
+def _codex_model_version(slug: str) -> tuple[str, tuple[int, ...]] | None:
+    """Compare numeric GPT releases only within an identical suffix family.
+
+    This is a naming heuristic, not release metadata: aliases, dated snapshots
+    and unfamiliar names remain unranked. Cache order and cross-family model
+    rankings cannot establish that a pin is stale.
+    """
+    match = re.fullmatch(r"gpt-([0-9]+(?:\.[0-9]+)*)(-[a-z]+(?:-[a-z]+)*)?", slug)
+    if match is None:
+        return None
+    try:
+        version = tuple(int(part) for part in match[1].split("."))
+    except ValueError:
+        return None
+    while len(version) > 1 and version[-1] == 0:
+        version = version[:-1]
+    return match[2] or "", version
+
+
+def inspect_codex_models(config: dict) -> dict:
+    """Report cache observations without changing configuration or exit status.
+
+    The cache belongs to the invoking client's CODEX_HOME, even when --root
+    names another repository. It is a snapshot, not proof of live availability.
+    Malformed rows invalidate the observation rather than inventing missing pins.
+    """
+    cache = Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex") / "models_cache.json"
+    result = {"cache_path": str(cache), "state": "skipped", "detail": "", "pins": []}
+    keys = [
+        "review.fallback_panel.lens_compute.codex.model",
+        "review.fallback_panel.verifier_compute.codex.model",
+    ]
+    pins = [(key, get(config, key, None)) for key in keys]
+    pins = [(key, model) for key, model in pins if isinstance(model, str) and model.strip()]
+    if not pins:
+        result["detail"] = "no explicit Codex reviewer model pins; inherited models are not checked"
+        return result
+    try:
+        document = json.loads(cache.read_text(encoding="utf-8"))
+        models = document.get("models") if isinstance(document, dict) else None
+        if not isinstance(models, list) or not all(
+            isinstance(row, dict) and isinstance(row.get("slug"), str) and row["slug"].strip()
+            for row in models
+        ):
+            raise ValueError("expected a models array of objects with nonempty slug strings")
+    except FileNotFoundError:
+        result["detail"] = "model cache absent; run Codex with this client home, then rerun kit_doctor"
+        return result
+    except (OSError, ValueError, RecursionError) as exc:
+        result.update(state="unavailable", detail=f"cannot read model cache: {exc}")
+        return result
+    slugs = {row["slug"] for row in models}
+    result.update(
+        state="checked",
+        detail="local cache snapshot only; refresh through Codex and confirm client/account access before changing a pin",
+    )
+    for key, model in pins:
+        version = _codex_model_version(model)
+        newer = sorted(
+            slug for slug in slugs
+            if version is not None
+            and (candidate := _codex_model_version(slug)) is not None
+            and candidate[0] == version[0] and candidate[1] > version[1]
+        )
+        result["pins"].append({
+            "key": key, "model": model, "missing": model not in slugs,
+            "newer_models": newer, "version_comparable": version is not None,
+        })
+    return result
+
+
 def inspect(
     root: Path,
     manifest: dict,
@@ -3146,6 +3221,7 @@ def inspect(
         inspection_root=root,
         registrations=inspect_registrations(root, engines_dir),
         lens_definitions=inspect_lens_definitions(root, config, engines_dir),
+        codex_models=inspect_codex_models(config),
         narrative_rendered=narrative,
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,
@@ -3256,6 +3332,20 @@ def _lens_definition_remedy(root: Path, engines_dir: str) -> str:
 
 def render(report: Report) -> str:
     lines: list[str] = ["kit-doctor — installation report", ""]
+    if report.codex_models:
+        models = report.codex_models
+        lines.append(f"  Codex model advisory [{models['state']}] — {models['cache_path']}")
+        lines.append(f"    {models['detail']}")
+        for pin in models["pins"]:
+            presence = "MISSING from cache" if pin["missing"] else "listed in cache"
+            lines.append(f"    {pin['key']}: {pin['model']} — {presence}")
+            if pin["newer_models"]:
+                lines.append("      newer same-family candidates: " + ", ".join(pin["newer_models"]))
+            elif pin["version_comparable"]:
+                lines.append("      no newer same-family version found in this cache")
+            else:
+                lines.append("      version comparison skipped: unrecognized numeric model family")
+        lines.append("")
 
     # Hoisted OUT of the drift list at the bottom and given its own block at the
     # top, because this file's drift is not like the other entries'. An upgrade
@@ -4236,6 +4326,7 @@ def main(argv: list[str] | None = None) -> int:
                         }
                         for d in report.lens_definitions
                     ],
+                    "codex_models": report.codex_models,
                     "narrative_rendered": report.narrative_rendered,
                     # Both emitted, because a consumer cannot derive either from
                     # `files` alone: an all-`unchanged` report looks identical

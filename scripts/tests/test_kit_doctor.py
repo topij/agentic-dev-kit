@@ -8369,3 +8369,131 @@ def test_a_rule_whose_prefix_lexes_to_nothing_is_not_a_grant(tmp_path, rule):
     assert _ungranted(kit_doctor.inspect_registrations(root, "scripts")) == [
         (".claude/settings.json", "scripts/pr_watch.py")
     ]
+
+
+@pytest.fixture
+def codex_cache(tmp_path, monkeypatch):
+    home = tmp_path / "codex-home"
+    home.mkdir()
+    monkeypatch.setenv("CODEX_HOME", str(home))
+    return home / "models_cache.json"
+
+
+def _model_config(model="gpt-6-sol"):
+    return {"review": {"fallback_panel": {"lens_compute": {"codex": {"model": model}}}}}
+
+
+def test_codex_model_numeric_family_and_independent_missing_observation(codex_cache):
+    codex_cache.write_text(json.dumps({"models": [{"slug": slug} for slug in (
+        "gpt-6.2-sol", "gpt-6.10-sol", "gpt-7-sol", "gpt-6.0-sol",
+        "gpt-5.9-sol", "gpt-99-astra", "gpt-99", "gpt-6-sol-preview",
+        "gpt-6-sol-2026-10-23",
+    )]}))
+    report = kit_doctor.inspect_codex_models(_model_config())
+    pin = report["pins"][0]
+    assert report["state"] == "checked"
+    assert pin["missing"] is True
+    assert pin["newer_models"] == ["gpt-6.10-sol", "gpt-6.2-sol", "gpt-7-sol"]
+    assert pin["version_comparable"] is True
+    # Decimal-looking releases are component versions, not floats or strings.
+    report = kit_doctor.inspect_codex_models(_model_config("gpt-6.9-sol"))
+    assert report["pins"][0]["newer_models"] == ["gpt-6.10-sol", "gpt-7-sol"]
+
+
+@pytest.mark.parametrize("slug", ["gpt-6.1-sol", "custom-alias", "gpt-6-sol-2026-10-23"])
+def test_codex_model_presence_does_not_require_recognized_family(codex_cache, slug):
+    codex_cache.write_text(json.dumps({"models": [{"slug": slug}, {"slug": "gpt-99-astra"}]}))
+    report = kit_doctor.inspect_codex_models(_model_config(slug))
+    assert report["pins"][0]["missing"] is False
+    assert report["pins"][0]["newer_models"] == []
+    assert report["pins"][0]["version_comparable"] is (slug == "gpt-6.1-sol")
+
+
+@pytest.mark.parametrize("payload", ["{", "null", "[]", "{}", '{"models": null}',
+    '{"models": [null]}', '{"models": [{}]}', '{"models": [{"slug": 2}]}',
+    '{"models": [{"slug": " "}]}', '[[' * 1000, '\udcff'])
+def test_codex_model_bad_cache_is_unavailable_not_missing(codex_cache, payload):
+    codex_cache.write_bytes(payload.encode("utf-8", errors="surrogateescape"))
+    report = kit_doctor.inspect_codex_models(_model_config())
+    assert report["state"] == "unavailable"
+    assert report["pins"] == []
+    assert "cannot read model cache" in report["detail"]
+
+
+def test_codex_model_absent_cache_is_explicit_skip(codex_cache):
+    report = kit_doctor.inspect_codex_models(_model_config())
+    assert report["state"] == "skipped"
+    assert "cache absent" in report["detail"]
+    assert report["cache_path"] == str(codex_cache)
+
+
+def test_codex_model_cache_io_error_is_advisory(codex_cache):
+    codex_cache.mkdir()
+    report = kit_doctor.inspect_codex_models(_model_config())
+    assert report["state"] == "unavailable"
+    assert report["pins"] == []
+
+
+def test_codex_model_default_home_and_empty_cache(tmp_path, monkeypatch):
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    cache = tmp_path / ".codex" / "models_cache.json"
+    _write(cache, '{"models": []}')
+    report = kit_doctor.inspect_codex_models(_model_config())
+    assert report["cache_path"] == str(cache)
+    assert report["state"] == "checked"
+    assert report["pins"][0]["missing"] is True
+
+
+def test_codex_model_pins_include_verifier_without_reading_advisory_tiers(codex_cache):
+    codex_cache.write_text('{"models": [{"slug": "gpt-6.1-sol"}]}')
+    config = _model_config("gpt-6.1-sol")
+    config["review"]["fallback_panel"]["verifier_compute"] = {"codex": {"model": "gpt-6-sol"}}
+    config["models"] = {"runtime_mappings": {
+        "claude": {"expensive": "fable"},
+        "codex": {"cheap": "low", "default": {"effort": "medium"},
+                  "expensive": {"model": "gpt-5.6-sol", "effort": "high"}},
+    }}
+    pins = kit_doctor.inspect_codex_models(config)["pins"]
+    assert [(pin["key"], pin["missing"]) for pin in pins] == [
+        ("review.fallback_panel.lens_compute.codex.model", False),
+        ("review.fallback_panel.verifier_compute.codex.model", True),
+    ]
+    assert pins[1]["newer_models"] == ["gpt-6.1-sol"]
+
+
+@pytest.mark.parametrize("model", [None, "", 123, [], {}])
+def test_codex_model_no_explicit_pin_is_not_an_availability_claim(codex_cache, model):
+    report = kit_doctor.inspect_codex_models(_model_config(model))
+    assert report["state"] == "skipped"
+    assert "no explicit Codex reviewer model pins" in report["detail"]
+    assert report["pins"] == []
+
+
+@pytest.mark.parametrize("payload, state", [
+    ('{"models": [{"slug": "gpt-6.1-sol"}]}', "checked"),
+    ("invalid", "unavailable"), (None, "skipped"),
+])
+def test_codex_model_cli_reports_advisories_without_changing_exit_status(
+    tmp_path, codex_cache, capsys, payload, state,
+):
+    root = _fake_repo(tmp_path / "repo")
+    config_path = root / "config/dev-model.yaml"
+    config_path.write_text(config_path.read_text() +
+        "review:\n  fallback_panel:\n    lens_compute:\n      codex:\n        model: gpt-6-sol\n")
+    manifest = _manifest({"scripts/check_doc_budget.py": kit_doctor.sha256_of(root / "scripts/check_doc_budget.py")})
+    _write(root / "kit-manifest.json", json.dumps(manifest))
+    if payload is not None:
+        codex_cache.write_text(payload)
+    assert kit_doctor.main(["--root", str(root), "--json"]) == 0
+    observation = json.loads(capsys.readouterr().out)["codex_models"]
+    assert observation["state"] == state
+    assert kit_doctor.main(["--root", str(root)]) == 0
+    human = capsys.readouterr().out
+    assert f"Codex model advisory [{state}]" in human
+    if state == "checked":
+        assert "MISSING from cache" in human
+        assert "newer same-family candidates: gpt-6.1-sol" in human
+    # An unrelated drift finding must still fail with the advisory present.
+    (root / "scripts/check_doc_budget.py").write_text("print('changed')\n")
+    assert kit_doctor.main(["--root", str(root), "--json"]) == 1

@@ -372,6 +372,55 @@ pull request, each stamped with the runtime, the lens command, the kit revision 
 date. Keep the change only when confirmed hits hold or rise and candidate false alarms,
 read, do not rise. The score covers the case set and nothing outside it (`#1156`).
 
+### Upgrading a model or following an alias change
+
+Run `<engine-dir>/kit_doctor.py` (or `--json`) on the machine that runs Codex.
+Its advisory `codex_models` report reads `$CODEX_HOME/models_cache.json`, defaulting
+to `~/.codex/models_cache.json`. It checks explicit Codex model pins in
+`review.fallback_panel.lens_compute` and `review.fallback_panel.verifier_compute`.
+Tier mappings remain advisory guidance and are not read by this check.
+Missing or unreadable caches are
+reported as skipped or unavailable; no advisory changes the doctor's exit status.
+
+A missing slug means missing from that cache, not proven unavailable at the
+service. Newer candidates are a naming heuristic: numeric `gpt-<version>` names
+with the same suffix family, such as `-sol`, compare by numeric components.
+Aliases and unfamiliar formats are not ranked; a different family is not an
+upgrade recommendation. Refresh the cache through Codex and confirm client and
+account access before changing a pin. The doctor neither refreshes the cache nor
+changes configuration.
+
+For a deliberate upgrade, preserve the old configuration and resolved model/effort
+from retained runtime evidence, then change the model id or alias in
+`config/dev-model.yaml`. Include `models.runtime_mappings.<runtime>` wherever the
+workflow uses that tier; those mappings are advisory unless the launch actually
+applies them. Check verifier settings too when the reviewer upgrade includes it.
+Regenerate affected Claude lens definitions through `panel_prompt.py` as described
+above, and read back the actual model and effort from each runtime's launch evidence.
+
+In the kit repository, run `scripts/review_eval.py` at the old and candidate
+settings for both Codex and Claude, using the same cases and lens/verifier commands
+apart from the intended compute change. Record the commands, runtime, resolved
+model/effort, case selection, revision SHA and date with both scores in the PR.
+Read the findings: citation-proxy hits alone do not establish detection, and a
+finding on a nominally clean case may be a real defect. Keep the upgrade only if
+confirmed hits hold or rise and the read false alarms do not rise. Preserve raw
+reports, verifier results and any interrupted-run limits. An adopter without the
+kit's history-based eval uses its own representative case set and records that
+limitation rather than claiming the kit's result.
+
+Apply the same procedure when a Claude alias (including
+`models.runtime_mappings.claude.expensive: fable`) resolves differently, even if
+configuration text did not change. Compare resolved ids in retained runtime evidence;
+the Codex cache check cannot detect Claude alias changes. Preserve the previous
+resolved id and reports before refreshing the baseline; if the old model cannot
+be rerun, use retained comparable evidence and state the gap. Reuse completed,
+applicable comparisons rather than repeat them merely to document the procedure:
+[#1206](https://github.com/topij/agentic-dev-kit/pull/1206) retains the Sol upgrade
+assessment and its limits; [#1209](https://github.com/topij/agentic-dev-kit/pull/1209)
+describes retaining evidence through session cleanup. Neither establishes an
+unmeasured Claude comparison.
+
 ## The contract every lens gets
 
 These are why the panel works. Drop any of them and it degrades toward the
