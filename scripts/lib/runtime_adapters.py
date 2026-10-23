@@ -341,10 +341,13 @@ def _baseline_adapter_text(
         "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
         "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
     }}
+    # The manifest names original objects and ancestry. Local replacements or
+    # grafts must not manufacture provenance for an adopter-authored description.
+    env["GIT_GRAFT_FILE"] = os.devnull
 
     def git(*args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
-            ["git", "-C", str(source_root), *args], env=env,
+            ["git", "--no-replace-objects", "-C", str(source_root), *args], env=env,
             capture_output=True, text=True, encoding="utf-8", timeout=10,
         )
 

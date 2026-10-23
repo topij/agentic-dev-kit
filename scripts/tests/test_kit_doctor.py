@@ -1093,6 +1093,76 @@ def test_unproven_baseline_adapter_stays_preserved(tmp_path, adapter_history, ga
     assert (adopter / rel).read_text() == old
 
 
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("replacement", ["commit", "blob", "namespace"])
+def test_baseline_history_ignores_replacement_objects(
+    tmp_path, adapter_history, monkeypatch, runtime, replacement,
+):
+    source, revision, git = adapter_history
+    adopter = tmp_path / "adopter"
+    rel = runtime_adapters._adapter_path(runtime, "wrap-up")
+    shared = "docs/agentic-dev-kit/workflows/wrap-up.md"
+    original = (source / rel).read_text()
+    authored = runtime_adapters.render_adapter(
+        runtime, "wrap-up", "Adopter policy: retain local instructions.", shared,
+    )
+    _write(adopter / rel, authored)
+    _write(adopter / "kit-manifest.json", json.dumps({"kit_commit": revision}))
+    _write(source / rel, runtime_adapters.render_adapter(
+        runtime, "wrap-up", "Current kit description.", shared,
+    ))
+    git("add", ".")
+    git("commit", "-m", "current render")
+    current = git("rev-parse", "HEAD")
+    _write(source / rel, authored)
+    git("add", ".")
+    if replacement == "blob":
+        replaced = git("rev-parse", f"{revision}:{rel}")
+        synthetic = git("rev-parse", f":{rel}")
+    else:
+        replaced = revision
+        synthetic = git("commit-tree", git("write-tree"), "-m", "replacement view")
+    git("reset", "--hard", current)
+    if replacement == "namespace":
+        git("update-ref", f"refs/test-replacements/{replaced}", synthetic)
+        monkeypatch.setenv("GIT_REPLACE_REF_BASE", "refs/test-replacements/")
+    else:
+        git("replace", replaced, synthetic)
+    assert git("--no-replace-objects", "show", f"{revision}:{rel}") == original.strip()
+    row = next(row for row in runtime_adapters.compare_adapters(source, adopter) if row.path == rel)
+    assert row.state == "adopter-owned"
+    assert (adopter / rel).read_text() == authored
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("graft_source", ["repository", "environment"])
+def test_baseline_history_rejects_grafted_ancestry(
+    tmp_path, adapter_history, monkeypatch, runtime, graft_source,
+):
+    source, revision, git = adapter_history
+    adopter = tmp_path / "adopter"
+    rel = runtime_adapters._adapter_path(runtime, "wrap-up")
+    original = (source / rel).read_text()
+    _write(adopter / rel, original)
+    _write(adopter / "kit-manifest.json", json.dumps({"kit_commit": revision}))
+    git("switch", "--orphan", "unrelated-history")
+    git("checkout", revision, "--", ".")
+    _write(source / rel, runtime_adapters.render_adapter(
+        runtime, "wrap-up", "Current kit description.", "docs/agentic-dev-kit/workflows/wrap-up.md",
+    ))
+    git("add", ".")
+    git("commit", "-m", "unrelated current render")
+    current = git("rev-parse", "HEAD")
+    graft = source / ".git/info/grafts" if graft_source == "repository" else tmp_path / "grafts"
+    _write(graft, f"{current} {revision}\n")
+    if graft_source == "environment":
+        monkeypatch.setenv("GIT_GRAFT_FILE", str(graft))
+    row = next(row for row in runtime_adapters.compare_adapters(source, adopter) if row.path == rel)
+    assert row.state == "adopter-owned"
+    assert "baseline unavailable" in row.detail
+    assert (adopter / rel).read_text() == original
+
+
 def test_baseline_history_ignores_callers_git_location(tmp_path, adapter_history, monkeypatch):
     source, revision, git = adapter_history
     adopter = tmp_path / "adopter"
