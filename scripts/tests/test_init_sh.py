@@ -5387,33 +5387,20 @@ def _run_template_copy(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
-def test_step_2s_branch_step_fails_loudly_when_the_cd_fails() -> None:
-    """Kills: reverting the branch step to `cd "$REPO" && git checkout -b …`.
-
-    Text-level on purpose, and weaker than the sibling tests here, which execute
-    what they check. Nothing in the kit executes this particular block — it
-    creates a branch — and #374 tracks the general gap that fenced shell ships
-    unchecked. Added because the mutation round found the `|| exit 1` fix pinned
-    by nothing at all, which is worse than pinned weakly: with the `&&` form the
-    `cd` can fail, the branch is never created, only the cd error is reported,
-    and Step 2 then writes into whatever tree the shell was in — #399 reached
-    through the one instruction that is supposed to establish the branch
-    guarantee.
-    """
-    doc = (
-        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "upgrade.md"
-    ).read_text(encoding="utf-8")
-    blocks = re.findall(r"```(?:bash|sh)\n(.*?)```", doc, re.DOTALL)
-    matching = [b for b in blocks if "git checkout -b" in b]
-    assert len(matching) == 1, f"expected one branch block, found {len(matching)}"
-
-    assert re.search(r'^cd "\$REPO" \|\| exit 1$', matching[0], re.M), (
-        "the branch step must fail loudly when the cd fails; found:\n" + matching[0]
+def test_step_2_stops_before_a_write_when_the_destination_is_missing(tmp_path: Path) -> None:
+    """Execute the destination guard; a failed cd must not fall through to a write."""
+    doc = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text(encoding="utf-8")
+    step = doc.split("## Step 2 —", 1)[1].split("## Step 3", 1)[0]
+    block = re.findall(r"```(?:bash|sh)\n(.*?)```", step, re.DOTALL)[0]
+    witness = tmp_path / "WRITE_RAN"
+    result = subprocess.run(
+        ["bash", "-c", block + '\n: > "$UPGRADE_WITNESS"\n'],
+        cwd=tmp_path, capture_output=True, text=True,
+        env={**os.environ, "REPO": str(tmp_path / "missing"),
+             "UPGRADE_BRANCH": "chore/assigned", "UPGRADE_WITNESS": str(witness)},
     )
-    assert '&& git checkout' not in matching[0], (
-        "the branch step is chained to the cd with `&&` — a failed cd then reports "
-        "only the cd error and never creates the branch"
-    )
+    assert result.returncode != 0
+    assert not witness.exists()
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
