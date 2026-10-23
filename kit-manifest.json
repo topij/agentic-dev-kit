@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "6ba64d47fa9bc58f929ed8678356bd8cf9ceb711c01c2ad73995cc81eb1e3bb9"
+      "sha256": "9870ac15635f0c255bbff86f4603df6298312991b8798adb3e8653d784738044"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -49,6 +49,10 @@
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
       "sha256": "e0de23263e8a7c1fe09d953e000feea615efa926e305ce6b21e12ad510cd3dcf"
+    },
+    "docs/agentic-dev-kit/session-cleanup.md": {
+      "role": "doctrine",
+      "sha256": "00f69821dfab13dca3d96973085a578366d21da7ac0d3d1254868a3c80f51960"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -83,7 +87,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "7ffcb8f113c80b5acc58f7748eed73bfa4b593a590dbf1788a11236275f22d7c"
+      "sha256": "d9d6da93ea5a501b07c780a7a89964bc5e612c987793dd33214033c1f40dda4d"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -123,11 +127,11 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "33054191b85479349a8992ff21893060092bbe351b4b33422378505e755450d4"
+      "sha256": "2039c068d69cd387da8c7e06b825619af87c17a3474f33e515650fcdda5295d7"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "a829a41a75ff03d9d270759f37599b651b862eafa6e744806962bfa7b1bbd611"
+      "sha256": "35cdc438f517828c9e02f00b9dd987e360f674b185205d7df7350e7b721954b0"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -206,7 +210,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "6bf720a803f69541cdb7075c6a0f2715463d18e525608b30f2d0e3e2f183ec02"
+      "sha256": "534d53a006cf6583baa951ffc346fa881803a9279b95609f2263d730bedf4bc4"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -301,6 +305,7 @@
         "scripts/lib/triage/model.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
+        "scripts/session_cleanup.py",
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
@@ -608,12 +613,17 @@
       "role": "repo-only",
       "sha256": "8706d6522167ffa54d3a7f783c99c46fa3af22ee2dd4a03ccd9a64fc5fe171a6"
     },
+    "scripts/session_cleanup.py": {
+      "role": "engine",
+      "sha256": "cab754c7e18d917e561cede5d141d5c6bf76653373f5fa19026a66df69830022"
+    },
     "scripts/sweep_scratch.py": {
       "required_by": [
-        "scripts/panel_prompt.py"
+        "scripts/panel_prompt.py",
+        "scripts/session_cleanup.py"
       ],
       "role": "engine",
-      "sha256": "eb3b8d295c6775b2e269b6a0df92f57bf9b874a0d492d3dd22e32e381fa85e5c"
+      "sha256": "1b9f58af507001b9c33c813d72ccd3ea64196789b6c88bef83cb486c326ce3fe"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -633,7 +643,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "fd41b7adc74c98dd35b9832051bf843e7fa9d9ead9ef069bffbbe63843c9f9aa"
+      "sha256": "3fef6bc36f39776aab08c768c2063a5d4f10041ebceb7a46633f8c02f0f5386f"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -681,7 +691,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "f6f15653fc859f9d51c30992dc40558e96e8996dc128096462a231c8574d15da"
+      "sha256": "c71dba96de4cb012f5e82e4e27b7fb8fda03572a15ab35569dabe3a485de6282"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -713,7 +723,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "8186524c9f4b977e8430d2c583a5e46bd6e2db1e45959c8b88c23985ca60fa40"
+      "sha256": "12d1197f059936d349188e503181e834a2d96547c658bb5de8595f702ee15686"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -750,6 +760,10 @@
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
       "sha256": "f031085e5bb481fc71d63c286d03cb61931df6d03838a20a330d549e40c37919"
+    },
+    "scripts/tests/test_session_cleanup.py": {
+      "role": "test",
+      "sha256": "347b840ae8cfcdf15ad677519ebff65c1675b2e06c3c915c4a2e24bcc06bbc22"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",

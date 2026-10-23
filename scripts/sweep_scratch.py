@@ -970,7 +970,8 @@ def create_review_round(root: str, head: str, settings: Settings, repo: Path) ->
     return record
 
 
-def validate_review_round(record: dict, settings: Settings, repo: Path, *, head: str | None = None) -> list[str]:
+def validate_review_round(record: dict, settings: Settings, repo: Path, *, head: str | None = None,
+                          marker_required: bool = True) -> list[str]:
     """Verify allocation identity and namespace; does not attest process liveness."""
     if not isinstance(record, dict) or set(record) != ROUND_KEYS:
         raise ConfigError("invalid review round record shape")
@@ -995,7 +996,8 @@ def validate_review_round(record: dict, settings: Settings, repo: Path, *, head:
         raise ConfigError("review round root was replaced")
     if head is not None and record["head"] != head:
         raise ConfigError("review round belongs to another reviewed head")
-    if _read_round_json(Path(path) / ROUND_MARKER) != record:
+    marker = Path(path) / ROUND_MARKER
+    if (marker_required or os.path.lexists(marker)) and _read_round_json(marker) != record:
         raise ConfigError("review round allocation receipt does not match its marker")
     return roots
 
@@ -1013,7 +1015,8 @@ def require_review_scratch(path: str, head: str, settings: Settings, repo: Path)
 
 
 def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: bool = False,
-                        reviewers_finished: bool = False) -> Outcome:
+                        reviewers_finished: bool = False, resuming: bool = False,
+                        before_remove=None) -> Outcome:
     """Retire only a caller-owned finished round, keeping dependency protections.
 
     The age exemption applies only to an allocated, identity-matched round whose
@@ -1026,7 +1029,11 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
     """
     if apply and not reviewers_finished:
         raise ConfigError("--apply retirement requires --reviewers-finished after all processes end and evidence is retained")
-    roots = validate_review_round(record, settings, repo)
+    # Only session_cleanup's durable, approved removal journal uses resuming.
+    # Standalone receipt retirement still requires its in-round marker. Resume
+    # tolerates ONLY an absent marker, never a malformed/replaced marker or an
+    # identity change; interrupted rmtree can remove that file before the tree.
+    roots = validate_review_round(record, settings, repo, marker_required=not resuming)
     worktrees = registered_worktrees(settings.repos)
     stores = repository_stores(worktrees)
     entry = classify(record["path"], device=record["root_identity"][0], worktrees=worktrees,
@@ -1039,7 +1046,7 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
     # The initial classification is only a survey. Refresh dependencies and the
     # configured roots at act time, just as age-based apply does. This narrows
     # accidental concurrent changes; it does not permit concurrent writers.
-    roots = validate_review_round(record, settings, repo)
+    roots = validate_review_round(record, settings, repo, marker_required=not resuming)
     try:
         worktrees = registered_worktrees(settings.repos)
         stores = repository_stores(worktrees)
@@ -1050,7 +1057,9 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
                      grace_seconds=0, now=time.time(), owned=True)
     if fresh.owner != STALE:
         return Outcome(record["path"], "kept", f"now {fresh.owner}: {fresh.reason}")
-    validate_review_round(record, settings, repo)
+    validate_review_round(record, settings, repo, marker_required=not resuming)
+    if before_remove is not None:
+        before_remove()
     remove_entry(record["path"], record["root"], tuple(record["identity"]))
     return Outcome(record["path"], "removed")
 

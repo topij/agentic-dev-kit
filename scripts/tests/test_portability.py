@@ -16086,7 +16086,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     root_binding_flat = " ".join(root_binding.split())
     assert (
         "`scripts/pr_watch.py`, `scripts/dev_session.sh`, "
-        "`scripts/launch_lane.py`, `scripts/sweep_scratch.py`, or the profile named by "
+        "`scripts/launch_lane.py`, `scripts/sweep_scratch.py`, `scripts/session_cleanup.py`, or the profile named by "
         f"`{profile_key}` (`{configured_profile_path}` in this repository), and to "
         "the CI workflows, hook scripts and runtime hook registrations "
         "(`.claude/settings.json`, `.codex/hooks.json`), "
@@ -16101,7 +16101,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert (
         "path-scoped rule.** Behavioral changes to `{{ENGINE_DIR}}/pr_watch.py`, "
         "`{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/launch_lane.py`, "
-        "`{{ENGINE_DIR}}/sweep_scratch.py`, or the "
+        "`{{ENGINE_DIR}}/sweep_scratch.py`, `{{ENGINE_DIR}}/session_cleanup.py`, or the "
         f"profile named by `{profile_key}` (shipped as `{shipped_profile_path}`), "
         "the CI workflows, the hook scripts, the runtime hook registrations "
         "(`.claude/settings.json`, `.codex/hooks.json`), "
@@ -16120,7 +16120,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert (
         "and behavioral changes to the configured `<engine-dir>/pr_watch.py`, "
         "`<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`, "
-        "`<engine-dir>/sweep_scratch.py`, or the profile "
+        "`<engine-dir>/sweep_scratch.py`, `<engine-dir>/session_cleanup.py`, or the profile "
         f"named by `{profile_key}` (shipped as `{shipped_profile_path}`), the CI "
         "workflows, the hook scripts, or the runtime hook registrations "
         "(`.claude/settings.json`, `.codex/hooks.json`), read and "
@@ -16160,6 +16160,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert set(claude_frontmatter["paths"]) == {
         "scripts/sweep_scratch.py",
         "scripts/devkit/sweep_scratch.py",
+        "scripts/session_cleanup.py",
+        "scripts/devkit/session_cleanup.py",
         "scripts/dev_session.sh",
         "scripts/devkit/dev_session.sh",
         "scripts/launch_lane.py",
@@ -21544,7 +21546,7 @@ def test_archive_unconfirmed_pending_preserves_concurrent_edit(tmp_path, mode, f
     "archive_plan_sessions.py", "check_doc_budget.py", "check_memory_budget.py",
     "digest_merged_prs.py", "fetch_merged_prs.py", "finalize_triage.py",
     "heartbeat_cli.py", "kit_doctor.py", "panel_prompt.py", "pr_watch.py",
-    "runtime_smoke.py", "sweep_scratch.py", "triage_friction_log.py",
+    "runtime_smoke.py", "sweep_scratch.py", "session_cleanup.py", "triage_friction_log.py",
     "verify_live_validation_bundle.py",
 ])
 def test_supported_standalone_entry_points_declare_python_floor_and_dependencies(name):

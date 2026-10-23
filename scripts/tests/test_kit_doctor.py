@@ -2698,6 +2698,7 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/launch_lane.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
+        "scripts/session_cleanup.py",
         "scripts/sweep_scratch.py",
         "scripts/lib/triage/model.py",
         "scripts/lib/systemize/config.py",

@@ -492,7 +492,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    you were handed**, beside it as `<round>/mut-<lens>-<short-sha>/`. Keep private
    environments and caches there too. Never use the system temp directory itself
    (`/tmp`, `/private/tmp`, `$TMPDIR`) as a review root. The cockpit allocates the
-   round through `sweep_scratch.py --create-review-round`; `panel_prompt.py`
+   round through `session_cleanup.py allocate` when `scratch.session_registry` is
+   configured, or standalone `sweep_scratch.py --create-review-round` otherwise;
+   both use the sweeper's allocation receipt. `panel_prompt.py`
    requires a supplied lens tree inside that allocation under `scratch.roots`.
    If the runtime gives you a different tree, stop and report it rather than
    creating unmanaged copies elsewhere. The cockpit retains terminal reports and
@@ -646,6 +648,14 @@ author re-reading their own diff. **Cite them by name, never by number.**
    receipt and reviewer outputs outside the round. Allocation prints JSON;
    retain it before launching anything and read its `path` as `<round>`:
 
+   When `scratch.session_registry` is configured, use
+   [`session-cleanup.md`](session-cleanup.md)'s `start` and `allocate` commands
+   instead of the standalone allocation below. They persist the same receipt
+   outside disposable checkouts before a lens starts. Use that workflow's seal,
+   preview and approved apply for retirement, retaining this panel's process and
+   evidence obligations. The standalone commands remain available for installations
+   that have not opted into the registry.
+
    ```sh
    uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
    ```
@@ -730,7 +740,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    mutation diffs, restoration evidence and relevant logs outside `<round>`;
    do not retain entire dependency trees as evidence. Remove only this round's
    registered lens worktrees with `git worktree remove` after checking their
-   status. Then preview and apply targeted retirement using the allocation
+   status. With `scratch.session_registry`, use the sealed-inventory retirement
+   in `session-cleanup.md`, retaining operator authorization for the concrete
+   paths. Otherwise preview and apply targeted retirement using the allocation
    receipt:
 
    ```sh

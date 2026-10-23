@@ -352,6 +352,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # Reports and, on --apply, removes stale scratch under the roots `scratch:`
     # configures (#900). Shipped: adopters' sessions fill the same temp dirs.
     ("scripts/sweep_scratch.py", "engine"),
+    ("scripts/session_cleanup.py", "engine"),
     # The kit's own test suite (#493). Role `test` rather than `engine`: nothing
     # here is imported by an engine at run time (`derive_dependencies` scans only
     # `engine` and `hook` roles), and none of it should be probed by
@@ -386,6 +387,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_repo_layout.py", "test"),
     ("scripts/tests/test_state_guard.py", "test"),
     ("scripts/tests/test_sweep_scratch.py", "test"),
+    ("scripts/tests/test_session_cleanup.py", "test"),
     ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_make_lint.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_parity_matrix.py", REPO_ONLY_ROLE),
@@ -488,6 +490,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # upgrading adopter gets doctrine pointing at a file they do not have, and
     # kit_doctor cannot report it missing because it is not tracked.
     ("docs/agentic-dev-kit/fallback-review-panel.md", "doctrine"),
+    ("docs/agentic-dev-kit/session-cleanup.md", "doctrine"),
     # The companion split out of the file above (#213). Tracked for the SAME
     # reason and by the same hand-checked route: fallback-review-panel.md is
     # manifest-owned and /upgrade-refreshed, and links here once. Untracked,

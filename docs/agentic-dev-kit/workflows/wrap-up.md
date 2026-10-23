@@ -113,6 +113,14 @@ retirement contract in `fallback-review-panel.md`, after reviewer processes end
 and evidence is retained. Report any round the engine kept; do not weaken its
 guards to make a wrap-up look complete.
 
+For sessions using `scratch.session_registry`, follow
+[`session-cleanup.md`](../session-cleanup.md) to discover the persisted inventory,
+seal required evidence and preview exact paths. Reuse operator authorization that
+already covers those paths; wrap-up itself still does not authorize deletion.
+Report kept paths as incomplete cleanup and archive Codex-managed worktrees through
+the native runtime before retrying from the primary checkout. A runtime end hook
+is advisory and does not replace this explicit lifecycle.
+
 The repository artifact set is load-bearing: `<handoff>` and, when applicable,
 `<handoff-history>`, `<friction-log>`, and an existing project-status artifact changed
 by this workflow. A successful tracker route additionally records only an identifier
