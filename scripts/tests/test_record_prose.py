@@ -503,16 +503,73 @@ def test_invalid_cli_inputs_are_explicitly_unavailable(repo, extra):
     assert report["status"] == "unavailable"
     assert report["error"]
     assert report["unavailable"][0]["detail"] == report["error"]
+    # The read failed before the changed files were listed, so no set is claimed.
+    assert "unchecked_paths" not in report
 
 
-def test_mixed_changes_supply_no_narrative_preflight_claim(repo):
+def test_a_change_touching_no_narrative_path_supplies_no_preflight_claim(repo):
     root, _ = repo
-    save(root, "docs/plan.md", "New record.\n")
     save(root, "code.py", "pass\n")
     code, report = run(repo, commit(root))
     assert code == 0, report
     assert report["status"] == "not-applicable"
     assert report["findings"] == report["unavailable"] == report["stamps"] == []
+    assert report["unchecked_paths"] == ["code.py"]
+
+
+def test_a_handoff_edit_riding_a_code_change_is_still_checked(repo):
+    # The wrap-up record rides the session's own pull request (#1197): the
+    # code beside it must not take the handoff lines out of the preflight.
+    root, _ = repo
+    save(root, "docs/plan.md", f"# Plan\n\nThis fixes {LOCAL_REF}.\n")
+    save(root, "code.py", "pass\n")
+    code, report = run(repo, commit(root))
+    assert code == 1, report
+    assert report["status"] == "failed"
+    assert report["paths"] == ["docs/plan.md"]
+    assert report["unchecked_paths"] == ["code.py"]
+    assert [(item["check"], item["source"]) for item in report["findings"]] == [
+        ("closing-keywords", "docs/plan.md")]
+
+
+def test_a_mixed_change_scans_only_its_narrative_paths(repo):
+    root, _ = repo
+    save(root, "docs/plan.md", "# Plan\n\nNew record.\n")
+    save(root, "code.py", f"# fixes {LOCAL_REF}\n")
+    save(root, "notes.md", "[gone](missing.md)\n")
+    code, report = run(repo, commit(root))
+    assert code == 0, report
+    assert report["status"] == "passed"
+    assert report["paths"] == ["docs/plan.md"]
+    assert report["unchecked_paths"] == ["code.py", "notes.md"]
+    assert report["findings"] == []
+
+
+def test_text_report_names_each_unchecked_path(repo):
+    require_kit_paths(ENGINE_REL)
+    root, base = repo
+    save(root, "docs/plan.md", "# Plan\n\nNew record.\n")
+    save(root, "code.py", "pass\n")
+    head = commit(root)
+    result = subprocess.run(
+        ["uv", "run", str(ENGINE), "--root", str(root), "--base", base, "--head", head],
+        capture_output=True, text=True, timeout=90,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Record preflight: passed\n" in result.stdout
+    assert "code.py: unchecked: not a configured narrative path\n" in result.stdout
+    assert "docs/plan.md: unchecked" not in result.stdout
+
+
+def test_text_moved_from_an_unchecked_path_is_not_a_move(repo):
+    root, _ = repo
+    save(root, "code.py", f"fixes {LOCAL_REF}\n")
+    base = commit(root)
+    (root / "code.py").unlink()
+    save(root, "docs/plan.md", f"# Plan\n\nfixes {LOCAL_REF}\n")
+    code, report = run((root, base), commit(root))
+    assert code == 1, report
+    assert [item["check"] for item in report["findings"]] == ["closing-keywords"]
 
 
 def test_missing_budgeted_candidate_is_unavailable(repo):
@@ -521,6 +578,27 @@ def test_missing_budgeted_candidate_is_unavailable(repo):
     code, report = run(repo, commit(root))
     assert code == 2, report
     assert "absent" in report["error"]
+
+
+def test_an_unavailable_mixed_report_still_names_its_unchecked_paths(repo):
+    root, _ = repo
+    (root / "docs/plan.md").unlink()
+    save(root, "code.py", "pass\n")
+    code, report = run(repo, commit(root))
+    assert code == 2, report
+    assert "absent" in report["error"]
+    assert report["unchecked_paths"] == ["code.py"]
+
+
+def test_an_unreadable_stamp_keeps_the_unchecked_paths(repo):
+    root, _ = repo
+    save(root, "docs/plan.md", "`make test` at `deadbeefdeadbeef` on 2026-10-10.\n")
+    save(root, "code.py", "pass\n")
+    code, report = run(repo, commit(root))
+    assert code == 2, report
+    assert report["status"] == "unavailable"
+    assert report["unavailable"][0]["check"] == "stamps"
+    assert report["unchecked_paths"] == ["code.py"]
 
 
 def test_local_destination_is_literal_not_a_git_pathspec(repo):
@@ -726,9 +804,10 @@ def test_cli_does_not_write_fresh_engine_or_input_tree(repo, tmp_path, status):
     shutil.copyfile(ENGINE.parent / "lib/kitconfig.py", fresh / "lib/kitconfig.py")
     save(root, ".gitignore", "__pycache__/\n*.pyc\n")
     base = commit(root)
-    save(root, "docs/plan.md", "New record.\n")
     if status == "not-applicable":
         save(root, "code.py", "pass\n")
+    else:
+        save(root, "docs/plan.md", "New record.\n")
     head = commit(root)
 
     before = tree_snapshot(fresh), tree_snapshot(root)

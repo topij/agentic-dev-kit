@@ -641,12 +641,11 @@ failure makes the overall outcome `incomplete-resumable`.
    by the pre-push hook, and the cockpit's joint wrap-up in `parallel.md` takes
    a batch's record instead.
 
-   **This route leaves the record to the review.** The narrative preflight in
-   `fallback-review-panel.md` runs only on a change confined to the narrative
-   paths, so on a mixed pull request nothing deterministic reads the handoff
-   edit for closing keywords, links or stamps. Keep the edit to the few lines
-   the handoff test left, and read them against *Numbers in prose* and the
-   closing-keyword rule before the review starts.
+   **The narrative preflight still reads the record on this route.** The
+   preflight in `fallback-review-panel.md` checks the narrative paths of any
+   change that touches them, so on a mixed pull request it reads the handoff
+   edit for closing keywords, links, budgets and stamps and leaves the code to
+   the review. Keep the edit to the few lines the handoff test left.
 
    **A wrap-up run before review is not complete when it hands back.** Its
    `forge-pr-write` is done once the record is committed on the session's branch

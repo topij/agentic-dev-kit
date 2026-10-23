@@ -186,10 +186,13 @@ list.
 
 ## Narrative preflight
 
-Before an opening review of a change confined to `paths.handoff`,
+Before an opening review of a change that touches any of `paths.handoff`,
 `paths.handoff_history`, `paths.friction_log` and `paths.friction_log_archive`,
 run the preflight invocation emitted by `<engine-dir>/panel_prompt.py` and
-retain its JSON report. Assembly pins the candidate's committed checker and
+retain its JSON report. A change that also touches other files is checked on
+those narrative paths alone, as when a session's handoff edit rides its own
+pull request; the report lists the other changed files in `unchecked_paths`,
+and they get no preflight check. Assembly pins the candidate's committed checker and
 `lib/kitconfig.py` as Git blob IDs and SHA-256 digests. The generated invocation
 loads and authenticates those bytes before executing either module in isolated
 Python, without checkout import paths or bytecode writes. A supplied review
@@ -224,8 +227,10 @@ reference, across intervening text and markup, including heading/list boundaries
 Review each pairing rather than treating a separator as protection from forge
 automation; exact intent declarations apply to the reference that was paired.
 An exit status alone is not the result: read `status`, `findings`, `unavailable`,
-`stamps` and `limits`. `not-applicable` means the comparison is outside its
-declared path scope, and supplies no preflight coverage. An unavailable read
+`stamps`, `limits` and `unchecked_paths`. `passed` covers the files in `paths`
+alone: with a non-empty `unchecked_paths` it says nothing about those files,
+which stay with the full review. `not-applicable` means the comparison touches none of
+the narrative paths, and supplies no preflight coverage. An unavailable read
 supplies no passing check. Resolve a failed check before recording review
 coverage; for an unavailable check, establish it independently and retain the
 command and result, or hold the review receipt.

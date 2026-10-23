@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "66a1186315ee7cbe04cefd51a7a1e6b1d2276689034755ceb023a27f2e5ab1f2"
+      "sha256": "4d42a22c60585ada43e76101e92bd2180aed8d910a24a4bf5c751cc63f41fce4"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -123,7 +123,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "acf408df709a44f08f3244e9250d2ef15087fd53d71787295f0495d3b7c2bd4d"
+      "sha256": "33054191b85479349a8992ff21893060092bbe351b4b33422378505e755450d4"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -167,7 +167,7 @@
     },
     "scripts/check_record_prose.py": {
       "role": "engine",
-      "sha256": "c537bcba5a8d6e5fb885eeda33738624d1dd4259a05c26de38d00a2bde17cac8"
+      "sha256": "b8d940cd58cdb4e83277529f4b92c48a410d575368bbf2102bfb2254150ea128"
     },
     "scripts/conftest.py": {
       "role": "engine",
@@ -733,7 +733,7 @@
     },
     "scripts/tests/test_record_prose.py": {
       "role": "test",
-      "sha256": "d59e4b74f7ccbdb2ebd8bc122d1e3809214a43a9932825a98fcd1e1ee4d5264b"
+      "sha256": "f2965e65eb265785dea0417ac45c047e0e90341f8c0728f75b85219f29607f3c"
     },
     "scripts/tests/test_repo_layout.py": {
       "role": "test",
