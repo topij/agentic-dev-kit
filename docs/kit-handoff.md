@@ -102,11 +102,10 @@ teardown (#1188).
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
-▶ Next: #1188 — make `scripts/tests/test_sweep_scratch.py` remove each test's
-temporary tree at teardown, so a round whose only pins are that module's fixtures
-retires. That does not clear the fixtures already in the kept round `review-72a279dd…`
-(receipt in the main checkout's ignored `state/review-rounds/`); removing that round is
-the operator's call. #1185 carries the unowned-entry case.
+▶ Next: #1185 — let an unowned scratch entry drop fixture git dirs whose dependents
+are all accounted for, as #1186 did for receipt-owned rounds. #1192's teardown does not
+clear the fixtures already in the kept round `review-72a279dd…` (receipt in the main
+checkout's ignored `state/review-rounds/`); removing that round is the operator's call.
 
 ### Reviewer profiles
 

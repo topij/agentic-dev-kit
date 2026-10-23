@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = ["markdown-it-py==4.0.0"]
 # ///
-"""Read-only preflight for changes confined to configured narrative paths.
+"""Read-only preflight for the configured narrative paths a change touches.
 
 Run with uv so the declared CommonMark parser is available. Git objects, not the
 working tree, supply the input. This is an adjunct to an independent full review:
@@ -56,6 +56,7 @@ LIMITS = [
     "Closing keywords pair conservatively with the next issue reference across intervening text and markup; declare each intended reference exactly.",
     "A narrative pairing is not reported when every line it spans was moved unchanged from one contiguous run of lines this change deletes from a narrative path; a copy, a new adjacency, a deletion inside it, a pairing spanning more than "
     f"{MAX_MOVED_SPAN} lines, or one whose source is not among the first {MAX_MOVE_CANDIDATES} unclaimed deleted lines matching its first line is still reported.",
+    "Only the configured narrative paths are scanned; any other changed file is listed in unchecked_paths and gets no preflight check.",
     "Every changed narrative file and commit message remains in full independent-review scope.",
 ]
 _HUNK = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
@@ -76,7 +77,7 @@ class CheckError(Exception):
 
 
 class NotApplicable(CheckError):
-    """The comparison is outside the declared narrative-path scope."""
+    """The comparison touches none of the declared narrative paths."""
 
 
 def git(root: Path, *args: str) -> str:
@@ -125,7 +126,7 @@ def path_value(value: object) -> str:
     return value
 
 
-def scope(root: Path, base: str, head: str) -> tuple[dict, str, list[str]]:
+def scope(root: Path, base: str, head: str) -> tuple[dict, str, list[str], list[str]]:
     config = loads(blob(root, base, "config/dev-model.yaml"))
     declared = {path_value(get(config, f"paths.{key}", None)) for key in NARRATIVE_KEYS}
     boundaries = git(root, "merge-base", "--all", base, head).splitlines()
@@ -134,9 +135,12 @@ def scope(root: Path, base: str, head: str) -> tuple[dict, str, list[str]]:
     boundary = boundaries[0]
     paths = git(root, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--name-only", "-z", "--no-renames", boundary, head).split("\0")
     changed = [p for p in paths if p]
-    if not changed or not set(changed) <= declared:
-        raise NotApplicable("the change is not confined to the configured narrative paths")
-    return config, boundary, changed
+    # A handoff edit rides the session's own pull request (#1197), so a mixed
+    # change checks its narrative paths and names the rest as unchecked.
+    narrative = [p for p in changed if p in declared]
+    if not narrative:
+        raise NotApplicable("the change touches none of the configured narrative paths")
+    return config, boundary, narrative, [p for p in changed if p not in declared]
 
 
 def markdown_lines(text: str) -> list[str]:
@@ -353,8 +357,9 @@ def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
     if Path(git(root, "rev-parse", "--show-toplevel").strip()).resolve() != root:
         raise CheckError("--root must name the repository root, not a subdirectory")
     base, head = commit(root, base), commit(root, head)
-    config, boundary, paths = scope(root, base, head)
+    config, boundary, paths, unchecked = scope(root, base, head)
     report = {"base": base, "head": head, "merge_base": boundary, "paths": paths,
+              "unchecked_paths": unchecked,
               "findings": [], "unavailable": [], "stamps": [], "limits": LIMITS}
 
     def finding(kind: str, source: str, line: int, detail: str) -> None:
@@ -524,7 +529,7 @@ def main(argv: list[str] | None = None) -> int:
         report = {"status": "unavailable", "error": str(exc), "limits": LIMITS,
                   "unavailable": [{"check": "input", "source": "input", "line": 0,
                                    "detail": str(exc)}]}
-    report = {"findings": [], "unavailable": [], "stamps": [], **report}
+    report = {"findings": [], "unavailable": [], "stamps": [], "unchecked_paths": [], **report}
     if args.json:
         print(json.dumps(report, ensure_ascii=False))
     else:
@@ -533,6 +538,8 @@ def main(argv: list[str] | None = None) -> int:
             print(report["reason"])
         for item in [*report.get("findings", []), *report.get("unavailable", [])]:
             print(f"{item['source']}:{item['line']}: {item['check']}: {item['detail']}")
+        for path in report["unchecked_paths"]:
+            print(f"{path}: unchecked: not a configured narrative path")
         for stamp in report.get("stamps", []):
             print(f"{stamp['source']}:{stamp['line']}: stamp {stamp['revision']} (names candidate head: {stamp['names_head']})")
         for limit in LIMITS:
