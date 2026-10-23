@@ -21,15 +21,18 @@ child of a root is one **entry**, and every entry gets exactly one owner class:
     linked worktree of some repository this config does not name; or it holds a
     ``.git`` directory whose ``worktrees/*/gitdir`` names a worktree that still
     exists outside the entry, which removing the entry would orphan; or it holds
-    any other git dir (a bare repository or a ``--separate-git-dir`` target, which
-    records nothing about who uses it) outside a ``.git`` directory; or it is,
+    any other git dir outside a ``.git`` directory (a bare repository or a
+    ``--separate-git-dir`` target) whose ``worktrees`` records name a worktree
+    outside the entry, or that is neither bare nor named by a ``.git`` file inside
+    the entry, since such a git dir records nothing about its main work tree; or
+    the entry is itself such a git dir, bare or not; or it is,
     holds or sits inside the git dir of a configured repository or an object
     store one borrows from through ``objects/info/alternates``, followed
     transitively. An unreadable ``.git`` file, a nonempty ``.git`` file the engine
     cannot parse, or an unreadable or unparseable ``worktrees`` record also lands
     here: kept, as if live. Empty regular ``.git`` files do not name a dependency.
     An unreadable or quoted ``alternates`` file is an exit 2. A review round retired
-    by its receipt is judged with two exceptions to this class, described under
+    by its receipt is judged with one exception to this class, described under
     review-round retirement below.
 ``in-grace``
     Something anywhere inside the entry was modified within
@@ -78,11 +81,18 @@ disposable:
   ``stale``: the borrowed-from clone records nothing, and only the configured
   repositories' alternates are read. The same holds for a ``--separate-git-dir``
   target that is itself named ``.git``.
-- The other direction costs reclaimed space: any bare-looking git dir keeps its
-  whole entry, so a session scratchpad holding a pytest basetemp with fixture
-  repositories (an ``origin.git``, say) is never swept. The reason names the git
-  dir that kept it. A review round retired through ``--finish-review-round`` is
-  the exception described below.
+- A git dir inside an entry that records nothing about its users is removable
+  (#1185): a bare repository driven as ``git --git-dir=<it> --work-tree=<elsewhere>``
+  or borrowed from through an unconfigured repository's ``alternates``, a
+  ``--separate-git-dir`` target given ``core.bare = true`` by hand while its work
+  tree outside still points at it, and a separated git dir whose real work tree is
+  outside but which a copied ``.git`` file inside the entry also names.
+  ``_detached_reason`` lists these with the cases that are kept.
+- The other direction costs reclaimed space: a nonempty ``.git`` file that does not
+  start with ``gitdir:`` (a test fixture's garbage pointer, say) keeps its whole
+  entry, though git refuses to follow it. The reason names the file. A review
+  round retired through ``--finish-review-round`` is the exception described
+  below.
 - A root over some other directory of repositories is refused only when it holds
   the home directory or a configured worktree repo. An idle sibling repository
   with no linked worktree is otherwise judged by age like anything else.
@@ -111,14 +121,14 @@ and removes its registered worktrees before attesting ``--reviewers-finished``.
 The engine cannot infer process completion or verify a review receipt. It verifies
 allocation and directory identity, then exempts ONLY that round from the age gate.
 Every filesystem refusal still applies, and so does every repository-dependency
-refusal except two that the round's ownership settles (#997): a git dir not beside
-its own work tree is disposable when it is bare (``core.bare = true``) or when the
-``.git`` file naming it sits inside the round, and in either case only when none of
-its ``worktrees`` records names a worktree outside the round; and a nonempty
-``.git`` file that does not start with ``gitdir:``, which git refuses to follow,
-names nothing to protect. Test
-fixtures a reviewer's suite leaves under an in-round pytest basetemp are both
-shapes. An age sweep, which knows no owner, still keeps either. A kept round
+refusal except one that the round's ownership settles (#997): a nonempty ``.git``
+file that does not start with ``gitdir:``, which git refuses to follow, names
+nothing to protect. An age sweep, which knows no owner, still keeps it. The other
+shape a reviewer's suite leaves under an in-round pytest basetemp, a git dir not
+beside its own work tree, is judged the same way in any entry: disposable when it
+is bare (``core.bare = true``) or when the ``.git`` file naming it sits inside the
+entry, and in either case only when none of its ``worktrees`` records names a
+worktree outside the entry (#1185). A kept round
 exits 1 and must be reported, not silently abandoned or retried with weaker guards.
 The caller must not allow concurrent writes during retirement; this is not a
 security boundary against a writer with the same filesystem access. An interrupted
@@ -633,29 +643,36 @@ def _is_bare(git_dir: str) -> bool:
     return result.returncode == 0 and result.stdout.strip() == "true"
 
 
-def _owned_detached_reason(git_dir: str, entry: str, inner: set[str]) -> str | None:
-    """Whether a retiring round may remove a git dir not beside its own work tree.
+def _detached_reason(git_dir: str, entry: str, inner: set[str]) -> str | None:
+    """Whether an entry may be removed with a git dir not beside its own work tree.
 
-    Inputs that share this shape inside a round, and what each gets:
+    The same rule holds in an unowned entry and in a retiring review round
+    (#1185, #997). Inputs that share this shape inside an entry, and what each gets:
     - a bare fixture (``origin.git``) with no worktree records: removed;
-    - a bare repository with a linked worktree outside the round: kept, by its
+    - a bare repository with a linked worktree outside the entry: kept, by its
       ``worktrees`` record;
-    - a ``--separate-git-dir`` target whose main work tree is in the round (the
+    - a ``--separate-git-dir`` target whose main work tree is in the entry (the
       ``.git`` file naming it was found inside): removed;
     - a ``--separate-git-dir`` target whose main work tree is outside: kept. Its
-      config says ``bare = false`` and records no work tree, so only the
-      in-round pointer can clear it;
-    - a decoy: an in-round ``.git`` file naming a separated git dir whose real
-      main work tree is outside: removed. It needs a reviewer to have copied or
-      written a pointer, as the cases below need a reviewer to have written
-      outside its round;
-    - a git dir with no in-round pointer whose config is missing, unreadable, not
-      a regular file or not ``bare = true``: kept. A git dir an in-round pointer
+      config says ``bare = false`` and records no work tree, so only an
+      in-entry pointer can clear it;
+    - a decoy: an in-entry ``.git`` file naming a separated git dir whose real
+      main work tree is outside: removed. In a round it needs a reviewer to have
+      copied or written a pointer; in an unowned entry, copying that work tree's
+      ``.git`` file into the entry beside its git dir does it, and nothing rules
+      that out;
+    - a git dir with no in-entry pointer whose config is missing, unreadable, not
+      a regular file or not ``bare = true``: kept. A git dir an in-entry pointer
       names is cleared without reading its config;
-    - a bare repository another one borrows from through ``alternates``, or one
-      driven as ``git --git-dir=<it> --work-tree=<elsewhere>``: removed. Neither
-      leaves a record inside it; the first is the limit ordinary clones already
-      carry, and both mean a reviewer wrote outside its round.
+    - a bare repository another one borrows from through ``alternates``, one
+      driven as ``git --git-dir=<it> --work-tree=<elsewhere>``, or a
+      ``--separate-git-dir`` target given ``core.bare = true`` by hand while its
+      work tree outside still points at it: removed. None leaves a record inside
+      the git dir; the first is the limit ordinary clones already carry. In a
+      round each means a reviewer wrote outside it; in an unowned entry nothing
+      rules them out, which is why a root must hold only disposable children;
+    - the git dir of a configured repository, or an object store one borrows
+      from: kept earlier, by ``repository_store_reason``.
     The entry itself being a git dir is decided in ``scan`` and stays kept.
     """
     reason = _main_repo_reason(git_dir, entry)
@@ -746,15 +763,17 @@ def scan(entry: str, top: os.stat_result, *, owned: bool = False) -> _Scan:
     """Size and newest timestamp over the whole tree, never following a symlink.
 
     ``owned`` is set only for a review round being retired by its allocation
-    receipt; see ``_owned_detached_reason`` for what it changes.
+    receipt; it exempts a ``.git`` file that does not start with ``gitdir:`` (see
+    ``_linked_gitdir_reason``). Detached git dirs are judged by
+    ``_detached_reason`` either way.
     """
     result = _Scan(size=_usage(top), newest=_stamp(top))
     if not stat.S_ISDIR(top.st_mode):
         return result
     if _looks_like_git_dir(entry):
         result.linked = _detached_git_dir(entry)  # the entry is itself a git dir
-    # An owned round judges its detached git dirs after the walk, once every
-    # in-round `.git` pointer to them has been seen.
+    # Detached git dirs are judged after the walk, once every in-entry `.git`
+    # pointer to them has been seen.
     inner: set[str] = set()
     detached: list[str] = []
 
@@ -791,14 +810,11 @@ def scan(entry: str, top: os.stat_result, *, owned: bool = False) -> _Scan:
                     # worktree of a --separate-git-dir repository holds the only
                     # pointer, outside. A git dir inside a `.git` (a submodule's,
                     # under modules/) belongs to the clone around it.
-                    if owned:
-                        detached.append(child)
-                    else:
-                        result.linked = _detached_git_dir(child)
+                    detached.append(child)
     for git_dir in detached:
         if result.linked is not None:
             break
-        result.linked = _owned_detached_reason(git_dir, entry, inner)
+        result.linked = _detached_reason(git_dir, entry, inner)
     return result
 
 
@@ -995,8 +1011,9 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
     caller attests reviewers and descendant processes have ended. Unowned session
     entries, reused paths, live worktrees, borrowed stores, git dirs something
     outside the round depends on, aliases and unreadable entries are NOT exempt.
-    Bare fixture repos and in-round separated git dirs are not protected here;
-    ``_owned_detached_reason`` lists what is (#997).
+    A ``.git`` file that does not start with ``gitdir:`` is not protected here
+    (#997). Fixture git dirs are not protected in any entry; ``_detached_reason``
+    lists what is (#1185).
     """
     if apply and not reviewers_finished:
         raise ConfigError("--apply retirement requires --reviewers-finished after all processes end and evidence is retained")

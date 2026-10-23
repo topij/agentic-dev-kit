@@ -1034,10 +1034,13 @@ def test_a_prunable_worktree_registration_does_not_wedge_the_sweep(root: Path, r
 
 
 def test_the_kept_reason_names_the_git_dir_that_kept_it(root: Path, repo: Path, base: Path):
-    _git(base, "clone", "-q", "--bare", str(repo), str(root / "entry" / "fixture" / "origin.git"))
+    # A separated git dir whose main work tree is outside; a bare fixture no
+    # longer keeps its entry (#1185).
+    (root / "entry" / "fixture").mkdir(parents=True)
+    _seeded(base / "outside-main", f"--separate-git-dir={root / 'entry' / 'fixture' / 'gd'}")
     _set_age(root / "entry", OLD)
     reports, _ = _run([root], repo, older_than=None)
-    assert str(root / "entry" / "fixture" / "origin.git") in reports[0].entries[0].reason
+    assert str(root / "entry" / "fixture" / "gd") in reports[0].entries[0].reason
 
 
 def test_an_extracted_copy_with_old_mtimes_is_judged_by_its_ctime(root: Path, repo: Path, base: Path):
@@ -1324,7 +1327,7 @@ def test_empty_git_marker_does_not_exempt_other_dependencies(root, repo, base, k
 
 
 def _round_fixture(kind, path, repo):
-    """Git dirs a reviewer's test suite leaves under an in-round pytest basetemp."""
+    """Git dirs a test suite leaves under a pytest basetemp, in a round or a session entry."""
     case = path / "basetemp" / "test_case0"
     case.mkdir(parents=True)
     if kind == "bare":
@@ -1355,10 +1358,11 @@ def _round_fixture(kind, path, repo):
         raise AssertionError(kind)
 
 
-ROUND_FIXTURES = [
-    "bare", "separated", "separated-relative", "malformed", "whitespace", "no-colon",
-    "blank-led-multi-line",
-]
+# Git dirs nothing outside depends on: disposable in any entry (#1185).
+GIT_DIR_FIXTURES = ["bare", "separated", "separated-relative"]
+# `.git` files git refuses to follow: disposable only in an owned round (#997).
+POINTER_FIXTURES = ["malformed", "whitespace", "no-colon", "blank-led-multi-line"]
+ROUND_FIXTURES = GIT_DIR_FIXTURES + POINTER_FIXTURES
 
 
 @pytest.mark.parametrize("kind", ROUND_FIXTURES)
@@ -1373,16 +1377,111 @@ def test_finished_round_reclaims_test_fixture_git_dirs(root, repo, kind):
     assert not path.exists()
 
 
-@pytest.mark.parametrize("kind", ROUND_FIXTURES)
-def test_age_sweep_still_keeps_fixture_git_dirs_in_a_round(root, repo, kind):
+@pytest.mark.parametrize("kind", POINTER_FIXTURES)
+def test_age_sweep_still_keeps_malformed_git_files_in_a_round(root, repo, kind):
     # Ownership is proven only by the receipt; a sweep that has none keeps them.
     settings, _receipt, path = _round(root, repo)
     _round_fixture(kind, path, repo)
     _set_age(path, OLD)
     reports, outcomes = _run([root], repo, older_than=0)
     assert _owners(reports) == {path.name: sweep.LIVE}
+    assert "unparseable .git file" in reports[0].entries[0].reason
     assert outcomes == []
     assert path.exists()
+
+
+@pytest.mark.parametrize("kind", GIT_DIR_FIXTURES)
+def test_age_sweep_reclaims_fixture_git_dirs_in_an_unowned_entry(root, repo, kind):
+    # #1185: a session scratchpad holding a suite's fixture repositories.
+    session = root / "session"
+    _round_fixture(kind, session, repo)
+    _set_age(session, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"session": sweep.STALE}
+    assert [o.action for o in outcomes] == ["removed"]
+    assert not session.exists()
+
+
+def test_age_sweep_reclaims_a_session_whose_only_git_dirs_are_fixtures(root, repo, base):
+    session = root / "session"
+    for kind in GIT_DIR_FIXTURES:
+        _round_fixture(kind, session / kind, repo)
+    _git(base, "clone", "-q", str(repo), str(session / "clone"))
+    (session / "notes.txt").write_text("scratch\n", encoding="utf-8")
+    _set_age(session, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"session": sweep.STALE}
+    assert [o.action for o in outcomes] == ["removed"]
+    assert not session.exists()
+
+
+def _unreadable_as_bare(kind, path, repo):
+    """A bare clone at ``path / "fixture.git"`` whose config does not read as bare."""
+    bare = path / "fixture.git"
+    _git(repo, "clone", "-q", "--bare", str(repo), str(bare))
+    config = bare / "config"
+    if kind == "config-symlink":
+        copy = path / "config-copy"
+        copy.write_bytes(config.read_bytes())
+        config.unlink()
+        config.symlink_to(copy)
+    elif kind == "config-missing":
+        config.unlink()
+    elif kind == "not-bare":
+        _git(bare, "config", "core.bare", "false")
+    else:
+        raise AssertionError(kind)
+
+
+@pytest.mark.parametrize(
+    "kind, guard",
+    [
+        ("bare-outside-worktree", "_main_repo_reason"),
+        ("separate-outside-main", "_is_bare"),
+        ("config-symlink", "_is_bare"),
+        ("config-missing", "_is_bare"),
+        ("not-bare", "_is_bare"),
+    ],
+)
+@pytest.mark.parametrize("neutralised", [False, True])
+def test_age_sweep_keeps_a_detached_git_dir_something_outside_may_use(
+    root, repo, base, kind, guard, neutralised, monkeypatch
+):
+    # Each keep, and a twin with its guard neutralised that removes the same entry.
+    session = root / "session"
+    session.mkdir()
+    if kind in ("bare-outside-worktree", "separate-outside-main"):
+        _outside_dependency(kind, session, repo, base)
+    else:
+        _unreadable_as_bare(kind, session, repo)
+    _set_age(session, OLD)
+    if neutralised:
+        stub = (lambda *a, **k: None) if guard == "_main_repo_reason" else (lambda *a, **k: True)
+        monkeypatch.setattr(sweep, guard, stub)
+    reports, outcomes = _run([root], repo, older_than=0)
+    if neutralised:
+        assert [o.action for o in outcomes] == ["removed"]
+        assert not session.exists()
+    else:
+        assert _owners(reports) == {"session": sweep.LIVE}
+        assert outcomes == []
+        assert session.exists()
+
+
+def test_bare_fixture_given_an_outside_worktree_after_the_report_is_kept(root, repo, base):
+    session = root / "session"
+    _round_fixture("bare", session, repo)
+    _set_age(session, OLD)
+    settings = _settings([root], repo)
+    reports = sweep.survey(settings, root=repo, now=time.time())
+    assert _owners(reports) == {"session": sweep.STALE}
+    bare = session / "basetemp" / "test_case0" / "origin.git"
+    _git(bare, "worktree", "add", "-q", "--detach", str(base / "late-wt"))
+    _set_age(session, OLD)
+    outcomes = sweep.apply(reports, settings, older_than=0)
+    assert [o.action for o in outcomes] == ["kept"]
+    assert "outside this entry" in outcomes[0].reason
+    assert session.exists()
 
 
 def _outside_linked_worktree(path, repo, base) -> Path:
@@ -1465,18 +1564,7 @@ def test_finished_round_keeps_a_git_file_it_cannot_read_or_resolve(root, repo, k
 @pytest.mark.parametrize("kind", ["config-symlink", "config-missing", "not-bare"])
 def test_finished_round_keeps_a_detached_git_dir_it_cannot_read_as_bare(root, repo, kind):
     settings, receipt, path = _round(root, repo)
-    bare = path / "fixture.git"
-    _git(repo, "clone", "-q", "--bare", str(repo), str(bare))
-    config = bare / "config"
-    if kind == "config-symlink":
-        copy = path / "config-copy"
-        copy.write_bytes(config.read_bytes())
-        config.unlink()
-        config.symlink_to(copy)
-    elif kind == "config-missing":
-        config.unlink()
-    else:
-        _git(bare, "config", "core.bare", "false")
+    _unreadable_as_bare(kind, path, repo)
     result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     assert result.action == "kept"
     assert "not beside its own work tree" in result.reason

@@ -750,8 +750,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    dir that an outside
    tree depends on still does (#997). One limit: an in-round `.git` file naming a
    separated git dir whose real main work tree is outside clears that git dir. The
-   `_owned_detached_reason` docstring in `sweep_scratch.py` lists this case with
-   the others. On an interrupted review, preserve its receipt and resume
+   `_detached_reason` docstring in `sweep_scratch.py` lists this case with
+   the others. The age sweep judges git dirs the same way (#1185), so of these
+   fixtures only the `.git` files need the round's receipt. On an interrupted review, preserve its receipt and resume
    its process/report accounting before retirement. A normal age sweep cannot
    reclaim a fresh round because it retains the configured grace window.
 

@@ -766,13 +766,15 @@ scratch:
   #
   # To add a root, append a line. Add only a directory whose every child is
   # disposable: an entry is judged by its age, by worktree registration and by the
-  # git dirs it holds, never by its other contents. An entry holding a bare or
-  # separated git dir is kept (pytest fixture repos such as an `origin.git` in a
-  # basetemp included, so such a session entry is never swept), as is
-  # one a worktree_repos repo borrows objects from; a clone that an unconfigured
-  # repository borrows from (--shared, --reference) is not detected, nor is a
-  # sibling repository with no linked worktree; the engine's docstring lists
-  # these limits. Needs git 2.36+ (`git worktree list -z`).
+  # git dirs it holds, never by its other contents. An entry holding a separated
+  # git dir whose `.git` pointer is outside it, or a bare one with a worktree
+  # outside, is kept, as is one a worktree_repos repo borrows objects from. Pytest
+  # fixture repos (an `origin.git` in a basetemp) do not keep an entry, and nor
+  # does a bare repository used as `--git-dir` for a work tree elsewhere, which
+  # records nothing; a nonempty `.git` file that does not start with `gitdir:`
+  # does keep it. A clone that an unconfigured repository borrows from
+  # (--shared, --reference) is not detected, nor is a sibling repository with no
+  # linked worktree; the engine's docstring lists these limits. Needs git 2.36+ (`git worktree list -z`).
   roots:
     - /private/tmp/claude-{uid}/{repo_slug}
   # An entry with anything inside it modified within this window is never
