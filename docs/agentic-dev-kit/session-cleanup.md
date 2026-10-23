@@ -30,7 +30,12 @@ namespace, reviewed head and cleanup policy. Its paths survive task-checkout
 removal. It accepts no imported receipt as new root authority. If allocation fails
 before returning, do not launch a reviewer: a marker may have been created without
 its registry record, and the failure needs reconciliation rather than guessed
-ownership. Do not change cleanup policy or move the registry during this lifecycle.
+ownership. Do not change protection roots, dependency repositories or the registry
+during this lifecycle. Such changes keep the old inventory unavailable until its
+original policy is restored or explicitly reconciled; there is no migration override.
+`list` reports an unavailable record with its path and reason while still listing
+other inventories. Changing only `scratch.grace_window` does not invalidate recorded
+retirement: this lifecycle already bypasses age through explicit ownership.
 
 Register actual writer process ids while they exist. Joining a parent is not
 proof its descendants ended:
@@ -50,7 +55,10 @@ Use `codex` only for app-managed worktrees and `git` for ordinary Git worktrees.
 The primary checkout is never eligible. The registry binds the recorded head and
 directory identity; a later commit requires a new inventory. Branch names are
 recorded but branches are not deleted by this engine. A branch's forge lifecycle
-remains separate from local scratch retirement.
+remains separate from local scratch retirement. Ordinary Git retirement requires
+the recorded commit to be reachable from a named ref; preserve an unreferenced
+detached commit on a branch before retrying. Codex's native archive preserves its
+commit snapshot instead.
 
 ## Retain required evidence, then seal
 
@@ -125,13 +133,18 @@ visible to the current user are covered. Run from outside every disposable path.
 The supported environment is POSIX with Git and `lsof`; other hosts must preserve
 the inventory and report the unavailable capability.
 
-Ordinary worktrees are removed by Git without force, after identity, head and status
-checks. App-managed worktrees return `archive-with-runtime`: preserve required
-ignored files through the seal, then use Codex's native archive tool on that exact
-attachment under the same authorization. Re-run apply from the primary checkout
-after the archive. Never recursively delete an app-managed checkout.
+Ordinary worktrees are removed by Git without force, after identity, head, status
+and dependency checks. Both runtimes refuse ignored content, including caches:
+retain required files through the seal, verify their retained bytes, then explicitly
+move or remove the original ignored files before retrying. A clean Git status alone
+does not establish that ignored data is disposable. App-managed worktrees return
+`archive-with-runtime` only after these checks: use Codex's native archive tool on
+that exact attachment under the same authorization. Re-run apply from the primary
+checkout after the archive. Never recursively delete an app-managed checkout.
 
 Round retirement uses the existing sweeper with fresh dependencies at act time.
+Worktree retirement also reads its configured Git-store, worktree and root protections
+before recommending native archive and immediately before ordinary Git removal.
 Shared Git stores, inbound alternates and external registered worktrees stay
 protected within its configured repository scope. The fixture-only route is the
 owned-round contract in `fallback-review-panel.md`; neither unchanged fixture bytes

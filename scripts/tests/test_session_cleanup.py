@@ -128,9 +128,15 @@ def test_evidence_special_files_refused_without_blocking(session, kind):
         path.symlink_to(original)
     else:
         os.link(original, path)
-    with pytest.raises(cleanup.sweep.ConfigError):
-        registry.seal(record, {"evidence_complete": True, "retain": [
-            {"source": str(path), "kind": "report", "requires": []}]})
+    manifest = root / "manifest.json"
+    manifest.write_text(json.dumps({"evidence_complete": True, "retain": [
+        {"source": str(path), "kind": "report", "requires": []}]}))
+    result = subprocess.run([sys.executable, cleanup.__file__, "--config",
+        str(registry.repo / "cleanup.yaml"), "seal", record["id"], str(manifest)],
+        cwd=registry.repo, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 2
+    assert ("symlink aliases" if kind == "symlink" else "unaliased regular file") in result.stderr
+    assert registry.load(record["id"])["seal"] is None
 
 
 @pytest.mark.parametrize("change", ["root", "round", "marker", "config"])
@@ -149,9 +155,13 @@ def test_identity_policy_or_marker_change_refused(session, change):
     else:
         path.rename(path.with_name(path.name + "-saved"))
         path.mkdir()
-    with pytest.raises((cleanup.sweep.ConfigError, OSError, cleanup.sweep.Refused)):
+    sentinel = path / "must-remain"
+    sentinel.write_text("replacement data")
+    message = {"root": "root identity changed", "round": "round was replaced", "marker": "round marker missing"}[change]
+    with pytest.raises(cleanup.sweep.ConfigError, match=message):
         apply(registry, record)
-    assert path.exists()
+    assert sentinel.read_text() == "replacement data"
+    assert registry.load(record["id"])["approval"] is None
 
 
 def test_live_worktree_and_alternate_protect_round_and_do_not_journal(session):
@@ -265,6 +275,7 @@ def test_cli_discovers_shared_registry_from_primary(session):
 
 
 @pytest.mark.parametrize("name", ["space and 'quote'", "unicode-é"])
+@pytest.mark.skipif(shutil.which("lsof") is None, reason="successful open-file observation requires lsof")
 def test_real_open_file_observation_preserves_path_names(session, monkeypatch, name):
     _, _, root = session
     path = root / name
@@ -273,9 +284,7 @@ def test_real_open_file_observation_preserves_path_names(session, monkeypatch, n
     with (path / "file").open("w") as stream:
         stream.write("open handle")
         found = cleanup.active_users([str(path)], [])
-    # Platforms unable to inspect open files fail closed rather than claiming
-    # no users. A working probe must actually identify this process's handle.
-    assert any("unavailable" in item or f"process {os.getpid()} uses " in item for item in found)
+    assert any(f"process {os.getpid()} uses {path}/file" == item for item in found), found
 
 
 def test_incomplete_open_file_probe_blocks(session, monkeypatch):
@@ -284,3 +293,239 @@ def test_incomplete_open_file_probe_blocks(session, monkeypatch):
     monkeypatch.setattr(cleanup.subprocess, "run", lambda *a, **k:
         subprocess.CompletedProcess(a, 0, stderr=b"partial observation"))
     assert "incomplete" in cleanup.active_users([str(root)], [])[0]
+
+
+def task_tree(registry, root):
+    task = root / "task"
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(task), "HEAD")
+    return task
+
+
+def commit(repo):
+    cleanup.git(repo, "add", ".gitignore")
+    cleanup.git(repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-qm", "fixture ignore")
+
+
+@pytest.mark.parametrize("runtime", ["git", "codex"])
+def test_ignored_data_requires_preservation_before_retirement(session, runtime):
+    registry, record, root = session
+    (registry.repo / ".gitignore").write_text(".env\n")
+    commit(registry.repo)
+    task = task_tree(registry, root)
+    secret = task / ".env"
+    secret.write_text("unique input")
+    registry.track_worktree(record, task, runtime)
+    registry.seal(record, {"evidence_complete": True, "retain": [
+        {"source": str(secret), "kind": "source", "requires": []}]})
+    result = apply(registry, record)
+    assert not result["complete"]
+    assert "ignored content" in result["paths"][0]["reason"]
+    assert secret.read_text() == "unique input"
+    retained = Path(record["seal"]["retained"][0]["retained"])
+    assert retained.read_text() == "unique input"
+    secret.unlink()  # explicit fixture preservation completed above
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == ("removed" if runtime == "git" else "archive-with-runtime")
+
+
+def test_unreferenced_detached_commit_preserved(session):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    (task / ".gitignore").write_text("cache/\n")
+    commit(task)
+    head = cleanup.git(task, "rev-parse", "HEAD")
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    result = apply(registry, record)
+    assert "no containing named ref" in result["paths"][0]["reason"]
+    assert cleanup.git(task, "rev-parse", "HEAD") == head
+    cleanup.git(registry.repo, "branch", "retained", head)
+    assert apply(registry, record)["complete"]
+    assert cleanup.git(registry.repo, "rev-parse", "retained") == head
+
+
+@pytest.mark.parametrize("runtime", ["git", "codex"])
+def test_shared_store_inside_worktree_is_protected(session, runtime):
+    registry, record, root = session
+    (registry.repo / ".gitignore").write_text("cache/\n")
+    commit(registry.repo)
+    task = task_tree(registry, root)
+    cleanup.git(root, "clone", "--bare", str(registry.repo), str(task / "cache"))
+    consumer = root / "consumer"
+    cleanup.git(root, "clone", "--shared", str(task / "cache"), str(consumer))
+    config = registry.repo / "cleanup.yaml"
+    config.write_text(config.read_text() + f"    - {consumer}\n")
+    registry = cleanup.Registry(registry.repo, config)
+    record = registry.start()
+    registry.track_worktree(record, task, runtime)
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    result = apply(registry, record)
+    assert "git dir or object store" in result["paths"][0]["reason"]
+    assert cleanup.git(consumer, "cat-file", "-e", "HEAD") == ""
+    cleanup.git(consumer, "repack", "-a", "-d")
+    (consumer / ".git/objects/info/alternates").unlink()
+    shutil.rmtree(task / "cache")  # consumer now owns its objects
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == ("removed" if runtime == "git" else "archive-with-runtime")
+    assert cleanup.git(consumer, "cat-file", "-e", "HEAD") == ""
+
+
+@pytest.mark.parametrize("change", ["ignored", "dirty", "head", "store", "active"])
+def test_worktree_act_time_recheck(session, monkeypatch, change):
+    registry, record, root = session
+    (registry.repo / ".gitignore").write_text("cache\n")
+    commit(registry.repo)
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    preview = registry.preview
+
+    def late_change(current):
+        result = preview(current)
+        if change == "ignored":
+            (task / "cache").write_text("late data")
+        elif change == "dirty":
+            (task / "data").write_text("late data")
+        elif change == "head":
+            (task / ".gitignore").write_text("changed\n")
+            commit(task)
+        elif change == "store":
+            cleanup.git(root, "init", "--bare", str(task / "cache"))
+            (registry.common / "objects/info/alternates").write_text(str(task / "cache/objects") + "\n")
+        else:
+            monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: ["late writer"])
+        return result
+
+    token = preview(record)["approval_token"]
+    monkeypatch.setattr(registry, "preview", late_change)
+    result = registry.apply(record, token, True)
+    assert result["paths"][0]["action"] == "kept"
+    expected = {"ignored": "ignored content", "dirty": "uncommitted", "head": "head changed",
+                "store": "git dir or object store", "active": "active user"}[change]
+    assert expected in result["paths"][0]["reason"]
+    assert task.is_dir()
+
+
+def test_grace_change_preserves_token_and_cleanup_authority(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    token = registry.preview(record)["approval_token"]
+    config = registry.repo / "cleanup.yaml"
+    config.write_text(config.read_text().replace("24h", "48h"))
+    resumed = cleanup.Registry(registry.repo, config)
+    current = resumed.load(record["id"])
+    assert resumed.preview(current)["approval_token"] == token
+    assert resumed.apply(current, token, True)["complete"]
+
+
+def test_list_isolates_invalid_inventory_without_granting_authority(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    config = registry.repo / "cleanup.yaml"
+    config.write_text(config.read_text().replace("24h", "48h").replace("scratch/{repo_slug}", "other/{repo_slug}"))
+    resumed = cleanup.Registry(registry.repo, config)
+    fresh = resumed.start()
+    broken = resumed.start()
+    (resumed.location(broken["id"]) / "session.json").write_text("not JSON")
+    result = subprocess.run([sys.executable, cleanup.__file__, "--config", str(config), "list"],
+        cwd=registry.repo, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr
+    listed = {item["id"]: item for item in json.loads(result.stdout)}
+    assert listed[fresh["id"]]["seal"] is None
+    assert "policy changed" in listed[record["id"]]["unavailable"]
+    assert "unavailable" in listed[broken["id"]]
+    with pytest.raises(cleanup.sweep.ConfigError, match="policy changed"):
+        resumed.load(record["id"])
+    assert Path(receipt["path"]).exists()
+
+
+@pytest.mark.parametrize("operation", ["allocate", "worktree", "process", "seal"])
+def test_sealing_freezes_inventory(session, operation):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    original = (registry.location(record["id"]) / "session.json").read_bytes()
+    with pytest.raises(cleanup.sweep.ConfigError, match="inventory is sealed"):
+        if operation == "allocate":
+            allocate(registry, record)
+        elif operation == "worktree":
+            registry.track_worktree(record, task, "git")
+        elif operation == "process":
+            registry.track_process(record, os.getpid())
+        else:
+            registry.seal(record, {})
+    assert (registry.location(record["id"]) / "session.json").read_bytes() == original
+
+
+def test_persisted_approval_conflict_refused(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    record["approval"] = "previous inventory"
+    registry.save(record)
+    with pytest.raises(cleanup.sweep.ConfigError, match="different persisted approval"):
+        apply(registry, registry.load(record["id"]))
+    assert Path(receipt["path"]).exists()
+
+
+def test_cwd_inside_worktree_keeps_data(session, monkeypatch):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    monkeypatch.chdir(task)
+    result = apply(registry, record)
+    assert "outside the worktree" in result["paths"][0]["reason"]
+    assert task.is_dir()
+    monkeypatch.chdir(registry.repo)
+
+
+@pytest.mark.parametrize("bad", ["closure", "duplicate", "retirement"])
+def test_evidence_declaration_guards(session, bad):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    source = root / "source"
+    source.write_text("evidence")
+    item = {"source": str(source), "kind": "source", "requires": []}
+    manifest = {"evidence_complete": True, "retain": [item]}
+    expected = "complete required evidence"
+    if bad == "closure":
+        manifest["evidence_complete"] = False
+    elif bad == "duplicate":
+        manifest["retain"].append(dict(item))
+        expected = "unique"
+    else:
+        outside = root / "outside"
+        outside.write_text("not owned")
+        manifest["retire"] = [{"source": str(outside), "reason": "redundant", "replaced_by": [str(source)]}]
+        expected = "owned round"
+    with pytest.raises(cleanup.sweep.ConfigError, match=expected):
+        registry.seal(record, manifest)
+    assert registry.load(record["id"])["seal"] is None
+    assert Path(receipt["path"]).exists()
+
+
+@pytest.mark.parametrize("state,expected", [("complete", 0), ("native", 1), ("refused", 2)])
+def test_cli_exit_status(session, state, expected):
+    registry, record, root = session
+    if state == "native":
+        registry.track_worktree(record, task_tree(registry, root), "codex")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    token = registry.preview(record)["approval_token"] if state != "refused" else "invalid"
+    code = "import sys; sys.path.insert(0, sys.argv[1]); import session_cleanup as c; c.active_users=lambda paths,pids: []; raise SystemExit(c.main(sys.argv[2:]))"
+    result = subprocess.run([sys.executable, "-c", code, str(Path(cleanup.__file__).parent),
+        "--config", str(registry.repo / "cleanup.yaml"), "apply", record["id"],
+        "--approve", token, "--processes-finished"], cwd=registry.repo,
+        capture_output=True, text=True, timeout=30)
+    assert result.returncode == expected, result.stderr
+    if state != "refused":
+        assert json.loads(result.stdout)["complete"] == (state == "complete")

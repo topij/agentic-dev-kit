@@ -150,11 +150,29 @@ class Registry:
         record = read_json(self.location(token) / "session.json")
         if (record.get("schema") != SCHEMA or record.get("id") != token
                 or record.get("common_identity") != list(sweep._identity(str(self.common)))
-                or record.get("policy") != self.policy):
+                or self.retirement_policy(record.get("policy", {})) != self.retirement_policy(self.policy)):
             raise sweep.ConfigError("session repository identity or cleanup policy changed")
         if any(r["status"] == "removing" for r in record["rounds"]) and not record["approval"]:
             raise sweep.ConfigError("interrupted removal lacks its durable approval")
         return record
+
+    @staticmethod
+    def retirement_policy(policy: dict) -> dict:
+        # Only grace_seconds is irrelevant: registered retirement always uses
+        # grace zero. Roots, dependency repositories, registry and common dir
+        # still bind authority; unknown future keys also remain bound. Preserve
+        # the original policy in the record/token for audit and retry stability.
+        return {key: value for key, value in policy.items() if key != "grace_seconds"}
+
+    def inventories(self) -> list[dict]:
+        result = []
+        for path in sorted(self.directory.glob("*/session.json")):
+            try:
+                result.append(self.load(path.parent.name))
+            except (OSError, ValueError, KeyError, TypeError, sweep.ConfigError) as exc:
+                result.append({"id": path.parent.name, "path": str(path),
+                               "unavailable": str(exc)})
+        return result
 
     def save(self, record: dict) -> None:
         publish(self.location(record["id"]) / "session.json", record)
@@ -259,6 +277,45 @@ class Registry:
             if hash_file(path) != (item["sha256"], item["size"]):
                 raise sweep.ConfigError(f"retained evidence changed: {path}")
 
+    def worktree_reason(self, worktree: dict) -> str | None:
+        path = canonical(Path(worktree["path"]))
+        if list(sweep._identity(str(path))) != worktree["identity"]:
+            return "worktree identity changed"
+        if git(path, "rev-parse", "HEAD") != worktree["head"]:
+            return "worktree head changed; inventory is stale"
+        if git(path, "rev-parse", "--path-format=absolute", "--git-common-dir") != str(self.common):
+            return "worktree belongs to a different repository"
+        worktrees = sweep.registered_worktrees(self.settings.repos)
+        if str(path) not in worktrees:
+            return "worktree is not registered"
+        # Read stores BEFORE excluding the retiring checkout from self-protection.
+        # Only this exact registered, identity/head/common-dir matched checkout
+        # is exempt. Parent/child/sibling registrations, other repositories and
+        # bare configured repositories remain; missing/unreadable metadata still
+        # fails closed in repository_stores. No fixture exemption is used here.
+        stores = sweep.repository_stores(worktrees)
+        others = [p for p in worktrees if p != str(path)]
+        roots = [sweep.expand_root(raw, root=namespace)
+                 for raw in self.settings.roots
+                 for namespace in {self.primary, self.repo, path}]
+        reason = (sweep.live_worktree_reason(str(path), others)
+                  or sweep.repository_store_reason(str(path), stores)
+                  or sweep.configured_root_reason(str(path), roots))
+        if reason:
+            return reason
+        if git(path, "status", "--porcelain", "--untracked-files=all"):
+            return "worktree has uncommitted or untracked content"
+        # Git remove and native archive can discard ignored files. Require the
+        # caller to retain/move those explicitly, including ignored caches; a
+        # seal assertion alone does not distinguish a cache from unique data.
+        if git(path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"):
+            return "worktree has ignored content; retain or move it before retirement"
+        if worktree["runtime"] == "git" and not git(path, "for-each-ref", "--contains", worktree["head"], "--format=%(refname)"):
+            return "worktree head has no containing named ref; preserve the commit before retirement"
+        if Path.cwd().resolve().is_relative_to(path):
+            return "invoke cleanup from outside the worktree"
+        return None
+
     def preview(self, record: dict) -> dict:
         self.verify_evidence(record)
         outcomes = []
@@ -274,15 +331,9 @@ class Registry:
                 if str(path) in sweep.registered_worktrees(self.settings.repos):
                     action, reason = "kept", "absent path still registered with Git"
             else:
-                canonical(path)
-                if list(sweep._identity(str(path))) != worktree["identity"]:
-                    action, reason = "kept", "worktree identity changed"
-                elif git(path, "rev-parse", "HEAD") != worktree["head"]:
-                    action, reason = "kept", "worktree head changed; inventory is stale"
-                elif git(path, "status", "--porcelain", "--untracked-files=all"):
-                    action, reason = "kept", "worktree has uncommitted or untracked content"
-                elif Path.cwd().resolve().is_relative_to(path):
-                    action, reason = "kept", "invoke cleanup from outside the worktree"
+                reason = self.worktree_reason(worktree)
+                if reason:
+                    action = "kept"
             outcomes.append({"path": str(path), "action": action, "reason": reason})
         for entry in record["rounds"]:
             receipt = entry["receipt"]
@@ -295,6 +346,8 @@ class Registry:
                 # still match before the existing sweeper may touch it.
                 outcomes.append({"path": receipt["path"], "action": "absent", "reason": None})
                 continue
+            if entry["status"] != "removing" and not os.path.lexists(Path(receipt["path"]) / sweep.ROUND_MARKER):
+                raise sweep.ConfigError("round marker missing without an approved removal journal")
             result = sweep.finish_review_round(receipt, self.settings, Path(entry["namespace"]),
                                                resuming=entry["status"] == "removing")
             outcomes.append({"path": result.path, "action": result.action, "reason": result.reason})
@@ -331,15 +384,14 @@ class Registry:
             return record["last_result"]
         for worktree, result in zip(record["worktrees"], preview["paths"], strict=False):
             if result["action"] == "remove-worktree":
-                # Git refuses locked, dirty and nested-repository trees. Never
-                # use --force or delete a worktree using the scratch primitive.
+                # Git's refusal is supplementary: it can discard ignored object
+                # stores. Refresh our content and dependency checks before Git.
+                # Never use --force or the scratch deletion primitive here.
                 try:
                     self.verify_evidence(record)
-                    path = canonical(Path(worktree["path"]))
-                    if (list(sweep._identity(str(path))) != worktree["identity"]
-                            or git(path, "rev-parse", "HEAD") != worktree["head"]
-                            or git(path, "status", "--porcelain", "--untracked-files=all")):
-                        raise sweep.ConfigError("worktree changed after preview")
+                    reason = self.worktree_reason(worktree)
+                    if reason:
+                        raise sweep.ConfigError(reason)
                     if active_users([worktree["path"]], record["pids"]):
                         raise sweep.ConfigError("worktree acquired an active user")
                     git(self.repo, "worktree", "remove", worktree["path"])
@@ -501,7 +553,7 @@ def main(argv: list[str] | None = None) -> int:
         repo = repo_root(Path.cwd())
         registry = Registry(repo, args.config or repo / "config/dev-model.yaml")
         if args.action == "list":
-            result = [registry.load(p.parent.name) for p in sorted(registry.directory.glob("*/session.json"))]
+            result = registry.inventories()
         else:
             with registry.lock():
                 record = registry.start() if args.action == "start" else registry.load(args.session)

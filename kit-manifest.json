@@ -52,7 +52,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "ff0255b71eab738fb995fca4ed10af03398b282f195541c3df072208c15fb29b"
+      "sha256": "75cd834cbbb296b5f7cb79672025fe848083591b74913dd1229b414bbbd467ab"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -615,7 +615,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "80966ae84a28149b92cbe0b2070c3c4eae403be4238e26424266e674b712aaca"
+      "sha256": "eaff2ff1d2f345aa778f526c820b66d30dcb27fdda8f63f7f93dd7a717c93d6e"
     },
     "scripts/sweep_scratch.py": {
       "required_by": [
@@ -763,7 +763,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "1ca352c08309e7ef5c864d265c702dff265f22ef7e02fa32a187792d3d220173"
+      "sha256": "be8c999f2e151a28e65d59d5f75ebe75ea0bd5bd35131c977de53c744790544b"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
