@@ -1402,7 +1402,7 @@ def test_age_sweep_reclaims_fixture_git_dirs_in_an_unowned_entry(root, repo, kin
     assert not session.exists()
 
 
-def test_age_sweep_reclaims_a_session_whose_only_git_dirs_are_fixtures(root, repo, base):
+def test_age_sweep_reclaims_a_session_of_fixture_git_dirs_beside_an_ordinary_clone(root, repo, base):
     session = root / "session"
     for kind in GIT_DIR_FIXTURES:
         _round_fixture(kind, session / kind, repo)
@@ -1437,6 +1437,7 @@ def _unreadable_as_bare(kind, path, repo):
     "kind, guard",
     [
         ("bare-outside-worktree", "_main_repo_reason"),
+        ("separated-outside-worktree", "_main_repo_reason"),
         ("separate-outside-main", "_is_bare"),
         ("config-symlink", "_is_bare"),
         ("config-missing", "_is_bare"),
@@ -1452,6 +1453,11 @@ def test_age_sweep_keeps_a_detached_git_dir_something_outside_may_use(
     session.mkdir()
     if kind in ("bare-outside-worktree", "separate-outside-main"):
         _outside_dependency(kind, session, repo, base)
+    elif kind == "separated-outside-worktree":
+        # The in-entry pointer clears the git dir without its config; only its
+        # `worktrees` record names the linked worktree outside.
+        _seeded(session / "project", f"--separate-git-dir={session / 'separate.git'}")
+        _git(session / "project", "worktree", "add", "-q", "--detach", str(base / "outside-wt"))
     else:
         _unreadable_as_bare(kind, session, repo)
     _set_age(session, OLD)

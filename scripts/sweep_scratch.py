@@ -82,11 +82,13 @@ disposable:
   repositories' alternates are read. The same holds for a ``--separate-git-dir``
   target that is itself named ``.git``.
 - A git dir inside an entry that records nothing about its users is removable
-  (#1185): a bare repository driven as ``git --git-dir=<it> --work-tree=<elsewhere>``
-  or borrowed from through an unconfigured repository's ``alternates``, a
-  ``--separate-git-dir`` target given ``core.bare = true`` by hand while its work
-  tree outside still points at it, and a separated git dir whose real work tree is
-  outside but which a copied ``.git`` file inside the entry also names.
+  (#1185): a bare repository driven as ``git --git-dir=<it> --work-tree=<elsewhere>``,
+  used as an outside clone's remote, or borrowed from through an unconfigured
+  repository's ``alternates``; a ``--separate-git-dir`` target given
+  ``core.bare = true`` by hand while its work tree outside still points at it; a
+  separated git dir whose real work tree is outside but which a copied ``.git``
+  file inside the entry also names; and a git dir whose linked worktree was moved
+  outside with plain ``mv``, leaving its ``worktrees`` record naming the old path.
   ``_detached_reason`` lists these with the cases that are kept.
 - The other direction costs reclaimed space: a nonempty ``.git`` file that does not
   start with ``gitdir:`` (a test fixture's garbage pointer, say) keeps its whole
@@ -665,12 +667,17 @@ def _detached_reason(git_dir: str, entry: str, inner: set[str]) -> str | None:
       a regular file or not ``bare = true``: kept. A git dir an in-entry pointer
       names is cleared without reading its config;
     - a bare repository another one borrows from through ``alternates``, one
-      driven as ``git --git-dir=<it> --work-tree=<elsewhere>``, or a
-      ``--separate-git-dir`` target given ``core.bare = true`` by hand while its
-      work tree outside still points at it: removed. None leaves a record inside
-      the git dir; the first is the limit ordinary clones already carry. In a
-      round each means a reviewer wrote outside it; in an unowned entry nothing
-      rules them out, which is why a root must hold only disposable children;
+      driven as ``git --git-dir=<it> --work-tree=<elsewhere>``, one an outside
+      clone names as its remote, or a ``--separate-git-dir`` target given
+      ``core.bare = true`` by hand while its work tree outside still points at
+      it: removed. None leaves a record inside the git dir; the first is the
+      limit ordinary clones already carry. In a round each means a reviewer
+      wrote outside it; in an unowned entry nothing rules them out, which is why
+      a root must hold only disposable children;
+    - a git dir whose linked worktree outside was moved with plain ``mv``
+      rather than ``git worktree move``: removed. Its ``worktrees`` record still
+      names the old, absent path, which ``_main_repo_reason`` treats as a
+      prunable registration; the same holds for an ordinary clone's ``.git``;
     - the git dir of a configured repository, or an object store one borrows
       from: kept earlier, by ``repository_store_reason``.
     The entry itself being a git dir is decided in ``scan`` and stays kept.
