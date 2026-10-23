@@ -503,6 +503,8 @@ def test_invalid_cli_inputs_are_explicitly_unavailable(repo, extra):
     assert report["status"] == "unavailable"
     assert report["error"]
     assert report["unavailable"][0]["detail"] == report["error"]
+    # A failed read never learned the scope, so it claims no unchecked set.
+    assert "unchecked_paths" not in report
 
 
 def test_a_change_touching_no_narrative_path_supplies_no_preflight_claim(repo):
@@ -512,7 +514,7 @@ def test_a_change_touching_no_narrative_path_supplies_no_preflight_claim(repo):
     assert code == 0, report
     assert report["status"] == "not-applicable"
     assert report["findings"] == report["unavailable"] == report["stamps"] == []
-    assert report["unchecked_paths"] == []
+    assert report["unchecked_paths"] == ["code.py"]
 
 
 def test_a_handoff_edit_riding_a_code_change_is_still_checked(repo):

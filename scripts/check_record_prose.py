@@ -79,6 +79,10 @@ class CheckError(Exception):
 class NotApplicable(CheckError):
     """The comparison touches none of the declared narrative paths."""
 
+    def __init__(self, reason: str, unchecked: list[str]):
+        super().__init__(reason)
+        self.unchecked = unchecked
+
 
 def git(root: Path, *args: str) -> str:
     try:
@@ -139,7 +143,7 @@ def scope(root: Path, base: str, head: str) -> tuple[dict, str, list[str], list[
     # change checks its narrative paths and names the rest as unchecked.
     narrative = [p for p in changed if p in declared]
     if not narrative:
-        raise NotApplicable("the change touches none of the configured narrative paths")
+        raise NotApplicable("the change touches none of the configured narrative paths", changed)
     return config, boundary, narrative, [p for p in changed if p not in declared]
 
 
@@ -524,12 +528,14 @@ def main(argv: list[str] | None = None) -> int:
         root = Path(args.root).resolve() if args.root is not None else repo_root()
         report = check(root, args.base, args.head, set(args.allow_close))
     except NotApplicable as exc:
-        report = {"status": "not-applicable", "reason": str(exc), "limits": LIMITS}
+        report = {"status": "not-applicable", "reason": str(exc), "limits": LIMITS,
+                  "unchecked_paths": exc.unchecked}
     except (CheckError, ImportError, KeyError, OSError, UnicodeError, ValueError) as exc:
         report = {"status": "unavailable", "error": str(exc), "limits": LIMITS,
                   "unavailable": [{"check": "input", "source": "input", "line": 0,
                                    "detail": str(exc)}]}
-    report = {"findings": [], "unavailable": [], "stamps": [], "unchecked_paths": [], **report}
+    # unchecked_paths is absent when the read failed before the scope was known.
+    report = {"findings": [], "unavailable": [], "stamps": [], **report}
     if args.json:
         print(json.dumps(report, ensure_ascii=False))
     else:
@@ -538,7 +544,7 @@ def main(argv: list[str] | None = None) -> int:
             print(report["reason"])
         for item in [*report.get("findings", []), *report.get("unavailable", [])]:
             print(f"{item['source']}:{item['line']}: {item['check']}: {item['detail']}")
-        for path in report["unchecked_paths"]:
+        for path in report.get("unchecked_paths", []):
             print(f"{path}: unchecked: not a configured narrative path")
         for stamp in report.get("stamps", []):
             print(f"{stamp['source']}:{stamp['line']}: stamp {stamp['revision']} (names candidate head: {stamp['names_head']})")

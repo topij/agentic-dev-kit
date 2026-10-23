@@ -9,7 +9,9 @@
   reference with `--allow-close`.
 - ADDED (report shape, #1197): the JSON report carries `unchecked_paths`, the
   changed files outside the narrative paths, which got no preflight check. Read
-  it with `paths` rather than assuming the whole diff was scanned. The `limits`
+  it with `paths` rather than assuming the whole diff was scanned. A
+  `not-applicable` report lists every changed file there; an `unavailable`
+  report that failed before the scope was read omits the key. The `limits`
   list gains one entry saying so.
 
 Take `scripts/check_record_prose.py` together with
