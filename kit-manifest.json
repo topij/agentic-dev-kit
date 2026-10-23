@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "4d42a22c60585ada43e76101e92bd2180aed8d910a24a4bf5c751cc63f41fce4"
+      "sha256": "6ba64d47fa9bc58f929ed8678356bd8cf9ceb711c01c2ad73995cc81eb1e3bb9"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -83,7 +83,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "3834a4135e7c13479c6c52015044c5376bf322f4bcf88cb342bd875c1cf128a4"
+      "sha256": "7ffcb8f113c80b5acc58f7748eed73bfa4b593a590dbf1788a11236275f22d7c"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -613,7 +613,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "308e32e1ef0e3bda3b9091fe8a71c00bbd94f5824a01afab88cc29d04245be79"
+      "sha256": "eb3b8d295c6775b2e269b6a0df92f57bf9b874a0d492d3dd22e32e381fa85e5c"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -633,7 +633,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "e950aa737a30ee7f11e9043df168febefd2d06a8ca0c868bee25263af447bbb0"
+      "sha256": "ff39ebfd520a61d43f0e675187050e1a95df984326eee341a6aa82222361d7df"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -757,7 +757,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "f96b1a388499b27cd58713efc5cdaf494464602ea039006a38f9801aa3671f0d"
+      "sha256": "d2f881aaded1e650d57ea65588b2153f6a0a6693b78d9182a32a389e2e162601"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

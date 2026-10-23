@@ -115,7 +115,9 @@ Gather the read-only disk/scratch report with the other sources. Include a
 protected leftovers from the command output, stamped with revision and date.
 Name refused or absent roots and unavailable disk data. A report limited to
 configured roots is not a whole-machine all-clear; recurring pressure with no
-sweepable entries can mean unmanaged review roots or protected fixture repos.
+sweepable entries can mean unmanaged review roots, or entries a fixture still
+keeps (a nonempty `.git` file that does not start with `gitdir:`, or a git dir
+something outside the entry depends on). The report's reason names which.
 Do not expand roots or delete anything as part of this briefing.
 
 **A source that fails is reported as unavailable, never as its empty value.** A
