@@ -123,7 +123,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "089eae3ab4680bc9e50205e461133fe3db69e13718fbd2ceadf08f225a2ba654"
+      "sha256": "d6909a7741a237cb9853332c8bbe8bc3c9c71933f2d6452ef8642aa5347e93ca"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "12d1197f059936d349188e503181e834a2d96547c658bb5de8595f702ee15686"
+      "sha256": "1c1a65bd7b805255cc31c5080a5012d7619776f6a6ddfb95fa39f4f618b7070c"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

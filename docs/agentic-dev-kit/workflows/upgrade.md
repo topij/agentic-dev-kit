@@ -1,6 +1,6 @@
 # Upgrade
 
-Upgrade this repo's agentic-dev-kit installation. Runs on a branch. After preflight,
+Upgrade this repo's agentic-dev-kit installation in its assigned task worktree. After preflight,
 Step 2 replaces `init.sh` with the fetched kit's copy to refresh the installer.
 Template refresh respects the baseline's recorded `not_installed` decisions;
 a partial record skips template copies. Seeded docs use `init.sh --no-clobber`,
@@ -44,6 +44,49 @@ test -f "$REPO/config/dev-model.yaml" && echo "has config" || echo "NO CONFIG"
   schema to migrate from. Say so plainly rather than guessing a config into existence.
 - **Config present** → continue. `kit.version` tells you the schema generation; its
   absence means v1 (pre-`runtime:`, pre-`models.tiers`).
+
+### Select the task worktree
+
+Before editing the adopter, reuse the worktree already assigned to this upgrade,
+including the current checkout when it is the assigned task worktree. An explicit
+operator instruction to use a particular checkout takes precedence. Do not switch
+the primary checkout or reuse another session's worktree. Read-only inspection may
+run there; edits, verification and commits belong in the task worktree.
+
+For reuse, verify its repository identity, task branch and existing changes, bind
+`REPO` to its absolute root, and set `UPGRADE_BRANCH` to that task branch. Preserve
+unrelated changes; an ambiguous assignment needs clarification rather than a reset.
+Do not create a nested worktree inside an already assigned one.
+
+When no worktree is assigned, select `UPGRADE_REMOTE` from the adopter's Git remotes
+and `UPGRADE_BASE` from the merged config's `vcs.protected_branch`. Choose a fresh
+`UPGRADE_BRANCH` under the adopter's task-branch convention and an absolute
+`UPGRADE_WORKTREE` path outside its automation and scratch-cleanup roots. Include a
+unique task suffix in the branch and path; a date alone can collide with another
+upgrade. Set those variables explicitly, then run this creation block:
+
+```bash
+: "${REPO:?REPO is not set — re-run the config check}"
+: "${UPGRADE_REMOTE:?select the adopter remote}"
+: "${UPGRADE_BASE:?read vcs.protected_branch from the merged config}"
+: "${UPGRADE_BRANCH:?choose a fresh task branch}"
+: "${UPGRADE_WORKTREE:?choose an absolute task-worktree path}"
+case "$UPGRADE_WORKTREE" in /*) ;; *) exit 1 ;; esac
+git -C "$REPO" fetch "$UPGRADE_REMOTE" \
+  "refs/heads/$UPGRADE_BASE:refs/remotes/$UPGRADE_REMOTE/$UPGRADE_BASE" || exit 1
+UPGRADE_START="$(git -C "$REPO" rev-parse --verify \
+  "refs/remotes/$UPGRADE_REMOTE/$UPGRADE_BASE^{commit}")" || exit 1
+git -C "$REPO" worktree add --no-track -b "$UPGRADE_BRANCH" \
+  "$UPGRADE_WORKTREE" "$UPGRADE_START" || exit 1
+REPO="$UPGRADE_WORKTREE"
+cd "$REPO" || exit 1
+```
+
+A failed fetch or a branch/path collision stops the step. Never delete an existing
+branch or worktree to make it succeed. The fresh branch starts at the fetched base,
+not at the caller's current feature branch, and has no upstream to the protected
+branch. On its first publication use `git -C "$REPO" push -u "$UPGRADE_REMOTE" HEAD`.
+For an assigned worktree, establish its intended publication remote before that push.
 
 Also fetch the kit you are upgrading *to*. If a non-empty `/tmp/agentic-dev-kit` already
 exists the clone fails and the step stops — inspect that checkout or move it aside rather
@@ -414,15 +457,16 @@ A baseline **older than the changelog itself** also finds nothing, and that is n
 either: the file records nothing before the PR it starts at, and says so in its own
 header.
 
-## Step 2 — Branch, refresh the migrator, then migrate
+## Step 2 — Assert the task branch, refresh the migrator, then migrate
 
-**Branch first.** Everything from here mutates the repo — config, hooks, rendered
-docs — so the "runs on a branch" guarantee has to be established *before* the first
-mutation, not before the file copies in Step 3:
+**Re-assert the selected destination.** Step 0 selected the task worktree and
+branch. Everything from here mutates the adopter, so stop if that binding is missing
+or the checkout has moved to another branch; do not create or switch a branch here:
 
 ```bash
-cd "$REPO" || exit 1
-git checkout -b chore/kit-upgrade || exit 1
+cd "${REPO:?REPO is not set — re-run Step 0}" || exit 1
+: "${UPGRADE_BRANCH:?UPGRADE_BRANCH is not set — re-run Step 0}"
+test "$(git symbolic-ref --quiet --short HEAD)" = "$UPGRADE_BRANCH" || exit 1
 ```
 
 **Then refresh `init.sh` itself before running it.** This is the step that is easy to get
@@ -1018,7 +1062,10 @@ cannot report staleness at all; re-run it with `--manifest` as shown above.
 
 > **Known gotcha:** the `state_paths` tests fail when run from inside a worktree carrying
 > a `.devkit_state_root` marker — the fixture neutralizes the environment but not marker
-> discovery. Run the gate from the main checkout, and see kit issue #10.
+> discovery. Verify in the assigned task worktree without that marker. If the assigned
+> tree carries one, use a separate marker-free verification worktree at the candidate
+> commit and record that directory with the result. Do not move verification into the
+> primary checkout or delete another session's marker.
 
 ## Step 6 — Record the friction, then hand off
 
