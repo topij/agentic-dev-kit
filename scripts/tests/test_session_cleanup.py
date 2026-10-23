@@ -139,7 +139,7 @@ def test_evidence_special_files_refused_without_blocking(session, kind):
     assert registry.load(record["id"])["seal"] is None
 
 
-@pytest.mark.parametrize("change", ["root", "round", "marker", "config"])
+@pytest.mark.parametrize("change", ["root", "round", "round-without-marker", "marker", "config"])
 def test_identity_policy_or_marker_change_refused(session, change):
     registry, record, _ = session
     receipt = allocate(registry, record)
@@ -155,9 +155,14 @@ def test_identity_policy_or_marker_change_refused(session, change):
     else:
         path.rename(path.with_name(path.name + "-saved"))
         path.mkdir()
+        if change == "round":
+            # Preserve the receipt bytes so this case isolates directory
+            # replacement rather than the separate missing-marker refusal.
+            shutil.copyfile(path.with_name(path.name + "-saved") / cleanup.sweep.ROUND_MARKER,
+                            path / cleanup.sweep.ROUND_MARKER)
     sentinel = path / "must-remain"
     sentinel.write_text("replacement data")
-    message = {"root": "root identity changed", "round": "round was replaced", "marker": "round marker missing"}[change]
+    message = {"root": "root identity changed", "round": "round was replaced", "round-without-marker": "round was replaced", "marker": "round marker missing"}[change]
     with pytest.raises(cleanup.sweep.ConfigError, match=message):
         apply(registry, record)
     assert sentinel.read_text() == "replacement data"
@@ -329,21 +334,47 @@ def test_ignored_data_requires_preservation_before_retirement(session, runtime):
     assert result["paths"][0]["action"] == ("removed" if runtime == "git" else "archive-with-runtime")
 
 
-def test_unreferenced_detached_commit_preserved(session):
+@pytest.mark.parametrize("local_ref", [None, "refs/bisect/good", "refs/worktree/keep", "refs/rewritten/keep"])
+def test_unreferenced_detached_commit_preserved(session, local_ref):
     registry, record, root = session
     task = task_tree(registry, root)
     (task / ".gitignore").write_text("cache/\n")
     commit(task)
     head = cleanup.git(task, "rev-parse", "HEAD")
+    if local_ref:
+        cleanup.git(task, "update-ref", local_ref, head)
     registry.track_worktree(record, task, "git")
     receipt = allocate(registry, record)
     seal(registry, record, receipt)
     result = apply(registry, record)
-    assert "no containing named ref" in result["paths"][0]["reason"]
+    assert "no containing shared branch" in result["paths"][0]["reason"]
     assert cleanup.git(task, "rev-parse", "HEAD") == head
     cleanup.git(registry.repo, "branch", "retained", head)
     assert apply(registry, record)["complete"]
     assert cleanup.git(registry.repo, "rev-parse", "retained") == head
+
+
+@pytest.mark.parametrize("runtime", ["git", "codex"])
+@pytest.mark.parametrize("flag", ["assume-unchanged", "skip-worktree"])
+def test_hidden_tracked_changes_preserved(session, runtime, flag):
+    registry, record, root = session
+    (registry.repo / ".gitignore").write_text("cache\n")
+    commit(registry.repo)
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, runtime)
+    cleanup.git(task, "update-index", "--" + flag, ".gitignore")
+    (task / ".gitignore").write_text("unique modification\n")
+    assert cleanup.git(task, "status", "--porcelain") == ""
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    result = apply(registry, record)
+    assert "index hides changes" in result["paths"][0]["reason"]
+    assert (task / ".gitignore").read_text() == "unique modification\n"
+    cleanup.git(task, "update-index", "--no-" + flag, ".gitignore")
+    assert "uncommitted" in apply(registry, record)["paths"][0]["reason"]
+    # Restore only the fixture change after proving it survived both refusals.
+    (task / ".gitignore").write_text("cache\n")
+    assert apply(registry, record)["paths"][0]["action"] == ("removed" if runtime == "git" else "archive-with-runtime")
 
 
 @pytest.mark.parametrize("runtime", ["git", "codex"])
@@ -423,7 +454,8 @@ def test_grace_change_preserves_token_and_cleanup_authority(session):
     assert resumed.apply(current, token, True)["complete"]
 
 
-def test_list_isolates_invalid_inventory_without_granting_authority(session):
+@pytest.mark.parametrize("malformed", ["json", "policy-shape", "deep-json"])
+def test_list_isolates_invalid_inventory_without_granting_authority(session, malformed):
     registry, record, root = session
     receipt = allocate(registry, record)
     seal(registry, record, receipt)
@@ -432,7 +464,13 @@ def test_list_isolates_invalid_inventory_without_granting_authority(session):
     resumed = cleanup.Registry(registry.repo, config)
     fresh = resumed.start()
     broken = resumed.start()
-    (resumed.location(broken["id"]) / "session.json").write_text("not JSON")
+    if malformed == "json":
+        (resumed.location(broken["id"]) / "session.json").write_text("not JSON")
+    elif malformed == "deep-json":
+        (resumed.location(broken["id"]) / "session.json").write_text('{"policy":' + '[' * 200000 + '0' + ']' * 200000 + '}')
+    else:
+        broken["policy"] = []
+        resumed.save(broken)
     result = subprocess.run([sys.executable, cleanup.__file__, "--config", str(config), "list"],
         cwd=registry.repo, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr

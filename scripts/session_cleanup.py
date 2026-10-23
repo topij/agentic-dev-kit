@@ -70,7 +70,10 @@ def read_bytes(path: Path, limit: int = LIMIT) -> bytes:
 
 
 def read_json(path: Path) -> dict:
-    value = json.loads(read_bytes(path))
+    try:
+        value = json.loads(read_bytes(path))
+    except RecursionError as exc:
+        raise sweep.ConfigError(f"JSON nesting exceeds the reader's limit: {path}") from exc
     if not isinstance(value, dict):
         raise sweep.ConfigError(f"expected JSON object: {path}")
     return value
@@ -158,6 +161,8 @@ class Registry:
 
     @staticmethod
     def retirement_policy(policy: dict) -> dict:
+        if not isinstance(policy, dict):
+            raise sweep.ConfigError("session policy must be a mapping")
         # Only grace_seconds is irrelevant: registered retirement always uses
         # grace zero. Roots, dependency repositories, registry and common dir
         # still bind authority; unknown future keys also remain bound. Preserve
@@ -303,6 +308,9 @@ class Registry:
                   or sweep.configured_root_reason(str(path), roots))
         if reason:
             return reason
+        flags = git(path, "ls-files", "-v", "-z").split("\0")
+        if any(item and (item[0].islower() or item[0] == "S") for item in flags):
+            return "worktree index hides changes with assume-unchanged or skip-worktree; inspect and clear those flags"
         if git(path, "status", "--porcelain", "--untracked-files=all"):
             return "worktree has uncommitted or untracked content"
         # Git remove and native archive can discard ignored files. Require the
@@ -310,8 +318,12 @@ class Registry:
         # seal assertion alone does not distinguish a cache from unique data.
         if git(path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"):
             return "worktree has ignored content; retain or move it before retirement"
-        if worktree["runtime"] == "git" and not git(path, "for-each-ref", "--contains", worktree["head"], "--format=%(refname)"):
-            return "worktree head has no containing named ref; preserve the commit before retirement"
+        # Only shared branches, tags and remote-tracking refs establish retention.
+        # refs/bisect, refs/worktree and refs/rewritten can belong to this checkout
+        # and disappear with it. Other namespaces (including shared stash/notes
+        # and custom refs) are conservatively insufficient; create a branch/tag.
+        if worktree["runtime"] == "git" and not git(path, "for-each-ref", "--contains", worktree["head"], "--format=%(refname)", "refs/heads", "refs/tags", "refs/remotes"):
+            return "worktree head has no containing shared branch, tag or remote ref; preserve the commit before retirement"
         if Path.cwd().resolve().is_relative_to(path):
             return "invoke cleanup from outside the worktree"
         return None
@@ -346,10 +358,15 @@ class Registry:
                 # still match before the existing sweeper may touch it.
                 outcomes.append({"path": receipt["path"], "action": "absent", "reason": None})
                 continue
-            if entry["status"] != "removing" and not os.path.lexists(Path(receipt["path"]) / sweep.ROUND_MARKER):
-                raise sweep.ConfigError("round marker missing without an approved removal journal")
-            result = sweep.finish_review_round(receipt, self.settings, Path(entry["namespace"]),
-                                               resuming=entry["status"] == "removing")
+            try:
+                result = sweep.finish_review_round(receipt, self.settings, Path(entry["namespace"]),
+                                                   resuming=entry["status"] == "removing")
+            except FileNotFoundError as exc:
+                # Let the sweeper validate directory identity first. Only its
+                # missing-marker diagnostic is translated; no guard is bypassed.
+                if exc.filename != str(Path(receipt["path"]) / sweep.ROUND_MARKER):
+                    raise
+                raise sweep.ConfigError("round marker missing without an approved removal journal") from exc
             outcomes.append({"path": result.path, "action": result.action, "reason": result.reason})
         for item in outcomes:
             item["owner"] = record["id"]

@@ -56,9 +56,11 @@ The primary checkout is never eligible. The registry binds the recorded head and
 directory identity; a later commit requires a new inventory. Branch names are
 recorded but branches are not deleted by this engine. A branch's forge lifecycle
 remains separate from local scratch retirement. Ordinary Git retirement requires
-the recorded commit to be reachable from a named ref; preserve an unreferenced
-detached commit on a branch before retrying. Codex's native archive preserves its
-commit snapshot instead.
+the recorded commit to be reachable from a shared branch, tag or remote-tracking
+ref; preserve an unreferenced detached commit on a branch before retrying.
+Checkout-local refs such as bisect/worktree/rewritten refs disappear on removal
+and cannot establish retention. Other custom ref namespaces are conservatively
+insufficient too. Codex's native archive preserves its commit snapshot instead.
 
 ## Retain required evidence, then seal
 
@@ -134,7 +136,10 @@ The supported environment is POSIX with Git and `lsof`; other hosts must preserv
 the inventory and report the unavailable capability.
 
 Ordinary worktrees are removed by Git without force, after identity, head, status
-and dependency checks. Both runtimes refuse ignored content, including caches:
+and dependency checks. Both runtimes refuse index flags that hide tracked changes
+(`assume-unchanged` or `skip-worktree`): inspect the affected paths and clear those
+flags before retrying, preserving any work they conceal. Both runtimes also refuse
+ignored content, including caches:
 retain required files through the seal, verify their retained bytes, then explicitly
 move or remove the original ignored files before retrying. A clean Git status alone
 does not establish that ignored data is disposable. App-managed worktrees return
