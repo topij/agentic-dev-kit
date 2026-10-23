@@ -743,7 +743,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
    in the round do not keep it: bare repositories, separated git dirs whose
    pointer is in the round, and `.git` files that do not start with `gitdir:`. A git
    dir that an outside
-   tree depends on still does (#997). On an interrupted review, preserve its receipt and resume
+   tree depends on still does (#997). One limit: an in-round `.git` file naming a
+   separated git dir whose real main work tree is outside clears that git dir. The
+   `_owned_detached_reason` docstring in `sweep_scratch.py` lists this case with
+   the others. On an interrupted review, preserve its receipt and resume
    its process/report accounting before retirement. A normal age sweep cannot
    reclaim a fresh round because it retains the configured grace window.
 

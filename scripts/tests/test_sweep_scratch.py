@@ -109,10 +109,12 @@ def _remove_test_tree(tmp_path: Path, monkeypatch):
     after them: nothing builds into the tree once this runs. Some tests patch
     ``os`` itself (``sweep.os`` is the ``os`` module), so the patches are undone
     first rather than at monkeypatch's own, later, teardown. A failure here is
-    raised, not ignored: a silent leftover is the defect this exists to stop."""
+    raised, not ignored: a silent leftover is the defect this exists to stop.
+    The path is not resolved, so a test that swapped ``tmp_path`` for a symlink
+    makes ``rmtree`` raise rather than empty the link's target."""
     yield
     monkeypatch.undo()
-    path = os.path.realpath(tmp_path)
+    path = os.fspath(tmp_path)
     if not os.path.lexists(path):
         return
     _make_removable(path)
@@ -1338,11 +1340,25 @@ def _round_fixture(kind, path, repo):
     elif kind == "whitespace":
         (case / "other").mkdir()
         (case / "other" / ".git").write_text("  \n")
+    elif kind == "no-colon":
+        # Git answers "invalid gitfile format". Its tail names a live git dir
+        # outside the round, so reading `gitdir` without the colon as a prefix
+        # would keep the round.
+        (case / "other").mkdir()
+        (case / "other" / ".git").write_text(f"gitdir {repo / '.git'}\n")
+    elif kind == "blank-led-multi-line":
+        # A leading blank makes git refuse it; only a check on the stripped text
+        # would see the `gitdir:` behind it and keep the round.
+        (case / "other").mkdir()
+        (case / "other" / ".git").write_text(f"\ngitdir: {repo / '.git'}\nextra\n")
     else:
         raise AssertionError(kind)
 
 
-ROUND_FIXTURES = ["bare", "separated", "separated-relative", "malformed", "whitespace"]
+ROUND_FIXTURES = [
+    "bare", "separated", "separated-relative", "malformed", "whitespace", "no-colon",
+    "blank-led-multi-line",
+]
 
 
 @pytest.mark.parametrize("kind", ROUND_FIXTURES)
@@ -1369,19 +1385,37 @@ def test_age_sweep_still_keeps_fixture_git_dirs_in_a_round(root, repo, kind):
     assert path.exists()
 
 
-@pytest.mark.parametrize("padding", ["\n" * 5000, "\nextra\n"], ids=["oversized", "multi-line"])
-def test_finished_round_keeps_a_padded_pointer_git_still_follows(root, repo, base, padding):
-    # Git strips trailing newlines, so a pointer past the read cap still links a
-    # worktree in the round to a git dir outside it.
-    settings, receipt, path = _round(root, repo)
+def _outside_linked_worktree(path, repo, base) -> Path:
     other = base / "other-repo"
     _git(repo, "clone", "--no-hardlinks", str(repo), str(other))
     wt = path / "outside-linked"
     _git(other, "worktree", "add", "--detach", str(wt))
+    return wt
+
+
+def test_finished_round_keeps_a_padded_pointer_git_still_follows(root, repo, base):
+    # Git strips trailing newlines, so a pointer past the read cap still links a
+    # worktree in the round to a git dir outside it.
+    settings, receipt, path = _round(root, repo)
+    wt = _outside_linked_worktree(path, repo, base)
     git_file = wt / ".git"
-    git_file.write_text(git_file.read_text().rstrip("\n") + padding)
-    if padding.startswith("\n" * 2):
-        subprocess.run(["git", "rev-parse", "--git-dir"], cwd=wt, check=True, capture_output=True)
+    git_file.write_text(git_file.read_text().rstrip("\n") + "\n" * 5000)
+    subprocess.run(["git", "rev-parse", "--git-dir"], cwd=wt, check=True, capture_output=True)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "unparseable .git file" in result.reason
+    assert wt.exists()
+
+
+def test_finished_round_keeps_a_multi_line_pointer_conservatively(root, repo, base):
+    # Git reads the extra line as part of the path and refuses the file, so this
+    # links nothing; the engine keeps it anyway rather than parse it as git does.
+    settings, receipt, path = _round(root, repo)
+    wt = _outside_linked_worktree(path, repo, base)
+    git_file = wt / ".git"
+    git_file.write_text(git_file.read_text().rstrip("\n") + "\nextra\n")
+    probe = subprocess.run(["git", "rev-parse", "--git-dir"], cwd=wt, capture_output=True, text=True)
+    assert probe.returncode != 0, probe.stdout
     result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     assert result.action == "kept"
     assert "unparseable .git file" in result.reason
@@ -1420,7 +1454,10 @@ def test_finished_round_keeps_a_git_file_it_cannot_read_or_resolve(root, repo, k
     try:
         result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     finally:
-        git_file.chmod(0o600)
+        # Only when present: a regression that removed the round must fail on
+        # the assertion below, not on this cleanup.
+        if kind == "unreadable" and os.path.lexists(git_file):
+            git_file.chmod(0o600)
     assert result.action == "kept"
     assert path.exists()
 
@@ -1653,6 +1690,11 @@ def test_retirement_refuses_unsafe_allocation_markers(root, repo, kind):
 # a run leaves no fixture behind (#1188)
 # --------------------------------------------------------------------------- #
 
+# These run the fixture in a child pytest, under a basetemp inside this test's
+# own tree. To mutation-test the teardown, select them with `-k teardown`: with
+# the teardown disabled, a whole-module run still leaves every other test's
+# fixtures behind, as it should.
+
 _LEFTOVER_TEST = '''
 import os
 from pathlib import Path
@@ -1671,29 +1713,111 @@ def test_builds_what_the_engine_keeps(tmp_path: Path):
     locked_file.chmod(0)
     (entry / "fixture.git" / "worktrees").chmod(0)
     entry.chmod(0o500)
+
+
+def test_patches_os_until_its_teardown(tmp_path: Path, monkeypatch):
+    # The removal needs os.chmod, so it succeeds only if this is undone first.
+    def refuse(*args, **kwargs):
+        raise RuntimeError("os.chmod still patched at teardown")
+
+    (tmp_path / "locked").mkdir(mode=0)
+    monkeypatch.setattr(os, "chmod", refuse)
+'''
+
+_NO_REMOVAL_TEST = '''
+import test_sweep_scratch
+from test_sweep_scratch import _remove_test_tree  # noqa: F401 — the autouse fixture under test
+
+
+def test_removal_does_nothing(tmp_path):
+    # Assigned, not monkeypatched, so the teardown's undo does not restore it.
+    test_sweep_scratch.shutil.rmtree = lambda *args, **kwargs: None
+    (tmp_path / "left").write_text("x")
+'''
+
+_SWAPPED_TMP_PATH_TEST = '''
+import os
+
+from test_sweep_scratch import _remove_test_tree  # noqa: F401 — the autouse fixture under test
+
+
+def test_swaps_its_tmp_path_for_a_link(tmp_path):
+    tmp_path.rmdir()
+    tmp_path.symlink_to(os.environ["OUTSIDE"], target_is_directory=True)
 '''
 
 
-def test_teardown_removes_every_fixture_the_engine_would_keep(base: Path):
-    """Run a test that leaves an unreadable dir, a FIFO ``gitdir``, a NUL-bearing
-    ``.git`` file and an odd-named entry under ``--basetemp``, and require none of
-    it to survive the run, nor the target of its outward symlink to change."""
-    outside = base / "outside"
-    outside.mkdir()
-    (outside / "keep.txt").write_text("keep\n", encoding="utf-8")
-    outside.chmod(0o500)
+def _scrub(path: Path) -> None:
+    """Remove a child run's basetemp without ``_remove_test_tree`` or
+    ``_make_removable``, so a mutant of either cannot leave behind the fixtures
+    the child built. Directories are opened before the walk descends into them;
+    a symlink is never followed."""
+    if not os.path.lexists(path):
+        return
+    os.chmod(path, 0o700)
+    for dirpath, dirnames, _files in os.walk(path):
+        for name in dirnames:
+            child = os.path.join(dirpath, name)
+            if not os.path.islink(child):
+                os.chmod(child, 0o700)
+    shutil.rmtree(path)
+
+
+def _run_child(base: Path, source: str, outside: Path) -> tuple[subprocess.CompletedProcess, Path]:
     tests = base / "tests"
     tests.mkdir()
-    (tests / "test_leftover.py").write_text(textwrap.dedent(_LEFTOVER_TEST), encoding="utf-8")
+    (tests / "test_child.py").write_text(textwrap.dedent(source), encoding="utf-8")
     basetemp = base / "basetemp"
     env = {**os.environ, "OUTSIDE": str(outside), "PYTHONPATH": str(Path(__file__).resolve().parent)}
     done = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider",
-         f"--basetemp={basetemp}", str(tests / "test_leftover.py")],
+         f"--basetemp={basetemp}", str(tests / "test_child.py")],
         capture_output=True, text=True, timeout=120, cwd=tests, env=env,
     )
-    assert done.returncode == 0, done.stdout + done.stderr
-    left = [os.path.join(d, n) for d, dirs, files in os.walk(basetemp) for n in dirs + files]
-    assert left == []
-    assert stat.S_IMODE(os.lstat(outside).st_mode) == 0o500
-    assert (outside / "keep.txt").read_text(encoding="utf-8") == "keep\n"
+    return done, basetemp
+
+
+def _outside(base: Path) -> Path:
+    outside = base / "outside"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("keep\n", encoding="utf-8")
+    return outside
+
+
+def test_teardown_removes_every_fixture_the_engine_would_keep(base: Path):
+    """Run a test that leaves an unreadable dir, a FIFO ``gitdir``, a NUL-bearing
+    ``.git`` file and an odd-named entry under ``--basetemp``, and one that leaves
+    ``os.chmod`` patched, and require none of it to survive the run, nor the target
+    of its outward symlink to change."""
+    outside = _outside(base)
+    outside.chmod(0o500)
+    done, basetemp = _run_child(base, _LEFTOVER_TEST, outside)
+    try:
+        assert done.returncode == 0, done.stdout + done.stderr
+        left = [os.path.join(d, n) for d, dirs, files in os.walk(basetemp) for n in dirs + files]
+        assert left == []
+        assert stat.S_IMODE(os.lstat(outside).st_mode) == 0o500
+        assert (outside / "keep.txt").read_text(encoding="utf-8") == "keep\n"
+    finally:
+        _scrub(basetemp)
+
+
+def test_teardown_raises_when_the_tree_survives(base: Path):
+    done, basetemp = _run_child(base, _NO_REMOVAL_TEST, _outside(base))
+    try:
+        assert done.returncode != 0, done.stdout + done.stderr
+        assert "error at teardown" in done.stdout.lower(), done.stdout
+        assert "test tree survived teardown" in done.stdout, done.stdout
+    finally:
+        _scrub(basetemp)
+
+
+def test_teardown_never_empties_the_target_of_a_swapped_tmp_path(base: Path):
+    outside = _outside(base)
+    done, basetemp = _run_child(base, _SWAPPED_TMP_PATH_TEST, outside)
+    try:
+        assert (outside / "keep.txt").is_file(), "the swapped tmp_path's target was emptied"
+        assert done.returncode != 0, done.stdout + done.stderr
+        assert "error at teardown" in done.stdout.lower(), done.stdout
+    finally:
+        _scrub(basetemp)

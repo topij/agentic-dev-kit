@@ -15,5 +15,10 @@ that no in-round pointer names and whose config cannot be read as a regular file
 so is a `.git` file that starts with `gitdir:` but is multi-line or oversized. The age
 sweep (`--apply --older-than`) is unchanged and still keeps all of them.
 
+One limit: a decoy `.git` file in the round that names a separated git dir whose real
+main work tree is outside the round makes that git dir removable. It needs a reviewer
+to have copied or written that pointer. The `_owned_detached_reason` docstring lists
+this case with the others.
+
 Refresh `scripts/sweep_scratch.py` and its tests. If you assert that a round holding a
 pytest basetemp of fixture repositories is `kept`, it is now `removed`.
