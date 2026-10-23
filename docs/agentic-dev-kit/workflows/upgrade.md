@@ -966,7 +966,8 @@ a preview with the refreshed **installed** engine and an explicit adopter root:
 : "${UPGRADE_PREVIEW_DIR:?select the session-owned preview directory}"
 case "$UPGRADE_PREVIEW_DIR" in /*) ;; *) exit 1 ;; esac
 DEFINITION_PREVIEW="$(mktemp "$UPGRADE_PREVIEW_DIR/lens-definition.XXXXXX")" || exit 1
-uv run "$REPO"/<engine-dir>/panel_prompt.py --root "$REPO" \
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/panel_prompt.py \
+  --root "${REPO:?REPO is not set — re-run Step 0}" \
   --runtime claude --lens "$UPGRADE_LENS" --agent-definition \
   > "$DEFINITION_PREVIEW" || exit 1
 ```
