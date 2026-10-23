@@ -151,7 +151,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "22928b67dbecc9cb75d70c18a0200efaa96ba30a1c41551ad0168a8f2b744666"
+      "sha256": "6760e816e8173e1120ac93e26d6a77bea97c082b3b111c57eb156eaddfd2f05c"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -717,7 +717,7 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "61525bc7134f8dba2354491544b916e126643719dedb3715043ba6633e902bef"
+      "sha256": "456fc4f46612fd6040b4225c37d9d82e3146353cb1110b2124bfe56d0045f3a0"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",

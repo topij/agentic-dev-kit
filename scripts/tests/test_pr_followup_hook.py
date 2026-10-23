@@ -1019,7 +1019,7 @@ def test_shipped_config_pins_the_selected_reviewer_compute():
 
     assert compute["claude"]["model"] == "sonnet"
     assert compute["claude"]["effort"] == "high"
-    assert compute["codex"]["model"] == "gpt-5.6-sol"
+    assert compute["codex"]["model"] == "gpt-6.1-sol"
     assert compute["codex"]["effort"] == "medium"
 
 
