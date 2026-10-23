@@ -36,11 +36,11 @@
   - `make test` at `27f99c6a`, in `.claude/worktrees/sweep-test-teardown`, on 2026-10-22 printed `5493 passed, 1 skipped`.
   - `make test` at `5b27b0ba`, in `.claude/worktrees/sweep-1189`, on 2026-10-22 printed `5516 passed, 1 skipped`.
   - #1188's retirement criterion: a round allocated at `00eeda8d` in which the module ran was `removed` by `--finish-review-round --apply --reviewers-finished` on 2026-10-22.
-- **Not established:** that a round in which a lens probes `.git` files, or mutation-tests the teardown across the whole module, can be retired. The engine kept both lens rounds of this session, and the operator removed them by hand. This is parked in the friction log.
+- **Not established:** that a round in which a lens probes `.git` files can be retired. #1193's lens round was kept by such a probe, and the operator removed it by hand; the friction log carries it. #1192's lens round was kept for a different reason: the lens disabled the teardown across the whole module, which keeps a round by design. #1193's comment asks a lens to mutation-test the teardown with `-k teardown` instead.
 - **Tracker:**
-  - Filed #1194.
-  - Added #1192's lens LOW findings to #1189, then closed it as completed with an evidence comment.
-  - #1188 closed through #1192's squash message.
+  - Filed #1194: `pr_watch` leaves a PR unclassed when its recorded base commit is missing from the local object store. No workstream carries it.
+  - #1189 received #1192's lens LOW findings, and was then marked completed with an evidence comment.
+  - #1188 was completed by #1192's squash message.
 
 ______________________________________________________________________
 

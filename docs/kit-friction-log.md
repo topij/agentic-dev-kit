@@ -27,18 +27,15 @@
 ## 2026-10-23
 
 - **A lens's own `.git` probes keep its review round.** Severity M, kept for
-  accumulation; no fix is proposed yet. Occurrences:
-  - #1193's adversarial lens left `probe-adv-5b27b0ba/w/multi/.git`, a multi-line
-    `gitdir:` pointer. `--finish-review-round --apply --reviewers-finished` answered
-    `kept`, which is correct: an unresolvable `gitdir:`-led pointer stays protected.
-    #1188's report records the same shape from #1186's lens.
-  - #1192's adversarial lens disabled the teardown across the whole module, which
-    left the pin test's NUL-bearing pointer in the round. #1193 now confines that
-    case to `-k teardown`.
-
-  The operator removed each round by hand. The open question is whether the lens
-  contract should place git probes somewhere that is not the round, or the engine
-  should accept a pointer whose target cannot exist.
+  accumulation; no remedy is proposed yet. #1193's adversarial lens left
+  `probe-adv-5b27b0ba/w/multi/.git`, a multi-line `gitdir:` pointer, in its round.
+  `--finish-review-round --apply --reviewers-finished` answered `kept`. The reason was
+  the conservative multi-line keep that #1193's engine comment documents, not an
+  unresolvable target: a single-line pointer whose target does not exist is already
+  removable in an owned round. #1188's report records a probe of the same family from
+  #1186's lens. The operator removed the round by hand. The open question is whether
+  the lens contract should place git probes outside the round, or the engine should
+  treat a multi-line pointer as linking nothing, as git does.
 
 ## 2026-10-22
 
