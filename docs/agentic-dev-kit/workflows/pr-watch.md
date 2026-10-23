@@ -92,6 +92,12 @@ merge back to one that has it. The exception is a surface the poll names in
 do about it). `dev_session.sh pr-watch <scope>` itself needs `gh`, so a gh-less session must
 invoke the engine directly, and on a **fork** checkout pass an explicit PR number.
 
+**A session's last pull request runs `wrap-up`'s handoff test before its opening
+review is requested**, best before the pull request is opened. When the test leaves something to hand over, the record is
+committed there and reviewed with the change, rather than in a wrap-up pull request
+of its own afterwards; when it leaves nothing, nothing is committed
+([`wrap-up.md`](wrap-up.md)).
+
 ## Loop
 
 Repeat until the report says **converged**:

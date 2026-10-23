@@ -1365,7 +1365,9 @@ def test_seeded_handoff_keeps_its_workstreams_through_an_archive_sweep(
     seeded = plan.read_text(encoding="utf-8")
     workstreams = seeded[seeded.index("\n## Workstreams\n") + 1 :]
     assert "▶ Next:" in workstreams
-    first_entry = seeded.index("## Session — ")
+    # The template seeds no session entry (wrap-up writes none); a handoff carried
+    # over from the earlier layout still has them, ahead of the archiver's footer.
+    first_entry = seeded.index("> Older session entries")
     newer = "".join(
         f"## Session — 2099-01-0{day} (entry {day})\n\n- Body {day}.\n\n"
         + "_" * 70 + "\n\n"

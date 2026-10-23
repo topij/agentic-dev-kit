@@ -95,7 +95,8 @@ source that failed on the retry.
 
 | Source          | How                                                                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Living handoff   | `<handoff>` — every entry under `## Workstreams` (status, owner, `▶ Next:`), plus the newest session entries as context                  |
+| Living handoff   | `<handoff>` — every entry under `## Workstreams` (status, owner, `▶ Next:`); dated session entries left from an earlier layout are context only |
+| Recent merges    | part of the open-PR forge read: the newest merged pull requests (`gh pr list --state merged --limit 10`, or the REST `pulls?state=closed` route keeping those with `merged_at`) — what just shipped, as context; `wrap-up` does not restate it. Unavailable with the forge, and reported as that gap |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
 | Open PRs         | `gh pr list` (or its REST equivalent, `gh api --paginate` on the `pulls` route) plus a non-acknowledging `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
@@ -131,6 +132,9 @@ instead, and reports its gap in the briefing text rather than in a fixed field.
 The two narrative-file reads are not in this set: a failed read there does not look
 like good news, it looks like a missing handoff.
 
+- With the open-PR list, the newest merged pull requests (`gh pr list --state merged
+  --limit 10 --json number,title,mergedAt`, or its REST equivalent). A failed read is
+  the forge gap, never an empty list.
 - `git status --short`, plus `git symbolic-ref --short -q HEAD`. If the symbolic read
   returns empty, run `git rev-parse --verify HEAD` and report `DETACHED at <sha>` rather
   than a blank branch. If neither establishes state, stop under `repository-state-read`.
@@ -229,9 +233,12 @@ like good news, it looks like a missing handoff.
 - your cron/CI health command (adapt to your infra)
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's
-  status line, owner pointer and `▶ Next:`. The newest session entries are context
-  for what just happened; they carry no next step, and **the most recent one is not
-  an instruction to this session**. A handoff with no `## Workstreams` section is
+  status line, owner pointer and `▶ Next:`. `wrap-up` writes no session entries, so
+  what just happened comes from the newest merged pull requests; dated session entries left from an earlier layout are
+  context too. Neither carries a next step, and **the most recent merge is not an
+  instruction to this session**. Check each pull request and issue a workstream
+  entry names against the forge and tracker reads above: a line that calls merged
+  work open or owed, or names a closed issue as the next step, is stale. A handoff with no `## Workstreams` section is
   in the older layout: read its latest session block's `Next:` / `Follow-ups:` lines
   as a single workstream's, and its top-of-file trail for the active sprint.
 - Read `<friction-log>` (the inbox — entries above the most-recent `## … — Backlog migrated to <tracker>` marker; everything below it is already ticketed)
@@ -504,7 +511,7 @@ Where things stand
   • Disk / scratch: <available space, stale/protected paths and reasons, command/revision/date | unavailable: reason>
   • <branch> (<clean | N uncommitted/untracked>) · <N open PRs | PRs unavailable: reason> · CI/cron: <all green | N failed/skipped | unavailable: reason>
   • Workstreams: <the entry names under ## Workstreams, one line>
-  • Last session: <one-line theme from the newest session entry — context, not an assignment>
+  • Recently merged: <the newest merged PRs, one line | unavailable: reason — context, not an assignment>
 
 What to do next
 
@@ -572,6 +579,13 @@ wrapped up gets no preference for it.
   session-start tripwire may have warned), mention it as a 🟢 housekeeping item
   (`wrap-up` sweeps the handoff; the `triage-friction-log` workflow graduates the inbox) — don't
   sweep inline.
+- If a `## Workstreams` entry is stale — it calls a merged pull request open or a
+  follow-up, or its `▶ Next:` names a closed issue — list it as a 🟢 housekeeping
+  item with what the forge or tracker says now. The next `wrap-up` corrects it;
+  don't edit it inline.
+- A runtime that does not offer this workflow as a native invocation (some hosted
+  sessions do not load the repository's skill adapters) follows this document by
+  hand. The briefing and its read-only contract are the same either way.
 - If a `## Workstreams` entry is named for a date, a run mode or a session (*Overnight
   lanes 2026-10-06*), or its status line says `assignment unconfirmed`, list it as a
   🟢 housekeeping item. A name is not misnamed when the run mode is itself the

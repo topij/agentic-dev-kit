@@ -311,10 +311,10 @@ wrap-up **from this cockpit session**:
    merged or held with at least one held, 0 only when all merged, and **64** when a
    required forge or identity read fails. Exit 64 invalidates the snapshot: the engine
    emits no lane board, and callers must stop rather than infer an empty or partial
-   result. **Do not write the
-   wrap-up block until every launched scope is merged, consciously parked, or held.** A
+   result. **Do not run the
+   joint wrap-up until every launched scope is merged, consciously parked, or held.** A
    scope that reconciles to **open** means the batch isn't closeable — finish or park it
-   first. A scope that reconciles to **parked** gets named as parked in the block, never
+   first. A scope that reconciles to **parked** gets named as parked, never
    folded into "all shipped"; a scope that reconciles to **held** gets named as awaiting
    your merge, with its PR number — it has NOT shipped either. (Pass the scopes
    explicitly — `rm` removes session dirs, so a scope already torn down won't
@@ -345,24 +345,26 @@ wrap-up **from this cockpit session**:
    per merged or held batch PR (parked scopes have no landed narrative to read; a held
    one has a finished PR body and is exactly what you need in order to rule on it).
 
-1. Write **one** session entry for the whole batch via `wrap-up` — open
-   with the tally line, then PRs landed, collisions avoided, each parked scope with
-   its reason, and each held scope with its PR number and what it is waiting on. Not
-   one entry per session. Update the `## Workstreams` entry of each workstream a lane
-   advanced, as `wrap-up` describes; a lane never edits `<handoff>` itself. Each lane,
-   parked ones included, is filed under the `## Workstreams` entry for its subject,
-   and the session entry groups the landed, parked and held scopes by those
-   workstream names. Never create a `## Workstreams` entry for the batch itself: a
-   batch is how the work ran, not a line of work.
+1. Run `wrap-up`'s handoff test over the whole batch, not per lane. The merged PRs
+   and their bodies already record what landed, so the handoff restates none of it
+   and writes no session entry. What a batch can leave is workstream state. Each lane,
+   parked ones included, is filed under the `## Workstreams` entry for its subject:
+   a **held** scope with its PR number and what it is waiting on, and a **parked**
+   scope with its reason, in that entry's `▶ Next:` or status line, as `wrap-up`
+   describes; a lane never edits `<handoff>` itself. Never create a `## Workstreams` entry for the batch itself: a
+   batch is how the work ran, not a line of work. The tally line the reconciler
+   printed goes in the chat and, when a PR is opened, in its body.
 
-1. Open it as its own `chore: update handoff` PR (this checkout sits on the protected
-   branch, so the handoff edit goes through a branch + PR like everything else;
-   mirrors the existing `chore: update handoff` cadence).
+1. When the test left something, open it as its own `chore: update handoff` PR (this
+   checkout sits on the protected branch, and the lanes' PRs are already reviewed or
+   merged, so this is `wrap-up`'s separate-PR route). When it left nothing — every
+   scope merged and each workstream's `▶ Next:` still true — the batch ends without
+   a handoff commit.
 
 Overflow that doesn't fit a PR body (richer lessons, friction-log entries) goes to a
 uniquely-named `docs/handoff/<scope>.md` fragment that rides the session's **own** PR
-— disjoint path, zero collision — and the cockpit folds it into the wrap-up block and
-deletes it. Start with PR-body-primary; only reach for fragments when bodies prove too
+— disjoint path, zero collision — and the cockpit folds what of it passes the
+handoff test into the workstream entries, and deletes it. Start with PR-body-primary; only reach for fragments when bodies prove too
 thin.
 
 ## Starting a new session

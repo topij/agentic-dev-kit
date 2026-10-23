@@ -3,26 +3,27 @@
 # my-project — Living Plan (Handoff)
 
 > **Forward-looking handoff (Principle #1).** Read this at the start of every session
-> (`session-start`); update it at the end (`wrap-up`). This file — not an agent's
-> memory, not a scratch note — is the single source of truth for what's done, in
-> progress, and next.
+> (`session-start`); update it at the end (`wrap-up`) when the session left something
+> to hand over. This file — not an agent's memory, not a scratch note — is the single
+> source of truth for what is in progress and next.
 >
-> **Two parts.** Session entries are a log of what happened, newest first, and carry no
-> next step. Each open line of work keeps its own `▶ Next:` in its entry under
-> **Workstreams** at the end of this file, until the operator closes it. A wrap-up
-> updates only the entry for the workstream it worked on, so finishing last does not
-> make one session's continuation the next task for everyone.
+> **Workstreams only.** Each open line of work keeps its own entry under
+> **Workstreams** at the end of this file — a status line, a pointer to the plan or
+> tracker issue that owns the detail, and its own `▶ Next:` — until the operator
+> closes it. A wrap-up updates only the entry for the workstream it worked on, so
+> finishing last does not make one session's continuation the next task for everyone.
 >
-> Older session entries graduate to [`handoff-history.md`](handoff-history.md) once this
-> file crosses its line budget (a warn-only tripwire — `scripts/check_doc_budget.py`).
-> The Workstreams section is never swept. Session-scoped scratch plans are exactly that:
+> **What shipped is not restated here.** Merged pull requests, commits and tracker
+> issues already record it, and `session-start` reads them first-hand. A wrap-up
+> edits this file only for what none of them holds — a decision, an abandoned
+> approach, half-finished state, a next step with no ticket — and a session that
+> left none of that commits nothing.
+>
+> The line budget is a warn-only tripwire (`scripts/check_doc_budget.py`).
+> Dated session entries from an earlier layout graduate to
+> [`handoff-history.md`](handoff-history.md) when this file crosses it; the
+> Workstreams section is never swept. Session-scoped scratch plans are exactly that:
 > scratch. This is the handoff.
-
-## Session — YYYY-MM-DD (<theme>)
-
-- <what shipped>
-- <what was decided>
-- <what was learned, or what this session did not establish>
 
 ______________________________________________________________________
 
