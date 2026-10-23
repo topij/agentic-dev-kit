@@ -96,7 +96,7 @@ source that failed on the retry.
 | Source          | How                                                                                                                                     |
 | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Living handoff   | `<handoff>` — every entry under `## Workstreams` (status, owner, `▶ Next:`); dated session entries left from an earlier layout are context only |
-| Recent merges    | `git log --first-parent --oneline -n 10` on the protected branch's remote head — what just shipped, as context; `wrap-up` does not restate it |
+| Recent merges    | part of the open-PR forge read: the newest merged pull requests (`gh pr list --state merged --limit 10`, or the REST `pulls?state=closed` route keeping those with `merged_at`) — what just shipped, as context; `wrap-up` does not restate it. Unavailable with the forge, and reported as that gap |
 | Friction inbox   | `<friction-log>` — entries since the last "Backlog migrated" marker                                                                  |
 | Tracker backlog  | your tracker's list-issues command/script — project `tracker.project_name` (open only — drop `completed`/`canceled`). Pass an explicit row limit *and* select fields; see the gather for why these are two separate limits and why a full page must be treated as truncated |
 | Open PRs         | `gh pr list` (or its REST equivalent, `gh api --paginate` on the `pulls` route) plus a non-acknowledging `pr_watch.py --json --no-persist --all-comments` poll per pull request — anything draft / CI-red / awaiting-review (the PR-follow-through rule). Page both the list and review findings completely |
@@ -132,9 +132,9 @@ instead, and reports its gap in the briefing text rather than in a fixed field.
 The two narrative-file reads are not in this set: a failed read there does not look
 like good news, it looks like a missing handoff.
 
-- `git log --first-parent --oneline -n 10` on the protected branch's remote head,
-  after fetching it. A failed fetch reads the local copy and says the list may be
-  behind.
+- With the open-PR list, the newest merged pull requests (`gh pr list --state merged
+  --limit 10 --json number,title,mergedAt`, or its REST equivalent). A failed read is
+  the forge gap, never an empty list.
 - `git status --short`, plus `git symbolic-ref --short -q HEAD`. If the symbolic read
   returns empty, run `git rev-parse --verify HEAD` and report `DETACHED at <sha>` rather
   than a blank branch. If neither establishes state, stop under `repository-state-read`.
@@ -234,8 +234,7 @@ like good news, it looks like a missing handoff.
 - your config-drift check, if you have one (parse its output for a 🔴-worthy line in *Render the briefing*)
 - Read `<handoff>`. The focus is the `## Workstreams` section: each `### <name>` entry's
   status line, owner pointer and `▶ Next:`. `wrap-up` writes no session entries, so
-  what just happened comes from the protected branch's recent first-parent log and
-  the pull requests it names; dated session entries left from an earlier layout are
+  what just happened comes from the newest merged pull requests; dated session entries left from an earlier layout are
   context too. Neither carries a next step, and **the most recent merge is not an
   instruction to this session**. Check each pull request and issue a workstream
   entry names against the forge and tracker reads above: a line that calls merged
@@ -512,7 +511,7 @@ Where things stand
   • Disk / scratch: <available space, stale/protected paths and reasons, command/revision/date | unavailable: reason>
   • <branch> (<clean | N uncommitted/untracked>) · <N open PRs | PRs unavailable: reason> · CI/cron: <all green | N failed/skipped | unavailable: reason>
   • Workstreams: <the entry names under ## Workstreams, one line>
-  • Recently merged: <the newest first-parent merges on the protected branch, one line — context, not an assignment>
+  • Recently merged: <the newest merged PRs, one line | unavailable: reason — context, not an assignment>
 
 What to do next
 

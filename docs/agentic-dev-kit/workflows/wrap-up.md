@@ -13,7 +13,9 @@ test.
 
 **Run it before the session's last pull request goes to review**, not after it
 merges: a handoff edit committed there is reviewed with the change it describes, in
-the same pass. A wrap-up started after that review only opens a pull request of its
+the same pass. The surest moment is before that pull request is opened, so the
+record is in the first head any reviewer or bot sees; once a review has started,
+a push moves the head it reviewed. A wrap-up started after that review only opens a pull request of its
 own when the test below finds something no other source holds.
 
 ## Resolve configuration
@@ -59,8 +61,8 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `document-budget-check` | required | Resolve and run `<engine-dir>/check_doc_budget.py`. A missing engine, usage/config failure, or unreadable result stops before staging; preserve the record edit for repair. |
 | `handoff-archive` | conditional | Required only when the budget checker directs a sweep. Resolve `<engine-dir>/archive_plan_sessions.py` and `<handoff-history>` before invoking it. Unavailability or a non-success outcome stops before staging, with both documents preserved as the helper reports. |
 | `tracker-search-and-write` | conditional and approval-gated | Required when a finding is issue-shaped and its point is not accumulation. Search first, then in an interactive session present the exact create/comment payload for an operator decision; do not park merely to avoid asking. Missing config, client, credential, operator presence, payload-specific approval, or a declined/silent decision degrades to a complete `<friction-log>` entry. Tracker availability never authorizes a write. |
-| `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
-| `pr-watch` | conditional | Required after a wrap-up pull request exists. For an isolated lane, the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
+| `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. A commit pushed to the session's own pull request satisfies it as fully as a separate wrap-up pull request does. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
+| `pr-watch` | conditional | Required once a pull request carries the wrap-up's repository artifacts, whether the session's own pull request or a separate wrap-up pull request; the wrap-up is not complete until that pull request settles. For an isolated lane, the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
 | `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
 | `forge-merge-write` | conditional and authority-gated | Required only when the exact head is mergeable and `merge-authority` permits this workflow to merge it. For an isolated lane whose persisted class is `self`, the cockpit must invoke `<engine-dir>/dev_session.sh merge <scope>`; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward `successful-completion`; if it proves failure or remains ambiguous, preserve the exact head and report `incomplete-resumable`. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
@@ -245,8 +247,9 @@ failure makes the overall outcome `incomplete-resumable`.
      session. For each one, propose where its pieces go: which existing
      workstream each pull request and each `▶ Next:` step belongs to, and the
      subject name of any new entry. Apply only the folds the operator approves.
-     A folded entry is removed once its pieces are placed, and the wrap-up
-     commit message says so in one line:
+     A folded entry is removed once its pieces are placed, and the body of the
+     pull request carrying the record says so in one line, which a squash merge
+     keeps in its message:
      `Closed workstream <name>: folded into <names>`.
      When the operator keeps an entry as its own workstream, drop its
      `assignment unconfirmed` marker, and rename it for its subject if its name
@@ -269,8 +272,9 @@ failure makes the overall outcome `incomplete-resumable`.
      it and name it in the pull request body.
    - **Closing a workstream is the operator's decision.** When the operator
      says a workstream is done or superseded, remove its entry and put one line
-     in the wrap-up commit message — `Closed workstream <name>: <why>` — so the
-     history keeps it. Never close one because its `▶ Next:` looks finished;
+     in the body of the pull request carrying the record —
+     `Closed workstream <name>: <why>` — so the history keeps it: a squash merge
+     replaces the wrap-up commit's own message. Never close one because its `▶ Next:` looks finished;
      ask.
    - **First run on a handoff with no `## Workstreams` section** — a handoff
      written before this layout. Create the section at the end of the file.
@@ -290,7 +294,10 @@ failure makes the overall outcome `incomplete-resumable`.
      correct: reconcile the entry with the operator, and never keep one side's
      `▶ Next:` silently. A session that updated several workstreams, or
      folded one, can meet another wrap-up in any of those entries; reconcile
-     each conflict the same way.
+     each conflict the same way. With the record riding feature pull requests,
+     such a conflict surfaces when one of them is merged or brought up to date
+     with the base; reconcile it then, the same way, and with no operator keep
+     both sides' lines and say so in that pull request's body.
    - Keep it concise — the handoff is a handoff document, not a changelog. A
      workstream entry is a status line, an owner pointer, a `▶ Next:`, and at
      most a few lines of what the test above left; its detail lives in the owner.

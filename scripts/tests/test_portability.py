@@ -3606,11 +3606,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-pr-write": (
                 "conditional",
-                "Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step.",
+                "Required when the wrap-up changes any repository artifact, including an existing project-status artifact. A commit pushed to the session's own pull request satisfies it as fully as a separate wrap-up pull request does. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step.",
             ),
             "pr-watch": (
                 "conditional",
-                "Required after a wrap-up pull request exists. For an isolated lane, the cockpit must invoke <engine-dir>/dev_session.sh pr-watch <scope> so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
+                "Required once a pull request carries the wrap-up's repository artifacts, whether the session's own pull request or a separate wrap-up pull request; the wrap-up is not complete until that pull request settles. For an isolated lane, the cockpit must invoke <engine-dir>/dev_session.sh pr-watch <scope> so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
             ),
             "merge-authority": (
                 "conditional and authority-gated",

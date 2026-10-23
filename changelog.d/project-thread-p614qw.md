@@ -17,7 +17,7 @@ when the file crosses its budget. A wrap-up may now also correct a line in any
 workstream entry that calls merged work open or names a closed issue, and still asks
 before rewriting a `▶ Next:`.
 
-CHANGED (report shape): `session-start` reads the protected branch's recent
-first-parent log for what just shipped. Its briefing's `Last session:` line is now
+CHANGED (report shape): `session-start` reads the newest merged pull requests, with
+its open-PR forge read, for what just shipped. Its briefing's `Last session:` line is now
 `Recently merged:`, and it lists a workstream entry that names merged or closed work
 as owed as a housekeeping item.

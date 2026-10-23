@@ -72,7 +72,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "64346f0dcc9aacab98320328c6e6e30133a4b8093f13b8d370a96fab44d13b15"
+      "sha256": "d3dc85b60e14513178490fb31170948d621aa9a54175725ba02459e9c74430a8"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -83,7 +83,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "4fd2913401bd9055e011408480486baec19b9ed41590df2841a3b2aa4ed683a8"
+      "sha256": "3834a4135e7c13479c6c52015044c5376bf322f4bcf88cb342bd875c1cf128a4"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -123,7 +123,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "bb9ae06a71fbbd910fd866228f251732a70aea8bf3f85d0cd4c8622e54ea4e53"
+      "sha256": "3ff949d00f7273879b73042d771f1242d6405c51e51b7d416ebc0846d89be61c"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -713,7 +713,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "18863d75577e9be6dec8fd785cc7296f9afee5198bc2dc9f3987c11a083543e3"
+      "sha256": "9f1ed6731896c0ede215b601f4a85f308cd3af975a95415a025f0bf00db75884"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
