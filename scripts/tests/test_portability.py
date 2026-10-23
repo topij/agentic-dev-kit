@@ -19753,6 +19753,46 @@ def test_upgrade_step_two_reuses_only_the_bound_branch(tmp_path: Path, binding: 
     assert _git(repo, "branch", "--show-current").stdout == before
 
 
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize("render_fails", [False, True])
+def test_upgrade_lens_preview_uses_adopter_root_without_overwriting_definition(
+    tmp_path: Path, render_fails: bool,
+) -> None:
+    repo, preview, bins = (tmp_path / name for name in ("adopter tree", "previews", "bin"))
+    for directory in (repo, preview, bins):
+        directory.mkdir()
+    definition = repo / ".claude/agents/custom.md"
+    definition.parent.mkdir(parents=True)
+    definition.write_text("adopter-authored definition\n")
+    calls = tmp_path / "calls"
+    uv = bins / "uv"
+    uv.write_text(
+        '#!/bin/sh\n'
+        'printf "%s\\n" "$@" > "$LENS_CALLS"\n'
+        'printf "rendered preview\\n"\n'
+        'exit "$LENS_EXIT"\n'
+    )
+    uv.chmod(0o755)
+    workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
+    section = workflow.split("### Refresh generated Claude lens definitions", 1)[1]
+    block = section.split("```bash\n", 1)[1].split("```", 1)[0]
+    block = block.replace("<engine-dir>", "scripts/devkit")
+    env = dict(os.environ, PATH=str(bins) + os.pathsep + os.environ["PATH"],
+               REPO=str(repo), UPGRADE_LENS="custom", UPGRADE_PREVIEW_DIR=str(preview),
+               LENS_CALLS=str(calls), LENS_EXIT="17" if render_fails else "0")
+    result = subprocess.run(["bash", "-c", block], cwd=tmp_path, env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == (1 if render_fails else 0)
+    assert calls.read_text().splitlines() == [
+        "run", str(repo / "scripts/devkit/panel_prompt.py"), "--root", str(repo),
+        "--runtime", "claude", "--lens", "custom", "--agent-definition",
+    ]
+    assert definition.read_text() == "adopter-authored definition\n"
+    assert next(preview.iterdir()).read_text() == "rendered preview\n"
+    assert "do not install a declined engine" in " ".join(section.split())
+    assert "reconcile and preserve adopter-authored additions" in " ".join(section.split())
+
+
 _RECENT_INTRO = (
     "# Handoff\n\n## Recent sessions\n\n"
     "Keep this live introduction.\n\n> An introductory quotation.\n\n"

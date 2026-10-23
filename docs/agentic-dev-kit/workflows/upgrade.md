@@ -942,6 +942,50 @@ entries are exactly where the risk is.
 - **`.claude/settings.json`** — if this repo has its own, **merge** the kit's hooks and
   permissions into it rather than replacing; it likely carries project-specific entries.
 
+### Refresh generated Claude lens definitions
+
+After refreshing `panel_prompt.py`, compare the configured Claude lens definitions
+with a fresh render, even when `review.fallback_panel` did not change. The generator's
+contract can change independently of configuration. Use the adopter's merged config,
+including its `review.fallback_panel.lenses`, `lens_compute.claude` and `paths.engines`;
+never copy the kit checkout's `.claude/agents/` definitions into the adopter.
+
+This step applies only when the adopter uses Claude lens definitions and the upgrade
+plan installs `panel_prompt.py` with its dependencies. If that engine was declined or
+is unavailable, report the regeneration gap and preserve existing definitions; do not
+install a declined engine just to quiet the report. If the plan retains a locally
+patched generator, make that limitation explicit before judging its output.
+
+For each configured lens, set `UPGRADE_LENS` to its name and `UPGRADE_PREVIEW_DIR` to
+an existing absolute, session-owned scratch directory outside the repository. Render
+a preview with the refreshed **installed** engine and an explicit adopter root:
+
+```bash
+: "${REPO:?REPO is not set — re-run Step 0}"
+: "${UPGRADE_LENS:?choose a lens from the adopter config}"
+: "${UPGRADE_PREVIEW_DIR:?select the session-owned preview directory}"
+case "$UPGRADE_PREVIEW_DIR" in /*) ;; *) exit 1 ;; esac
+DEFINITION_PREVIEW="$(mktemp "$UPGRADE_PREVIEW_DIR/lens-definition.XXXXXX")" || exit 1
+uv run "$REPO"/<engine-dir>/panel_prompt.py --root "$REPO" \
+  --runtime claude --lens "$UPGRADE_LENS" --agent-definition \
+  > "$DEFINITION_PREVIEW" || exit 1
+```
+
+Compare that preview with `$REPO/.claude/agents/<lens>.md` before writing the
+installed definition. A failed render stops this lens's refresh; its partial preview
+is not a replacement. Leave an identical definition alone. Refresh an unchanged
+previous kit-generated definition after establishing that provenance; reconcile and
+preserve adopter-authored additions instead of overwriting them based on a generated
+header. Install a missing definition only when the upgrade plan calls for it. Do not
+delete definitions for removed or renamed lenses automatically: inspect their callers
+and retain or migrate them deliberately.
+
+Rerun the refreshed doctor's lens-definition report against the adopter root after
+reconciliation, and report any remaining difference with its disposition. Generated
+Claude definitions carry Claude compute; this step does not create Codex agent
+files. A definition written during a Claude session may only become available in a
+new session, so file reconciliation alone is not evidence the runtime loaded it.
+
 **Then record the baseline — this step is not optional, and its omission is what made
 `differs` unjudgeable for every adopter until now:**
 
