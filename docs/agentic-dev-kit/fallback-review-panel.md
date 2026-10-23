@@ -398,8 +398,9 @@ applies them. Check verifier settings too when the reviewer upgrade includes it.
 Regenerate affected Claude lens definitions through `panel_prompt.py` as described
 above, and read back the actual model and effort from each runtime's launch evidence.
 
-In the kit repository, run `scripts/review_eval.py` at the old and candidate
-settings for both Codex and Claude, using the same cases and lens/verifier commands
+In the kit repository, follow the
+[kit-only evaluation guide](https://github.com/topij/agentic-dev-kit/tree/main/docs/agentic-dev-kit/review-eval)
+at the old and candidate settings for both Codex and Claude, using the same cases and lens/verifier commands
 apart from the intended compute change. Record the commands, runtime, resolved
 model/effort, case selection, revision SHA and date with both scores in the PR.
 Read the findings: citation-proxy hits alone do not establish detection, and a
