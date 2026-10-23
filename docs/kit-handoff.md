@@ -93,7 +93,10 @@ protections; #1130 (`d2f40206`) delivered #1127's dependency refresh at retireme
 fixture git dirs in a receipt-owned round (#997, narrowed to rounds); unowned entries
 still keep them (#1185). #1193 (`043f61f2`) delivered #1186's residual LOWs (#1189),
 and #1192 (`5b50b225`) has `test_sweep_scratch.py` remove each test's tree at
-teardown (#1188).
+teardown (#1188). Not established: that a round in which a lens probes `.git` files can be
+retired. On 2026-10-23 the kept rounds `review-72a279dd…` (#1186), `review-6dec9387…`
+(#1193) and `review-0714c186…` (#1195's round 1) were still on disk; removing them is
+the operator's call (friction log, 2026-10-23).
 `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
 [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -102,11 +105,8 @@ teardown (#1188).
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
 
-▶ Next: #1188 — make `scripts/tests/test_sweep_scratch.py` remove each test's
-temporary tree at teardown, so a round whose only pins are that module's fixtures
-retires. That does not clear the fixtures already in the kept round `review-72a279dd…`
-(receipt in the main checkout's ignored `state/review-rounds/`); removing that round is
-the operator's call. #1185 carries the unowned-entry case.
+▶ Next: #1185 — let the age sweep drop fixture git dirs in an unowned entry when every
+dependent is accounted for.
 
 ### Reviewer profiles
 
