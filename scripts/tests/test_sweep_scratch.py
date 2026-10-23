@@ -1490,6 +1490,92 @@ def test_bare_fixture_given_an_outside_worktree_after_the_report_is_kept(root, r
     assert session.exists()
 
 
+def _bare_with_outside_worktree(session, repo, wt, name="fixture.git") -> Path:
+    bare = session / name
+    _git(repo, "clone", "-q", "--bare", str(repo), str(bare))
+    _git(bare, "worktree", "add", "-q", "--detach", str(wt))
+    return bare
+
+
+def _only_record(bare: Path) -> Path:
+    (record,) = (bare / "worktrees").iterdir()
+    return record / "gitdir"
+
+
+@pytest.mark.parametrize("kind", ["sibling-prefix", "relative-record", "unstattable"])
+def test_age_sweep_keeps_a_bare_fixture_by_each_shape_of_its_worktree_record(root, repo, base, kind):
+    # `_main_repo_reason` now guards every detached git dir in every entry.
+    session = root / "session"
+    session.mkdir()
+    if kind == "sibling-prefix":
+        # A worktree whose path starts with the entry's name is not inside it.
+        _bare_with_outside_worktree(session, repo, root / "session-wt")
+    elif kind == "relative-record":
+        bare = _bare_with_outside_worktree(session, repo, base / "outside-wt")
+        record = _only_record(bare)
+        record.write_text(os.path.relpath(record.read_text().strip(), record.parent) + "\n")
+    else:
+        if os.geteuid() == 0:
+            pytest.skip("root stats through a 000 directory")
+        _bare_with_outside_worktree(session, repo, base / "locked" / "wt")
+        (base / "locked").chmod(0)
+    _set_age(root, OLD)
+    try:
+        reports, outcomes = _run([root], repo, older_than=0)
+    finally:
+        if kind == "unstattable":
+            (base / "locked").chmod(0o700)
+    assert _owners(reports)["session"] == sweep.LIVE
+    reason = next(e.reason for e in reports[0].entries if e.path.endswith("/session"))
+    expected = "cannot stat the worktree" if kind == "unstattable" else "lives outside this entry"
+    assert expected in reason
+    assert outcomes == []
+    assert session.exists()
+
+
+@pytest.mark.parametrize("dependent_first", [False, True])
+def test_age_sweep_judges_every_detached_git_dir_in_an_entry(root, repo, base, dependent_first):
+    # Both name orders, so whichever the walk lists first, a judgement of only
+    # the first detached git dir removes the entry in one of them.
+    session = root / "session"
+    session.mkdir()
+    fixture, dependent = ("b.git", "a.git") if dependent_first else ("a.git", "b.git")
+    _git(repo, "clone", "-q", "--bare", str(repo), str(session / fixture))
+    _bare_with_outside_worktree(session, repo, base / "outside-wt", name=dependent)
+    _set_age(session, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"session": sweep.LIVE}
+    assert str(base / "outside-wt") in reports[0].entries[0].reason
+    assert outcomes == []
+    assert session.exists()
+
+
+@pytest.mark.parametrize("kind", ["remote", "shared", "decoy", "moved"])
+def test_age_sweep_removes_each_dependent_its_limits_name(root, repo, base, kind):
+    # The documented limits of #1185: nothing inside the entry records these
+    # dependents, so the entry is removed. A change that detects one updates
+    # this test and the limits together.
+    session = root / "session"
+    session.mkdir()
+    if kind in ("remote", "shared"):
+        bare = session / "origin.git"
+        _git(repo, "clone", "-q", "--bare", str(repo), str(bare))
+        extra = ["--shared"] if kind == "shared" else []
+        _git(base, "clone", "-q", *extra, str(bare), str(base / "outside-clone"))
+    elif kind == "decoy":
+        _seeded(base / "outside-main", f"--separate-git-dir={session / 'gd'}")
+        (session / "copy").mkdir()
+        shutil.copyfile(base / "outside-main" / ".git", session / "copy" / ".git")
+    else:
+        _bare_with_outside_worktree(session, repo, base / "wt")
+        os.rename(base / "wt", base / "wt-moved")
+    _set_age(session, OLD)
+    reports, outcomes = _run([root], repo, older_than=0)
+    assert _owners(reports) == {"session": sweep.STALE}
+    assert [o.action for o in outcomes] == ["removed"]
+    assert not session.exists()
+
+
 def _outside_linked_worktree(path, repo, base) -> Path:
     other = base / "other-repo"
     _git(repo, "clone", "--no-hardlinks", str(repo), str(other))

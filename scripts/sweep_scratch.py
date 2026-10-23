@@ -87,8 +87,9 @@ disposable:
   repository's ``alternates``; a ``--separate-git-dir`` target given
   ``core.bare = true`` by hand while its work tree outside still points at it; a
   separated git dir whose real work tree is outside but which a copied ``.git``
-  file inside the entry also names; and a git dir whose linked worktree was moved
-  outside with plain ``mv``, leaving its ``worktrees`` record naming the old path.
+  file inside the entry also names; and a git dir whose ``worktrees`` record names
+  a linked worktree path that does not exist when the sweep runs, because the
+  worktree was moved with plain ``mv`` or sits on a volume that is not mounted.
   ``_detached_reason`` lists these with the cases that are kept.
 - The other direction costs reclaimed space: a nonempty ``.git`` file that does not
   start with ``gitdir:`` (a test fixture's garbage pointer, say) keeps its whole
@@ -675,9 +676,10 @@ def _detached_reason(git_dir: str, entry: str, inner: set[str]) -> str | None:
       wrote outside it; in an unowned entry nothing rules them out, which is why
       a root must hold only disposable children;
     - a git dir whose linked worktree outside was moved with plain ``mv``
-      rather than ``git worktree move``: removed. Its ``worktrees`` record still
-      names the old, absent path, which ``_main_repo_reason`` treats as a
-      prunable registration; the same holds for an ordinary clone's ``.git``;
+      rather than ``git worktree move``, or sits on a volume that is not
+      mounted: removed. Its ``worktrees`` record names a path that does not
+      exist, which ``_main_repo_reason`` treats as a prunable registration; the
+      same holds for an ordinary clone's ``.git``;
     - the git dir of a configured repository, or an object store one borrows
       from: kept earlier, by ``repository_store_reason``.
     The entry itself being a git dir is decided in ``scan`` and stays kept.
