@@ -24,6 +24,21 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-23
+
+- **A lens's own `.git` probes keep its review round.** Severity M, kept for
+  accumulation; no remedy is proposed yet. #1193's adversarial lens left
+  `probe-adv-5b27b0ba/w/multi/.git`, a multi-line `gitdir:` pointer, in its round.
+  `--finish-review-round --apply --reviewers-finished` answered `kept`. The reason was
+  the conservative multi-line keep that #1193's engine comment documents, not an
+  unresolvable target: a single-line pointer whose target does not exist is already
+  removable in an owned round. #1188's report records a probe of the same family from
+  #1186's lens, and #1195's round-1 correctness lens left
+  `probe-corr-a330dcd5/entry/.git`, which was kept as unparseable too. Each kept
+  round waits for the operator to remove it by hand. The open question is whether the
+  lens contract should place git probes outside the round, or the engine should treat a
+  multi-line pointer as linking nothing, as git does.
+
 ## 2026-10-22
 
 - **An unidentified `pr_watch` write failed a `make test` stamp.** Severity L, kept for
