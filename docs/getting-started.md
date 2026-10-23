@@ -113,7 +113,7 @@ urgency, each candidate tagged `[size · model · mode]`, ending with one pick:
 
 Where things stand
   • main (clean) · 0 open PRs · CI green
-  • Last session: scaffolded the auth module
+  • Recently merged: #3 scaffold the auth module
 
 What to do next
 🟡 Soon

@@ -123,7 +123,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "3ff949d00f7273879b73042d771f1242d6405c51e51b7d416ebc0846d89be61c"
+      "sha256": "622c1e956e6e58c3211f4fe50ffda6bced1d7f66fd115fb952d4569fba19541c"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -594,7 +594,7 @@
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "0d497f5529d2e3bd774b8f20ed640b158ef6655700b178776362af6235501291"
+      "sha256": "9955e1bfd51dcbb9ef9309fefaa39852792ffa24eb1f0dcf3a813b8dba623b45"
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
@@ -713,7 +713,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "9f1ed6731896c0ede215b601f4a85f308cd3af975a95415a025f0bf00db75884"
+      "sha256": "df959e9f816cbdf05f18b94205de77e52de55b7a050298bec7cef79b12c5a126"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -729,7 +729,7 @@
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
-      "sha256": "9aadd318716aa640bbcf6b00c981a01debdea945abd1ca8cec75a45eaacfe26b"
+      "sha256": "25f75999ca3bea732784b6000b04df71c0a2b9c63ff37d8fb99342629c704b4c"
     },
     "scripts/tests/test_record_prose.py": {
       "role": "test",

@@ -3552,6 +3552,8 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "**the most recent merge is not an instruction to this session**"
             in flattened
         )
+        assert "• Recently merged: <the newest merged PRs" in flattened
+        assert "A failed read is the forge gap, never an empty list." in flattened
         assert (
             "**When the operator names a workstream or a task** in the invocation "
             "or its context, that is the pick."
@@ -3733,6 +3735,13 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "the session's work is on that entry's own plan or issue"
         ) in flattened
         assert "**A wrap-up writes no session entry.**" in flattened
+        assert "in any entry, whichever session made it so" in flattened
+        assert (
+            "Do not push the record onto a pull request whose current head carries a receipt"
+            in flattened
+        )
+        assert "**An isolated lane's pull request never carries it**" in flattened
+        assert "**A wrap-up run before review is not complete when it hands back.**" in flattened
         assert "**Decide whether there is anything to hand over.**" in flattened
         assert "If nothing is left, the handoff is not edited." in flattened
         assert (
@@ -4483,6 +4492,24 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         )),
         ("wrap-up", wrap, wrap.replace(
             "writes no session entry.**", "writes a session entry.**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "in any entry, whichever", "in this session's entry, whichever", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Do not\n   push the record onto", "Do\n   push the record onto", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "pull request never carries\n   it**", "pull request may carry\n   it**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "is not complete when it hands back.**", "is complete when it hands back.**", 1
+        )),
+        ("session-start", session, session.replace(
+            "• Recently merged: <the newest", "• Last session: <the newest", 1
+        )),
+        ("session-start", session, session.replace(
+            "the forge gap, never an empty list.", "the forge gap, or an empty list.", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "leave its entries as they are,",
@@ -21544,6 +21571,7 @@ def _assert_parallel_files_lanes_by_subject(text: str) -> None:
     assert (
         "Never create a `## Workstreams` entry for the batch itself" in flattened
     )
+    assert "the batch ends without a handoff commit" in flattened
 
 
 def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
@@ -21558,8 +21586,24 @@ def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
             "Never create a `## Workstreams` entry for the batch itself",
             "Create a `## Workstreams` entry for the batch itself", 1,
         ),
+        text.replace("the batch ends without\n   a handoff commit", "the batch opens\n   a handoff PR", 1),
     )
     for mutated in mutations:
         assert mutated != text
         with pytest.raises(AssertionError):
             _assert_parallel_files_lanes_by_subject(mutated)
+
+
+def test_pr_watch_runs_the_handoff_test_before_the_opening_review() -> None:
+    # A session's record rides its own PR into its opening review, not after it.
+    text = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+    ).read_text(encoding="utf-8")
+    needle = (
+        "**A session's last pull request runs `wrap-up`'s handoff test before its "
+        "opening review is requested**"
+    )
+    assert needle in " ".join(text.split())
+    mutated = text.replace("handoff test before its opening", "handoff test after its opening", 1)
+    assert mutated != text
+    assert needle not in " ".join(mutated.split())

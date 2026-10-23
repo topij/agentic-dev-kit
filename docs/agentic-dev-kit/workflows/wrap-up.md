@@ -636,7 +636,23 @@ failure makes the overall outcome `incomplete-resumable`.
    pass is requested, so one review covers the change and its record and no
    second pull request exists to review. A session with several pull requests
    puts the record on the last one to go to review, or on each one whose
-   workstream entry it changes.
+   workstream entry it changes. **An isolated lane's pull request never carries
+   it**: a `dev/*` branch that touches `<handoff>` or `<friction-log>` is refused
+   by the pre-push hook, and the cockpit's joint wrap-up in `parallel.md` takes
+   a batch's record instead.
+
+   **This route leaves the record to the review.** The narrative preflight in
+   `fallback-review-panel.md` runs only on a change confined to the narrative
+   paths, so on a mixed pull request nothing deterministic reads the handoff
+   edit for closing keywords, links or stamps. Keep the edit to the few lines
+   the handoff test left, and read them against *Numbers in prose* and the
+   closing-keyword rule before the review starts.
+
+   **A wrap-up run before review is not complete when it hands back.** Its
+   `forge-pr-write` is done once the record is pushed; its `pr-watch`,
+   `merge-authority` and `forge-merge-write` are the session pull request's own
+   watch loop, and until that settles the honest outcome is `incomplete-resumable`
+   naming the pull request and its head, with that watch loop as the resume step.
 
    **A separate wrap-up pull request is the exception, and costs its own review.**
    It is the route only when the test above left something to hand over and no

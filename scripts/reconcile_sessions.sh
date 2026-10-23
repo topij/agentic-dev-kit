@@ -767,15 +767,15 @@ cmd_reconcile() {
     [[ "$open" -gt 0 ]] && tally="${tally}$(printf ', open %d' "$open")"
     printf '%s\n' "$tally"
     if [[ "$open" -gt 0 ]]; then
-        echo "⚠ ${open} lane(s) still OPEN — batch not fully closed; finish or park before writing the block."
+        echo "⚠ ${open} lane(s) still OPEN — batch not fully closed; finish or park before the joint wrap-up."
     fi
     if [[ -n "$held_notes" ]]; then
         echo "→ held for operator sign-off — green, review-clean, receipt bound to head."
-        echo "  Nothing left for the batch; merge or park each, and name it in the block:"
+        echo "  Nothing left for the batch; merge or park each, and name it in its workstream entry:"
         printf '%s' "$held_notes"
     fi
     if [[ -n "$parked_notes" ]]; then
-        echo "⚠ parked — name each in the wrap-up block (never fold into \"all shipped\"):"
+        echo "⚠ parked — name each in its workstream entry (never fold into \"all shipped\"):"
         printf '%s' "$parked_notes"
     fi
     if [[ -n "$unknown_notes" ]]; then
