@@ -10,8 +10,9 @@
 - ADDED (report shape, #1197): the JSON report carries `unchecked_paths`, the
   changed files outside the narrative paths, which got no preflight check. Read
   it with `paths` rather than assuming the whole diff was scanned. A
-  `not-applicable` report lists every changed file there; an `unavailable`
-  report omits the key. The `limits`
+  `not-applicable` report lists every changed file there. The key is absent
+  only from an `unavailable` report whose read failed before the changed files
+  were listed. The `limits`
   list gains one entry saying so.
 
 Take `scripts/check_record_prose.py` together with

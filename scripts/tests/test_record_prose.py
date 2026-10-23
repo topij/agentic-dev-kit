@@ -503,7 +503,7 @@ def test_invalid_cli_inputs_are_explicitly_unavailable(repo, extra):
     assert report["status"] == "unavailable"
     assert report["error"]
     assert report["unavailable"][0]["detail"] == report["error"]
-    # An unavailable report supplies no coverage, so it claims no unchecked set.
+    # The read failed before the changed files were listed, so no set is claimed.
     assert "unchecked_paths" not in report
 
 
@@ -578,6 +578,27 @@ def test_missing_budgeted_candidate_is_unavailable(repo):
     code, report = run(repo, commit(root))
     assert code == 2, report
     assert "absent" in report["error"]
+
+
+def test_an_unavailable_mixed_report_still_names_its_unchecked_paths(repo):
+    root, _ = repo
+    (root / "docs/plan.md").unlink()
+    save(root, "code.py", "pass\n")
+    code, report = run(repo, commit(root))
+    assert code == 2, report
+    assert "absent" in report["error"]
+    assert report["unchecked_paths"] == ["code.py"]
+
+
+def test_an_unreadable_stamp_keeps_the_unchecked_paths(repo):
+    root, _ = repo
+    save(root, "docs/plan.md", "`make test` at `deadbeefdeadbeef` on 2026-10-10.\n")
+    save(root, "code.py", "pass\n")
+    code, report = run(repo, commit(root))
+    assert code == 2, report
+    assert report["status"] == "unavailable"
+    assert report["unavailable"][0]["check"] == "stamps"
+    assert report["unchecked_paths"] == ["code.py"]
 
 
 def test_local_destination_is_literal_not_a_git_pathspec(repo):

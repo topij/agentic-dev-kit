@@ -355,13 +355,16 @@ def local_target(source: str, target: str) -> str | None:
     return resolved
 
 
-def check(root: Path, base: str, head: str, allowed: set[str]) -> dict:
+def check(root: Path, base: str, head: str, allowed: set[str], known: dict | None = None) -> dict:
     from markdown_it import MarkdownIt
 
     if Path(git(root, "rev-parse", "--show-toplevel").strip()).resolve() != root:
         raise CheckError("--root must name the repository root, not a subdirectory")
     base, head = commit(root, base), commit(root, head)
     config, boundary, paths, unchecked = scope(root, base, head)
+    if known is not None:
+        # A read that fails after this point still knows which files went unscanned.
+        known["unchecked_paths"] = unchecked
     report = {"base": base, "head": head, "merge_base": boundary, "paths": paths,
               "unchecked_paths": unchecked,
               "findings": [], "unavailable": [], "stamps": [], "limits": LIMITS}
@@ -520,22 +523,24 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--allow-close", action="append", default=[], help="exact intended closing reference; repeat as needed")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
+    known: dict = {}
     try:
         if args.root is not None and not args.root.strip():
             raise CheckError("--root must not be empty or whitespace")
         if any(not re.fullmatch(r"(?:[\w.-]+/[\w.-]+)?#\d+|https://github\.com/[\w.-]+/[\w.-]+/issues/\d+", ref) for ref in args.allow_close):
             raise CheckError("--allow-close takes an exact issue reference, such as '#123'")
         root = Path(args.root).resolve() if args.root is not None else repo_root()
-        report = check(root, args.base, args.head, set(args.allow_close))
+        report = check(root, args.base, args.head, set(args.allow_close), known)
     except NotApplicable as exc:
         report = {"status": "not-applicable", "reason": str(exc), "limits": LIMITS,
                   "unchecked_paths": exc.unchecked}
     except (CheckError, ImportError, KeyError, OSError, UnicodeError, ValueError) as exc:
         report = {"status": "unavailable", "error": str(exc), "limits": LIMITS,
                   "unavailable": [{"check": "input", "source": "input", "line": 0,
-                                   "detail": str(exc)}]}
-    # An unavailable report carries no unchecked_paths: it supplies no coverage
-    # at all, so it names no partial scan either.
+                                   "detail": str(exc)}],
+                  **known}
+    # unchecked_paths is absent only when the read failed before the changed
+    # files were listed.
     report = {"findings": [], "unavailable": [], "stamps": [], **report}
     if args.json:
         print(json.dumps(report, ensure_ascii=False))
