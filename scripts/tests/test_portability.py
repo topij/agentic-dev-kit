@@ -3549,9 +3549,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             in flattened
         )
         assert (
-            "**the most recent one is not an instruction to this session**"
+            "**the most recent merge is not an instruction to this session**"
             in flattened
         )
+        assert "• Recently merged: <the newest merged PRs" in flattened
+        assert "A failed read is the forge gap, never an empty list." in flattened
         assert (
             "**When the operator names a workstream or a task** in the invocation "
             "or its context, that is the pick."
@@ -3606,11 +3608,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-pr-write": (
                 "conditional",
-                "Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step.",
+                "Required when the wrap-up changes any repository artifact, including an existing project-status artifact. A commit pushed to the session's own pull request satisfies it as fully as a separate wrap-up pull request does. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step.",
             ),
             "pr-watch": (
                 "conditional",
-                "Required after a wrap-up pull request exists. For an isolated lane, the cockpit must invoke <engine-dir>/dev_session.sh pr-watch <scope> so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
+                "Required once a pull request carries the wrap-up's repository artifacts, whether the session's own pull request or a separate wrap-up pull request; the wrap-up is not complete until that pull request settles. For an isolated lane, the cockpit must invoke <engine-dir>/dev_session.sh pr-watch <scope> so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
             ),
             "merge-authority": (
                 "conditional and authority-gated",
@@ -3678,8 +3680,8 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
                 "Park the full finding in <friction-log> or preserve the existing status artifact, then complete the repository path while reporting the degraded capability.",
             ),
             "successful-noop": (
-                "The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred.",
-                "Say so and create no commit or pull request.",
+                "The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred — including a session whose handoff test found nothing to hand over.",
+                "Say so, name what the handoff test found already recorded elsewhere, and create no commit or pull request.",
             ),
             "incomplete-resumable": (
                 "A changed repository artifact has not reached an authoritative terminal state because branch/push/pull-request creation is unavailable or ambiguous, pr-watch is unavailable or unsettled, or an authorized merge failed or remains ambiguous after read-back.",
@@ -3732,7 +3734,20 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "**With no operator to confirm**, update an existing entry only when "
             "the session's work is on that entry's own plan or issue"
         ) in flattened
-        assert "**It carries no `▶ Next:`**" in flattened
+        assert "**A wrap-up writes no session entry.**" in flattened
+        assert "in any entry, whichever session made it so" in flattened
+        assert (
+            "Do not push the record onto a pull request whose current head carries a receipt"
+            in flattened
+        )
+        assert "**An isolated lane's pull request never carries it**" in flattened
+        assert "**A wrap-up run before review is not complete when it hands back.**" in flattened
+        assert "**Decide whether there is anything to hand over.**" in flattened
+        assert "If nothing is left, the handoff is not edited." in flattened
+        assert (
+            "**The default home is the session's own pull request, before its review.**"
+            in flattened
+        )
         # A workstream is a subject, and a batch is filed per pull request.
         assert (
             "**A workstream is named for its subject, never for a date, a run mode, "
@@ -3777,10 +3792,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "When the operator keeps an entry as its own workstream, drop its "
             "`assignment unconfirmed` marker"
         ) in flattened
-        assert "Do not rename or edit earlier session entries" in flattened
+        assert "leave its entries as they are, and the archive sweep moves them" in flattened
         assert "**Leave every other workstream's entry alone.**" in flattened
         assert (
-            "If the falsified line is that entry's `▶ Next:`, ask the operator "
+            "If the falsified line is an entry's `▶ Next:`, ask the operator "
             "rather than rewriting it"
         ) in flattened
         assert "**Closing a workstream is the operator's decision.**" in flattened
@@ -3791,7 +3806,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         )
         assert "and never keep one side's `▶ Next:` silently" in flattened
         assert "`## Workstreams` is a standing section and is never swept" in flattened
-        assert "for the workstream this session worked on, never in the session entry" in flattened
+        assert (
+            "the `▶ Next:` line in the entry for the workstream this session worked on."
+            in flattened
+        )
         assert (
             "Closing a workstream is not among them: it is the operator's call"
             in flattened
@@ -4350,7 +4368,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "**the most recently updated entry is promoted**", 1
         )),
         ("session-start", session, session.replace(
-            "**the most recent one is not", "**the most recent one is", 1
+            "**the most recent merge is not an", "**the most recent merge is an", 1
         )),
         ("session-start", session, session.replace(
             "context, that is the pick.", "context, it is one candidate.", 1
@@ -4473,11 +4491,29 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "entry whenever the session's work looks related to it;", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "**It carries no `▶ Next:`**", "**It carries the `▶ Next:`**", 1
+            "writes no session entry.**", "writes a session entry.**", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "Do not rename or edit earlier session entries",
-            "Rename earlier session entries as needed", 1
+            "in any entry, whichever", "in this session's entry, whichever", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Do not\n   push the record onto", "Do\n   push the record onto", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "pull request never carries\n   it**", "pull request may carry\n   it**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "is not complete when it hands back.**", "is complete when it hands back.**", 1
+        )),
+        ("session-start", session, session.replace(
+            "• Recently merged: <the newest", "• Last session: <the newest", 1
+        )),
+        ("session-start", session, session.replace(
+            "the forge gap, never an empty list.", "the forge gap, or an empty list.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "leave its entries as they are,",
+            "rename its entries as needed,", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "**Leave every other workstream's entry alone.**",
@@ -4507,7 +4543,15 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "is swept with the oldest entries", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "worked on, never in the session entry", "worked on, and in the session entry", 1
+            "the `▶ Next:` line in the entry\n", "the `▶ Next:` line in the session entry\n", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "If nothing is left, the handoff is not edited.",
+            "If nothing is left, add a session entry anyway.", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**The default home is the session's own pull request, before its review.**",
+            "**The default home is a separate wrap-up pull request.**", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Closing a workstream is not among them",
@@ -21527,6 +21571,7 @@ def _assert_parallel_files_lanes_by_subject(text: str) -> None:
     assert (
         "Never create a `## Workstreams` entry for the batch itself" in flattened
     )
+    assert "the batch ends without a handoff commit" in flattened
 
 
 def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
@@ -21541,8 +21586,29 @@ def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
             "Never create a `## Workstreams` entry for the batch itself",
             "Create a `## Workstreams` entry for the batch itself", 1,
         ),
+        text.replace("the batch ends without\n   a handoff commit", "the batch opens\n   a handoff PR", 1),
     )
     for mutated in mutations:
         assert mutated != text
         with pytest.raises(AssertionError):
             _assert_parallel_files_lanes_by_subject(mutated)
+
+
+def _assert_pr_watch_handoff_test_ordering(text: str) -> None:
+    flattened = " ".join(text.split())
+    assert (
+        "**A session's last pull request runs `wrap-up`'s handoff test before its "
+        "opening review is requested**"
+    ) in flattened
+
+
+def test_pr_watch_runs_the_handoff_test_before_the_opening_review() -> None:
+    # A session's record rides its own PR into its opening review, not after it.
+    text = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+    ).read_text(encoding="utf-8")
+    _assert_pr_watch_handoff_test_ordering(text)
+    mutated = text.replace("handoff test before its opening", "handoff test after its opening", 1)
+    assert mutated != text
+    with pytest.raises(AssertionError):
+        _assert_pr_watch_handoff_test_ordering(mutated)

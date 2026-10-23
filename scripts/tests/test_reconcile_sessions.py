@@ -1557,7 +1557,7 @@ def test_an_open_lane_outranks_a_held_one(harness: Harness) -> None:
 
 def test_the_held_block_names_every_held_lane_with_its_pr(harness: Harness) -> None:
     """The operator's to-do list. An exit code alone does not say which PRs are
-    waiting, and the batch's wrap-up block has to name them."""
+    waiting, and the batch's joint wrap-up has to name them."""
     harness.branch("lane/tau")
     harness.pr("lane/tau", 519, "OPEN", title="tighten the guard")
     harness.session("tau", "lane/tau", "operator")

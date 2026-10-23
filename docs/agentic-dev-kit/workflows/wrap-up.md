@@ -1,6 +1,22 @@
 # Wrap up
 
-End-of-session wrap-up. Update the living handoff and commit.
+End-of-session wrap-up. Decide whether the session left anything to hand over, and
+if it did, record it in the living handoff on the session's own pull request.
+
+**A session can end with nothing to hand over.** What a merged pull request, its body,
+a commit or a tracker issue already records, `session-start` reads first-hand from
+those sources, and a copy in `<handoff>` is one more thing to go stale and one more
+pull request to review. So the handoff carries only what those sources cannot hold,
+and a session that left none of it ends as `successful-noop`: no commit, no pull
+request, no review. *Decide whether there is anything to hand over* below is the
+test.
+
+**Run it before the session's last pull request goes to review**, not after it
+merges: a handoff edit committed there is reviewed with the change it describes, in
+the same pass. The surest moment is before that pull request is opened, so the
+record is in the first head any reviewer or bot sees; once a review has started,
+a push moves the head it reviewed. A wrap-up started after that review only opens a pull request of its
+own when the test below finds something no other source holds.
 
 ## Resolve configuration
 
@@ -45,8 +61,8 @@ Once a condition occurs, `not-triggered` is invalid and cannot satisfy completio
 | `document-budget-check` | required | Resolve and run `<engine-dir>/check_doc_budget.py`. A missing engine, usage/config failure, or unreadable result stops before staging; preserve the record edit for repair. |
 | `handoff-archive` | conditional | Required only when the budget checker directs a sweep. Resolve `<engine-dir>/archive_plan_sessions.py` and `<handoff-history>` before invoking it. Unavailability or a non-success outcome stops before staging, with both documents preserved as the helper reports. |
 | `tracker-search-and-write` | conditional and approval-gated | Required when a finding is issue-shaped and its point is not accumulation. Search first, then in an interactive session present the exact create/comment payload for an operator decision; do not park merely to avoid asking. Missing config, client, credential, operator presence, payload-specific approval, or a declined/silent decision degrades to a complete `<friction-log>` entry. Tracker availability never authorizes a write. |
-| `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
-| `pr-watch` | conditional | Required after a wrap-up pull request exists. For an isolated lane, the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
+| `forge-pr-write` | conditional | Required when the wrap-up changes any repository artifact, including an existing project-status artifact. A commit pushed to the session's own pull request satisfies it as fully as a separate wrap-up pull request does. If branch, push, or pull-request creation is unavailable, preserve the exact local diff/commit, report wrap-up as incomplete, and give a copy-pasteable resume step. |
+| `pr-watch` | conditional | Required once a pull request carries the wrap-up's repository artifacts, whether the session's own pull request or a separate wrap-up pull request; the wrap-up is not complete until that pull request settles. For an isolated lane, the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete. |
 | `merge-authority` | conditional and authority-gated | Required only after `pr-watch` says the exact head is mergeable. For an isolated lane, resolve its persisted merge class; for a non-lane pull request, resolve the project's declared merge policy and default to `operator` when none exists. A `self` route still needs project and current-request authority; an `operator` route needs current operator authorization for the exact pull request. Unknown lane metadata or insufficient authority leaves the mergeable pull request in `successful-operator-handoff`; it never authorizes a merge. |
 | `forge-merge-write` | conditional and authority-gated | Required only when the exact head is mergeable and `merge-authority` permits this workflow to merge it. For an isolated lane whose persisted class is `self`, the cockpit must invoke `<engine-dir>/dev_session.sh merge <scope>`; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward `successful-completion`; if it proves failure or remains ambiguous, preserve the exact head and report `incomplete-resumable`. |
 | `project-status-write` | optional enhancement | Update only a project status artifact that already exists and is in scope. Its absence is an honest skip, not a reason to invent one. |
@@ -117,7 +133,7 @@ summary; read the destination first.
 |---|---|---|
 | `hard-stop` | A required capability fails, record validation fails, an operator-owned edit overlaps, or shared/runtime policy conflicts. | Preserve existing and newly authored record data, name the failed capability, and provide the next safe resume step. |
 | `degraded-success` | A triggered tracker route or an in-scope existing project-status integration is unavailable, and every changed repository artifact reached its authoritative terminal state. | Park the full finding in `<friction-log>` or preserve the existing status artifact, then complete the repository path while reporting the degraded capability. |
-| `successful-noop` | The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred. | Say so and create no commit or pull request. |
+| `successful-noop` | The session produced no change to any repository artifact, no friction artifact is owed, and no tracker write occurred — including a session whose handoff test found nothing to hand over. | Say so, name what the handoff test found already recorded elsewhere, and create no commit or pull request. |
 | `incomplete-resumable` | A changed repository artifact has not reached an authoritative terminal state because branch/push/pull-request creation is unavailable or ambiguous, `pr-watch` is unavailable or unsettled, or an authorized merge failed or remains ambiguous after read-back. | Do not claim completion. Preserve and report the exact working-tree diff or commit, branch, pull-request URL and exact head when present, the failed, unsettled, or ambiguous capability, and a copy-pasteable safe resume step. |
 | `successful-operator-handoff` | The pull request carrying the repository artifacts is mergeable at an exact reviewed head, but the declared merge class or current authority requires an operator to act. | Leave the pull request unmerged; report its URL, exact head, merge class or authority gap, durable record paths, and the command or operator action that safely resumes it. |
 | `successful-completion` | Every required and triggered conditional capability completed, each external identifier was read back or returned authoritatively, and any merge was authorized by the declared class plus the current request. | Report the durable record paths, verified merged pull request when one was required, actual tracker identifiers when approved, and a next-session starter for each workstream it updated, or an explicit no-follow-up result. |
@@ -149,13 +165,51 @@ failure makes the overall outcome `incomplete-resumable`.
    different workstream may have wrapped up after this one started, and its work is
    not yours to record.
 
-1. **Update `<handoff>`.** It has two parts with different owners. The session
-   entries are a log of what happened, newest first. `## Workstreams`, at the end
-   of the file, holds one `### <name>` entry per open line of work: a one-line
-   status, a pointer to the plan or tracker issue that owns the detail, and that
-   workstream's own `▶ Next:`. **Finishing last gives a session no say over
-   another workstream**, which is why the two parts are kept apart
-   ([#762](https://github.com/topij/agentic-dev-kit/issues/762)).
+1. **Decide whether there is anything to hand over.** The handoff carries only what
+   no other source holds. Ask of each thing the session did or learned whether one of
+   these already records it:
+
+   - a merged or open pull request, its body or its review dispositions;
+   - a commit message on the protected branch;
+   - a tracker issue, its state or its comments;
+   - the changelog fragment the change added.
+
+   `session-start` reads all of those first-hand, so restating them here only adds
+   a copy that can go stale. What is left is the handoff's content, and it is
+   short:
+
+   - a **decision** with no other home — a choice between options, a scope cut, an
+     operator ruling that no pull request or issue carries;
+   - an **abandoned approach**, and why, when nothing else says it was tried;
+   - **half-finished state** — an unpushed branch, a running job, a temporary tree,
+     a review round still on disk — that the next session would otherwise trip over;
+   - a **next step with no ticket**, or a change to a workstream's `▶ Next:` because
+     the session finished, moved or replaced the one there;
+   - a **new line of work**, or a workstream the operator closed.
+
+   If nothing is left, the handoff is not edited. Continue with *Route this
+   session's friction*, which can still owe a `<friction-log>` entry or a tracker
+   write; when it does not either, the outcome is `successful-noop`, and you name
+   what the test found already recorded elsewhere (*"#42 and its body record the
+   change; #43 holds the follow-up"*). **A one-off session, or one whose pull
+   requests and tickets say everything, is an expected outcome, not an edge case.**
+   A decision recorded in a pull request body or an issue comment does not need a
+   copy here; when a workstream's next step depends on it, the `▶ Next:` points at
+   that record.
+
+1. **Update `<handoff>`**, with only what the test above left. `## Workstreams`
+   holds one `### <name>` entry per open line of work: a one-line status, a pointer
+   to the plan or tracker issue that owns the detail, and that workstream's own
+   `▶ Next:`. **Finishing last gives a session no say over another workstream**,
+   which is why each line of work keeps its own entry
+   ([#762](https://github.com/topij/agentic-dev-kit/issues/762)). **A wrap-up
+   writes no session entry.** The dated `## Session — <date>` log a handoff may
+   still carry is a record from an earlier layout: leave its entries as they are,
+   and the archive sweep moves them to `<handoff-history>` oldest-first. What a
+   session entry used to say is in the session's pull requests and commits, and
+   the rest — a decision, an abandoned approach, what was not established — goes
+   in the entry of the workstream it bears on, as a short line that points at its
+   record where one exists.
 
    - **Name the workstream this session worked on.** Infer it from the session's
      work and confirm it with the operator in one line — *"Recording this under
@@ -163,8 +217,8 @@ failure makes the overall outcome `incomplete-resumable`.
      one. A session that genuinely advanced more than one workstream updates each,
      confirmed the same way. **With no operator to confirm**, update an existing
      entry only when the session's work is on that entry's own plan or issue;
-     otherwise create a new entry, and say in the session entry that the
-     assignment was not confirmed. A new entry cannot replace another
+     otherwise create a new entry, and end its status line with `assignment
+     unconfirmed`. A new entry cannot replace another
      workstream's next step; a wrong guess about an existing entry can.
    - **A workstream is named for its subject, never for a date, a run mode, or a
      session.** The subject is the part of the system the work changes: *Release
@@ -182,10 +236,8 @@ failure makes the overall outcome `incomplete-resumable`.
      post-merge check (*after Monday's run, confirm …*) goes in the `▶ Next:` of
      the workstream whose change it verifies. A scope parked without a pull
      request goes by the same test: its ticket's subject names the workstream,
-     or, with no ticket, the subject of the work it was scoped to. The session
-     entry groups its bullets by those workstream names, so a reader finds each change under the
-     subject it belongs to. **With no operator to confirm**, apply the rule above
-     to each pull request separately. When a new entry's subject looks like an
+     or, with no ticket, the subject of the work it was scoped to. **With no
+     operator to confirm**, apply the rule above to each pull request separately. When a new entry's subject looks like an
      existing entry's but the plan-or-issue test did not match, create it anyway
      and end its status line with `assignment unconfirmed — may belong to
      <existing name>`, so the next wrap-up with an operator can fold it in.
@@ -195,36 +247,34 @@ failure makes the overall outcome `incomplete-resumable`.
      session. For each one, propose where its pieces go: which existing
      workstream each pull request and each `▶ Next:` step belongs to, and the
      subject name of any new entry. Apply only the folds the operator approves.
-     A folded entry is removed once its pieces are placed, and this session's
-     entry says so in one line: `Closed workstream <name>: folded into <names>`.
+     A folded entry is removed once its pieces are placed, and the body of the
+     pull request carrying the record says so in one line, which a squash merge
+     keeps in its message:
+     `Closed workstream <name>: folded into <names>`.
      When the operator keeps an entry as its own workstream, drop its
      `assignment unconfirmed` marker, and rename it for its subject if its name
      was a date, a run mode or a session, so it is not offered again. A name is not misnamed
      when the run mode is itself the subject, as in work on the lane launcher.
      Without an operator, leave these entries as they are.
-   - **Add a session entry** at the top of the session log: `## Session —
-     <date> (<theme>)`. The theme names what the session changed, not only how it
-     ran: *overnight lanes* alone tells a reader nothing the date does not. The
-     entry then says what shipped, what was decided, and what was not
-     established. **It carries no `▶ Next:`** — that lives in the workstream's
-     entry. Do not rename or edit earlier session entries: they are a record,
-     and the archive sweep moves them oldest-first because nothing live remains
-     in them.
    - **Update only that workstream's entry** — its status line, its owner
      pointer, and its `▶ Next:` (the starter step below). Detail stays in the
      owner, not here. **Leave every other workstream's entry alone.** There are
      three exceptions. The first is a fold the operator approved, as the fold
      bullet above describes. The second is an entry the operator kept as its
      own workstream: drop its marker and rename it, as the same bullet says. The
-     third is a line this session's own work made false — a pull request it
-     names has merged, an issue it names has closed: correct that line and say
-     so to the operator. If the falsified line is that entry's `▶ Next:`, ask
+     third is a line that is false at the sha you ship, in any entry, whichever
+     session made it so — a pull request it calls open or a follow-up has
+     merged, an issue it names has closed: read each pull request and issue the
+     entries name, correct those lines, and say so to the operator. This is the
+     read that keeps an entry from listing merged work as owed after a session
+     that never wrapped up. If the falsified line is an entry's `▶ Next:`, ask
      the operator rather than rewriting it, and in a run with no operator leave
-     it and name it in the session entry.
+     it and name it in the pull request body.
    - **Closing a workstream is the operator's decision.** When the operator
      says a workstream is done or superseded, remove its entry and put one line
-     in this session's entry — `Closed workstream <name>: <why>` — so the
-     history keeps it. Never close one because its `▶ Next:` looks finished;
+     in the body of the pull request carrying the record —
+     `Closed workstream <name>: <why>` — so the history keeps it: a squash merge
+     replaces the wrap-up commit's own message. Never close one because its `▶ Next:` looks finished;
      ask.
    - **First run on a handoff with no `## Workstreams` section** — a handoff
      written before this layout. Create the section at the end of the file.
@@ -239,15 +289,18 @@ failure makes the overall outcome `incomplete-resumable`.
      layout's "In Progress", "Done", and sprint-status sections are standing
      content; migrate them only on the operator's word.
    - **Concurrent wrap-ups reconcile explicitly.** Two wrap-ups on *different*
-     workstreams edit different entries, so those merge cleanly; both add an
-     entry at the top of the session log, which git reports as a conflict at
-     that one point — resolve it by keeping both entries, newest first. Two
-     wrap-ups on the *same* workstream conflict in its entry, and that conflict
-     is correct: reconcile the entry with the operator, and never keep one
-     side's `▶ Next:` silently. A session that updated several workstreams, or
+     workstreams edit different entries, so those merge cleanly. Two wrap-ups
+     on the *same* workstream conflict in its entry, and that conflict is
+     correct: reconcile the entry with the operator, and never keep one side's
+     `▶ Next:` silently. A session that updated several workstreams, or
      folded one, can meet another wrap-up in any of those entries; reconcile
-     each conflict the same way.
-   - Keep it concise — the handoff is a handoff document, not a changelog.
+     each conflict the same way. With the record riding feature pull requests,
+     such a conflict surfaces when one of them is merged or brought up to date
+     with the base; reconcile it then, the same way, and with no operator keep
+     both sides' lines and say so in that pull request's body.
+   - Keep it concise — the handoff is a handoff document, not a changelog. A
+     workstream entry is a status line, an owner pointer, a `▶ Next:`, and at
+     most a few lines of what the test above left; its detail lives in the owner.
 
    **Author record prose defensively** — review findings concentrate in
    narration of work already done, so write claims a later round cannot refute:
@@ -380,9 +433,10 @@ failure makes the overall outcome `incomplete-resumable`.
    **Carry into the ticket what the inbox entry would have carried** — the severity
    (**H**/**M**/**L**) alongside all three parts above. The filed path is the faster
    and more consequential of the two; a ticket that drops the severity tells a reader
-   *less* than the parked entry it replaced, which is backwards. Record the filing in
-   `<handoff>` **once it has actually happened**, the way the handoff-update step
-   above records any filed work — the enumeration, never a count beside it.
+   *less* than the parked entry it replaced, which is backwards. The filed ticket is
+   its own record: name it in `<handoff>` only **once it has actually happened**, and
+   only where a workstream's `▶ Next:` or owner pointer now points at it — the
+   enumeration, never a count beside it.
 
    **Park it in `<friction-log>`** — a short entry under a dated `## YYYY-MM-DD`
    heading carrying the observed issue, a severity (**H**/**M**/**L**), and whichever
@@ -417,7 +471,7 @@ failure makes the overall outcome `incomplete-resumable`.
    not gather. Skip the step entirely if nothing workflow-specific came up.
 
 1. **Set the workstream's next-session starter** — the `▶ Next:` line in the entry
-   for the workstream this session worked on, never in the session entry. A
+   for the workstream this session worked on. A
    session that worked on several sets one in each of their entries. It is a
    suggestion for whoever next picks up *that* workstream, not an assignment for the
    next session to start in the repository; `session-start` presents every
@@ -440,7 +494,7 @@ failure makes the overall outcome `incomplete-resumable`.
    artifact: name it in validation and staging, and take the same branch/PR/`pr-watch`
    path as any other changed repository artifact.
 
-1. **Keep the handoff docs lean.** After adding this session's block, run
+1. **Keep the handoff docs lean.** After editing `<handoff>`, run
    `uv run <engine-dir>/check_doc_budget.py`. If it warns that `<handoff>` is over
    budget, run `uv run <engine-dir>/archive_plan_sessions.py --target-lines
    <handoff-budget>` — it sweeps oldest-first, one block at a time, until
@@ -575,20 +629,48 @@ failure makes the overall outcome `incomplete-resumable`.
    directly.** Commit as `chore: update handoff — [one-line summary of session work]`
    (stage `<friction-log>` too if you added an inbox entry this session, and
    `<handoff-history>` if the archive sweep ran; also stage any existing project-status
-   artifact this workflow changed). If you're already on the
-   session's feature branch, this is just another commit on that branch's PR —
-   **unless that PR already carries a current-head independent-review receipt**
-   (per `pr-watch`); a push there would move the head and invalidate it,
-   re-opening the full review obligation for a diff that is entirely the
-   handoff update ([`#435`](https://github.com/topij/agentic-dev-kit/issues/435)).
-   In that case, or if you're on the protected branch (e.g. a planning-only
-   session), branch the handoff off the **protected branch**, not off the
-   session's feature branch — branching from the feature branch would carry
-   its already-reviewed commits into the new PR too, defeating the point of
-   keeping the handoff separate. Branch first (`chore/update-handoff-<date>`)
-   before committing, then push and open the completed work **ready for review**. Ready
-   status invites review and does not authorize merge. Immediately run
-   `pr-watch --assert-ready` before the normal watch-and-fix loop. If a material
+   artifact this workflow changed).
+
+   **The default home is the session's own pull request, before its review.**
+   Commit the record on the session's feature branch before the opening review
+   pass is requested, so one review covers the change and its record and no
+   second pull request exists to review. A session with several pull requests
+   puts the record on the last one to go to review, or on each one whose
+   workstream entry it changes. **An isolated lane's pull request never carries
+   it**: a `dev/*` branch that touches `<handoff>` or `<friction-log>` is refused
+   by the pre-push hook, and the cockpit's joint wrap-up in `parallel.md` takes
+   a batch's record instead.
+
+   **This route leaves the record to the review.** The narrative preflight in
+   `fallback-review-panel.md` runs only on a change confined to the narrative
+   paths, so on a mixed pull request nothing deterministic reads the handoff
+   edit for closing keywords, links or stamps. Keep the edit to the few lines
+   the handoff test left, and read them against *Numbers in prose* and the
+   closing-keyword rule before the review starts.
+
+   **A wrap-up run before review is not complete when it hands back.** Its
+   `forge-pr-write` is done once the record is committed on the session's branch
+   and pushed with it, whether or not the pull request is open yet; its `pr-watch`,
+   `merge-authority` and `forge-merge-write` are the session pull request's own
+   watch loop, and until that settles the honest outcome is `incomplete-resumable`
+   naming the pull request and its head (or, before it is opened, the branch and
+   commit), with opening it and that watch loop as the resume step.
+
+   **A separate wrap-up pull request is the exception, and costs its own review.**
+   It is the route only when the test above left something to hand over and no
+   session pull request can carry it: the session's pull requests already carry a
+   current-head independent-review receipt (per `pr-watch`), or have merged, or
+   the session had none (a planning-only session on the protected branch). Do not
+   push the record onto a pull request whose current head carries a receipt: the
+   push moves the head and invalidates it, re-opening the full review obligation
+   for a diff that is entirely the handoff update
+   ([`#435`](https://github.com/topij/agentic-dev-kit/issues/435)). Branch the
+   handoff off the **protected branch**, not off the session's feature branch —
+   branching from the feature branch would carry its already-reviewed commits into
+   the new PR too, defeating the point of keeping the handoff separate. Branch
+   first (`chore/update-handoff-<date>`) before committing, then push and
+   open the completed work **ready for review**. Ready status invites review and
+   does not authorize merge. Immediately run `pr-watch --assert-ready` before the normal watch-and-fix loop. If a material
    unfinished-work window required the bounded draft exception in `pr-watch`, the same
    run must finish the work and body, push them, and **mark the PR ready** before continuing. For an isolated
    lane, the cockpit runs `<engine-dir>/dev_session.sh pr-watch <scope>` until the exact
@@ -615,14 +697,16 @@ failure makes the overall outcome `incomplete-resumable`.
 
 - Do NOT add session working detail (debugging steps, conversation context) — that
   belongs in session-scoped scratch notes or memory, not the living handoff. A
-  decision the session took is not working detail: its session entry records it
+  decision the session took is not working detail: when no pull request or issue
+  records it, the entry of the workstream it bears on does
 - Do NOT change the handoff's structure or add new sections without asking — but the
   `archive_plan_sessions.py` sweep (moving old session blocks to `<handoff-history>`),
-  this session's own entry in the session log, the entry for each workstream it
+  the entry for each workstream it
   worked on (new or existing, `▶ Next:` included), a fold of a misnamed or
   unconfirmed entry that the operator approved, clearing the marker on or
   renaming an entry the operator kept, and the first-run creation of
   `## Workstreams` are all documented edits, not structure changes, so do them
   without asking. Closing a workstream is not among them: it is the operator's call
 - If a backlog item was promoted to a sprint epic, move it (don't duplicate)
-- If the session produced no repository-artifact changes, say so and skip the commit
+- If the session produced no repository-artifact changes, or the handoff test left
+  nothing to hand over, say so and skip the commit

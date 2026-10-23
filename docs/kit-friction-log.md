@@ -33,9 +33,11 @@
   the conservative multi-line keep that #1193's engine comment documents, not an
   unresolvable target: a single-line pointer whose target does not exist is already
   removable in an owned round. #1188's report records a probe of the same family from
-  #1186's lens. The operator removed the round by hand. The open question is whether
-  the lens contract should place git probes outside the round, or the engine should
-  treat a multi-line pointer as linking nothing, as git does.
+  #1186's lens, and #1195's round-1 correctness lens left
+  `probe-corr-a330dcd5/entry/.git`, which was kept as unparseable too. Each kept
+  round waits for the operator to remove it by hand. The open question is whether the
+  lens contract should place git probes outside the round, or the engine should treat a
+  multi-line pointer as linking nothing, as git does.
 
 ## 2026-10-22
 

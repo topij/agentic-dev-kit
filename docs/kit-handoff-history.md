@@ -5,6 +5,122 @@ and the next step there; this file is append-only history.
 
 ## Session log
 
+### 2026-10-22 (reviewer measurement and verifier compute, in a Claude Code cloud session)
+
+- **Reviewer measurement:**
+  [#1168](https://github.com/topij/agentic-dev-kit/pull/1168) (`e0b6a7b`) has
+  `post-merge-systemize` read fallback-panel dispositions as findings and tally
+  reviewer precision (#772, #1157).
+  [#1169](https://github.com/topij/agentic-dev-kit/pull/1169) (`e68871b`) and
+  [#1179](https://github.com/topij/agentic-dev-kit/pull/1179) (`a00eeed`) shipped
+  `scripts/review_eval.py` and its case set (#1156).
+  [#1181](https://github.com/topij/agentic-dev-kit/pull/1181) (`a72034b`) scores a
+  verifier stage over reused lens reports.
+  [#1183](https://github.com/topij/agentic-dev-kit/pull/1183) (`901daad`) declares
+  `review.fallback_panel.verifier_compute` for #1155.
+- **Decided:** the operator chose the cheap tier for the verifier and kept the key
+  optional until measured. The verifier comparison on #1156 found no run that refuted
+  a hit; the case set is too small to rank tiers. The operator ran the Codex verifier
+  locally, because a cloud session has no Codex.
+- **Review proportionality:**
+  [#1167](https://github.com/topij/agentic-dev-kit/pull/1167) (`4248942`) refuses a
+  `--last-reviewed` sha that is not on the branch past its fork point (#1166).
+- Each PR body names its `make test` run; failures known to come from the cloud sandbox
+  were left to CI. This session filed #1180, #1182
+  and #1184 for review findings it left open. Its workstream assignment was not
+  confirmed by the operator.
+
+### 2026-10-21 (changelog lookup and record-prose report limits)
+
+- **Changelog fragments:** [#1147](https://github.com/topij/agentic-dev-kit/pull/1147)
+  merged as `f98cc100a9527fcc0f908e89683d11ec5556ca0a`. It pins the lookup's baseline
+  range and pathspec and aligns fragment naming guidance with the malformed-path warning.
+- **Record-prose report limits:** [#1146](https://github.com/topij/agentic-dev-kit/pull/1146)
+  merged as `f1999dfb56db0bd38624feb72bd5f228adc3c401`. The report prints the declared
+  move bounds; the existing boundary tests assert the emitted wording.
+  This workstream assignment was not confirmed by the operator.
+- The PR bodies retain the `make test` commands, revisions, directories, dates and
+  terminal output; their review dispositions retain the independent checks and limits.
+  Headless-lane verification was interrupted; the cockpit took over at the unchanged heads.
+- Tracker disposition and workstream closure remain operator decisions. The friction
+  inbox records the recurring verification timeout; no tracker write was made.
+
+### 2026-10-20 (worktree-first sessions)
+
+- **Worktree-first sessions:** [#1136](https://github.com/topij/agentic-dev-kit/pull/1136)
+  merged as `023a211bc7b7cd7689fd98ad49b1841efe43f77e` on the operator's request.
+  The shared `AGENTS.md` carries the task-worktree preference.
+- Verification: `make test` at `7438abb864b6aea3fe74c5995c5039d021318ce3`, in
+  `/private/tmp/agentic-dev-kit-worktree-preference-20261020`, on 2026-10-20 passed.
+  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1136#issuecomment-6287957657)
+  retains the exploratory mutation limits; no agent-compliance harness was run.
+- The operator-approved triage filed
+  [#1137](https://github.com/topij/agentic-dev-kit/issues/1137),
+  [#1138](https://github.com/topij/agentic-dev-kit/issues/1138),
+  [#1139](https://github.com/topij/agentic-dev-kit/issues/1139) and
+  [#1140](https://github.com/topij/agentic-dev-kit/issues/1140). The archive-sweep
+  [#1141](https://github.com/topij/agentic-dev-kit/pull/1141) carries the exact
+  approve/archive/park commands; parked source entries remain in the inbox.
+- Evidence availability: `test -e` at `0b6db571544eca5ecda299cc5c821aefad62e5ec`,
+  in `/private/tmp/agentic-dev-kit-triage-20261020-7858b019`, on 2026-10-20 found
+  `/private/tmp/devkit-overnight-20261014-01a13bcb/` absent, including its
+  `reviews/review-1108-ownership.log` and `reviews/review-1108-ownership-amended.log`.
+  The dated 2026-10-15 TRI-11 source is archived verbatim and included in
+  [#1137](https://github.com/topij/agentic-dev-kit/issues/1137); its location wording
+  is historical. That ticket's acceptance audit needs another retained source or an
+  explicit unavailable-input result. The
+  [availability correction](https://github.com/topij/agentic-dev-kit/pull/1141#issuecomment-6289423693)
+  records the distinction without changing the approved source or payload.
+- Workstream **Worktree-first sessions** finished on the operator's confirmation;
+  no follow-up remains.
+
+### 2026-10-18 (cs-toolkit upgrade support)
+
+- **Scratch retention:** [#1126](https://github.com/topij/agentic-dev-kit/pull/1126)
+  merged as `bc1bd023`, annotating the deliberate system-temp refusal for Bandit
+  (#1124). [#1130](https://github.com/topij/agentic-dev-kit/pull/1130) merged as
+  `d2f40206`; retirement now refreshes Git dependencies before removal (#1127).
+  The cosmetic Bandit-selector follow-up is #1128.
+- **Triage outcome receipts:** #1130 also delivered scheduled caller enforcement
+  (#1129). Its [review disposition](https://github.com/topij/agentic-dev-kit/pull/1130#issuecomment-6248253499)
+  records the evidence and the corrected verification chronology from the
+  correctness lens; its overlapping full-suite run was discarded as verification.
+- **Consumer upgrades:** the operator will continue cs-toolkit's upgrade using
+  kit `d2f40206d3b819b496398ad0d08eba97a9d7b9ca`. This session did not upgrade
+  cs-toolkit. The later adopter evidence is in **Consumer upgrades** below;
+  copying CLI files alone does not establish real scheduled-run behavior.
+- Verification: `make test` in `/Users/topi/Coding/agentic-dev-kit` at
+  `2fb0981c6e8cbc71b3fe5785714029a201685555` on 2026-10-18 passed. The merged
+  `d2f40206` tree matches that candidate. Full output is retained in
+  `/private/tmp/devkit-1127-1129-evidence-eTfHvO/make-test-2fb0981c.log`.
+- The session recorded uv-cache dependency refusals and review mutation/verification
+  overlap, preserving scratch guards. The later triage sweep is recorded in
+  [#1141](https://github.com/topij/agentic-dev-kit/pull/1141).
+- On 2026-10-20 the operator canceled the retained October 18 triage draft
+  `749a3ff1c51d4fe1928d7f0d4553c2cc`, preserving its source entries and report at
+  `reports/triage_live_2026-10-18_749a3ff1c51d4fe1928d7f0d4553c2cc.md`.
+  Fresh session `7858b0190c764ac3af1d3d1002463f7f` took the operator's new decisions.
+
+### 2026-10-18 (caller-owned triage receipts; managed review scratch)
+
+- **Triage outcome receipts:** [#1121](https://github.com/topij/agentic-dev-kit/pull/1121)
+  merged as `d5129869`. The caller allocates freshness for each engine call;
+  cs-toolkit later integrated the wrapper in its PR 2769.
+- **Scratch retention:** [#1122](https://github.com/topij/agentic-dev-kit/pull/1122)
+  merged as `dd089388`, completing #900. Reviews now allocate owned rounds and
+  retire them after processes finish and evidence is retained. The dependency
+  protections remain in force; this did not reclaim legacy unmanaged scratch.
+  The [review disposition](https://github.com/topij/agentic-dev-kit/pull/1122#issuecomment-6242495091)
+  retains the review evidence; the residual CLI-help finding was routed to #996.
+- Verification: `make test` at `e080536159c0b16874f47ed8b36336e296d820a3`, in
+  `/Users/topi/Coding/agentic-dev-kit`, on 2026-10-18 passed. This is the reviewed
+  scratch-lifecycle candidate, before the squash merge.
+- Retirement kept the opening and repair panel rounds because uv-cache `.git`
+  markers triggered dependency protection. The friction archive records the paths
+  after the #1141 sweep; the guards were not bypassed.
+- Workstream assignment confirmed by the operator: **Triage outcome receipts**
+  and **Scratch retention**.
+
 ### 2026-10-16 (ticket-creation region snapshots; split-workflow placement and citation pins; REST review-read gap decision, in a Claude Code cloud session)
 
 - **Ticket execution environments:** [#1114](https://github.com/topij/agentic-dev-kit/pull/1114)
