@@ -34,6 +34,10 @@
       "role": "repo-only",
       "sha256": "c05b938911ef1f28374027a1668e63ed122a7e9d21887d14a95bb15fa044d0f6"
     },
+    "docs/agentic-dev-kit/parallel-verification.md": {
+      "role": "doctrine",
+      "sha256": "5d2ce21be93f74cc0726bc106a2d28df0a486f0f1ba6b3011390131c0a521847"
+    },
     "docs/agentic-dev-kit/review-eval/cases.yaml": {
       "role": "repo-only",
       "sha256": "a0f59b80e24ab63d98f4a2a6ead27d2703da4de5b8bf9c8dbd53eb2ad056ba5a"
@@ -68,11 +72,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "bd021183eea14393237deea5aeebcb6bb17c76d2a807069fb4f44b069aa99c16"
+      "sha256": "3af2bf368e4d3bd20a63b7eb45354e8fe230d81dba0c208002b27fdda12660c9"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "f96ee462858be70773908fc88b9008438dd6237e40eecae12cb393e277dfad1a"
+      "sha256": "ba68a9ddb6a24e80f3836e5fd4b04424565931bb4be7635974a22f49896a5315"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -91,7 +95,7 @@
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "d37156a9e8e34e5dde3153dc1d02f599f99904bdc281cd410deaa6ca4b565100"
+      "sha256": "a389d99d43c019bbcb3f8969431ec550af787b60b0e90cc1b813eb08f7e35a93"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
       "required_by": [
@@ -128,6 +132,10 @@
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
       "sha256": "2039c068d69cd387da8c7e06b825619af87c17a3474f33e515650fcdda5295d7"
+    },
+    "docs/agentic-dev-kit/writing-for-agents.md": {
+      "role": "doctrine",
+      "sha256": "ae25078a6a0326a91e893ccbde82fbd08f403cd0c1739368fececf1b5a670584"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -210,7 +218,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "718516cb66bc022aaf041389efc77af20df4a073b3913454d646c02cf441751c"
+      "sha256": "2a366cea86c71c6d74635508e601c0f022a6fccfb2eaf9cc777f4b708e8e7bc3"
     },
     "scripts/launch_lane.py": {
       "role": "engine",

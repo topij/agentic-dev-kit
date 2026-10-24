@@ -566,7 +566,8 @@ pull-request count.
 A cluster meeting `systemize.pattern_threshold` may produce the smallest instruction,
 shared-workflow, or config edit that would have prevented the root cause. Prefer the
 narrowest shared repository source. Do not edit a Claude or Codex adapter unless the
-finding is genuinely about that runtime's invocation or capability translation.
+finding is genuinely about that runtime's invocation or capability translation. Draft
+the edit by [`writing-for-agents.md`](../writing-for-agents.md).
 
 State each proposal's net line change on the files it edits (lines added minus lines
 removed, per file and in total, as `git diff --numstat` prints it for the proposed
