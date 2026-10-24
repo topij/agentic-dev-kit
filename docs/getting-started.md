@@ -144,6 +144,11 @@ Two modes, by the shape of the task:
   Map each lane's file footprint first — the sandbox prevents *state* collisions,
   not *source* merge conflicts.
 
+Before editing, reuse the task's assigned linked worktree or create one with a task
+branch. Inline work still belongs in that checkout; it does not mean editing the
+primary checkout. The [developer guide](developer-guide.md#run-a-development-session)
+shows the worktree setup. Keep edits, verification and commits together there.
+
 Reserve the top model tier for the one decision that's expensive to get wrong;
 let a cheaper tier do the mechanical building.
 
@@ -151,7 +156,8 @@ let a cheaper tier do the mechanical building.
 
 Every change goes through a branch and a PR — and opening the PR is *not* the end
 of the task. If this is the session's last PR, run `wrap-up` (section 5) before you
-start watching it, so any handoff edit rides this PR and is reviewed with it. Then:
+request its opening review, preferably before opening it, so any handoff edit rides
+this PR and is reviewed with it. Open completed work ready for review. Then:
 
 ```text
 /pr-watch 42          # Claude; `$pr-watch 42` in Codex
@@ -172,7 +178,8 @@ self-merge.
 
 ## 5 · Hand off — `wrap-up`
 
-Once the session's last PR is open and before its review, `wrap-up` asks whether the session left anything
+Before the session's last PR goes to review, preferably before opening it,
+`wrap-up` asks whether the session left anything
 its pull requests, commits and tracker issues do not already record. When the
 answer is no, it commits nothing. When there is something — a decision, an
 abandoned approach, a next step with no ticket — it updates the entry of the
@@ -209,6 +216,11 @@ unattended. What you *can't* yet explain goes to
 That one parks because it has no mechanism and no fix yet — only a next diagnostic
 step — not because it is minor. Any one missing part is enough to park it. Because the
 next `session-start` reads both the handoff and the inbox, neither thread is lost.
+
+For disposable review rounds and task checkouts, follow the
+[evidence retention and cleanup guide](developer-guide.md#retain-evidence-and-finish-session-cleanup).
+Keep required evidence before retiring scratch, and obtain authorization for the
+concrete deletion scope. A wrap-up invocation alone does not provide it.
 
 ## 6 · Turn the flywheel
 

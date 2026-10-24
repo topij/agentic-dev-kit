@@ -17,8 +17,8 @@ configured `paths.engines` directory in an adopted repository.
 | --- | --- | --- |
 | Fresh repository made from the template | Run `./init.sh`, then inspect `config/dev-model.yaml`. | [Getting started](getting-started.md) |
 | Existing repository with its own agent rules, config, or CI | Invoke `adopt` and review its selective install plan before it writes. | [Adopt workflow](agentic-dev-kit/workflows/adopt.md) |
-| Repository that already has the kit | Invoke `upgrade` to inspect drift, migrate config, and refresh kit-owned files. | [Upgrade workflow](agentic-dev-kit/workflows/upgrade.md) |
-| A normal development session | Invoke `session-start`, work on a branch, invoke `wrap-up` before review, then watch the PR. | [Session loop](#run-a-development-session) |
+| Repository that already has the kit | Invoke `upgrade` in its assigned task worktree to inspect drift, migrate config, and refresh kit-owned files. | [Upgrade workflow](agentic-dev-kit/workflows/upgrade.md) |
+| A normal development session | Invoke `session-start`, use a task worktree, invoke `wrap-up` before review, then watch the PR. | [Session loop](#run-a-development-session) |
 
 Do not use `cp -r` on a mature repository: it can overwrite the files whose
 ownership `adopt` must inspect. Re-running `init.sh` migrates config and renders
@@ -30,47 +30,80 @@ unclaimed templates; it does not replace the drift inspection and file refresh i
 1. Invoke `session-start`. It reads the configured handoff and friction log, the
    repository state, and available forge, CI, and tracker sources. An unavailable
    source is reported as a gap. The workflow recommends work but makes no changes.
-2. Create a branch from the configured protected branch. In **this kit repository**,
-   use `chore/<slug>` or `feat/<slug>` for cockpit work; `dev/` is reserved for
-   isolated lanes. For example, after checking that your working tree is ready:
+2. Reuse the worktree assigned to this task, or create a dedicated linked worktree
+   and task branch before editing. Keep unrelated work in its original checkout.
+   In **this kit repository**, cockpit branches use `chore/<slug>` or `feat/<slug>`;
+   `dev/` is reserved for isolated lanes. From the primary repository, this example
+   creates a fresh task checkout from the fetched base:
 
    ```sh
-   git fetch origin main
-   git switch -c chore/update-guide origin/main
+   REPO="$(git rev-parse --show-toplevel)" || exit 1
+   TASK_WORKTREE="$(dirname "$REPO")/devkit-update-guide"
+   git -C "$REPO" fetch origin main || exit 1
+   git -C "$REPO" worktree add --no-track -b chore/update-guide \
+     "$TASK_WORKTREE" origin/main || exit 1
+   cd "$TASK_WORKTREE" || exit 1
    ```
 
-   Check your project's own branch policy in an adopter repository.
+   Choose an unused branch and destination; a collision stops the example. Run
+   edits, verification and commits in that task checkout. An adopter uses its own
+   remote, protected branch and task-branch convention.
 3. Make the change and run the repository's verification command. For this kit,
    run `make test` with a long enough tool timeout to receive the pytest summary.
    Its `check-syntax` target has the limitation recorded in [AGENTS.md](../AGENTS.md);
    inspect changed shell scripts separately until that gap is repaired.
-4. Open completed work ready for review, and invoke `wrap-up` before its review
-   starts. It asks whether the session left anything the PR, its commits and the
-   tracker do not already record — a decision, an abandoned approach, a next step
+4. Invoke `wrap-up` before requesting the final PR's opening review, preferably
+   before opening the PR. It asks whether the session left anything the PR, its
+   commits and the tracker do not already record — a decision, an abandoned approach, a next step
    with no ticket. If so, it commits that to the workstream's entry in the
    configured handoff on the same PR, so one review covers both; if not, it commits
    nothing. It also routes friction. Tracker writes need a decision on their exact
-   payload.
+   payload. Verify any final edits, then open completed work ready for review.
 5. Invoke `pr-watch` for the exact PR, and continue through CI and review findings.
    Ready status starts review; it does not grant merge authority. Follow the
    project's merge policy for the final act.
 
 ```mermaid
 flowchart LR
-    Brief["session-start<br/>briefing"] --> Branch["branch and work"]
-    Branch --> Verify["project verification"]
-    Verify --> PR["ready PR"]
-    PR --> Wrap{"wrap-up<br/>anything to hand over?"}
-    Wrap -->|yes| Record["commit handoff edit<br/>on this PR"]
-    Wrap -->|no| Watch
-    Record --> Watch["pr-watch<br/>CI and review"]
-    Watch --> Authority{"merge authority?"}
+    Brief["session-start<br/>briefing and environment"] --> Task["task worktree<br/>branch and edit"]
+    Task --> Wrap{"wrap-up<br/>unrecorded handoff?"}
+    Wrap -->|yes| Record["commit record<br/>with the change"]
+    Wrap -->|no| Verify
+    Record --> Verify["project verification"]
+    Verify --> PR["open ready PR<br/>assert ready"]
+    PR --> Watch["pr-watch<br/>CI and independent review"]
+    Watch --> Authority{"merge gates and<br/>project authority?"}
     Authority -->|authorized| Merge["merge and read back"]
-    Authority -->|operator held| Hold["hold exact PR head"]
+    Authority -->|operator decision needed| Hold["hold exact PR head"]
 ```
 
 For the full first-session walkthrough, use [Getting started](getting-started.md).
 For the review loop and its stop conditions, use the [PR watch workflow](agentic-dev-kit/workflows/pr-watch.md).
+
+## Read review status without confusing it with merge authority
+
+| Report field | What to do with it |
+| --- | --- |
+| `converged` | The watch loop has no remaining checks or new findings to handle in its observed scope. Still inspect read gaps and the review request. |
+| `review_evidence` | Inspect whether independent review covers the current head through bot coverage or a recorded receipt. A push requires evidence for the new head. |
+| `merge_blockers` | Resolve the named blocker, or continue polling when the check rollup is settling. A receipt cannot override a current-head changes-requested review. |
+| `mergeable` | The engine's merge gate is satisfied; the project's merge policy must also authorize the actor. |
+| `done` | Legacy alias for `mergeable`; do not use it to mean the watch loop ended. |
+
+A reviewer outage follows the [fallback review contract](agentic-dev-kit/fallback-review-panel.md).
+The computed review class determines the required lenses. The optional verifier
+assesses findings; it does not grant merge authority. Record dispositions with the
+review receipt so the findings survive outside local watch state. Follow the
+[watch loop](agentic-dev-kit/workflows/pr-watch.md) for review requests, round
+budgets and contained LOW repairs.
+
+When changing reviewer prompts or compute, use the kit's
+[reviewer evaluation guide](agentic-dev-kit/review-eval/reviewer-eval.md).
+`review_eval.py` compares reports against known-bug and clean cases, with an optional
+verifier comparison. Citation matches and candidate false alarms need human
+interpretation; an evaluation score is not a review of the PR being merged. The
+case set depends on this kit's history and is a maintainer tool, not an adopter
+installation requirement.
 
 ## Work in an isolated lane
 
@@ -126,11 +159,57 @@ uv run scripts/kit_doctor.py
 uv run scripts/check_doc_budget.py
 ```
 
-`kit_doctor` reports kit-owned file drift and installation properties. A `differs`
-result requires inspection: a hash mismatch cannot tell an older file from a local
+`kit_doctor` reports kit-owned file drift and installation properties. It also
+reports explicit Codex lens and verifier model pins against the invoking client's
+local model cache. That observation is advisory: an absent cache is skipped, an
+unreadable cache is unavailable, and a comparable newer name is not proof of live
+account access. It neither changes configuration nor changes the doctor's exit
+status. Confirm client access before deliberately updating the reviewer compute in
+`config/dev-model.yaml`.
+
+For an upgrade, follow the [shared upgrade workflow](agentic-dev-kit/workflows/upgrade.md)
+from the assigned worktree. Inspect the installation before replacing the installer;
+compare runtime adapters with their recorded baseline when available, preserving
+unclassified authored content. Missing baseline history needs inspection, not a
+blanket overwrite. Preview Claude lens definitions using the adopter's merged
+configuration, inspect the diff, and record the installed baseline after the
+selected refreshes. A linked-worktree install reports shared hooks instead of
+silently installing them; follow the workflow's explicit shared-hook installation
+step.
+
+For ordinary drift diagnosis, a `differs` result requires inspection: a hash mismatch cannot tell an older file from a local
 edit. The document-budget command warns by default; its warning is a route to the
 configured workflow, not permission to rewrite the narrative documents.
 
 If a workflow stops, keep its exact branch, state, report, and PR identity. Resume
 through that workflow's documented entry point after resolving the named cause.
 Do not treat an unavailable forge or tracker as an empty result.
+
+## Retain evidence and finish session cleanup
+
+When `scratch.session_registry` is configured, use the
+[completed-session cleanup lifecycle](agentic-dev-kit/session-cleanup.md).
+Start an inventory before allocating review rounds; track actual writers and
+register disposable worktrees at their final commit. Keep package caches and
+basetemps in scratch, separate from evidence you need to retain.
+
+After writers and descendants end, enumerate the required reports, dispositions,
+verification, compute receipts and supporting assets in an evidence manifest.
+Seal it to retain content-addressed copies in the repository's shared Git metadata.
+That local retention survives removal of a task checkout; it is not included in a
+fresh clone or protected from deletion of the repository itself.
+
+From the primary checkout, these commands discover inventories and report disk
+and scratch state without deleting anything:
+
+```sh
+uv run scripts/session_cleanup.py list
+uv run scripts/sweep_scratch.py --disk --json
+```
+
+Preview the selected inventory before requesting authorization for its exact paths.
+The preview token binds the scope; it is not operator consent. The lifecycle guide
+covers approved apply, kept paths and interrupted cleanup. App-managed Codex
+worktrees use native archive after the guards allow it, followed by another apply
+to confirm completion. A queued archive or a keep reason remains unfinished work.
+Session-start and ordinary wrap-up do not authorize deletion.
