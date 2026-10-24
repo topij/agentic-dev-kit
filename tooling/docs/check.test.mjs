@@ -52,6 +52,23 @@ test('broken files, anchors, images and escapes fail with source context', async
   await assert.rejects(checkDocuments(root, ['missing.md']), /ENOENT/);
 });
 
+test('responsive image markup is refused even when its fallback exists', async t => {
+  const root = await fixture(t);
+  await fs.writeFile(path.join(root, 'docs/picture.svg'), '<svg/>');
+  for (const markup of [
+    '<picture><source srcset="missing.svg"><img src="docs/picture.svg"></picture>',
+    '<img src="docs/picture.svg" srcset="missing.svg 2x">',
+    '<img src="docs/picture.svg" srcset="">',
+  ]) {
+    await fs.writeFile(path.join(root, 'README.md'), markup);
+    const result = await checkDocuments(root, ['README.md']);
+    assert.equal(result.errors.length, 1, markup);
+    assert.match(result.errors[0], /^README.md: (source|img)\[srcset\] is unsupported/);
+  }
+  await fs.writeFile(path.join(root, 'README.md'), '`<img srcset="missing.svg">`\n\n```html\n<source srcset="missing.svg">\n```\n<img src="docs/picture.svg">');
+  assert.deepEqual((await checkDocuments(root, ['README.md'])).errors, []);
+});
+
 test('only real Mermaid fences become renders', () => {
   const source = '# Topic\n\n````markdown\n```mermaid\ninvalid\n```\n````\n\n~~~mermaid\nflowchart LR\nA-->B\n~~~\n';
   const result = inspectMarkdown(source);

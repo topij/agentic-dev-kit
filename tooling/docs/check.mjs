@@ -26,10 +26,14 @@ export function inspectMarkdown(source) {
   $('a[href],img[src]').each((_, element) => {
     links.push($(element).attr(element.tagName === 'img' ? 'src' : 'href'));
   });
+  const unsupported = [];
+  $('source[srcset],img[srcset]').each((_, element) => {
+    unsupported.push(`${element.tagName}[srcset] is unsupported; use an ordinary img src or Markdown image`);
+  });
   const diagrams = markdown.parse(source, {}).filter(
     token => token.type === 'fence' && token.info.trim().split(/\s+/)[0] === 'mermaid',
   ).map(token => ({ code: token.content, line: token.map[0] + 1 }));
-  return { anchors, links, diagrams };
+  return { anchors, links, diagrams, unsupported };
 }
 
 function inside(root, target) {
@@ -51,6 +55,7 @@ export async function checkDocuments(root, files) {
     if (!inside(root, sourcePath)) throw new Error(`Source outside repository: ${file}`);
     const document = await read(sourcePath); // A missing requested source must fail.
     diagrams.push(...document.diagrams.map(diagram => ({ ...diagram, file })));
+    errors.push(...document.unsupported.map(message => `${file}: ${message}`));
     for (const target of document.links) {
       // Remote URLs and protocol-relative URLs are deliberately offline checks' limit.
       if (/^[a-z][a-z\d+.-]*:/i.test(target) || target.startsWith('//')) continue;

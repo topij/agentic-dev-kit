@@ -29,7 +29,10 @@ for link-like text. It checks local Markdown links, reference links, HTML links 
 images, including percent-encoded paths. Markdown heading fragments use GitHub-style
 slugs, including duplicate headings; explicit HTML ids and named anchors are accepted.
 Target files must exist inside the repository. Directory links are allowed without a
-fragment. Fragments on non-Markdown files are rejected as unsupported.
+fragment. Fragments on non-Markdown files are rejected as unsupported. Responsive
+image markup (`source[srcset]` and `img[srcset]`) is also rejected, including when
+an ordinary fallback image exists. Use Markdown images or HTML `img` elements with
+`src`; the checker does not parse responsive image candidate lists.
 
 Linked Markdown targets outside the source list are read to resolve their anchors;
 their outgoing links and diagrams are not recursively checked. Historical records,
@@ -58,5 +61,6 @@ run `verify` again and inspect the new preview. Dependency or browser startup fa
 also fail the job; they do not count as successful diagram validation.
 
 The check's regression tests exercise broken destinations and anchors, ignored code
-examples, duplicate heading slugs, and valid and invalid browser renders. They do not
+examples, duplicate heading slugs, refusal of responsive image markup, and valid and
+invalid browser renders. They do not
 replace this repository's required `make test` verification.
