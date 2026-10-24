@@ -414,6 +414,13 @@ payload, and attributes the defect to the code it names, not to the pull request
 reported it. When the entry already links a ticket for it, present the archive choice
 first.
 
+A proposed ticket whose fix adds to or changes a standing instruction (`AGENTS.md`,
+`CLAUDE.md`, `.claude/rules/`, or a shared workflow doc) names the existing text the
+change would extend or fold into, and its acceptance criteria require the implementing
+pull request to report its net line change on those files (lines added minus lines
+removed). An entry that would add a rule beside an existing one says why it cannot
+fold into it.
+
 Before computing proposal digests, classify each proposed ticket and include its
 execution-environment section and configured label according to
 [`ticket-execution-environment.md`](../ticket-execution-environment.md). Apply this

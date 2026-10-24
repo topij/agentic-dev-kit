@@ -242,7 +242,8 @@ The report is load-bearing. Write it before any external route and update it aft
 attempt so a retry can distinguish proposed, attempted, and completed actions. Include:
 the forge repository, window, protected-branch head, config fingerprint, execution mode,
 capability preflight, cache/digest locations, capped-input status, candidate clusters,
-route dispositions, the dispatch records below, external identifiers actually created,
+route dispositions, each shared-rule proposal's net line change and the text it
+considered folding into, the dispatch records below, external identifiers actually created,
 incomplete actions, and the next safe resume step. Do not record a tracker identifier,
 notification receipt, review receipt, or pull-request URL that was not actually returned
 by that integration or observed by the marker read-back below.
@@ -566,6 +567,12 @@ A cluster meeting `systemize.pattern_threshold` may produce the smallest instruc
 shared-workflow, or config edit that would have prevented the root cause. Prefer the
 narrowest shared repository source. Do not edit a Claude or Codex adapter unless the
 finding is genuinely about that runtime's invocation or capability translation.
+
+State each proposal's net line change on the files it edits (lines added minus lines
+removed, per file and in total). A proposal that adds lines also names the existing text
+it considered folding the rule into, and why that did not fit. Standing instructions are
+budgeted as well as reviewed (`doc_budgets` in `config/dev-model.yaml`), and a rule that
+extends an existing one usually leaves the instruction set shorter than a new one.
 
 Add a provenance marker beside each proposed rule:
 

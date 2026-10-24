@@ -17,8 +17,13 @@ or ``/wrap-up`` step should *nudge*, never block). Pass ``--strict`` to make it
 exit 1 when over budget (e.g. if you ever want it as a soft CI signal).
 
 The tracked docs + their budgets come from ``config/dev-model.yaml``'s
-``doc_budgets`` list (``{path, budget, archive, remedy}``) — see
+``doc_budgets`` list (``{path, budget, archive?, remedy}``) — see
 ``scripts/lib/kitconfig.py``. Adjust the budgets there, not here.
+
+``archive`` is optional (#1176). A narrative doc names the file its old blocks
+are swept into; an instruction file such as ``AGENTS.md`` has nowhere to sweep
+to, so its entry omits ``archive`` and its ``remedy`` names consolidation
+instead. The warning then prints the remedy alone rather than an archive sweep.
 
 Usage:
 
@@ -56,7 +61,7 @@ class DocStatus:
     path: str
     lines: int
     budget: int
-    archive: str
+    archive: str | None
     remedy: str
 
     @property
@@ -82,18 +87,33 @@ def _line_count(path: Path) -> int:
         return sum(1 for _ in handle)
 
 
-def _load_doc_budgets(config_path: Path) -> list[tuple[str, int, str, str]]:
-    """Read ``doc_budgets`` from ``config/dev-model.yaml`` as (path, budget, archive, remedy) tuples."""
+def _load_doc_budgets(config_path: Path) -> list[tuple[str, int, str | None, str]]:
+    """Read ``doc_budgets`` from ``config/dev-model.yaml`` as (path, budget, archive, remedy) tuples.
+
+    ``archive`` is ``None`` for an entry that omits it; every other key is required.
+    """
     config = load_config(config_path)
     budgets = get(config, "doc_budgets")
     if not isinstance(budgets, list) or not budgets:
         raise ValueError(f"'doc_budgets' in {config_path} must be a non-empty list")
-    out: list[tuple[str, int, str, str]] = []
+    out: list[tuple[str, int, str | None, str]] = []
     for i, entry in enumerate(budgets):
         if not isinstance(entry, dict):
             raise ValueError(f"doc_budgets[{i}] must be a mapping, got {type(entry).__name__}")
+        archive = entry.get("archive")
+        if "archive" in entry and (archive is None or not str(archive).strip()):
+            # An `archive:` written with no value is a typo, not an archive-less
+            # entry: an archive-less entry omits the key.
+            raise ValueError(f"doc_budgets[{i}] has an empty 'archive'; omit the key instead")
         try:
-            out.append((str(entry["path"]), int(entry["budget"]), str(entry["archive"]), str(entry["remedy"])))
+            out.append(
+                (
+                    str(entry["path"]),
+                    int(entry["budget"]),
+                    None if archive is None else str(archive),
+                    str(entry["remedy"]),
+                )
+            )
         except KeyError as exc:
             raise ValueError(f"doc_budgets[{i}] missing required key {exc}") from exc
     return out
@@ -115,7 +135,9 @@ def render(statuses: list[DocStatus], *, quiet: bool) -> str:
     """Human-readable report. When ``quiet`` only over-budget docs are shown."""
     lines: list[str] = []
     for s in statuses:
-        if s.over:
+        if s.over and s.archive is None:
+            lines.append(f"⚠ {s.path} is {s.lines} lines (budget ~{s.budget}): {s.remedy_text}.")
+        elif s.over:
             lines.append(
                 f"⚠ {s.path} is {s.lines} lines (budget ~{s.budget}) — an archive "
                 f"sweep into {s.archive} is overdue: {s.remedy_text}."
