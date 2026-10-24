@@ -57,53 +57,62 @@ before merge. Adopt the pieces incrementally; each stands on its own.
 
 ## How it fits together
 
-One session runs the inner loop — **session-start → work → wrap-up → pr-watch** —
-while the **friction flywheel** turns underneath it, feeding tickets and new rules
-back into the next session's briefing.
+Follow the task you are doing; the [architecture page](docs/architecture.md)
+keeps the detailed component and authority flows.
+
+### Deliver a change
 
 ```mermaid
-flowchart TD
-    A([session start]) --> B["session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI<br/>+ recent merges"]
-    B --> C{"operator-selected work<br/>or compatible recommendation"}
-    C -->|self-contained| D["parallel<br/>isolated worktree lanes<br/>· suggested model tier"]
-    C -->|judgment / interactive| E["cockpit<br/>assigned task worktree"]
-    D --> K{"wrap-up<br/>anything PRs + tracker<br/>don't record?"}
-    E --> K
-    K -->|yes| K2["commit handoff<br/>with this change"]
-    K -->|no| V
-    K2 --> V["verify completed branch"]
-    V --> F["open ready PR"]
-    F --> G["pr-watch<br/>CI + independent review<br/>class determines lenses"]
-    G --> H{"merge gates satisfied<br/>and actor authorized?"}
-    H -->|yes| J["merge and read back"]
-    H -->|no| I["resolve blocker or<br/>hold for operator"]
-    I --> G
-    J --> L([session end])
-    J -. review evidence .-> R[(merged PR reviews)]
-
-    K -. friction accrues .-> M[(friction-log)]
-    M -. cadence .-> N["triage-friction-log<br/>frozen inbox · exact decisions"]
-    R[(merged PR reviews)] -. scheduled .-> O["post-merge-systemize<br/>cluster root causes"]
-    N -. approved filing .-> P[(tracker)]
-    O -. qualifying pattern .-> Q["shared rule proposal"]
-    Q -. reviewed and merged .-> S[(shared rules)]
-    P -. seeds next session .-> B
-    S -. binds next session .-> B
+flowchart LR
+    Start["Brief and choose work"] --> Work["Edit in task worktree"]
+    Work --> Record["Wrap up and verify"]
+    Record --> Review["Open ready PR and watch"]
+    Review --> Decision{"Gates satisfied and<br/>actor authorized?"}
+    Decision -->|yes| Merge["Merge and read back"]
+    Decision -->|no| Hold["Resolve blocker or hold"]
 ```
 
-`wrap-up` runs before the session's last PR goes to review, so a handoff edit is
-reviewed with the change it describes. When the PRs, commits and tracker already say
-everything, it commits nothing. Solid arrows are one session's flow; dotted arrows are the asynchronous flywheel
-(**down** through approved tracker filing and **up** through recurring-pattern
-rule proposals). Review readiness and merge authority are separate: safety-critical
-changes require their prescribed review and operator sign-off; ordinary changes
-also follow the project's merge policy.
+[`session-start`](docs/agentic-dev-kit/workflows/session-start.md) supplies the
+briefing. [`wrap-up`](docs/agentic-dev-kit/workflows/wrap-up.md) records only what
+the PR, commits and tracker do not already hold, before review.
+[`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md) owns the review loop;
+merge authority remains a separate project decision. Use the
+[session recipe](docs/developer-guide.md#run-a-development-session) to start.
 
-Use the [review-status guide](docs/developer-guide.md#read-review-status-without-confusing-it-with-merge-authority)
-to distinguish convergence from merge clearance. The
-[cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) retains required
-evidence before separately authorized scratch or worktree retirement; ending a
-session does not itself authorize deletion.
+### Turn experience into improvements
+
+```mermaid
+flowchart LR
+    Friction["Session friction"] --> Triage["Triage frozen inbox"]
+    Triage --> Decision["Exact operator decision"]
+    Decision --> Outcome["File, archive or park"]
+    Reviews["Merged PR reviews"] --> Patterns["Systemize recurring causes"]
+    Patterns --> Proposal["Shared rule proposal<br/>or routed finding"]
+```
+
+The [triage contract](docs/agentic-dev-kit/workflows/triage-friction-log.md) owns
+inbox decisions. The [systemize contract](docs/agentic-dev-kit/workflows/post-merge-systemize.md)
+owns recurring-pattern proposals. Tracker writes require approval of their payload;
+the [detailed flywheel](docs/architecture.md#friction-flywheel) shows the routes.
+
+### Keep evidence before cleanup
+
+```mermaid
+flowchart LR
+    Inventory["Inventory and track writers"] --> Retain["End writers and seal evidence"]
+    Retain --> Preview["Preview exact paths"]
+    Preview --> Decision{"Operator authorizes<br/>this scope?"}
+    Decision -->|yes| Apply["Apply with fresh guards"]
+    Decision -->|no| Keep["Keep inventory"]
+```
+
+The [cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) owns retention,
+consent and kept-path recovery. Ending a session does not authorize deletion;
+[the detailed flow](docs/architecture.md#evidence-retention-and-cleanup) includes
+native archive and completion checks.
+
+For a blocked task, use the [symptom-to-recovery table](docs/troubleshooting.md).
+Before editing or replacing a file, check the [ownership reference](docs/ownership.md).
 
 ## Quickstart
 

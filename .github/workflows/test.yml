@@ -153,3 +153,30 @@ jobs:
         run: |
           python -m pip uninstall -y pyyaml
           python -m pytest scripts/tests/test_kitconfig.py -q
+
+  documentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tooling/docs/package-lock.json
+      - name: Install documentation dependencies
+        run: npm --prefix tooling/docs ci --ignore-scripts
+      - name: Install diagram browser
+        run: npm --prefix tooling/docs exec -- playwright install --with-deps chromium
+      - name: Check links, anchors and rendered diagrams
+        run: npm --prefix tooling/docs run verify
+      - name: Retain diagram previews
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-previews
+          path: tooling/docs/previews/
+          if-no-files-found: ignore
+          retention-days: 14
