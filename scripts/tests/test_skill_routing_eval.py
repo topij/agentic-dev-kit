@@ -154,3 +154,70 @@ def test_an_unreadable_case_file_or_adapter_exits_2(tmp_path: Path) -> None:
 def test_stemming_joins_the_forms_a_request_uses() -> None:
     assert skill_routing_eval.tokens("watching watched watches") == ["watch"] * 3
     assert skill_routing_eval.tokens("the PR is green") == ["pr", "green"]
+
+
+def _tie_model() -> skill_routing_eval.Model:
+    return skill_routing_eval.Model.build({"a-skill": "foo bar", "z-skill": "foo bar"})
+
+
+def test_a_tie_fails_a_positive_case_whichever_slug_sorts_first(tmp_path: Path, monkeypatch) -> None:
+    """Two skills scoring the same on a prompt: neither is ahead, so neither passes top_k 1."""
+    monkeypatch.setattr(skill_routing_eval, "model_invoked_slugs", lambda: ("a-skill", "z-skill"))
+    model = _tie_model()
+    monkeypatch.setattr(skill_routing_eval.Model, "build", classmethod(lambda cls, d: model))
+    monkeypatch.setattr(skill_routing_eval, "read_descriptions", lambda root, runtime: {})
+    cases = {
+        "settings": {"top_k": 1, "unrelated_max_score": 0.9, "collision_threshold": 1.1},
+        "skills": {
+            slug: {"positive": [{"prompt": "foo"}], "negative": [{"prompt": "qux", "owner": other}, {"prompt": "qux"}]}
+            for slug, other in (("a-skill", "z-skill"), ("z-skill", "a-skill"))
+        },
+    }
+    failures = skill_routing_eval.evaluate(tmp_path, cases).failures
+    assert any("positive prompt for a-skill" in f for f in failures), failures
+    assert any("positive prompt for z-skill" in f for f in failures), failures
+
+
+def test_a_prompt_sharing_no_word_with_any_description_passes_nothing(tmp_path: Path) -> None:
+    def mutate(data: dict) -> None:
+        data["skills"]["parallel"]["positive"].append({"prompt": "zzzz qqqq"})
+        # Both score 0: an owner that does not outscore the skill does not reject it.
+        data["skills"]["wrap-up"]["negative"].append({"prompt": "zzzz qqqq", "owner": "pr-watch"})
+
+    result = _run("--root", str(REPO_ROOT), "--cases", str(_cases(tmp_path, mutate)))
+    assert result.returncode == 1
+    assert "positive prompt for parallel" in result.stdout
+    assert "negative prompt for wrap-up not rejected" in result.stdout
+
+
+def test_a_collision_just_over_the_threshold_fails(tmp_path: Path) -> None:
+    def mutate(data: dict) -> None:
+        data["settings"]["collision_threshold"] = 0.05
+
+    result = _run("--root", str(REPO_ROOT), "--cases", str(_cases(tmp_path, mutate)))
+    assert result.returncode == 1
+    assert "collide (cosine" in result.stdout
+
+
+def test_empty_case_lists_fail(tmp_path: Path) -> None:
+    def mutate(data: dict) -> None:
+        data["skills"]["pr-watch"] = {"positive": [], "negative": []}
+
+    result = _run("--root", str(REPO_ROOT), "--cases", str(_cases(tmp_path, mutate)))
+    assert result.returncode == 1
+    assert "pr-watch: no positive prompts" in result.stdout
+    assert "pr-watch: no negative prompt owned by another skill" in result.stdout
+    assert "pr-watch: no negative prompt that no kit skill should take" in result.stdout
+
+
+def test_a_malformed_case_exits_2(tmp_path: Path) -> None:
+    for mutate, message in (
+        (lambda d: d["skills"]["pr-watch"]["positive"].append({"text": "x"}), "needs a non-empty 'prompt'"),
+        (lambda d: d["skills"]["pr-watch"].update(positive="watch my pr"), "must be a list"),
+        (lambda d: d["skills"]["pr-watch"]["negative"].append({"prompt": "x", "owner": "nope"}), "has owner 'nope'"),
+        (lambda d: d["skills"]["pr-watch"]["negative"].append({"prompt": "x", "owner": "pr-watch"}), "has owner 'pr-watch'"),
+    ):
+        result = _run("--root", str(REPO_ROOT), "--cases", str(_cases(tmp_path, mutate)))
+        assert result.returncode == 2, (message, result.stdout, result.stderr)
+        assert message in result.stderr
+        assert "Traceback" not in result.stderr

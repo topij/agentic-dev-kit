@@ -623,7 +623,7 @@
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
-      "sha256": "c4391c841014268d922580cbc983434329a7a0114af93f8d326243948851f902"
+      "sha256": "3eef4a95cbaf8bd1ed8b28eb279882a2bb327c331c248f1b80901116603c5691"
     },
     "scripts/sweep_scratch.py": {
       "required_by": [
@@ -775,7 +775,7 @@
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",
-      "sha256": "96326330388c6d34f907625ad1e948190b32a47b55ef3d89e09fca3568ebb8f8"
+      "sha256": "50816844599ec7fd3608e0d0e9a4d6543d417603ba3555f79f7c77afc79bd11c"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",

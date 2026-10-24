@@ -134,8 +134,9 @@ class Model:
     def rank(self, text: str) -> list[tuple[str, float]]:
         q = self.query(text)
         scores = [(slug, self.cosine(q, vec)) for slug, vec in self.vectors.items()]
-        # Ties break by slug so a run is reproducible; a tie still counts against a
-        # positive case, since the target is not ahead of the skill it ties with.
+        # Ties break by slug so the printed order is reproducible. Whether a positive
+        # case passes does not read this order: evaluate() counts every other skill
+        # scoring at or above the target, so a tie counts against it either way.
         return sorted(scores, key=lambda item: (-item[1], item[0]))
 
 
@@ -181,6 +182,21 @@ def read_cases(path: Path) -> dict:
         value = data["settings"].get(key)
         if not isinstance(value, (int, float)) or isinstance(value, bool):
             raise EvalError(f"{path}: settings.{key} must be a number")
+    slugs = set(model_invoked_slugs())
+    for slug, entry in data["skills"].items():
+        if not isinstance(entry, dict):
+            raise EvalError(f"{path}: skills.{slug} must be a mapping")
+        for kind in ("positive", "negative"):
+            cases = entry.get(kind, [])
+            if not isinstance(cases, list):
+                raise EvalError(f"{path}: skills.{slug}.{kind} must be a list")
+            for i, case in enumerate(cases):
+                where = f"{path}: skills.{slug}.{kind}[{i}]"
+                if not isinstance(case, dict) or not isinstance(case.get("prompt"), str) or not case["prompt"].strip():
+                    raise EvalError(f"{where} needs a non-empty 'prompt'")
+                owner = case.get("owner")
+                if owner is not None and (kind != "negative" or owner not in slugs or owner == slug):
+                    raise EvalError(f"{where} has owner {owner!r}; an owner is another model-invoked skill, on a negative case")
     return data
 
 
@@ -194,6 +210,15 @@ def evaluate(root: Path, cases: dict) -> Result:
 
     for slug in sorted(set(slugs) - set(cases["skills"])):
         result.failures.append(f"{slug}: no cases; every model-invoked skill needs positive and negative prompts")
+    for slug in sorted(set(slugs) & set(cases["skills"])):
+        entry = cases["skills"][slug]
+        negatives = entry.get("negative", [])
+        if not entry.get("positive"):
+            result.failures.append(f"{slug}: no positive prompts")
+        if not any("owner" in case for case in negatives):
+            result.failures.append(f"{slug}: no negative prompt owned by another skill")
+        if not any("owner" not in case for case in negatives):
+            result.failures.append(f"{slug}: no negative prompt that no kit skill should take")
     for slug in sorted(set(cases["skills"]) - set(slugs)):
         result.failures.append(f"{slug}: has cases but is not a model-invoked skill")
 
@@ -212,8 +237,12 @@ def evaluate(root: Path, cases: dict) -> Result:
             entry = cases["skills"][slug]
             for case in entry.get("positive", []):
                 ranking = model.rank(case["prompt"])
-                position = [s for s, _ in ranking].index(slug) + 1
-                ok = position <= top_k and dict(ranking)[slug] > 0
+                target = dict(ranking)[slug]
+                # Every other skill scoring at or above the target is ahead of it, so a
+                # tie fails whichever slug sorts first; a prompt sharing no word with
+                # the description (score 0) never passes.
+                position = 1 + sum(1 for s, v in ranking if s != slug and v >= target)
+                ok = position <= top_k and target > 0
                 result.rows.append({"runtime": runtime, "skill": slug, "kind": "positive",
                                     "prompt": case["prompt"], "rank": position, "ok": ok})
                 if not ok:
@@ -226,9 +255,6 @@ def evaluate(root: Path, cases: dict) -> Result:
                 scores = dict(model.rank(case["prompt"]))
                 owner = case.get("owner")
                 if owner is not None:
-                    if owner not in scores:
-                        result.failures.append(f"{slug}: negative case names unknown owner {owner!r}")
-                        continue
                     ok = scores[owner] > scores[slug]
                     detail = f"{slug} {scores[slug]:.2f} vs owner {owner} {scores[owner]:.2f}"
                 else:
