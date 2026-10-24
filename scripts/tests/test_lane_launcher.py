@@ -129,6 +129,8 @@ CLAUDE_OUTPUT_MODES = (
     "none",
     "denied",
     "no-denial-list",
+    "with-usage",
+    "odd-usage",
 )
 
 
@@ -163,6 +165,9 @@ def _fake_claude(
         # `success` envelope whose only trace of the refusal is this list.
         "denied": "sys.stdout.write(json.dumps({**good, 'permission_denials': [{'tool_name': 'Write', 'tool_use_id': 'toolu_x', 'tool_input': {'file_path': 'x.txt'}}]}) + '\\n')",
         "no-denial-list": "sys.stdout.write(json.dumps({k: v for k, v in good.items() if k != 'permission_denials'}) + '\\n')",
+        # The token and cost fields a real result object carries beside the text.
+        "with-usage": "sys.stdout.write(json.dumps({**good, 'usage': {'input_tokens': 12, 'output_tokens': 34, 'cache_read_input_tokens': 5, 'service_tier': 'standard'}, 'total_cost_usd': 0.0123, 'num_turns': 3, 'duration_ms': 4567, 'modelUsage': {'claude-haiku-x': {'inputTokens': 12, 'outputTokens': 34, 'costUSD': 0.0123}}}) + '\\n')",
+        "odd-usage": "sys.stdout.write(json.dumps({**good, 'usage': {'input_tokens': True, 'output_tokens': False}, 'total_cost_usd': True, 'modelUsage': ['x'], 'num_turns': '3'}) + '\\n')",
     }[output]
     path.write_text(
         "#!/usr/bin/env python3\n"
@@ -217,6 +222,7 @@ def _install_repo(
     claude_policy: str | None = "accept-edits",
     profile: dict[str, object] | bytes | None = None,
     profile_key: str | None = "config/claude-lane-settings.json",
+    runtime_mappings: str = "",
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -285,7 +291,8 @@ def _install_repo(
         "  termination_grace_seconds: 1\n"
         "vcs:\n"
         "  protected_branch: trunk\n"
-        "  dev_branch_prefix: lane\n",
+        "  dev_branch_prefix: lane\n"
+        + runtime_mappings,
         encoding="utf-8",
     )
     profile_path = repo / "config" / "claude-lane-settings.json"
@@ -324,6 +331,7 @@ def _run_launcher(
     descriptor: dict[str, object],
     prompt: Path,
     env: dict[str, str],
+    *extra: str,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -333,6 +341,7 @@ def _run_launcher(
             str(descriptor["descriptor_path"]),
             "--prompt-file",
             str(prompt),
+            *extra,
         ],
         env=env,
         check=False,
@@ -2479,3 +2488,152 @@ else:
         pytest.fail("the stable-file reader blocked on the substituted file")
     assert result.returncode == 0, result.stdout + result.stderr
     assert ("regular contents accepted" if mode == "regular" else "refused:") in result.stdout
+
+
+_TIER_MAPPINGS = (
+    "models:\n"
+    "  runtime_mappings:\n"
+    "    claude:\n"
+    "      cheap: haiku\n"
+    "      expensive:\n"
+    "        model: opus\n"
+    "        effort: high\n"
+    "    codex:\n"
+    "      cheap: low\n"
+    "      expensive:\n"
+    "        model: gpt-x\n"
+    "        effort: xhigh\n"
+)
+
+
+def _child_argv(sessions: Path, descriptor: dict[str, object], runtime: str) -> list[str]:
+    final_path = Path(_receipt(sessions, descriptor)["terminal"]["final_message_path"])
+    if runtime == "claude":
+        return json.loads(json.loads(final_path.read_bytes())["result"])["argv"]
+    return json.loads(final_path.read_text(encoding="utf-8"))["argv"]
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize(
+    ("runtime", "tier", "compute_argv", "model", "effort"),
+    [
+        ("claude", "cheap", ["--model", "haiku"], "haiku", None),
+        ("claude", "expensive", ["--model", "opus", "--effort", "high"], "opus", "high"),
+        ("codex", "cheap", ["-c", "model_reasoning_effort=low"], None, "low"),
+        ("codex", "expensive", ["-m", "gpt-x", "-c", "model_reasoning_effort=xhigh"], "gpt-x", "xhigh"),
+    ],
+)
+def test_a_requested_tier_reaches_the_child_argv_after_the_policy_slot(
+    tmp_path: Path,
+    runtime: str,
+    tier: str,
+    compute_argv: list[str],
+    model: str | None,
+    effort: str | None,
+) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime, runtime_mappings=_TIER_MAPPINGS
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env, "--tier", tier)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["request"]["compute"] == {
+        "tier": tier, "model": model, "effort": effort, "argv": compute_argv
+    }
+    argv = _child_argv(sessions, descriptor, runtime)
+    policy = receipt["request"]["approval_policy"]["argv"]
+    assert argv[: len(policy)] == policy
+    assert argv[len(policy) : len(policy) + len(compute_argv)] == compute_argv
+    assert receipt["observed"]["argv"] == [*receipt["request"]["configured_command"], *argv]
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_no_tier_inherits_the_clients_compute(tmp_path: Path, runtime: str) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime, runtime_mappings=_TIER_MAPPINGS
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["request"]["compute"] == {
+        "tier": None, "model": None, "effort": None, "argv": []
+    }
+    argv = _child_argv(sessions, descriptor, runtime)
+    for flag in ("--model", "--effort", "-m"):
+        assert flag not in argv
+    assert not any(part.startswith("model_reasoning_effort=") for part in argv)
+
+
+@pytest.mark.parametrize(
+    ("tier", "mappings", "message"),
+    [
+        ("default", _TIER_MAPPINGS, "has no models.runtime_mappings.claude.default"),
+        ("cheap", "", "has no models.runtime_mappings.claude.cheap"),
+        ("huge", _TIER_MAPPINGS, "--tier must be one of"),
+        (
+            "cheap",
+            "models:\n  runtime_mappings:\n    claude:\n      cheap: 'haiku --dangerously-skip-permissions'\n",
+            "must be one word",
+        ),
+        (
+            "cheap",
+            "models:\n  runtime_mappings:\n    claude:\n      cheap:\n        model: haiku\n        sandbox: 'off'\n",
+            "must be one word or a map of model and effort",
+        ),
+        (
+            "cheap",
+            "models:\n  runtime_mappings:\n    claude:\n      cheap: -p\n",
+            "must be one word",
+        ),
+    ],
+)
+def test_a_tier_the_config_cannot_map_is_refused_before_any_attempt(
+    tmp_path: Path, tier: str, mappings: str, message: str
+) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", runtime_mappings=mappings
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env, "--tier", tier)
+    assert result.returncode == 64, result.stderr
+    assert message in result.stderr
+    assert not (sessions / "probe" / "launch-attempt.json").exists()
+
+
+@pytest.mark.evidence
+def test_a_claude_lane_records_the_usage_its_result_reports(tmp_path: Path) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output="with-usage"
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    terminal = _receipt(sessions, descriptor)["terminal"]
+    assert terminal["usage"] == {
+        "source": "claude json result",
+        "usage": {"input_tokens": 12, "output_tokens": 34, "cache_read_input_tokens": 5},
+        "total_cost_usd": 0.0123,
+        "models": {"claude-haiku-x": {"inputTokens": 12, "outputTokens": 34, "costUSD": 0.0123}},
+        "num_turns": 3,
+        "duration_ms": 4567,
+    }
+
+
+@pytest.mark.evidence
+def test_usage_the_launcher_cannot_read_is_none_and_never_fails_the_lane(
+    tmp_path: Path,
+) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output="odd-usage"
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["terminal"]["usage"] is None
+
+
+def test_a_codex_lane_records_no_usage(tmp_path: Path) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    assert _receipt(sessions, descriptor)["terminal"]["usage"] is None

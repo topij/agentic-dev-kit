@@ -82,7 +82,7 @@ CONFIGURED_PREFIX="$(devkit_config_scalar "$CONFIG_FILE" vcs "" dev_branch_prefi
 
 # Sessions container — mirror dev_session.sh so no-arg discovery lines up with
 # the sibling that created the sessions.
-SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(dirname "$REPO_ROOT")/dev-model-sessions}"
+SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(devkit_default_sessions_dir "$REPO_ROOT")}"
 DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 
 _die() {

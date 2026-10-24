@@ -14,6 +14,32 @@ devkit_find_repo_root() {
     return 1
 }
 
+# Default lane sessions container: a `dev-model-sessions/` sibling of the
+# repository's PRIMARY worktree. Resolving it from the invoking checkout instead
+# (`dirname` of the repo root) sends a command run inside a lane worktree, or
+# inside a linked cockpit worktree, to a different directory than the one the
+# sessions live in (#479). The primary worktree is the first record of
+# `git worktree list`, which every linked worktree of one repository reports
+# identically. A bare primary (no working tree), or a git that cannot list
+# worktrees, keeps the old answer: the sibling of the checkout passed in.
+devkit_default_sessions_dir() {
+    local repo_root="$1" primary
+    primary="$(git -C "$repo_root" worktree list --porcelain -z 2>/dev/null | python3 -c '
+import sys
+fields = sys.stdin.buffer.read().split(b"\0")
+first = []
+for field in fields:
+    if not field:
+        break
+    first.append(field)
+if not first or not first[0].startswith(b"worktree ") or b"bare" in first[1:]:
+    raise SystemExit(1)
+sys.stdout.buffer.write(first[0][len(b"worktree "):])
+' 2>/dev/null)" || primary=""
+    [[ -n "$primary" && "$primary" == /* && -d "$primary" ]] || primary="$repo_root"
+    printf '%s/dev-model-sessions\n' "$(dirname "$primary")"
+}
+
 # Read one scalar from the kit's deliberately simple, hand-authored YAML config.
 # Supports top-level sections, one optional subsection, and scalar values. Keeping
 # this here lets every shell engine share the same config semantics without taking

@@ -22,6 +22,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import secrets
 import select
 import shutil
@@ -93,6 +94,19 @@ RUNTIME_APPROVAL_POLICIES: dict[str, dict[str, tuple[str, ...]]] = {
         "accept-edits": ("--permission-mode", "acceptEdits"),
     },
 }
+# Compute tiers (Principle #7). `--tier` names one of the three neutral tier
+# names the kit fixes (the keys `models.tiers` documents; this tuple is a
+# constant, not read from config); the engine reads `models.runtime_mappings.<runtime>.<tier>` and
+# emits that runtime's own controls in a fixed argv slot after the approval
+# contribution. A scalar value is the one control the runtime's mapping names (a
+# Claude model alias, a Codex effort level, as the config comment defines); a map
+# carries `model` and/or `effort`. Without `--tier` the lane inherits the client's
+# compute, as before. A requested tier with no mapping is refused rather than
+# silently run on the default, and each value is held to one plain word so config
+# cannot smuggle a second flag into the argv.
+COMPUTE_TIERS = ("cheap", "default", "expensive")
+COMPUTE_WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+RUNTIME_SCALAR_COMPUTE = {"claude": "model", "codex": "effort"}
 # The Claude trust route (design matrix, 2026-08-27): an unattended lane worktree
 # is an untrusted workspace, so the branch's project settings never supply policy
 # and the operator's user settings must not either. `--setting-sources ""` loads
@@ -220,21 +234,27 @@ class RuntimeProfile:
         command: list[str],
         transports: dict[str, str],
         approval: dict[str, Any],
+        compute: dict[str, Any] | None = None,
     ) -> None:
         self.runtime = runtime
         self.command = command
         self.transports = transports
+        # {"tier", "model", "effort", "argv"}: the requested tier, what the merged
+        # config mapped it to, and the argv that carries it. All None/empty when no
+        # tier was requested, so the argv is exactly the inherit-compute one.
+        self.compute = compute or {"tier": None, "model": None, "effort": None, "argv": []}
         # {"declared", "argv", "settings_profile_path", "settings_profile_sha256"}:
         # the declared policy, the exact argv it produces, and the trust-route
         # profile the argv names (Claude) — bound into the request by both sides.
         self.approval = approval
 
     def child_argv(self, worktree: str, final_message: str) -> list[str]:
-        # Fixed order: command prefix, approval contribution, worktree, final text,
-        # prompt. For Codex this is the #609 argv with `--sandbox <policy>` in the
+        # Fixed order: command prefix, approval contribution, compute, worktree,
+        # final text, prompt. Compute is empty unless a tier was requested. For Codex this is the #609 argv with `--sandbox <policy>` in the
         # second slot; for Claude it is `claude -p --setting-sources "" --permission-mode
         # <mode> --settings <profile> --output-format json`.
         approval_args = list(self.approval["argv"])
+        compute_args = list(self.compute["argv"])
         worktree_args = (
             ["--cd", worktree] if self.transports["worktree"] == "cd-flag" else []
         )
@@ -243,7 +263,14 @@ class RuntimeProfile:
         else:
             final_args = ["--output-format", "json"]
         prompt_args = ["-"] if self.transports["prompt"] == "stdin-dash" else []
-        return [*self.command, *approval_args, *worktree_args, *final_args, *prompt_args]
+        return [
+            *self.command,
+            *approval_args,
+            *compute_args,
+            *worktree_args,
+            *final_args,
+            *prompt_args,
+        ]
 
 
 class _ForkedChild:
@@ -443,7 +470,46 @@ def _load_descriptor(path: Path, *, now: dt.datetime | None = None) -> tuple[dic
     return descriptor, raw
 
 
-def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, Path]:
+def _compute_for_runtime(runtime: str, config: dict[str, Any], tier: str | None) -> dict[str, Any]:
+    """Resolve a requested tier to this runtime's compute controls, or refuse."""
+    if tier is None:
+        return {"tier": None, "model": None, "effort": None, "argv": []}
+    if tier not in COMPUTE_TIERS:
+        raise LaunchError(f"--tier must be one of {', '.join(COMPUTE_TIERS)}")
+    key = f"models.runtime_mappings.{runtime}.{tier}"
+    value = get(config, key, None)
+    if value is None:
+        raise LaunchError(
+            f"tier {tier} has no {key}; refusing rather than running on the runtime default"
+        )
+    if isinstance(value, str):
+        chosen = {RUNTIME_SCALAR_COMPUTE[runtime]: value}
+    elif isinstance(value, dict) and value and set(value) <= {"model", "effort"}:
+        chosen = {name: setting for name, setting in value.items() if setting is not None}
+        if not chosen:
+            raise LaunchError(f"config {key} sets neither model nor effort")
+    else:
+        raise LaunchError(f"config {key} must be one word or a map of model and effort")
+    for name, setting in chosen.items():
+        if not isinstance(setting, str) or not COMPUTE_WORD.fullmatch(setting):
+            raise LaunchError(
+                f"config {key}.{name} is {setting!r}; it must be one word of letters, "
+                "digits, '.', '_' or '-'"
+            )
+    model, effort = chosen.get("model"), chosen.get("effort")
+    argv: list[str] = []
+    if runtime == "claude":
+        argv += ["--model", model] if model else []
+        argv += ["--effort", effort] if effort else []
+    else:
+        argv += ["-m", model] if model else []
+        argv += ["-c", f"model_reasoning_effort={effort}"] if effort else []
+    return {"tier": tier, "model": model, "effort": effort, "argv": argv}
+
+
+def _config_for_launcher(
+    runtime: str, tier: str | None = None
+) -> tuple[RuntimeProfile, int, int, int, Path]:
     if runtime not in SUPPORTED_RUNTIMES:
         raise LaunchError("descriptor runtime is not a supported headless runtime")
     root = repo_root(SCRIPT_DIR)
@@ -469,6 +535,7 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
             )
         transports[kind] = declared
     approval = _approval_for_runtime(runtime, config, root)
+    compute = _compute_for_runtime(runtime, config, tier)
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
         raise LaunchError("config parallel.observation_timeout_seconds must be positive")
     if not isinstance(lifetime, int) or isinstance(lifetime, bool) or lifetime <= 0:
@@ -490,7 +557,9 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
             f"configured {runtime} launcher is unavailable on the trusted path"
         )
     return (
-        RuntimeProfile(runtime, [resolved_executable, *command[1:]], transports, approval),
+        RuntimeProfile(
+            runtime, [resolved_executable, *command[1:]], transports, approval, compute
+        ),
         timeout,
         lifetime,
         termination_grace,
@@ -876,6 +945,12 @@ def _request_binding(
             "settings_profile_path": profile.approval["settings_profile_path"],
             "settings_profile_sha256": profile.approval["settings_profile_sha256"],
         },
+        "compute": {
+            "tier": profile.compute["tier"],
+            "model": profile.compute["model"],
+            "effort": profile.compute["effort"],
+            "argv": list(profile.compute["argv"]),
+        },
         "process_nonce_sha256": _sha256(process_nonce.encode()),
     }
 
@@ -927,6 +1002,63 @@ def _extract_final_result(
     if not isinstance(denials, list):
         raise LaunchError("runtime result carries no permission_denials list")
     return result.encode("utf-8"), denials
+
+
+def _numeric_fields(value: object) -> dict[str, int | float] | None:
+    if not isinstance(value, dict):
+        return None
+    kept = {
+        str(key): number
+        for key, number in value.items()
+        if isinstance(number, (int, float)) and not isinstance(number, bool)
+    }
+    return kept or None
+
+
+def _reported_usage(transport: str, final_bytes: bytes) -> dict[str, Any] | None:
+    """The token and cost figures the runtime reported about itself, or None.
+
+    Evidence for the operator, never for a gate: it is read best-effort from the
+    same final-message bytes the receipt already hashes, and any shape it does not
+    recognise reads as None rather than failing the lane. Only Claude's
+    `json-stdout` result carries figures; `last-message-file` holds the final text
+    alone. The values are the runtime's own and cover what its result object
+    covers; whether that includes subagents is the runtime's definition, which
+    this does not check. Only numeric fields are kept.
+    """
+    if transport != "json-stdout" or not final_bytes:
+        return None
+    try:
+        value, _end = json.JSONDecoder().raw_decode(final_bytes.decode("utf-8").strip())
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        # ValueError covers JSONDecodeError and the integer-length limit.
+        return None
+    if not isinstance(value, dict) or value.get("type") != "result":
+        return None
+    models = value.get("modelUsage")
+    reported = {
+        "source": "claude json result",
+        "usage": _numeric_fields(value.get("usage")),
+        "total_cost_usd": value.get("total_cost_usd")
+        if isinstance(value.get("total_cost_usd"), (int, float))
+        and not isinstance(value.get("total_cost_usd"), bool)
+        else None,
+        "models": {
+            str(name): _numeric_fields(figures) or {}
+            for name, figures in models.items()
+        }
+        if isinstance(models, dict)
+        else None,
+        "num_turns": value.get("num_turns")
+        if type(value.get("num_turns")) is int
+        else None,
+        "duration_ms": value.get("duration_ms")
+        if type(value.get("duration_ms")) is int
+        else None,
+    }
+    if all(reported[key] is None for key in reported if key != "source"):
+        return None
+    return reported
 
 
 def _redirect_stdout_to_reserved_final(final_message: Path) -> None:
@@ -1008,7 +1140,7 @@ def _child_main(arguments: argparse.Namespace) -> int:
             f"launch-receipt-{descriptor['descriptor_id']}.json"
         )
         profile, _timeout, _lifetime, _termination_grace, config_root = (
-            _config_for_launcher(descriptor["runtime"])
+            _config_for_launcher(descriptor["runtime"], arguments.tier)
         )
         if Path(descriptor["repo_root"]).resolve() != config_root:
             raise LaunchError("descriptor repository is foreign to the launcher configuration")
@@ -1216,6 +1348,8 @@ def _terminal_receipt(
         # cannot expose it (`last-message-file`), or the result could not be
         # extracted at all. Never spelled `[]` in either case.
         "permission_denials": permission_denials,
+        # The runtime's own token/cost report, or None; never part of the verdict.
+        "usage": _reported_usage(final_text_transport, final_bytes),
         "finished_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     _write_atomic(receipt_path, receipt)
@@ -1325,7 +1459,7 @@ def _wait_for_process_or_signal(
     return None
 
 
-def launch(descriptor_path: Path, prompt_path: Path) -> int:
+def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) -> int:
     descriptor, descriptor_raw = _load_descriptor(descriptor_path)
     (
         profile,
@@ -1333,7 +1467,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         configured_lifetime,
         termination_grace,
         config_root,
-    ) = _config_for_launcher(descriptor["runtime"])
+    ) = _config_for_launcher(descriptor["runtime"], tier)
     final_text_transport = profile.transports["final_text"]
     if Path(descriptor["repo_root"]).resolve() != config_root:
         raise LaunchError("descriptor repository is foreign to the launcher configuration")
@@ -1408,6 +1542,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         authority_fd=authority_read,
         ready_fd=ready_write,
         ack_fd=ack_read,
+        tier=tier,
     )
     process: _ForkedChild | None = None
     caught: list[int] = []
@@ -1611,6 +1746,11 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--descriptor")
     parser.add_argument("--prompt-file")
+    parser.add_argument(
+        "--tier",
+        help="neutral compute tier (cheap, default, expensive) applied through "
+        "models.runtime_mappings.<runtime>; omit to inherit the client's compute",
+    )
     return parser
 
 
@@ -1619,7 +1759,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if not arguments.descriptor or not arguments.prompt_file:
             raise LaunchError("--descriptor and --prompt-file are required")
-        return launch(Path(arguments.descriptor), Path(arguments.prompt_file))
+        return launch(
+            Path(arguments.descriptor), Path(arguments.prompt_file), arguments.tier
+        )
     except LaunchError as exc:
         print(f"[lane-launcher] error: {exc}", file=sys.stderr)
         return 64

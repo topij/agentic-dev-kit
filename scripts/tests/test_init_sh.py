@@ -3574,6 +3574,7 @@ def test_both_runtime_mappings_comments_declare_the_status_per_runtime():
 RUNTIME_MAPPINGS_READERS = {
     "init.sh": "the schema migration writes the map; it never reads a value back",
     "scripts/runtime_smoke.py": "the repo-only smoke runner applies the cheap tier to its own probes",
+    "scripts/launch_lane.py": "the headless lane wrapper applies a tier only when started with --tier",
 }
 
 
@@ -3601,7 +3602,9 @@ def test_no_shipped_engine_reads_runtime_mappings() -> None:
     The reference config's comment and `runtime-parity.md`'s *Capability tiers* row
     once said no engine reads `models.runtime_mappings`. `runtime_smoke.py` (#913)
     made that false without touching either. This names every reader, and requires
-    each one besides the migration to be repo-only, so it never reaches an adopter.
+    each one besides the migration and `launch_lane.py` to be repo-only, so it never
+    reaches an adopter. `launch_lane.py` reads it only under `--tier` (#1173), the
+    one mechanical route the config comment names.
 
     It scans every tracked file outside the tests under `scripts/`, and `init.sh`,
     that is Python, shell, or carries a shebang: an extensionless hook such as
@@ -3641,9 +3644,11 @@ def test_no_shipped_engine_reads_runtime_mappings() -> None:
     finally:
         sys.modules.pop(spec.name, None)
     roles = dict(doctor.KIT_OWNED)
-    assert {name: roles.get(name) for name in readers - {"init.sh"}} == {
-        "scripts/runtime_smoke.py": doctor.REPO_ONLY_ROLE
-    }
+    # launch_lane.py ships on purpose: `--tier` is the one mechanical route the
+    # config comment names. Every other reader must stay repo-only.
+    assert {
+        name: roles.get(name) for name in readers - {"init.sh", "scripts/launch_lane.py"}
+    } == {"scripts/runtime_smoke.py": doctor.REPO_ONLY_ROLE}
 
 
 def test_init_sh_stamps_the_same_tier_mapping_defaults_as_the_reference_config(

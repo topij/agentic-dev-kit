@@ -88,8 +88,13 @@ the wrapper refuses a descriptor whose runtime has no configured command.
 ```bash
 python3 <engine-dir>/launch_lane.py \
   --descriptor <session>/launch-descriptor.json \
-  --prompt-file <task-prompt>
+  --prompt-file <task-prompt> \
+  [--tier <cheap|default|expensive>]
 ```
+
+`--tier` applies the plan step's effort tier through `models.runtime_mappings`; without
+it the lane inherits the client's compute. [`parallel.md`](parallel.md#per-lane-effort-tier-risk--reasoning-effort--model)
+says what the wrapper passes and what the receipt records.
 
 Per runtime, `parallel.<runtime>_headless_command` supplies the argv prefix (the
 shipped values select stable `codex exec` and `claude -p`), and
