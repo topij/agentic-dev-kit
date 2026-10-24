@@ -1035,8 +1035,9 @@ migrate_runtime_schema() {
     cheap: mechanical
     default: standard
     expensive: judgment
-  # STATUS, per runtime: ADVISORY on both. The kit carries this map through no
-  # engine, so a workflow tier reaches a session only when the cockpit or the
+  # STATUS, per runtime: ADVISORY on both, with one mechanical route: the
+  # headless lane wrapper launch_lane.py applies it when started with --tier.
+  # Otherwise a workflow tier reaches a session only when the cockpit or the
   # operator applies it by hand: the delegation tool `model` parameter,
   # `claude -p --model/--effort`, `codex -m`, `-c model_reasoning_effort=`.
   # The values name controls each client accepted when the tiers were

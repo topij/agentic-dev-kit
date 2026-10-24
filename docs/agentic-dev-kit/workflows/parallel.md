@@ -194,7 +194,7 @@ deliberately:
    Interactive `new` prints launch or activation guidance for the **operator's own
    shell**, so it can only *suggest* the tier — the operator applies it (model and
    reasoning effort, if exposed) when starting the session. The supported
-   **unattended/headless** wrapper does not apply the suggested tier; see
+   **unattended/headless** wrapper applies it when you pass `--tier <tier>`; see
    [Unattended / headless launch](parallel-headless.md#unattended--headless-launch--new---headless).
 
 After launch, **this** session is the cockpit: `list` (or `list --watch` for an
@@ -253,10 +253,14 @@ suggestion and the operator applies it through the runtime's own controls — on
 `--model <alias>` and `--effort <level>` at launch, on Codex `-m <model>` and
 `-c model_reasoning_effort=<level>`; the aliases and levels `models.runtime_mappings`
 names are the ones each client accepted when calibrated (the `models` comment in
-`config/dev-model.yaml` carries the stamp). `models.runtime_mappings` itself is
-advisory on both runtimes: no shipped engine reads it. The supported headless wrapper
-deliberately inherits the client's compute on both runtimes and carries neither control:
-the launcher establishes worktree, environment, identity, and receipt authority only.
+`config/dev-model.yaml` carries the stamp). `models.runtime_mappings` is advisory on
+both runtimes except on one route: `launch_lane.py --tier <cheap|default|expensive>`
+reads `models.runtime_mappings.<runtime>.<tier>` and puts that runtime's own controls on
+the lane's argv, right after the approval policy (Claude `--model`/`--effort`, Codex
+`-m`/`-c model_reasoning_effort=`). It refuses a tier the config does not map, and a
+value that is not one plain word, before any launch attempt exists. The resolved
+compute is bound into the launch request and the receipt, so the parent and child
+must agree on it. Without `--tier` the wrapper inherits the client's compute.
 What "inherit" resolves to differs by trust route — a Claude lane under the wrapper's
 `--setting-sources ""` runs the product default model and effort, not the operator's
 user settings, while a Codex lane runs the user's `config.toml` model and effort
@@ -266,8 +270,16 @@ controls; without the complete descriptor environment and observer/receipt chain
 remains unsupported for state-writing lanes on either runtime.
 
 **Unspecified tier.** Without an explicit model or effort selection, an interactive
-lane uses the agent client's defaults when started. A supported headless lane uses
-the trust-route resolution above. A suggested tier alone changes neither.
+lane uses the agent client's defaults when started. A supported headless lane started
+without `--tier` uses the trust-route resolution above. A suggested tier alone changes
+neither.
+
+**What a lane cost.** A Claude lane's terminal receipt carries `terminal.usage`: the
+token counts, `total_cost_usd`, per-model figures (`modelUsage`), turn count and
+duration from the runtime's own JSON result. They are the runtime's figures, numeric
+fields only, and do not change the verdict. Comparing `terminal.usage.models` with
+`request.compute.model` shows whether the model you asked for is the one that ran. A
+Codex lane records `usage: null`, because its final-text transport carries no figures.
 
 ### Joint wrap-up — the cockpit owns the handoff
 

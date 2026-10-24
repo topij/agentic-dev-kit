@@ -675,15 +675,17 @@ models:
     cheap: mechanical
     default: standard
     expensive: judgment
-  # STATUS, per runtime: ADVISORY on both. No shipped engine reads this map:
-  # besides init.sh's migration write, its only reader is the kit repository's
+  # STATUS, per runtime: ADVISORY on both, with one mechanical route. The one
+  # shipped engine that reads this map is scripts/launch_lane.py, and only when
+  # it is started with `--tier <cheap|default|expensive>`: it then passes the
+  # mapped value on the headless lane's argv and refuses a tier with no mapping.
+  # Besides init.sh's migration write, the other reader is the kit repository's
   # own smoke runner, which is not shipped and applies the `cheap` values to its
   # probes. `test_no_shipped_engine_reads_runtime_mappings` in
-  # scripts/tests/test_init_sh.py holds that set. So a workflow's tier
-  # reaches a session only when the
-  # cockpit or the operator applies the value by hand — the delegation tool's
-  # `model` parameter, `claude -p --model/--effort`, `codex -m` and
-  # `-c model_reasoning_effort=`. The VALUES below name controls each client was
+  # scripts/tests/test_init_sh.py holds that set. Everywhere else a workflow's
+  # tier reaches a session only when the cockpit or the operator applies the
+  # value by hand — the delegation tool's `model` parameter,
+  # `claude -p --model/--effort`, `codex -m` and `-c model_reasoning_effort=`. The VALUES below name controls each client was
   # observed to accept (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27;
   # saved_plans/capability-tier-calibration-live-validation_2026-08-27.md):
   #
