@@ -18,13 +18,16 @@ flowchart LR
     Codex --> Agent
     Agent --> Engines
     Engines --> State["state resolver<br/>lane or production state"]
+    Engines --> Registry["cleanup registry<br/>shared Git metadata + retained evidence"]
     Agent --> Forge["forge, tracker, CI,<br/>notification clients"]
     Engines --> Forge
     Templates["docs/templates/"] --> Init["init.sh"]
     Init --> Config
     Init --> Rendered["rendered agent guides<br/>and narrative docs"]
     Manifest["kit-manifest.json"] --> Doctor["kit_doctor.py"]
-    Engines --> Doctor
+    Config --> Doctor
+    Baseline["installed baseline<br/>and adapter provenance"] --> Doctor
+    Cache["local Codex model cache<br/>advisory snapshot"] --> Doctor
 ```
 
 `config/dev-model.yaml` holds project choices: document paths, runtime launchers,
@@ -52,6 +55,11 @@ repository owns its rendered narrative docs and root agent guides. The
 [upgrade workflow](agentic-dev-kit/workflows/upgrade.md) distinguishes those
 adopter-owned files from kit-owned engines and templates; `kit_doctor.py` compares
 installed kit-owned files with the manifest and checks installation properties.
+Upgrades run in an assigned task worktree. Adapter inspection can use the recorded
+kit baseline's history to recognize an older generated description; unavailable
+history does not establish ownership. Claude lens definitions are previewed from
+the adopter's merged configuration before replacement. Shared hook installation
+has a separate explicit step because linked worktrees share Git administration.
 
 ### Source map
 
@@ -63,7 +71,9 @@ installed kit-owned files with the manifest and checks installation properties.
 | Runtime bindings | [Claude skills](../.claude/skills/), [Codex skills](../.agents/skills/) | Enter the shared workflows from each client. |
 | Review and lanes | [`pr_watch.py`](../scripts/pr_watch.py), [`dev_session.sh`](../scripts/dev_session.sh), [`launch_lane.py`](../scripts/launch_lane.py) | Poll and record review state, issue worktrees, and launch bounded headless sessions. |
 | State paths | [`scripts/lib/state_paths/`](../scripts/lib/state_paths/) | Resolve workflow artifacts into the declared state root or lane sandbox. |
-| Installation inspection | [`kit_doctor.py`](../scripts/kit_doctor.py), [`kit-manifest.json`](../kit-manifest.json) | Report kit-owned drift and installation properties. |
+| Review measurement | [`review_eval.py`](../scripts/review_eval.py), [evaluation guide](agentic-dev-kit/review-eval/reviewer-eval.md) | Compare lens and optional verifier reports against cases from kit history; scores require interpretation. |
+| Session cleanup | [`session_cleanup.py`](../scripts/session_cleanup.py), [`sweep_scratch.py`](../scripts/sweep_scratch.py) | Retain declared evidence and retire authorized inventory paths while preserving dependency guards. |
+| Installation inspection | [`kit_doctor.py`](../scripts/kit_doctor.py), [`kit-manifest.json`](../kit-manifest.json) | Report kit-owned drift, adapter and lens-definition state, and advisory Codex reviewer model observations. |
 
 Engines beneath `paths.engines` can be vendored under another directory in an
 adopter repository. The links above show this kit repository's default layout.
@@ -81,18 +91,23 @@ sequenceDiagram
     Agent->>Forge: read PR and CI state
     Agent-->>Developer: briefing with gaps and recommendation
     Developer->>Agent: choose work
-    Agent->>Forge: push branch and open ready PR
+    Agent->>Agent: edit in assigned task worktree
     Agent->>Records: wrap-up handoff test
     opt Something no PR, commit or tracker issue records
-        Agent->>Forge: commit the handoff edit on the same PR
+        Agent->>Agent: commit handoff edit with the change
     end
+    Agent->>Agent: verify completed branch
+    Agent->>Forge: push, open ready PR and assert ready
     loop Until review and CI settle
         Agent->>Forge: pr-watch poll
         Forge-->>Agent: checks and findings
         Agent->>Forge: push repair or answer finding
     end
-    Agent->>Developer: exact-head merge decision when required
-    Developer-->>Agent: authorize or hold
+    Agent->>Agent: inspect merge gates and project authority
+    opt Operator decision required
+        Agent->>Developer: exact-head merge decision
+        Developer-->>Agent: authorize or hold
+    end
 ```
 
 `session-start` makes no content edits or acknowledgements; its pr-watch read may
@@ -106,6 +121,43 @@ or merged, or that had none.
 Merge authority is separate from review readiness. For a non-lane PR without a
 project merge policy, the [wrap-up contract](agentic-dev-kit/workflows/wrap-up.md#authority-contract)
 holds the merge for an exact operator decision.
+
+## Review evidence and merge authority
+
+```mermaid
+flowchart TB
+    Poll["pr-watch at exact PR head"] --> Loop{"CI and findings<br/>handled?"}
+    Loop -->|no| Repair["fix or disposition<br/>then poll again"]
+    Repair --> Poll
+    Loop -->|yes| Converged["converged<br/>settle any owed review request"]
+    Bot["qualifying configured-bot<br/>review of this head"] --> Evidence["independent review evidence"]
+    Receipt["completed independent pass<br/>head-bound receipt + disposition"] --> Evidence
+    Converged --> Gate{"mergeable?<br/>evidence + no merge blockers"}
+    Evidence --> Gate
+    Gate -->|no| Block["resolve blocker / poll / review"]
+    Block --> Poll
+    Gate -->|yes| Authority{"project and request<br/>authorize this actor?"}
+    Authority -->|yes| Merge["merge and read back"]
+    Authority -->|no| Hold["operator hold"]
+```
+
+`converged` ends the repair loop in the poll's observed scope. `mergeable` also
+requires current-head independent-review evidence and satisfied merge guards;
+`done` is its legacy alias. Neither ready status nor convergence grants the actor
+merge authority. The REST backend can poll but cannot authorize a merge. Read
+`truncated_reads` and `unavailable_reads` before treating its result as complete.
+
+The [PR-watch contract](agentic-dev-kit/workflows/pr-watch.md) owns the request,
+receipt and round-budget rules. The [fallback contract](agentic-dev-kit/fallback-review-panel.md)
+selects lenses from the computed review class, isolates reviewers, and defines
+optional verification and typed dispositions. Receipt source and lens names are
+self-reported; storing them does not independently prove a review occurred.
+
+The [evaluation runner](agentic-dev-kit/review-eval/reviewer-eval.md) measures
+reviewer changes separately from this delivery gate. It gives case reports and
+optional verifier comparisons, not merge clearance. Likewise, `kit_doctor`'s
+Codex model-cache report is an advisory observation about explicit configured
+pins, not a live availability check or an automatic model upgrade.
 
 ## Isolation and state
 
@@ -137,6 +189,40 @@ sandbox or production artifact for a declared cache read; own-session triage
 state must instead resolve through its write path so it cannot import another
 session's approval evidence. Follow each workflow's path rules before adding an
 artifact rather than constructing a `state/` path in a caller.
+
+## Evidence retention and cleanup
+
+```mermaid
+flowchart TB
+    Start["start session inventory"] --> Allocate["allocate owned review rounds"]
+    Allocate --> Work["track writers<br/>register final worktree heads"]
+    Work --> Stop["writers and descendants ended"]
+    Stop --> Seal["seal complete evidence manifest"]
+    Seal --> Evidence["content-addressed evidence<br/>shared Git registry"]
+    Seal --> Preview["preview exact paths and keep reasons"]
+    Preview --> Consent{"operator authorization<br/>covers concrete scope?"}
+    Consent -->|no| Hold["retain inventory; await decision"]
+    Consent -->|yes| Apply["apply with renewed process attestation<br/>and fresh dependency guards"]
+    Apply --> Kept["kept / active / unavailable<br/>incomplete; preserve reason"]
+    Apply --> Native["archive-with-runtime<br/>Codex native archive"]
+    Native --> Apply
+    Apply --> Complete["completed<br/>retained hashes checked; paths absent"]
+```
+
+With `scratch.session_registry` configured, inventories and sealed evidence live
+under `<git-common-dir>/devkit/<scratch.session_registry>/`, shared by linked
+checkouts. This durable local record survives task-worktree removal; a fresh clone
+does not contain it. The caller declares evidence completeness, including required
+assets and dependencies, and the engine checks retained bytes. It cannot discover
+all evidence dependencies from arbitrary report prose.
+
+The [cleanup contract](agentic-dev-kit/session-cleanup.md) separates ownership,
+retention and deletion authority. A preview token binds an inventory and seal;
+it does not supply operator consent. Fresh process and dependency observations
+can keep an approved path. A native archive request still needs terminal
+confirmation and another apply; queued work is not completed cleanup. Policy
+changes or unavailable inventories require explicit recovery rather than broader
+sweep roots. Ordinary age-based scratch reports remain a separate operation.
 
 ## Friction flywheel
 

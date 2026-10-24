@@ -64,19 +64,20 @@ back into the next session's briefing.
 ```mermaid
 flowchart TD
     A([session start]) --> B["session-start<br/>reads handoff + friction-log<br/>+ tracker + open PRs + CI<br/>+ recent merges"]
-    B --> C{"pick next work<br/>by urgency"}
+    B --> C{"operator-selected work<br/>or compatible recommendation"}
     C -->|self-contained| D["parallel<br/>isolated worktree lanes<br/>· suggested model tier"]
-    C -->|judgment / interactive| E["cockpit<br/>work inline"]
-    D --> F["open PR"]
-    E --> F
-    F --> K{"wrap-up<br/>anything PRs + tracker<br/>don't record?"}
-    K -->|yes| K2["commit it to the handoff<br/>on this PR"]
-    K -->|no| G
-    K2 --> G["pr-watch<br/>poll · fix · reply<br/>until green and clean"]
-    G --> H{"risky change?<br/>send-gate · destructive · kill-path"}
-    H -->|yes| I["safety-critical review<br/>deterministic gate · dual-lens<br/>· operator sign-off"]
-    H -->|no| J["merge"]
-    I --> J
+    C -->|judgment / interactive| E["cockpit<br/>assigned task worktree"]
+    D --> K{"wrap-up<br/>anything PRs + tracker<br/>don't record?"}
+    E --> K
+    K -->|yes| K2["commit handoff<br/>with this change"]
+    K -->|no| V
+    K2 --> V["verify completed branch"]
+    V --> F["open ready PR"]
+    F --> G["pr-watch<br/>CI + independent review<br/>class determines lenses"]
+    G --> H{"merge gates satisfied<br/>and actor authorized?"}
+    H -->|yes| J["merge and read back"]
+    H -->|no| I["resolve blocker or<br/>hold for operator"]
+    I --> G
     J --> L([session end])
     J -. review evidence .-> R[(merged PR reviews)]
 
@@ -94,7 +95,15 @@ flowchart TD
 reviewed with the change it describes. When the PRs, commits and tracker already say
 everything, it commits nothing. Solid arrows are one session's flow; dotted arrows are the asynchronous flywheel
 (**down** through approved tracker filing and **up** through recurring-pattern
-rule proposals).
+rule proposals). Review readiness and merge authority are separate: safety-critical
+changes require their prescribed review and operator sign-off; ordinary changes
+also follow the project's merge policy.
+
+Use the [review-status guide](docs/developer-guide.md#read-review-status-without-confusing-it-with-merge-authority)
+to distinguish convergence from merge clearance. The
+[cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) retains required
+evidence before separately authorized scratch or worktree retirement; ending a
+session does not itself authorize deletion.
 
 ## Quickstart
 
