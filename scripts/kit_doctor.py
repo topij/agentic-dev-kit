@@ -2682,8 +2682,9 @@ class LensDefinitionError(ValueError):
     """Configuration that cannot produce a faithful agent definition."""
 
 
-# The runtimes a `review.fallback_panel.<section>` compute map may name, and the
-# keys each runtime's value may hold (#1184).
+# The runtimes `verifier_compute` may name, and the keys a runtime's value in
+# either compute map may hold (#1184). `lens_compute` takes any runtime: the lens
+# prompt says when one has no kit-known carrier.
 COMPUTE_RUNTIMES: tuple[str, ...] = ("claude", "codex")
 COMPUTE_KEYS: tuple[str, ...] = ("model", "effort")
 # What a verifier_compute value may contain: the prompt renders no free text.
@@ -2701,7 +2702,8 @@ def compute_config(config: dict, section: str, runtime: str) -> dict:
     another shape is refused rather than taken for the cockpit's choice (#1184):
     a ``review`` or ``fallback_panel`` that is not a map, a section or runtime
     value that is not a map (an empty string or list and ``false`` included), a
-    runtime outside ``COMPUTE_RUNTIMES``, and a key outside ``COMPUTE_KEYS``. Keys
+    ``verifier_compute`` runtime outside ``COMPUTE_RUNTIMES``, and a key outside
+    ``COMPUTE_KEYS``. Keys
     match case-sensitively, so a typo such as ``modle`` or ``Effort`` is refused
     rather than ignored. The values themselves are left to the caller, which
     knows what its carrier accepts.
@@ -2715,7 +2717,7 @@ def compute_config(config: dict, section: str, runtime: str) -> dict:
         if not isinstance(node, dict):
             raise ComputeConfigError(f"{where} is {node!r}, not a map")
     unknown = sorted(str(key) for key in node if key not in COMPUTE_RUNTIMES)
-    if unknown:
+    if unknown and section == "verifier_compute":
         raise ComputeConfigError(
             f"{where} names {', '.join(unknown)}, which is not a runtime "
             f"({', '.join(COMPUTE_RUNTIMES)})"

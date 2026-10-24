@@ -8670,7 +8670,8 @@ def test_codex_model_cli_reports_advisories_without_changing_exit_status(
     ({"verifier_compute": {"codex": {"model": "a b"}}}, "verifier_compute.codex.model is 'a b'"),
     ({"verifier_compute": "haiku"}, "verifier_compute is 'haiku', not a map"),
     ({"verifier_compute": {"claude": {"modle": "opus"}}}, "verifier_compute.claude holds modle"),
-    ({"lens_compute": {"cluade": {"model": "sonnet"}}}, "lens_compute names cluade"),
+    ({"verifier_compute": {"cluade": {"model": "haiku"}}}, "verifier_compute names cluade"),
+    ({"lens_compute": {"claude": {"Effort": "high"}}}, "lens_compute.claude holds Effort"),
     ({"lens_compute": {"codex": []}}, "lens_compute.codex is [], not a map"),
 ])
 def test_the_doctor_reports_a_compute_map_the_panel_would_refuse(panel, problem):
@@ -8683,7 +8684,9 @@ def test_the_doctor_reports_a_compute_map_the_panel_would_refuse(panel, problem)
 def test_the_doctor_reads_a_well_formed_or_absent_compute_map_as_fine():
     assert kit_doctor.inspect_compute({}) == []
     assert kit_doctor.inspect_compute({"review": {"fallback_panel": {
-        "lens_compute": {"claude": {"model": "sonnet", "effort": "high"}, "codex": None},
+        # A lens runtime the kit has no carrier for is allowed; the prompt says so.
+        "lens_compute": {"claude": {"model": "sonnet", "effort": "high"}, "codex": None,
+                         "other": {"effort": "low"}},
         "verifier_compute": {"claude": {"model": "haiku", "effort": None},
                              "codex": {"model": "gpt-6-sol", "effort": "low"}},
     }}}) == []

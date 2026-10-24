@@ -283,10 +283,10 @@ it sees no change.
 
 **A value of another shape is refused, never read as unset** (`#1184`). An absent or
 null runtime means inherit. `panel_prompt.py` exits 2 on anything else that is not a map, an
-empty string or list and `false` included. It also exits 2 on a runtime other than
-`claude` or `codex` and on a key other than `model` or `effort`, matched
-case-sensitively, so a typo such as `modle` or `Effort` is not silently dropped. The
-same rules hold for `verifier_compute`, and `kit_doctor.py` reports each map they would
+empty string or list and `false` included. It also exits 2 on a key other than `model`
+or `effort`, matched case-sensitively, so a typo such as `modle` or `Effort` is not
+silently dropped. The same rules hold for `verifier_compute`, which also refuses a
+runtime other than `claude` or `codex`, and `kit_doctor.py` reports each map they would
 refuse under `compute_problems`, as advice that leaves its exit status alone.
 
 **Each runtime reaches its own key by its own path**, and the key is inert until

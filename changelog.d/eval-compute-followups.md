@@ -7,7 +7,8 @@ unset or ignore:
 - a `lens_compute` section or runtime value that is an empty string, an empty list or
   `false` (it read as "inherit the cockpit's");
 - a `review` or `review.fallback_panel` that is not a map;
-- a runtime other than `claude` or `codex` under either section;
+- a runtime other than `claude` or `codex` under `verifier_compute` (`lens_compute`
+  still takes any runtime);
 - a key other than `model` or `effort`, matched case-sensitively, so `modle` or
   `Effort` is refused.
 
