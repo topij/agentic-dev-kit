@@ -19,8 +19,9 @@ row that relies on one says `judgement, unenforced` and names it under *Notes*.
 
 ## Notes
 
-- The `pre-push` rows hold only in a checkout that ran `make install-hooks`. CI's
-  `driftcheck` test gates the manifest rule everywhere else.
+- The `pre-push` rows hold only in a checkout that ran `make install-hooks`, and both
+  guards skip, fail-open, when the hook finds no `python3`. CI's `driftcheck` test gates
+  the manifest rule everywhere else; the `dev/*` guard has no CI backstop.
 - The engine-path test covers the files `kit-manifest.json` lists as kit-owned, and keeps an
   allowlist of known pre-existing paths.
 - `scripts/check_record_prose.py` is a review preflight that the fallback panel runs on the

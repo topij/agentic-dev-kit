@@ -14,5 +14,6 @@ proposing a prose rule and updates its row in the same patch. A config without t
 keeps working, and the run reports the table as unconfigured. `./init.sh` adds the key
 (`docs/enforcement.md`) only when it writes a new `systemize:` block, so to use the
 table in an existing config, add the line under `systemize:` yourself. The value must be a
-`.md` path outside `report_root`, `state.dirname` and `.git`; any other value stops the
-run with exit 2.
+`.md` path outside `report_root`, `state.dirname` and `.git` that is not one of the
+run's control inputs (`AGENTS.md`, `CLAUDE.md`, the `post-merge-systemize` workflow,
+`paths.friction_log`, `paths.handoff`); any other value is a hard stop (exit 1).

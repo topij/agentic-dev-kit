@@ -105,6 +105,12 @@ def test_heartbeat_keys_are_required_only_engine_backed(tmp_path: Path, key: str
         ("enforcement_table", "scripts/hooks/pre-push", "must name a .md file outside report_root, state.dirname and .git"),
         ("enforcement_table", ".github/workflows/ci.yml", "must name a .md file outside report_root, state.dirname and .git"),
         ("enforcement_table", "'docs/rules.md '", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "' docs/rules.md'", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "AGENTS.md", "must not name a systemize control input"),
+        ("enforcement_table", "claude.md", "must not name a systemize control input"),
+        ("enforcement_table", "docs/agentic-dev-kit/workflows/post-merge-systemize.md", "must not name a systemize control input"),
+        ("enforcement_table", "docs/handoff.md", "must not name a systemize control input"),
+        ("enforcement_table", "Docs/Friction-Log.md", "must not name a systemize control input"),
     ],
 )
 def test_invalid_values_stop_naming_the_invariant(tmp_path: Path, key, value, message) -> None:

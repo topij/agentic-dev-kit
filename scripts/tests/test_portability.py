@@ -21780,6 +21780,7 @@ def test_shared_rule_proposals_climb_the_enforcement_ladder() -> None:
     assert "cell is exactly `judgement, unenforced` when nothing stops a violating change" in systemize
     assert "When the key is absent, report the table as unconfigured" in systemize
     assert "repository-relative `.md` file path without `..`, outside `report_root`, `state.dirname` and `.git`" in systemize
+    assert "is none of the run's control inputs" in systemize
     triage = " ".join((workflows / "triage-friction-log.md").read_text(encoding="utf-8").split())
     assert "chooses its fix level as `post-merge-systemize`'s shared-rule route does" in triage
     assert "the past occurrence and the revision that carried it" in triage

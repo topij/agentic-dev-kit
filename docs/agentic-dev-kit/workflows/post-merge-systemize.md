@@ -65,7 +65,8 @@ Validate values as well as presence:
   integers, not booleans, and `refuted_flag_percent` is at most `100`.
 - `enforcement_table`, when present, is a repository-relative `.md` file path without
   `..`, outside `report_root`, `state.dirname` and `.git`, compared without regard to
-  case.
+  case, and is none of the run's control inputs (`AGENTS.md`, `CLAUDE.md`, this
+  workflow, `paths.friction_log` or `paths.handoff`).
 - `tracker_severity` is one of the canonical severities defined in Step 1.
 - `operator_logins` is a sequence of unique, non-empty forge logins. Normalize by
   trimming ASCII whitespace and lowercasing ASCII letters while preserving every other
@@ -248,8 +249,9 @@ the forge repository, window, protected-branch head, config fingerprint, executi
 capability preflight, cache/digest locations, capped-input status, candidate clusters,
 route dispositions, each shared-rule proposal's net line change and the text it
 considered folding into, its enforcement level and, for a check, its proof (pull request,
-revision, command and failing output), whether the enforcement table was configured, the dispatch records below, external identifiers actually created,
-incomplete actions, and the next safe resume step. Do not record a tracker identifier,
+revision, command and failing output), the dispatch records below, external identifiers
+actually created, incomplete actions, the next safe resume step, and for the run as a
+whole whether the enforcement table was configured. Do not record a tracker identifier,
 notification receipt, review receipt, or pull-request URL that was not actually returned
 by that integration or observed by the marker read-back below.
 

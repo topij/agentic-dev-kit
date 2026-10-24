@@ -320,6 +320,14 @@ def load_settings(start: Path | None = None) -> Settings:
             raise SystemizeError(
                 "systemize.enforcement_table must name a .md file outside report_root, state.dirname and .git"
             )
+        # A rule PR appends rows here, so it must not rewrite what the run reads as input.
+        inputs = {*CONTROL_INPUTS}
+        for key in ("paths.friction_log", "paths.handoff"):
+            value = _get(config, key)
+            if isinstance(value, str) and value:
+                inputs.add(value)
+        if str(folded) in {str(PurePosixPath(p.casefold())) for p in inputs}:
+            raise SystemizeError("systemize.enforcement_table must not name a systemize control input")
 
     rendered = [p for p in (cache, digest_pattern, report, heartbeat) if p is not None]
     if len(rendered) != len(set(rendered)):
