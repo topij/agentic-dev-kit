@@ -8663,3 +8663,47 @@ def test_codex_model_cli_reports_advisories_without_changing_exit_status(
     # An unrelated drift finding must still fail with the advisory present.
     (root / "scripts/check_doc_budget.py").write_text("print('changed')\n")
     assert kit_doctor.main(["--root", str(root), "--json"]) == 1
+
+
+@pytest.mark.parametrize("panel, problem", [
+    ({"verifier_compute": {"claude": {"effort": "low"}}}, "verifier_compute.claude.effort is set"),
+    ({"verifier_compute": {"codex": {"model": "a b"}}}, "verifier_compute.codex.model is 'a b'"),
+    ({"verifier_compute": "haiku"}, "verifier_compute is 'haiku', not a map"),
+    ({"verifier_compute": {"claude": {"modle": "opus"}}}, "verifier_compute.claude holds modle"),
+    ({"verifier_compute": {"cluade": {"model": "haiku"}}}, "verifier_compute names cluade"),
+    ({"lens_compute": {"claude": {"Effort": "high"}}}, "lens_compute.claude holds Effort"),
+    ({"lens_compute": {"codex": []}}, "lens_compute.codex is [], not a map"),
+])
+def test_the_doctor_reports_a_compute_map_the_panel_would_refuse(panel, problem):
+    """#1184: a malformed compute value was caught only when panel_prompt.py rendered
+    a prompt, so the doctor stayed green until then."""
+    problems = kit_doctor.inspect_compute({"review": {"fallback_panel": panel}})
+    assert len(problems) == 1 and problem in problems[0], problems
+
+
+def test_the_doctor_reads_a_well_formed_or_absent_compute_map_as_fine():
+    assert kit_doctor.inspect_compute({}) == []
+    assert kit_doctor.inspect_compute({"review": {"fallback_panel": {
+        # A lens runtime the kit has no carrier for is allowed; the prompt says so.
+        "lens_compute": {"claude": {"model": "sonnet", "effort": "high"}, "codex": None,
+                         "other": {"effort": "low"}},
+        "verifier_compute": {"claude": {"model": "haiku", "effort": None},
+                             "codex": {"model": "gpt-6-sol", "effort": "low"}},
+    }}}) == []
+    assert kit_doctor.inspect_compute({"review": "x"}) == ["review is 'x', not a map"]
+    assert kit_doctor.inspect_compute({"review": {"fallback_panel": []}}) == [
+        "review.fallback_panel is [], not a map"]
+
+
+def test_a_compute_problem_is_reported_without_changing_exit_status(tmp_path, capsys):
+    root = _fake_repo(tmp_path / "repo")
+    config_path = root / "config/dev-model.yaml"
+    config_path.write_text(config_path.read_text() +
+        "review:\n  fallback_panel:\n    verifier_compute:\n      claude:\n        effort: low\n")
+    manifest = _manifest({"scripts/check_doc_budget.py": kit_doctor.sha256_of(root / "scripts/check_doc_budget.py")})
+    _write(root / "kit-manifest.json", json.dumps(manifest))
+    assert kit_doctor.main(["--root", str(root), "--json"]) == 0
+    problems = json.loads(capsys.readouterr().out)["compute_problems"]
+    assert len(problems) == 1 and "verifier_compute.claude.effort is set" in problems[0]
+    assert kit_doctor.main(["--root", str(root)]) == 0
+    assert "⚠ compute config: review.fallback_panel.verifier_compute.claude.effort is set" in capsys.readouterr().out

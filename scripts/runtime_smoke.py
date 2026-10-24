@@ -1633,7 +1633,12 @@ def panel_prompt(ctx: Context, tree: Path, lens: str, runtime: str) -> str:
 
 def run_codex_panel(ctx: Context, row: Row, binary: Path, home: Path, pin: str) -> None:
     lenses = lens_roster(ctx.config)
-    compute = get(ctx.config, "review.fallback_panel.lens_compute.codex", {}) or {}
+    compute = get(ctx.config, "review.fallback_panel.lens_compute.codex", None)
+    if compute is not None and not isinstance(compute, dict):
+        # An empty string or list is malformed, not unset (#1184).
+        row.set("failed", f"review.fallback_panel.lens_compute.codex is {compute!r}, not a map")
+        return
+    compute = compute or {}
     model, effort = compute.get("model"), compute.get("effort")
     if not lenses:
         row.set("failed", "review.fallback_panel.lenses is empty")
@@ -2087,7 +2092,12 @@ def delegation_prompt(lens: str, prompt: str) -> str:
 
 def run_claude_panel(ctx: Context, row: Row, binary: Path, config_dir: Path, pin: str) -> None:
     lenses = lens_roster(ctx.config)
-    compute = get(ctx.config, "review.fallback_panel.lens_compute.claude", {}) or {}
+    compute = get(ctx.config, "review.fallback_panel.lens_compute.claude", None)
+    if compute is not None and not isinstance(compute, dict):
+        # An empty string or list is malformed, not unset (#1184).
+        row.set("failed", f"review.fallback_panel.lens_compute.claude is {compute!r}, not a map")
+        return
+    compute = compute or {}
     model, effort = compute.get("model"), compute.get("effort")
     if not lenses:
         row.set("failed", "review.fallback_panel.lenses is empty")

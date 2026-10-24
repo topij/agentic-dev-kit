@@ -60,7 +60,9 @@ and the setting was not yet tried in an eval run when this was written. In the f
 recorded Codex run (#1156, 2026-10-22), a lens with network fetched the current `main`
 into its scratch copy. An absolute `path:line` counts only inside the lens's own tree
 (`lens-<lens>-<short sha>/`), since the kit checkout holds the fixed file at the same
-relative path.
+relative path. Every cited path is normalised first: a `.` segment is dropped, a `..`
+resolved, and a path that still climbs out of the tree, such as `../kit/bug.py`, is no
+citation.
 
 ```sh
 uv run <engine-dir>/review_eval.py --runtime claude \
