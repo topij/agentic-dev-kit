@@ -37,7 +37,8 @@ command is invoked; they do not replace, relax, or reconstruct this chain.
 | reconciliation | exact checkout repository; authoritative PR list; persisted base/class when a session survives; stable snapshots of every surviving local ref, remote-tracking ref, and live origin branch | `merged`, `held`, `open`, or `parked` row plus the batch exit contract | repository/read/shape failure emits no board and stops; an observed newer or moving branch tip keeps the lane resumable |
 | `rm` | persisted branch and base, never the worktree's current branch | merged PR head or ancestor relation before branch deletion | dirty or undeterminable worktree refuses without `--force`; the removal command repeats that guard at act time; unlanded or identity-mismatched branch is kept for recovery |
 
-Changing `dev_session.sh`, the lane launcher or this workflow's identity chain? The
+Changing `dev_session.sh` (including its merge, `rm` or reconcile paths), the lane
+launcher or this workflow's identity chain? The
 hostile changes the kit's verification must reject are listed in
 [`parallel-verification.md`](../parallel-verification.md); running a lane does not
 need them.

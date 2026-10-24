@@ -109,6 +109,15 @@ interpretation; an evaluation score is not a review of the PR being merged. The
 case set depends on this kit's history and is a maintainer tool, not an adopter
 installation requirement.
 
+When changing a skill adapter's `description`, run
+`uv run scripts/skill_routing_eval.py`; `make test` runs it too. It scores the
+prompts in [`skill-routing/cases.json`](agentic-dev-kit/skill-routing/cases.json)
+against every model-invoked skill's description, for each runtime, and fails when a
+prompt does not reach its skill, a negative prompt does, or two descriptions overlap.
+It is lexical, so a failure usually means the description lacks the words a request
+uses. Whether a live client then invokes the skill is a separate, on-demand question
+(#1221). Add a case when a real request missed its skill.
+
 ## Work in an isolated lane
 
 Use a lane when its source-file footprint is disjoint from other active work. The

@@ -27,8 +27,8 @@ to it:
 - Leave out what the material itself says.
 
 A skill description is a pointer the runtime loads on every turn, so it pays for every
-word. The kit's own repository checks that its descriptions still reach their skills
-from the requests people type (#1221).
+word. The kit's own repository runs a routing check that scores its skill
+descriptions against the requests people type (#1221).
 
 ## Two costs
 
@@ -63,7 +63,7 @@ material forces the agent to assemble a meaning from several places, and it will
 always find them all.
 
 **Sprawl** is the failure: a document too long even when every line is true. Attention
-thins over the excess. The cure is the ladder above, not smaller type: move reference
+thins over the excess. The cure is the ladder above: move reference
 behind pointers, and split by path so each path carries only what it needs.
 `doc_budgets` in `config/dev-model.yaml` is the tripwire for the files every session
 loads.
