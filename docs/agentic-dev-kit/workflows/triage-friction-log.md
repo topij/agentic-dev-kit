@@ -419,7 +419,8 @@ A proposed ticket whose fix adds to or changes a standing instruction (`AGENTS.m
 change would extend or fold into, and its proposed payload asks the implementing pull
 request to report its net line change on those files (lines added minus lines removed,
 as `git diff --numstat` prints it). A proposed ticket that would add a rule beside an
-existing one says in its payload why it cannot fold into it.
+existing one says in its payload why it cannot fold into it. Draft the instruction text
+by [`writing-for-agents.md`](../writing-for-agents.md).
 
 Before computing proposal digests, classify each proposed ticket and include its
 execution-environment section and configured label according to

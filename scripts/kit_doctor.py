@@ -487,6 +487,10 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # adopter cannot refresh the adapters or shared workflows while keeping an
     # older account of which ones are supposed to exist.
     ("docs/agentic-dev-kit/ticket-execution-environment.md", "doctrine"),
+    # Linked from the parallel and systemize/triage workflows, which /upgrade
+    # refreshes; an untracked target would leave those links dangling.
+    ("docs/agentic-dev-kit/parallel-verification.md", "doctrine"),
+    ("docs/agentic-dev-kit/writing-for-agents.md", "doctrine"),
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
     ("docs/agentic-dev-kit/live-validation-evidence.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/review-eval/reviewer-eval.md", REPO_ONLY_ROLE),
