@@ -623,7 +623,7 @@
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
-      "sha256": "51f41d7b979989c48925e5de7d6b4222eda17108bd98a9f93b23df2c38745117"
+      "sha256": "c4391c841014268d922580cbc983434329a7a0114af93f8d326243948851f902"
     },
     "scripts/sweep_scratch.py": {
       "required_by": [

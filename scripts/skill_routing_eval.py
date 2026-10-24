@@ -64,10 +64,14 @@ SETTINGS = ("top_k", "unrelated_max_score", "collision_threshold")
 # Function words carry no routing signal; with only a handful of descriptions in the
 # corpus, IDF alone would not push them down far enough.
 STOPWORDS = frozenset(
-    """a an and are as at be been but by can could do does for from had has have how i if
-    in into is it its me my no not of on or our so than that the their them then there
-    these they this those to up us was we were what when where which while who why will
-    with would you your yours""".split()
+    (
+        "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "can", "could",
+        "do", "does", "for", "from", "had", "has", "have", "how", "i", "if", "in",
+        "into", "is", "it", "its", "me", "my", "no", "not", "of", "on", "or", "our",
+        "so", "than", "that", "the", "their", "them", "then", "there", "these", "they",
+        "this", "those", "to", "up", "us", "was", "we", "were", "what", "when", "where",
+        "which", "while", "who", "why", "will", "with", "would", "you", "your", "yours",
+    )
 )
 
 
