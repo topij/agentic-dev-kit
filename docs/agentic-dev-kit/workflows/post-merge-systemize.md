@@ -63,8 +63,9 @@ Validate values as well as presence:
   `pattern_threshold` is no greater than `max_findings_prs_per_run`.
 - `refuted_flag_min_findings` and `refuted_flag_percent`, when present, are positive
   integers, not booleans, and `refuted_flag_percent` is at most `100`.
-- `enforcement_table`, when present, is a repository-relative file path without `..`,
-  outside `report_root` and `state.dirname`.
+- `enforcement_table`, when present, is a repository-relative `.md` file path without
+  `..`, outside `report_root`, `state.dirname` and `.git`, compared without regard to
+  case.
 - `tracker_severity` is one of the canonical severities defined in Step 1.
 - `operator_logins` is a sequence of unique, non-empty forge logins. Normalize by
   trimming ASCII whitespace and lowercasing ASCII letters while preserving every other
@@ -579,16 +580,22 @@ that works (Principle #8, *Mechanism over memory*):
 
 The proposal names the level it chose and why each higher level does not work. A
 proposed check carries its proof: run against the code of at least one pull request in
-the cluster it fails, and on the patched base it passes. The proof names that pull
-request, the revision, the command and the failing output. A check that cannot be shown
+the cluster it fails, and on the patched base it passes. Run it at the revision that
+carried the mistake (the pull request's head before its fix, or the merged commit when
+the mistake reached the base), in a detached worktree of its own and never in the
+caller's checkout. The proof names that pull request, the revision, the command and the
+failing output, so a reviewer of the proposal can rerun it. A check that cannot be shown
 failing on a real past mistake is not proposed as a check.
 
 When `systemize.enforcement_table` is configured, read that table before proposing a
 prose rule. A cluster whose root cause matches a row marked `judgement, unenforced` is a
 recurrence of an unenforced rule: say so, and reconsider level 2 before writing more
 prose. Each shared-rule proposal adds or updates its row (the rule, where it is written,
-and what enforces it, or `judgement, unenforced`) in the same patch, creating the file
-with its header row if it does not exist. When the key is absent, report the table as
+and what enforces it) in the same patch, creating the file with the header row
+`| Rule | Where it is written | Enforced by |` if it does not exist. The *Enforced by*
+cell is exactly `judgement, unenforced` when nothing stops a violating change: a review
+preflight, a pull request template checkbox or a warning names itself in a note beside
+the table, not in that cell. When the key is absent, report the table as
 unconfigured and skip this paragraph.
 
 Prefer the narrowest shared repository source. Do not edit a Claude or Codex adapter unless the

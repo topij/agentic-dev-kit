@@ -306,12 +306,19 @@ def load_settings(start: Path | None = None) -> Settings:
     table: str | None = None
     if "enforcement_table" in section:
         table = _relative_fragment(section["enforcement_table"], "systemize.enforcement_table")
-        pure = PurePosixPath(table)
-        if pure in (PurePosixPath("."), PurePosixPath("")) or pure.is_relative_to(
-            PurePosixPath(report_root_rel)
-        ) or pure.is_relative_to(PurePosixPath(STATE_DIRNAME)):
+        # The route writes rows into this file, so it must be a Markdown table: a
+        # hook, workflow or config path here would be edited by a rule PR. Compared
+        # case-folded, since `State/x.md` is `state/x.md` on a case-insensitive disk.
+        folded = PurePosixPath(table.casefold())
+        reserved = (report_root_rel.casefold(), STATE_DIRNAME.casefold(), ".git")
+        if (
+            table != table.strip()
+            or table.endswith("/")
+            or folded.suffix != ".md"
+            or any(folded.is_relative_to(PurePosixPath(r)) for r in reserved)
+        ):
             raise SystemizeError(
-                "systemize.enforcement_table must name a tracked file outside report_root and state.dirname"
+                "systemize.enforcement_table must name a .md file outside report_root, state.dirname and .git"
             )
 
     rendered = [p for p in (cache, digest_pattern, report, heartbeat) if p is not None]

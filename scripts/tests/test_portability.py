@@ -21774,5 +21774,12 @@ def test_shared_rule_proposals_climb_the_enforcement_ladder() -> None:
     assert "run against the code of at least one pull request in the cluster it fails" in systemize
     assert "When `systemize.enforcement_table` is configured, read that table" in systemize
     assert "its enforcement level and, for a check, its proof" in systemize, "the report's Include list must carry the fields"
+    assert "Run it at the revision that carried the mistake" in systemize
+    assert "in a detached worktree of its own and never in the caller's checkout" in systemize
+    assert "creating the file with the header row `| Rule | Where it is written | Enforced by |`" in systemize
+    assert "cell is exactly `judgement, unenforced` when nothing stops a violating change" in systemize
+    assert "When the key is absent, report the table as unconfigured" in systemize
+    assert "repository-relative `.md` file path without `..`, outside `report_root`, `state.dirname` and `.git`" in systemize
     triage = " ".join((workflows / "triage-friction-log.md").read_text(encoding="utf-8").split())
     assert "chooses its fix level as `post-merge-systemize`'s shared-rule route does" in triage
+    assert "the past occurrence and the revision that carried it" in triage

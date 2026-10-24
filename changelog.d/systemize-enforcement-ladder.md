@@ -13,4 +13,6 @@ pairing each standing rule with what enforces it. The shared-rule route reads it
 proposing a prose rule and updates its row in the same patch. A config without the key
 keeps working, and the run reports the table as unconfigured. `./init.sh` adds the key
 (`docs/enforcement.md`) only when it writes a new `systemize:` block, so to use the
-table in an existing config, add the line under `systemize:` yourself.
+table in an existing config, add the line under `systemize:` yourself. The value must be a
+`.md` path outside `report_root`, `state.dirname` and `.git`; any other value stops the
+run with exit 2.
