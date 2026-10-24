@@ -779,7 +779,7 @@
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "f031085e5bb481fc71d63c286d03cb61931df6d03838a20a330d549e40c37919"
+      "sha256": "2de26bbcfe18b54e5e32402ac978bad0291fecc2421bde434729a55f0b9a0251"
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
