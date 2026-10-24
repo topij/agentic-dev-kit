@@ -2773,10 +2773,12 @@ def inspect_compute(config: dict) -> list[str]:
     """
     problems = []
     for runtime in COMPUTE_RUNTIMES:
-        for read in (lambda: compute_config(config, "lens_compute", runtime),
-                     lambda: verifier_compute(config, runtime)):
+        for section in ("lens_compute", "verifier_compute"):
             try:
-                read()
+                if section == "verifier_compute":
+                    verifier_compute(config, runtime)
+                else:
+                    compute_config(config, section, runtime)
             except ComputeConfigError as exc:
                 if str(exc) not in problems:
                     problems.append(str(exc))
