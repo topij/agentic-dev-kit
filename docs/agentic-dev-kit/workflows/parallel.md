@@ -261,11 +261,14 @@ both runtimes except on one route: `launch_lane.py --tier <cheap|default|expensi
 reads `models.runtime_mappings.<runtime>.<tier>` and puts that runtime's own controls on
 the lane's argv, right after the approval policy (Claude `--model`/`--effort`, Codex
 `-m`/`-c model_reasoning_effort=`). It refuses a tier the config does not map, and a
-value that is not one plain word, before any launch attempt exists. It does not check
+value that is not one plain word (letters, digits, `.`, `_`, `-`; so a bracketed or
+`provider:`-style model id is refused, not passed), before any launch attempt exists.
+It does not check
 that the client knows the value: a Claude `--effort` it does not recognise warns and
 runs at the default, so the receipt's `request.compute` records what was requested,
 not what the client applied. The resolved compute is bound into the launch request and
-the receipt, so the parent and child must agree on it. Without `--tier` the wrapper inherits the client's compute.
+the receipt, so the parent and child must agree on it. Without `--tier` the wrapper
+inherits the client's compute.
 What "inherit" resolves to differs by trust route — a Claude lane under the wrapper's
 `--setting-sources ""` runs the product default model and effort, not the operator's
 user settings, while a Codex lane runs the user's `config.toml` model and effort
@@ -436,8 +439,10 @@ The receipt command uses the `head` from the exact poll whose diff was independe
 reviewed and refuses if a push landed before recording.
 
 The wrapper resolves the sessions directory from the repository's primary worktree, so
-it works the same from the primary checkout, a linked cockpit worktree, or inside the
-lane's own worktree. **Poll a lane's PR through this wrapper, not with bare
+when that primary is an ordinary checkout it works the same from the primary checkout,
+a linked cockpit worktree, or inside the lane's own worktree. A repository whose git
+directory lives elsewhere (`--separate-git-dir`, a submodule) resolves it beside the
+invoking checkout instead; set `DEVKIT_SESSIONS_DIR` there. **Poll a lane's PR through this wrapper, not with bare
 `pr_watch.py`.** A bare poll from the cockpit reads the cockpit's `state/`, where the
 lane's receipt and settle baseline are not, so a finished lane's PR reports as
 unreviewed and unsettled. `pr_watch.py` prints a warning naming the lane when it sees

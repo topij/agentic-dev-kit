@@ -533,7 +533,7 @@ PY
 _lane_extras() {
     [[ -d "$SESSIONS_DIR" ]] || return 0
     python3 - "$SESSIONS_DIR" "$DEFAULT_BASE" <<'PY' 2>/dev/null || true
-import json, os, subprocess, sys
+import json, os, re, subprocess, sys
 from pathlib import Path
 
 sessions, default_base = Path(sys.argv[1]), sys.argv[2]
@@ -588,8 +588,10 @@ def run_state(session):
         status = read_json(receipt_path)["status"] if has_receipt else None
     except Exception:
         return "?"
-    if has_receipt and not (isinstance(status, str) and status.isalpha()):
-        # A receipt that exists but carries no plain-word status, null included.
+    if has_receipt and not (isinstance(status, str) and re.fullmatch(r"[a-z]{1,16}", status)):
+        # A receipt that exists but carries no short lower-case ASCII word as
+        # its status, null included: the launcher writes only such words, and a
+        # cell must not carry arbitrary file text onto the board.
         return "?"
     if status not in (None, "observed"):
         return status

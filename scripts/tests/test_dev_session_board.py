@@ -203,6 +203,37 @@ def test_a_receipt_status_is_shown_only_when_it_is_a_plain_word(repo: Repo) -> N
     assert _board(repo)["odd"][5] == "?"
 
 
+@pytest.mark.parametrize("status", ["a" * 17, "Completed", "complété"], ids=["long", "upper", "non-ascii"])
+def test_a_receipt_status_the_launcher_would_not_write_is_unknown(repo: Repo, status: str) -> None:
+    _new(repo, "odd")
+    _attempt(repo.sessions / "odd", pid=_dead_pid())
+    _receipt(repo.sessions / "odd", status)
+    assert _board(repo)["odd"][5] == "?"
+
+
+def test_an_oversized_session_file_is_unknown(repo: Repo) -> None:
+    _new(repo, "alpha")
+    session = repo.sessions / "alpha"
+    _attempt(session, pid=_dead_pid())
+    (session / "launch-receipt-d1.json").write_text(
+        # Valid JSON then padding: the first MiB alone still parses, so only
+        # the explicit size check refuses it.
+        json.dumps({"status": "completed"}) + " " * (1 << 20), encoding="utf-8"
+    )
+    assert _board(repo)["alpha"][5] == "?"
+
+
+@pytest.mark.parametrize("name", ["launch-attempt.json", "launch-receipt-d1.json"])
+def test_a_dangling_session_file_link_is_unknown(repo: Repo, name: str) -> None:
+    # A dangling link is a file that exists but cannot be read, not an absent one.
+    _new(repo, "alpha")
+    session = repo.sessions / "alpha"
+    _attempt(session, pid=os.getpid())
+    (session / name).unlink(missing_ok=True)
+    (session / name).symlink_to(session / "nowhere.json")
+    assert _board(repo)["alpha"][5] == "?"
+
+
 def test_the_watch_board_carries_the_same_columns(repo: Repo) -> None:
     _new(repo, "alpha")
     _attempt(repo.sessions / "alpha", pid=os.getpid())
