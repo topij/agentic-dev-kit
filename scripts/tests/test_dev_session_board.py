@@ -333,8 +333,11 @@ def test_a_pid_that_names_no_single_process_is_not_read_as_alive(repo: Repo, pid
     # 0 and negative pids address process groups, so os.kill succeeds on them;
     # pids past the C int range make os.kill raise instead.
     _new(repo, "alpha")
+    _new(repo, "beta")
     _attempt(repo.sessions / "alpha", pid=pid)
-    assert _board(repo)["alpha"][5] == "?"
+    board = _board(repo)
+    assert board["alpha"][5] == "?"
+    assert board["beta"][5] == "—"  # read without raising, so the board survives
 
 
 def test_a_live_pid_owned_by_someone_else_still_counts_as_alive(repo: Repo) -> None:
@@ -358,7 +361,7 @@ def test_one_malformed_attempt_file_costs_only_its_own_row(repo: Repo) -> None:
     assert (board["alpha"][6], board["beta"][6]) == ("beta", "alpha")
 
 
-def test_the_watch_board_marks_a_row_whose_run_state_changed(repo: Repo) -> None:
+def test_the_watch_board_marks_a_row_whose_run_or_overlap_changed(repo: Repo) -> None:
     _new(repo, "alpha")
     session = repo.sessions / "alpha"
     _attempt(session, pid=os.getpid())
@@ -379,9 +382,10 @@ def test_the_watch_board_marks_a_row_whose_run_state_changed(repo: Repo) -> None
     assert row[:2] == ["*", "alpha"]
     assert row[6] == "running"
     assert frame()[0] == "alpha"  # settled again
-    # A peer starting to touch alpha's file changes only alpha's OVERLAP cell.
+    # alpha dirties a file (its DIRTY moves), then a new peer touches the same
+    # file, which changes only alpha's OVERLAP cell.
     (repo.sessions / "alpha" / "wt" / "shared.txt").write_text("a\n", encoding="utf-8")
-    assert frame()[:2] == ["*", "alpha"]  # alpha's own DIRTY moved
+    assert frame()[:2] == ["*", "alpha"]
     beta = _new(repo, "beta")
     (beta / "shared.txt").write_text("b\n", encoding="utf-8")
     row = frame()

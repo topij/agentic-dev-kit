@@ -1013,7 +1013,9 @@ def _numeric_fields(value: object) -> dict[str, int | float] | None:
         for key, number in value.items()
         if isinstance(number, (int, float))
         and not isinstance(number, bool)
-        and math.isfinite(number)
+        # A float may be NaN or infinite; an int is exact however long it is,
+        # and converting one past float range would raise.
+        and (not isinstance(number, float) or math.isfinite(number))
     }
     return kept or None
 

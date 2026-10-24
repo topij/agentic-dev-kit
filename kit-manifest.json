@@ -191,7 +191,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "14b404621b3100aad5f794f7303a4e4736e708f6c309600a2474af49a537362d"
+      "sha256": "4c59ca0064ba21663e769cf2338e8b397b27cee1d8f4c3eed83be400ee54ff1c"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -226,7 +226,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "cc1757b631eddc7b34bcdf5ca683f504535d7c141c75d769ef57e1b981ebf2f2"
+      "sha256": "c556a3a8d5cf1b22dca2ae1671c10f2048f56fffb016aed870d6394a1d296946"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -699,7 +699,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "61c2ad765c9306836c003c5b5c9863d5d796adc89bd34ee3a9dcb6b6df0cf14a"
+      "sha256": "eb4a4cd9870a7e969707db06f7f506d758d61828f7847224431ad385949a06ce"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "c5fc023ca2183fd65499ff06ecdc0d4dd6d5ce32b6ebb0429140be7774998c22"
+      "sha256": "dc20255f663b7e7b880ee30daefcc67f970548f78b2f33944b507f1fff97194b"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

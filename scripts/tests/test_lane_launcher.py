@@ -2648,6 +2648,27 @@ def test_usage_figures_json_cannot_carry_read_as_none(final_bytes: bytes) -> Non
     assert _load_launcher()._reported_usage("json-stdout", final_bytes) is None
 
 
+HUGE = int("1" + "0" * 400)
+
+
+@pytest.mark.parametrize(
+    ("result", "field", "kept"),
+    [
+        ({"usage": {"input_tokens": HUGE}}, "usage", {"input_tokens": HUGE}),
+        ({"total_cost_usd": HUGE}, "total_cost_usd", HUGE),
+        ({"modelUsage": {"m": {"inputTokens": HUGE}}}, "models", {"m": {"inputTokens": HUGE}}),
+    ],
+    ids=["usage", "total-cost", "model"],
+)
+def test_an_integer_past_float_range_is_kept_and_never_raises(
+    result: dict, field: str, kept: object
+) -> None:
+    # Parsed by json, but float() of it overflows: the reader must not convert.
+    final_bytes = json.dumps({"type": "result", **result}).encode()
+    usage = _load_launcher()._reported_usage("json-stdout", final_bytes)
+    assert usage is not None and usage[field] == kept
+
+
 def test_a_codex_lane_records_no_usage(tmp_path: Path) -> None:
     repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
     result = _run_launcher(engine_dir, descriptor, prompt, env)

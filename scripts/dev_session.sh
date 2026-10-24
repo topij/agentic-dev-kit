@@ -562,6 +562,9 @@ def wrapper_alive(attempt):
     return True
 
 
+# run_state and wrapper_alive must not raise on any file content: an exception
+# here empties the whole board's RUN and OVERLAP, so each guard is explicit and
+# pinned by a test rather than caught wholesale.
 def run_state(session):
     attempt_path = session / "launch-attempt.json"
     if not attempt_path.exists():
@@ -615,12 +618,7 @@ for session in sorted(p for p in sessions.iterdir() if (p / "wt").is_dir()):
         files = footprint(session)
     except Exception:
         files = None
-    # One malformed session file costs that lane its row, never the board.
-    try:
-        run = run_state(session)
-    except Exception:
-        run = "?"
-    rows.append((session.name, run, files))
+    rows.append((session.name, run_state(session), files))
 
 for scope, run, files in rows:
     if files is None:
