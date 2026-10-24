@@ -315,11 +315,13 @@ Each piece maps to one or more of the ten principles in
 | `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
 | `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
 | `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, ready-by-default PRs with a bounded material unfinished-work draft exception, watch-and-fix to merge, self-merge policy. |
+| `docs/agentic-dev-kit/writing-for-agents.md` | #8 Mechanism over memory | How to write a workflow, skill, rule or `AGENTS.md` edit an agent will read: a rule that names its failure, a demanding but checkable instruction, and no restated doctrine. `post-merge-systemize` and `triage-friction-log` draft their proposals by it. |
 | `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, kill/recovery paths, and the CI, hook and hook-registration files that guard a merge; bound through the Claude rule and precise root `AGENTS.md` routing without a runtime-specific copy. |
 | `docs/agentic-dev-kit/runtime-parity.md` | Runtime parity | Machine-readable workflow inventory, adoption footprint and capability matrix for Claude Code and Codex; structural adapter tests and the fresh-install fixtures derive their expected set from this contract. |
 | `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
 | `scripts/lib/kitconfig.py` | #10 No hardcoding | Stdlib-only reader for `config/dev-model.yaml`, used where an engine must stay dependency-free (`pr_watch.py` declares zero third-party deps). |
 | `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning; the same tripwire watches an instruction file's size. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. An instruction file such as `AGENTS.md` has nothing to sweep into, so its entry omits `archive` and the warning prints the remedy alone. Warn-only by default — it exits 0 even when a doc is over budget, and returns 1 only under `--strict`. It exits 2 on a usage or config error whatever the flags, so a `path:` naming a doc you have since renamed will gate any pipeline that runs it. |
+| `scripts/skill_routing_eval.py` | #8 Mechanism over memory | Scores the prompts in `docs/agentic-dev-kit/skill-routing/cases.json` against every model-invoked skill's `description`, for both runtimes, and fails when a request misses its skill, a negative case reaches it, or two descriptions overlap. Lexical and offline; `make test` runs it. |
 | `scripts/pr_watch.py` | #5 | The poll-fix-ack and merge-evidence engine behind `pr-watch`. Exact-head receipts remain backward-compatible; a `fallback:delta` pass recorded with `--compose-parent` preserves and revalidates its full-review parent, delta ancestry, and changed paths. |
 | `scripts/verify_live_validation_bundle.py` | #9 Deterministic scaffolding | Verifies retained redacted live-runtime evidence, externally expected source/review/runtime bindings, applied-compute attestations, and the separate receipt required before a parity capability promotion. |
 | `scripts/dev_session.sh`, `scripts/launch_lane.py`, `scripts/reconcile_sessions.sh` | #3 | Worktree/lane issuer, environment-capable per-runtime launcher (Codex and Claude), and reconciler. |
@@ -423,7 +425,13 @@ hard-link escape, artifact collisions, and tracked or control-file targets befor
 atomic write. An existing target must declare the expected artifact kind and complete
 same-run identity; foreign or malformed content stops without replacement. A
 shared-rule proposal is staged only in a clean isolated worktree; local changes to an
-intended destination stop that route instead of riding into its PR.
+intended destination stop that route instead of riding into its PR. The proposal
+takes the first fix level that works (a structural change, then a check shown failing
+on a past pull request's code, then a prose rule for a judgement call) and names it in
+the report. The optional `systemize.enforcement_table` names a Markdown table pairing
+each standing rule with what enforces it; the route reads it before proposing a rule
+and updates the row in the same patch. Without the key, the run reports the table as
+unconfigured.
 Set `systemize.operator_logins` to exact forge identities whose review findings are
 trusted; configured bot identities come from `review.bots` and explicit aliases only.
 The installer prompts for the operator list and never infers it from the repository

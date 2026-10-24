@@ -240,7 +240,14 @@ flowchart LR
     Decision -->|archive| Archive["friction archive"]
     Decision -->|park| Inbox
     Merged["merged PR reviews"] --> Systemize["post-merge-systemize<br/>cluster root causes"]
-    Systemize -->|qualifying pattern| Rule["shared rule proposal"]
+    Systemize -->|qualifying pattern| Ladder{"fix level"}
+    Ladder -->|first| Structure["structural change"]
+    Ladder -->|then| Check["check shown failing<br/>on a past PR"]
+    Ladder -->|judgement call only| Rule["prose rule"]
+    Table[("enforcement table")] -.->|unenforced rule repeats| Ladder
+    Structure --> Proposal["shared-rule PR<br/>names level and proof,<br/>updates the table row"]
+    Check --> Proposal
+    Rule --> Proposal
     Systemize -->|other below-threshold cluster| Inbox
     Systemize -->|below-threshold single| Severity{"tracker severity?"}
     Severity -->|below| Inbox
@@ -252,8 +259,14 @@ flowchart LR
 The routes have different inputs. Triage works from frozen inbox blocks and
 requires exact decisions and read-back before it accounts for a tracker write or
 sweeps a block. Systemize works from merged PR review evidence and proposes a
-shared rule only for a qualifying cross-PR pattern. Its tracker route also needs
-payload-specific approval. The [triage](agentic-dev-kit/workflows/triage-friction-log.md)
+shared-rule change only for a qualifying cross-PR pattern. It takes the first fix
+level that works: a structural change so the mistake cannot be made, then a check
+whose failure names the fix and which fails on the code of a pull request in the
+cluster, and a prose rule only for a judgement call a check cannot make. When
+`systemize.enforcement_table` is configured, it reads that table first: a pattern
+that repeats a rule marked `judgement, unenforced` is a reason to reconsider a
+check, and the proposal updates the rule's row in the same patch. Its tracker route
+also needs payload-specific approval. The [triage](agentic-dev-kit/workflows/triage-friction-log.md)
 and [systemize](agentic-dev-kit/workflows/post-merge-systemize.md) contracts own
 the details of artifacts, retries, and recovery.
 

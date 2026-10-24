@@ -232,10 +232,14 @@ On a cadence (weekly works well):
 - **`triage-friction-log`** reads the new inbox entries and routes each one: a
   single incident becomes a tracker ticket, then the entry is swept to the archive.
 - **`post-merge-systemize`** scans recently merged PRs for a pattern that reaches
-  `systemize.pattern_threshold` — and only *then* proposes a standing shared rule.
+  `systemize.pattern_threshold` — and only *then* proposes a fix. It tries a
+  structural change first, then a check that fails on the past mistake, and writes a
+  prose rule only for a judgement call no check can make. The optional
+  `systemize.enforcement_table` records what enforces each rule, so a rule that
+  keeps being broken shows up as unenforced.
 
 Single incidents route **down** (to the tracker); repeated patterns route **up**
-(to a rule). That asymmetry is deliberate — it's what keeps your rule set small
+(to a check or a rule). That asymmetry is deliberate — it's what keeps your rule set small
 and your friction log honest instead of ratcheting every week.
 
 The **down**-route runs on two clocks, not one. `/wrap-up` takes it immediately for
@@ -304,7 +308,7 @@ session-start → work (inline or parallel) → wrap-up → pr-watch
                                                                │
                         friction-log ──weekly──► triage + systemize
                                                                │
-                                       tickets + rules ──► next session-start
+                              tickets + checks + rules ──► next session-start
 ```
 
 Each session leaves the repo more legible than it found it: the handoff carries
