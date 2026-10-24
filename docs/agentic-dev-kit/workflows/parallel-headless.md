@@ -146,7 +146,8 @@ config value widens a lane to unrestricted. Shared
 across runtimes, `parallel.descriptor_ttl_seconds` supplies descriptor lifetime,
 `parallel.observation_timeout_seconds` bounds the child observation handshake, and
 `parallel.termination_grace_seconds` bounds graceful cleanup before forced process-
-group termination. Resolve all through the merged config; never restate them in an
+group termination, and `parallel.max_resumes` bounds how many times one launch resumes
+a lane that stopped without a terminal state (below). Resolve all through the merged config; never restate them in an
 adapter or fixture. A user-local runtime install is outside the wrapper's trusted
 executable path by design: name the absolute binary in the command.
 
@@ -164,6 +165,43 @@ terminal receipt binds the final-message evidence bytes and the extracted final 
 by digest. For Claude, an empty stdout, malformed or partial JSON, more than one JSON
 value, a non-`result` object, an error result, or an empty `result` is a failed
 terminal receipt, never success.
+
+**Terminal state and bounded resume.** A lane given the contract verbatim still
+stopped to wait for a watcher or for its own subagents (`#514`, `#564`), so the
+launcher checks for the end instead of trusting the instruction. The contract asks
+the lane to end its final text with one plain-text line: `LANE-TERMINAL: pr-ready
+#<n>`, `LANE-TERMINAL: no-pr <reason>` or `LANE-TERMINAL: blocked <reason>`. The
+wrapper reads only the last non-blank line and needs the whole line to match, so a
+line quoted earlier, wrapped in backticks or followed by prose is no terminal state.
+The receipt records what it declared as `terminal.lane_state`.
+
+A successful run without that line is a nonterminal stop. For a Claude lane the
+wrapper resumes the same runtime session (`--resume <session_id>`) with one fixed
+nudge that restates the terminal rule and names nothing new to do, at most
+`parallel.max_resumes` times. A resume continues the launch the wrapper already
+bound and needs no new descriptor: it runs from the same wrapper process, in the
+worktree, with the scrubbed environment and the launch's lineage nonce, and with the
+launch argv's command, trust step, approval policy, settings profile and compute plus
+only `--resume <session_id>`. The session id must be a canonical UUID. Each round
+reserves its own `launch-final-<id>-resume-<n>.txt`, gets the same process-group and
+lineage cleanup as the launch, and is recorded in `terminal.resumes` with its argv,
+digests, return code, denials, usage and terminal state. A failed, denied or
+interrupted round, at launch or on resume, is never resumed. While a round runs, the
+receipt stays `observed`, so the board shows `running`.
+Observed live with Claude Code 2.1.310 on 2026-10-25, launcher at `52c26401`: a
+`--tier cheap` lane told to answer only `READY` ended its launch round without the line,
+was resumed in the same session under `dontAsk` and the lane profile, closed with a
+`no-pr` line, and was recorded `completed` with one entry in `terminal.resumes`.
+
+A lane that still names no terminal state is recorded `stalled` and the wrapper exits
+75; one that cannot be resumed is recorded `stalled` at once. That covers a Codex lane,
+whose final-message file carries no session id, `max_resumes: 0`, and a result with no
+canonical session id. Exit statuses: 0 `completed`, 75 `stalled`, 70 `failed`, 64
+refused before launch, 128+N interrupted by signal N.
+
+The nudge does not restate the lane's PR or CI state; the lane reads that itself.
+`terminal.usage` covers the launch round only, so a lane's total is it plus every
+`terminal.resumes[].usage`.
 
 The descriptor, rewrite seal, and receipt fail closed on expiry, descriptor-only byte
 rewrite, or reuse; a moved descriptor; a descriptor environment that disagrees with its repository,

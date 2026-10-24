@@ -59,8 +59,11 @@ sessions — report it as-is, then stop. Read-only.
 - **RUN** is the headless wrapper's own evidence in the session directory: `—` for a
   lane with no launch attempt (interactive, or not launched yet), `starting`,
   `running` while the wrapper's process is alive, `lost` when the wrapper died before
-  writing a terminal receipt, or the terminal receipt's status (`completed`, `failed`,
-  `interrupted`, `rejected`). `?` means a file could not be read or held a value the
+  writing a terminal receipt, or the terminal receipt's status (`completed`, `stalled`,
+  `failed`, `interrupted`, `rejected`). `stalled` is a lane that ended without naming
+  its terminal state after its resumes ([`parallel-headless.md`](parallel-headless.md),
+  *Terminal state and bounded resume*); `terminal.lane_state` in the receipt says what
+  a `completed` lane declared. `?` means a file could not be read or held a value the
   board cannot trust, such as a pid that names no single process. `running` comes
   from a process check and is a hint, not proof.
 - **OVERLAP** names the other active lanes that change at least one of the same files

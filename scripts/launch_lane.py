@@ -12,6 +12,14 @@ The descriptor's ``runtime`` selects a config-owned template under ``parallel``:
 transport vocabulary and the argv each one produces; a declaration the runtime does
 not implement refuses before launch, so config cannot make Claude read its prompt
 from an argument or make Codex report through stdout.
+
+A lane's final text ends with one ``LANE-TERMINAL:`` line naming where it stopped
+(``pr-ready #<n>``, ``no-pr <reason>`` or ``blocked <reason>``); the receipt records
+it as ``terminal.lane_state``. A successful run without that line is a nonterminal
+stop: a Claude lane is resumed in the same session with a fixed nudge, at most
+``parallel.max_resumes`` times, and a lane that still names no terminal state is
+recorded ``stalled``. Exit status: 0 completed, 75 stalled, 70 failed, 64 refused,
+128+N interrupted by signal N.
 """
 
 from __future__ import annotations
@@ -163,6 +171,72 @@ OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~", "\\")
 # Structural again: a closed set of accepted keys, not a list of known-widening
 # spellings (panel round 14, adversarial lens).
 PERMISSION_RULE_LISTS = ("allow", "deny", "ask")
+# The lane's own report of where it stopped (#514, #564). The contract
+# (`_lane_contract` in dev_session.sh) asks every lane to end its final text with
+# exactly one of these lines. Only the last non-blank line is read, so a line the
+# lane quotes earlier in its text never counts, and a match is the whole line: a
+# line wrapped in backticks or followed by prose is no terminal state. A
+# successful run whose final text has none is a nonterminal stop: the wrapper
+# resumes it (Claude) or records it `stalled`.
+LANE_TERMINAL_LINE = re.compile(
+    r"LANE-TERMINAL: (?:pr-ready #(?P<pr>[1-9][0-9]{0,9})"
+    r"|(?P<state>no-pr|blocked) (?P<reason>\S.{0,199}))"
+)
+# The one message a resume round sends. Fixed text, so a resume carries no
+# authority the original prompt did not: it names nothing new to do and restates
+# only the contract's own terminal rule.
+RESUME_NUDGE = (
+    "Your previous turn ended without a terminal state, so the lane launcher has "
+    "resumed you. You are not finished. Continue the task from where you stopped. "
+    "Do not wait for a watcher, monitor, notification or background task: run what "
+    "you need in the foreground, and poll anything you are waiting on yourself with "
+    "a bounded loop. When you reach a terminal state, end your final text with "
+    "exactly one plain-text line and nothing after it: `LANE-TERMINAL: pr-ready "
+    "#<PR number>`, `LANE-TERMINAL: no-pr <reason>` or `LANE-TERMINAL: blocked "
+    "<reason>`, written without the backticks.\n"
+)
+# Exit status of a run that ended without a terminal state (EX_TEMPFAIL): distinct
+# from success (0), a launcher refusal (64) and a failed lane (70).
+STALLED_EXIT = 75
+
+
+def _lane_terminal_state(final_text: bytes | None) -> dict[str, Any] | None:
+    """The terminal state the final text's last non-blank line declares, or None."""
+    if not final_text:
+        return None
+    try:
+        text = final_text.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return None
+    match = LANE_TERMINAL_LINE.fullmatch(lines[-1])
+    if match is None:
+        return None
+    if match["pr"]:
+        return {"state": "pr-ready", "pr": int(match["pr"]), "reason": None}
+    return {"state": match["state"], "pr": None, "reason": match["reason"]}
+
+
+def _claude_session_id(final_bytes: bytes) -> str | None:
+    """The `session_id` of Claude's JSON result when it is a canonical UUID, else None.
+
+    It becomes an argv value for `--resume`, so anything else — another flag, a
+    path, an empty string — is refused rather than passed.
+    """
+    try:
+        value, _end = json.JSONDecoder().raw_decode(final_bytes.decode("utf-8").strip())
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        return None
+    session_id = value.get("session_id") if isinstance(value, dict) else None
+    if not isinstance(session_id, str):
+        return None
+    try:
+        parsed = uuid.UUID(session_id)
+    except ValueError:
+        return None
+    return session_id if str(parsed) == session_id else None
 
 
 def _edit_allow_escapes_the_worktree(entry: str) -> bool:
@@ -236,8 +310,12 @@ class RuntimeProfile:
         transports: dict[str, str],
         approval: dict[str, Any],
         compute: dict[str, Any] | None = None,
+        max_resumes: int = 0,
     ) -> None:
         self.runtime = runtime
+        # How many resume rounds one bound launch may run after a nonterminal stop
+        # (`parallel.max_resumes`); part of the request binding.
+        self.max_resumes = max_resumes
         self.command = command
         self.transports = transports
         # {"tier", "model", "effort", "argv"}: the requested tier, what the merged
@@ -271,6 +349,24 @@ class RuntimeProfile:
             *worktree_args,
             *final_args,
             *prompt_args,
+        ]
+
+    def resume_argv(self, session_id: str) -> list[str]:
+        # The launch argv with `--resume <session>` after compute: the same command,
+        # trust step, approval policy, settings profile and compute as the bound
+        # launch, so a resume round runs under exactly the policy the launch did.
+        # Only Claude's transports carry a session id back (`json-stdout`); Codex's
+        # final-message file does not, so a Codex lane is never resumed.
+        if self.runtime != "claude" or self.transports["final_text"] != "json-stdout":
+            raise LaunchError(f"runtime {self.runtime} has no resume transport")
+        return [
+            *self.command,
+            *self.approval["argv"],
+            *self.compute["argv"],
+            "--resume",
+            session_id,
+            "--output-format",
+            "json",
         ]
 
 
@@ -508,6 +604,13 @@ def _compute_for_runtime(runtime: str, config: dict[str, Any], tier: str | None)
     return {"tier": tier, "model": model, "effort": effort, "argv": argv}
 
 
+def _max_resumes(config: dict[str, Any]) -> int:
+    value = get(config, "parallel.max_resumes", None)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise LaunchError("config parallel.max_resumes must be a non-negative integer")
+    return value
+
+
 def _config_for_launcher(
     runtime: str, tier: str | None = None
 ) -> tuple[RuntimeProfile, int, int, int, Path]:
@@ -537,6 +640,7 @@ def _config_for_launcher(
         transports[kind] = declared
     approval = _approval_for_runtime(runtime, config, root)
     compute = _compute_for_runtime(runtime, config, tier)
+    max_resumes = _max_resumes(config)
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
         raise LaunchError("config parallel.observation_timeout_seconds must be positive")
     if not isinstance(lifetime, int) or isinstance(lifetime, bool) or lifetime <= 0:
@@ -559,7 +663,12 @@ def _config_for_launcher(
         )
     return (
         RuntimeProfile(
-            runtime, [resolved_executable, *command[1:]], transports, approval, compute
+            runtime,
+            [resolved_executable, *command[1:]],
+            transports,
+            approval,
+            compute,
+            max_resumes,
         ),
         timeout,
         lifetime,
@@ -952,6 +1061,7 @@ def _request_binding(
             "effort": profile.compute["effort"],
             "argv": list(profile.compute["argv"]),
         },
+        "max_resumes": profile.max_resumes,
         "process_nonce_sha256": _sha256(process_nonce.encode()),
     }
 
@@ -1260,6 +1370,55 @@ def _fork_observer_child(
     return _ForkedChild(pid, os.fdopen(prompt_write, "wb", buffering=0))
 
 
+def _fork_resume_child(
+    argv: list[str],
+    *,
+    worktree: str,
+    environment: dict[str, str],
+    final_message: Path,
+) -> _ForkedChild:
+    """Start one resume round: the runtime itself, in its own process group.
+
+    A resume continues the launch the parent already bound, so it has no observer
+    handshake of its own: the descriptor authorised one bounded run, and its expiry
+    and `lane_oid` describe the start (a lane that has committed no longer matches
+    `lane_oid`). What the round inherits is fixed by the parent, not chosen here:
+    the scrubbed environment with the launch's lineage nonce, the worktree, the
+    argv `RuntimeProfile.resume_argv` built from the bound profile, and a freshly
+    reserved, empty final-message file.
+    """
+    prompt_read, prompt_write = os.pipe()
+    try:
+        pid = os.fork()
+    except OSError:
+        os.close(prompt_read)
+        os.close(prompt_write)
+        raise
+    if pid == 0:
+        try:
+            os.setsid()
+            for signum in (signal.SIGINT, signal.SIGTERM):
+                signal.signal(signum, signal.SIG_DFL)
+            os.chdir(worktree)
+            os.environ.clear()
+            os.environ.update(environment)
+            os.close(prompt_write)
+            os.dup2(prompt_read, 0)
+            os.close(prompt_read)
+            _redirect_stdout_to_reserved_final(final_message)
+            _close_nonstandard_descriptors()
+            os.execvpe(argv[0], argv, os.environ)
+        except BaseException as exc:  # child must terminalize without re-entering parent
+            print(f"[lane-launcher] resume child failed: {exc}", file=sys.stderr)
+        finally:
+            with contextlib.suppress(Exception):
+                sys.stdout.flush()
+                sys.stderr.flush()
+        os._exit(70)
+    os.close(prompt_read)
+    return _ForkedChild(pid, os.fdopen(prompt_write, "wb", buffering=0))
+
+
 def _read_receipt(path: Path) -> dict[str, Any]:
     raw = _read_stable_regular_file(path)
     try:
@@ -1310,6 +1469,8 @@ def _terminal_receipt(
     final_text: bytes | None,
     permission_denials: list[Any] | None,
     required_observed_sha256: str | None = None,
+    lane_state: dict[str, Any] | None = None,
+    resumes: list[dict[str, Any]] | None = None,
 ) -> None:
     try:
         receipt = _read_receipt(receipt_path)
@@ -1357,6 +1518,12 @@ def _terminal_receipt(
         "permission_denials": permission_denials,
         # The runtime's own token/cost report, or None; never part of the verdict.
         "usage": _reported_usage(final_text_transport, final_bytes),
+        # The terminal state the LAST round's final text declared, or None. The
+        # fields above (returncode through usage) describe the launch round; each
+        # resume round's own evidence is its entry in `resumes`, so a lane's total
+        # usage is `usage` plus every round's.
+        "lane_state": lane_state,
+        "resumes": list(resumes or []),
         "finished_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     _write_atomic(receipt_path, receipt)
@@ -1565,6 +1732,7 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
     }
     error: str | None = None
     bound_receipt_sha256: str | None = None
+    resumes: list[dict[str, Any]] = []
     try:
         process = _fork_observer_child(
             child_arguments,
@@ -1691,20 +1859,142 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
             return 70
         if bound_receipt_sha256 is None:
             raise LaunchError("successful child has no bound observed receipt")
+        launch_text = final_text
+        lane_state = _lane_terminal_state(final_text)
+        last_final_bytes = final_bytes
+        stall_reason: str | None = None
+        lineage_environment = {
+            **_scrubbed_environment(descriptor),
+            PROCESS_LINEAGE_ENV: process_nonce,
+        }
+        # Bounded resume (#514, #564): a successful round whose final text names no
+        # terminal state is resumed in the same runtime session, at most
+        # `max_resumes` times, each round under the bound launch's own policy. A
+        # failed, denied or interrupted round is never resumed — a stall is a stop
+        # before the end, not a failure.
+        while lane_state is None:
+            if len(resumes) >= profile.max_resumes:
+                stall_reason = (
+                    f"final text named no terminal state after {len(resumes)} "
+                    f"resume round(s) (parallel.max_resumes is {profile.max_resumes})"
+                )
+                break
+            if profile.runtime != "claude":
+                stall_reason = (
+                    f"final text named no terminal state, and runtime {profile.runtime} "
+                    "has no resume transport"
+                )
+                break
+            session_id = _claude_session_id(last_final_bytes)
+            if session_id is None:
+                stall_reason = (
+                    "final text named no terminal state, and the runtime result "
+                    "carries no resumable session id"
+                )
+                break
+            round_number = len(resumes) + 1
+            round_final = session_dir / f"launch-final-{descriptor_id}-resume-{round_number}.txt"
+            _reserve_empty_regular_file(round_final)
+            round_argv = profile.resume_argv(session_id)
+            process = _fork_resume_child(
+                round_argv,
+                worktree=descriptor["worktree"],
+                environment=lineage_environment,
+                final_message=round_final,
+            )
+            with contextlib.suppress(BrokenPipeError):
+                process.stdin.write(RESUME_NUDGE.encode())
+            with contextlib.suppress(OSError):
+                process.stdin.close()
+            round_returncode = _wait_for_process_or_signal(process, caught)
+            round_error: str | None = None
+            if round_returncode is not None and _process_group_exists(process.pid):
+                round_error = "child exited while its process group remained active"
+            if (
+                round_returncode is not None
+                and round_error is None
+                and _processes_with_launch_nonce(process_nonce)
+            ):
+                round_error = "child exited while detached launch-lineage processes remained active"
+            if caught or round_error:
+                round_returncode = _terminate_process_group(process, termination_grace)
+                _terminate_launch_lineage(process_nonce, termination_grace)
+            round_bytes = b""
+            if round_final.is_file() and not round_final.is_symlink():
+                round_bytes = _read_stable_regular_file(round_final)
+            round_text: bytes | None = None
+            round_denials: list[Any] | None = None
+            try:
+                round_text, round_denials = _extract_final_result(
+                    final_text_transport, round_bytes
+                )
+            except LaunchError as exc:
+                if round_error is None and round_returncode == 0 and not caught:
+                    round_error = str(exc)
+            if round_error is None and round_returncode != 0 and not caught:
+                round_error = f"child exited with status {round_returncode}"
+            if round_error is None and not caught and round_denials:
+                round_error = (
+                    "runtime reported permission denials under declared policy "
+                    f"{profile.approval['declared']}"
+                )
+            lane_state = None if (caught or round_error) else _lane_terminal_state(round_text)
+            resumes.append(
+                {
+                    "round": round_number,
+                    "session_id": session_id,
+                    "argv": round_argv,
+                    "prompt_sha256": _sha256(RESUME_NUDGE.encode()),
+                    "final_message_path": str(round_final),
+                    "final_message_sha256": _sha256(round_bytes) if round_bytes else None,
+                    "final_text_sha256": _sha256(round_text) if round_text else None,
+                    "returncode": round_returncode,
+                    "permission_denials": round_denials,
+                    "usage": _reported_usage(final_text_transport, round_bytes),
+                    "lane_state": lane_state,
+                    "error": round_error,
+                    "finished_at": dt.datetime.now(dt.timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                }
+            )
+            if caught or round_error:
+                _terminal_receipt(
+                    receipt_path,
+                    attempt,
+                    status="interrupted" if caught else "failed",
+                    returncode=returncode,
+                    caught_signal=caught[0] if caught else None,
+                    final_message=final_message,
+                    error="launcher interrupted"
+                    if caught
+                    else f"resume round {round_number}: {round_error}",
+                    final_text_transport=final_text_transport,
+                    final_text=launch_text,
+                    permission_denials=permission_denials,
+                    resumes=resumes,
+                )
+                return 128 + caught[0] if caught else 70
+            last_final_bytes = round_bytes
         _terminal_receipt(
             receipt_path,
             attempt,
-            status="completed",
+            status="completed" if lane_state is not None else "stalled",
             returncode=returncode,
             caught_signal=None,
             final_message=final_message,
-            error=None,
+            error=stall_reason,
             final_text_transport=final_text_transport,
-            final_text=final_text,
+            final_text=launch_text,
             permission_denials=permission_denials,
             required_observed_sha256=bound_receipt_sha256,
+            lane_state=lane_state,
+            resumes=resumes,
         )
         print(f"[lane-launcher] receipt: {receipt_path}", file=sys.stderr)
+        if lane_state is None:
+            print(f"[lane-launcher] lane stalled: {stall_reason}", file=sys.stderr)
+            return STALLED_EXIT
         return 0
     except (LaunchError, OSError) as exc:
         returncode: int | None = process.poll() if process is not None else None
@@ -1728,6 +2018,7 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
             final_text_transport=final_text_transport,
             final_text=None,
             permission_denials=None,
+            resumes=resumes,
         )
         return 128 + caught[0] if caught else 70
     finally:

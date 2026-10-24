@@ -123,6 +123,13 @@ parallel:
   # An interrupted or rejected launch gets this bounded graceful-stop window
   # before the wrapper escalates to forced process-group termination.
   termination_grace_seconds: 5
+  # A successful lane run whose final text names no terminal state (no closing
+  # `LANE-TERMINAL:` line) is resumed in the same Claude session at most this many
+  # times before the wrapper records it `stalled` (exit 75). 0 records the stall
+  # without resuming. Codex lanes are never resumed: their final-message file
+  # carries no session id. Every recorded stall in #514/#564 finished after one
+  # re-drive, which is why the shipped value is 1.
+  max_resumes: 1
 
 doc_budgets:
   # Line-count tripwires (the archival mechanism of Principle #1 for the handoff docs,

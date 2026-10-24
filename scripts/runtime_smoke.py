@@ -1762,7 +1762,8 @@ def run_lane(ctx: Context, row: Row, runtime: str, pin: str, runtime_env: dict[s
     prompt_file.write_text(
         "This is an automated read-only smoke task. Do not edit any file, commit, push, "
         "or open a pull request. Run `git rev-parse --abbrev-ref HEAD` once, then reply "
-        f"with exactly one line: {token} followed by a space and the branch it printed.\n",
+        f"with exactly two lines: first {token} followed by a space and the branch it "
+        "printed, then the plain-text line LANE-TERMINAL: no-pr read-only smoke task\n",
         encoding="utf-8",
     )
     since = time.time() - 1
