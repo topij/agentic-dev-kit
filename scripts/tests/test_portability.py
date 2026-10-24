@@ -21751,3 +21751,8 @@ def test_rule_proposals_report_their_net_line_change() -> None:
     ), "the report's Include list must carry the field"
     triage = " ".join((workflows / "triage-friction-log.md").read_text(encoding="utf-8").split())
     assert "report its net line change on those files" in triage
+    assert "names the existing text the change would extend or fold into" in triage
+    assert "says in its payload why it cannot fold into it" in triage
+    assert "and why that did not fit" in systemize
+    session_start = " ".join((workflows / "session-start.md").read_text(encoding="utf-8").split())
+    assert "with the entry's remedy as the action; don't consolidate inline" in session_start

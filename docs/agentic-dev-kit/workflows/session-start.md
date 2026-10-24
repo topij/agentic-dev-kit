@@ -588,7 +588,7 @@ wrapped up gets no preference for it.
   (`wrap-up` sweeps the handoff; the `triage-friction-log` workflow graduates the inbox) — don't
   sweep inline. An instruction file with a `doc_budgets` entry and no `archive` (such
   as `AGENTS.md`) over its budget is the same 🟢 item, with the entry's remedy as the
-  action; don't consolidate inline.
+  action; don't consolidate inline during session start.
 - If a `## Workstreams` entry is stale — it calls a merged pull request open or a
   follow-up, or its `▶ Next:` names a closed issue — list it as a 🟢 housekeeping
   item with what the forge or tracker says now. The next `wrap-up` corrects it;

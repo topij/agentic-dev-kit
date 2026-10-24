@@ -416,10 +416,10 @@ first.
 
 A proposed ticket whose fix adds to or changes a standing instruction (`AGENTS.md`,
 `CLAUDE.md`, `.claude/rules/`, or a shared workflow doc) names the existing text the
-change would extend or fold into, and its acceptance criteria require the implementing
-pull request to report its net line change on those files (lines added minus lines
-removed). An entry that would add a rule beside an existing one says why it cannot
-fold into it.
+change would extend or fold into, and its proposed payload asks the implementing pull
+request to report its net line change on those files (lines added minus lines removed,
+as `git diff --numstat` prints it). A proposed ticket that would add a rule beside an
+existing one says in its payload why it cannot fold into it.
 
 Before computing proposal digests, classify each proposed ticket and include its
 execution-environment section and configured label according to

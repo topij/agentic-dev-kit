@@ -125,7 +125,8 @@ parallel:
   termination_grace_seconds: 5
 
 doc_budgets:
-  # Line-count tripwires (the archival mechanism of Principle #1). A file over budget
+  # Line-count tripwires (the archival mechanism of Principle #1 for the handoff docs,
+  # a consolidation nudge for an instruction file). A file over budget
   # is a housekeeping nudge: check_doc_budget.py exits 0 by default even when one is
   # over, and returns 1 only under --strict. It exits 2 on a usage or CONFIG error
   # regardless of flags — including a `path:` here that no longer exists — so a renamed
@@ -147,10 +148,11 @@ doc_budgets:
     remedy: "run the triage-friction-log workflow to graduate the inbox to the tracker"
   # An instruction file has no history file to sweep into, so its entry omits
   # `archive:` and the remedy names consolidation (#1176). Every runtime reads
-  # AGENTS.md (Claude Code through CLAUDE.md's import), so it is the instruction
-  # file every installation has. Add more entries the same way, for instance a
-  # CLAUDE.md that carries runtime-only text; a configured path that does not
-  # exist stops check_doc_budget.py with exit 2.
+  # AGENTS.md (Claude Code through CLAUDE.md's import), and init.sh renders it, so
+  # it is the instruction file an installed kit has. Add more entries the same way,
+  # for instance a CLAUDE.md that carries runtime-only text. A configured path that
+  # does not exist stops check_doc_budget.py with exit 2 before any other warning
+  # prints, so a repository that drops AGENTS.md drops this entry with it.
   - path: AGENTS.md
     budget: 240
     remedy: "fold new rules into the text they extend, move reference material behind a pointer, or turn a mechanical rule into a check; do not raise the budget to fit"

@@ -3,7 +3,7 @@
 # requires-python = ">=3.12"
 # dependencies = []
 # ///
-"""Warn-only tripwire: nudge an archive sweep when a handoff doc grows too large.
+"""Warn-only tripwire: nudge a sweep or consolidation when a budgeted doc grows too large.
 
 The two cross-session handoff docs — ``docs/handoff.md`` (the living plan) and
 ``docs/friction-log.md`` (the friction inbox) — are meant to stay lean:
@@ -101,10 +101,16 @@ def _load_doc_budgets(config_path: Path) -> list[tuple[str, int, str | None, str
         if not isinstance(entry, dict):
             raise ValueError(f"doc_budgets[{i}] must be a mapping, got {type(entry).__name__}")
         archive = entry.get("archive")
-        if "archive" in entry and (archive is None or not str(archive).strip()):
-            # An `archive:` written with no value is a typo, not an archive-less
-            # entry: an archive-less entry omits the key.
-            raise ValueError(f"doc_budgets[{i}] has an empty 'archive'; omit the key instead")
+        if "archive" in entry and not (isinstance(archive, str) and archive.strip()):
+            # An `archive:` with no value, or with `false` or a list, is a typo, not an
+            # archive-less entry: an archive-less entry omits the key. Printed through
+            # str() it would tell the reader to sweep into "None" or "False".
+            raise ValueError(f"doc_budgets[{i}] has an empty or non-path 'archive'; omit the key instead")
+        remedy = entry.get("remedy")
+        if "remedy" in entry and not (isinstance(remedy, str) and remedy.strip()):
+            # With no archive the remedy is the whole warning, so an empty one would
+            # print a warning that says nothing.
+            raise ValueError(f"doc_budgets[{i}] has an empty 'remedy'")
         try:
             out.append(
                 (
@@ -148,7 +154,7 @@ def render(statuses: list[DocStatus], *, quiet: bool) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point: report each handoff doc's line count against its budget.
+    """CLI entry point: report each budgeted doc's line count against its budget.
 
     Returns 0 (warn-only), or 1 when ``--strict`` and a doc is over budget, or 2
     on a usage error (config missing/malformed, or a configured doc is missing).
