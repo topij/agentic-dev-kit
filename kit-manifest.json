@@ -76,7 +76,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "e364f41c77f7747f367c4ee13a396641a3fb8d3ba8f9f25dec8f91f5c8a0ac41"
+      "sha256": "3fca78a6d8c7162a12024c1019b34a33eecd9c01201689058a5c38963d2c70f3"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -191,7 +191,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "5b351c25b8a64d0444309b5de378aae5f452d2ce81ece47a87edc80dae48e09f"
+      "sha256": "14b404621b3100aad5f794f7303a4e4736e708f6c309600a2474af49a537362d"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -226,7 +226,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "86496e5f9e6956573658f7c60d02c98f93bea8dc67382aa5a50feb40a7782506"
+      "sha256": "cc1757b631eddc7b34bcdf5ca683f504535d7c141c75d769ef57e1b981ebf2f2"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -325,7 +325,7 @@
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
-      "sha256": "a64179d390f143e83bc4d35618d63ca76d7b1e574370dfe6c94b28526af5ecaf"
+      "sha256": "4aee9de062b9fe0176d0602d793cbac4f1ac23c29b458227f013926b7e3398d0"
     },
     "scripts/lib/runtime_adapters.py": {
       "required_by": [
@@ -611,7 +611,7 @@
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "c420f38de3a59516f1b9662fc76b4aa17d33b16515cffb912508a116e8f3a1e3"
+      "sha256": "4b390fa2cfb9ed72f2bd3fa95f8f5d5a936feae89e49f4d9ea7c2ab22aff6f53"
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
@@ -699,7 +699,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "593162e066103a6ca894f73f45508999270f243accaff9dbdb923ae387eda81f"
+      "sha256": "61c2ad765c9306836c003c5b5c9863d5d796adc89bd34ee3a9dcb6b6df0cf14a"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "18998e51619ce35053d56dc4eec50c29243490fc4c25edbed21f8eb7057152e0"
+      "sha256": "c5fc023ca2183fd65499ff06ecdc0d4dd6d5ce32b6ebb0429140be7774998c22"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

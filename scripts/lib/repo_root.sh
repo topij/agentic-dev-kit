@@ -20,8 +20,10 @@ devkit_find_repo_root() {
 # inside a linked cockpit worktree, to a different directory than the one the
 # sessions live in (#479). The primary worktree is the first record of
 # `git worktree list`, which every linked worktree of one repository reports
-# identically. A bare primary (no working tree), or a git that cannot list
-# worktrees, keeps the old answer: the sibling of the checkout passed in.
+# identically. A bare primary (no working tree), a primary that is not an
+# existing absolute directory, or a git that cannot list worktrees, keeps the
+# old answer: the sibling of the checkout passed in. scripts/pr_watch.py
+# mirrors this in `_default_sessions_dir`; change both together.
 devkit_default_sessions_dir() {
     local repo_root="$1" primary
     primary="$(git -C "$repo_root" worktree list --porcelain -z 2>/dev/null | python3 -c '

@@ -80,8 +80,8 @@ git check-ref-format --branch "$CONFIGURED_PROTECTED_BRANCH" >/dev/null 2>&1 || 
 DEFAULT_BASE="${DEV_SESSION_BASE:-$CONFIGURED_PROTECTED_BRANCH}"
 CONFIGURED_PREFIX="$(devkit_config_scalar "$CONFIG_FILE" vcs "" dev_branch_prefix || true)"
 
-# Sessions container — mirror dev_session.sh so no-arg discovery lines up with
-# the sibling that created the sessions.
+# Sessions container — mirror dev_session.sh so no-arg discovery finds the
+# sessions it created, beside the primary worktree.
 SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(devkit_default_sessions_dir "$REPO_ROOT")}"
 DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 

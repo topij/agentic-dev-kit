@@ -65,6 +65,8 @@ sessions — report it as-is, then stop. Read-only.
 - **OVERLAP** names the other active lanes that change at least one of the same files
   (committed against the lane's base, uncommitted, or untracked). Two names in each
   other's OVERLAP cell are the pair to sequence: merge one, then rebase the other.
+  A lane whose footprint cannot be read shows `?` and is left out of the others'
+  comparison, so their `—` does not clear them against it while any lane shows `?`.
 
 ### Live board — `parallel list --watch [interval]`
 
@@ -277,8 +279,10 @@ neither.
 **What a lane cost.** A Claude lane's terminal receipt carries `terminal.usage`: the
 token counts, `total_cost_usd`, per-model figures (`modelUsage`), turn count and
 duration from the runtime's own JSON result. They are the runtime's figures, numeric
-fields only, and do not change the verdict. Comparing `terminal.usage.models` with
-`request.compute.model` shows whether the model you asked for is the one that ran. A
+fields only, and do not change the verdict. `terminal.usage.models` is keyed by the
+runtime's full model ids and can list an auxiliary model beside the main one, so read
+it beside `request.compute.model` (often an alias such as `opus`) rather than
+expecting the two to match exactly. A
 Codex lane records `usage: null`, because its final-text transport carries no figures.
 
 ### Joint wrap-up — the cockpit owns the handoff

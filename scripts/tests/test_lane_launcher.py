@@ -2632,6 +2632,22 @@ def test_usage_the_launcher_cannot_read_is_none_and_never_fails_the_lane(
     assert receipt["terminal"]["usage"] is None
 
 
+@pytest.mark.parametrize(
+    "final_bytes",
+    [
+        b'{"type": "result", "usage": ' + b"[" * 100_000 + b"]" * 100_000 + b"}",
+        b'{"type": "result", "num_turns": ' + b"9" * 5_000 + b"}",
+        b'{"type": "result", "usage": {"input_tokens": NaN}, "total_cost_usd": Infinity,'
+        b' "modelUsage": {"m": {"costUSD": -Infinity, "flag": true}}}',
+    ],
+    ids=["deep-nesting", "long-integer", "non-finite"],
+)
+def test_usage_figures_json_cannot_carry_read_as_none(final_bytes: bytes) -> None:
+    # A receipt is canonical JSON: a value a strict reader refuses, or one the
+    # parser itself refuses, must never reach it.
+    assert _load_launcher()._reported_usage("json-stdout", final_bytes) is None
+
+
 def test_a_codex_lane_records_no_usage(tmp_path: Path) -> None:
     repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
     result = _run_launcher(engine_dir, descriptor, prompt, env)

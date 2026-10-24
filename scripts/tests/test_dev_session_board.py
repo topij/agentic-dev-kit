@@ -117,6 +117,8 @@ def test_the_sessions_dir_is_the_same_from_primary_linked_and_lane_checkouts(
         resolved = repo.run(checkout, "path", "alpha")
         assert resolved.returncode == 0, (checkout, resolved.stderr)
         assert resolved.stdout.strip() == expected, checkout
+        # pr_watch.py's mirror, behind its lane-state hint, agrees.
+        assert _python_sessions_dir(checkout, repo.env) == str(repo.sessions), checkout
 
 
 def test_an_explicit_sessions_dir_still_wins(repo: Repo, tmp_path: Path) -> None:
@@ -246,7 +248,7 @@ def test_a_cockpit_poll_names_the_lane_that_holds_the_prs_watch_state(
     assert "lane session" not in chosen.stderr
 
 
-def _sessions_dir_from(repo_root: Path, env: dict[str, str]) -> str:
+def _shell_sessions_dir(repo_root: Path, env: dict[str, str]) -> str:
     return subprocess.run(
         ["bash", "-c", f'source "{ENGINE_DIR / "lib" / "repo_root.sh"}"; '
          f'devkit_default_sessions_dir "{repo_root}"'],
@@ -254,7 +256,24 @@ def _sessions_dir_from(repo_root: Path, env: dict[str, str]) -> str:
     ).stdout.strip()
 
 
-def test_a_bare_primary_keeps_the_invoking_checkouts_sibling(tmp_path: Path) -> None:
+def _python_sessions_dir(repo_root: Path, env: dict[str, str]) -> str:
+    # pr_watch.py's mirror of the shell resolver, which its lane-state hint uses.
+    return subprocess.run(
+        ["python3", "-c",
+         "import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); "
+         "import pr_watch; print(pr_watch._default_sessions_dir(Path(sys.argv[2])))",
+         str(ENGINE_DIR), str(repo_root)],
+        env=env, cwd=repo_root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+SESSIONS_DIR_RESOLVERS = pytest.mark.parametrize(
+    "_sessions_dir_from", [_shell_sessions_dir, _python_sessions_dir], ids=["shell", "python"]
+)
+
+
+@SESSIONS_DIR_RESOLVERS
+def test_a_bare_primary_keeps_the_invoking_checkouts_sibling(tmp_path: Path, _sessions_dir_from) -> None:
     bare = tmp_path / "bare.git"
     seed = tmp_path / "seed"
     seed.mkdir()
@@ -267,7 +286,8 @@ def test_a_bare_primary_keeps_the_invoking_checkouts_sibling(tmp_path: Path) -> 
     assert resolved == str(tmp_path / "nested" / "dev-model-sessions")
 
 
-def test_a_primary_that_is_not_a_directory_falls_back(tmp_path: Path) -> None:
+@SESSIONS_DIR_RESOLVERS
+def test_a_primary_that_is_not_a_directory_falls_back(tmp_path: Path, _sessions_dir_from) -> None:
     # A git that names a primary which no longer exists on disk.
     shim = tmp_path / "bin"
     shim.mkdir()
@@ -308,6 +328,36 @@ def test_a_wrapper_that_died_before_any_receipt_is_lost(repo: Repo) -> None:
     assert _board(repo)["alpha"][5] == "lost"
 
 
+@pytest.mark.parametrize("pid", [0, -1, 2**31, 2**64], ids=["zero", "group", "int32", "huge"])
+def test_a_pid_that_names_no_single_process_is_not_read_as_alive(repo: Repo, pid: int) -> None:
+    # 0 and negative pids address process groups, so os.kill succeeds on them;
+    # pids past the C int range make os.kill raise instead.
+    _new(repo, "alpha")
+    _attempt(repo.sessions / "alpha", pid=pid)
+    assert _board(repo)["alpha"][5] == "?"
+
+
+def test_a_live_pid_owned_by_someone_else_still_counts_as_alive(repo: Repo) -> None:
+    if os.getuid() == 0:
+        pytest.skip("root may signal every process, so no pid answers EPERM")
+    _new(repo, "alpha")
+    _attempt(repo.sessions / "alpha", pid=1)
+    assert _board(repo)["alpha"][5] == "starting"
+
+
+def test_one_malformed_attempt_file_costs_only_its_own_row(repo: Repo) -> None:
+    alpha, beta = (_new(repo, s) for s in ("alpha", "beta"))
+    (alpha / "shared.txt").write_text("a\n", encoding="utf-8")
+    (beta / "shared.txt").write_text("b\n", encoding="utf-8")
+    (repo.sessions / "alpha" / "launch-attempt.json").write_text(
+        json.dumps({"descriptor_id": "d1", "parent_process": "not-a-map"}), encoding="utf-8"
+    )
+    board = _board(repo)
+    assert board["alpha"][5] == "?"
+    assert board["beta"][5] == "—"
+    assert (board["alpha"][6], board["beta"][6]) == ("beta", "alpha")
+
+
 def test_the_watch_board_marks_a_row_whose_run_state_changed(repo: Repo) -> None:
     _new(repo, "alpha")
     session = repo.sessions / "alpha"
@@ -328,3 +378,12 @@ def test_the_watch_board_marks_a_row_whose_run_state_changed(repo: Repo) -> None
     row = frame()
     assert row[:2] == ["*", "alpha"]
     assert row[6] == "running"
+    assert frame()[0] == "alpha"  # settled again
+    # A peer starting to touch alpha's file changes only alpha's OVERLAP cell.
+    (repo.sessions / "alpha" / "wt" / "shared.txt").write_text("a\n", encoding="utf-8")
+    assert frame()[:2] == ["*", "alpha"]  # alpha's own DIRTY moved
+    beta = _new(repo, "beta")
+    (beta / "shared.txt").write_text("b\n", encoding="utf-8")
+    row = frame()
+    assert row[:2] == ["*", "alpha"]
+    assert row[7] == "beta"

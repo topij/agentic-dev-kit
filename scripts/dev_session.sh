@@ -527,7 +527,8 @@ PY
 # origin/<base> when that ref exists) plus its uncommitted and untracked paths.
 # `plan` checks footprints before launch; this is the same check while the batch
 # runs, when sequencing two PRs still helps. A lane whose footprint cannot be
-# read shows `?` and is left out of everyone else's comparison.
+# read shows `?` and is left out of everyone else's comparison, so a peer's `—`
+# says nothing about that lane; parallel.md tells the cockpit so.
 _lane_extras() {
     [[ -d "$SESSIONS_DIR" ]] || return 0
     python3 - "$SESSIONS_DIR" "$DEFAULT_BASE" <<'PY' 2>/dev/null || true
@@ -546,8 +547,11 @@ def git(worktree, *args):
 
 
 def wrapper_alive(attempt):
-    pid = (attempt.get("parent_process") or {}).get("pid")
-    if type(pid) is not int or pid <= 0:
+    parent = attempt.get("parent_process")
+    pid = parent.get("pid") if isinstance(parent, dict) else None
+    # A pid os.kill cannot take, or one that names a process group (0, -n),
+    # is not evidence about the wrapper.
+    if type(pid) is not int or not 0 < pid < 2**31:
         return None
     try:
         os.kill(pid, 0)
@@ -611,7 +615,12 @@ for session in sorted(p for p in sessions.iterdir() if (p / "wt").is_dir()):
         files = footprint(session)
     except Exception:
         files = None
-    rows.append((session.name, run_state(session), files))
+    # One malformed session file costs that lane its row, never the board.
+    try:
+        run = run_state(session)
+    except Exception:
+        run = "?"
+    rows.append((session.name, run, files))
 
 for scope, run, files in rows:
     if files is None:

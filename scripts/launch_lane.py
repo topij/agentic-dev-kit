@@ -21,6 +21,7 @@ import contextlib
 import datetime as dt
 import hashlib
 import json
+import math
 import os
 import re
 import secrets
@@ -1010,7 +1011,9 @@ def _numeric_fields(value: object) -> dict[str, int | float] | None:
     kept = {
         str(key): number
         for key, number in value.items()
-        if isinstance(number, (int, float)) and not isinstance(number, bool)
+        if isinstance(number, (int, float))
+        and not isinstance(number, bool)
+        and math.isfinite(number)
     }
     return kept or None
 
@@ -1024,7 +1027,8 @@ def _reported_usage(transport: str, final_bytes: bytes) -> dict[str, Any] | None
     `json-stdout` result carries figures; `last-message-file` holds the final text
     alone. The values are the runtime's own and cover what its result object
     covers; whether that includes subagents is the runtime's definition, which
-    this does not check. Only numeric fields are kept.
+    this does not check. Only finite numeric fields are kept, and a model with none
+    is left out.
     """
     if transport != "json-stdout" or not final_bytes:
         return None
@@ -1039,14 +1043,15 @@ def _reported_usage(transport: str, final_bytes: bytes) -> dict[str, Any] | None
     reported = {
         "source": "claude json result",
         "usage": _numeric_fields(value.get("usage")),
-        "total_cost_usd": value.get("total_cost_usd")
-        if isinstance(value.get("total_cost_usd"), (int, float))
-        and not isinstance(value.get("total_cost_usd"), bool)
-        else None,
+        "total_cost_usd": (_numeric_fields({"cost": value.get("total_cost_usd")}) or {}).get(
+            "cost"
+        ),
         "models": {
-            str(name): _numeric_fields(figures) or {}
+            str(name): kept
             for name, figures in models.items()
+            if (kept := _numeric_fields(figures)) is not None
         }
+        or None
         if isinstance(models, dict)
         else None,
         "num_turns": value.get("num_turns")
