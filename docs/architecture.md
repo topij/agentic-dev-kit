@@ -263,7 +263,7 @@ shared-rule change only for a qualifying cross-PR pattern. It takes the first fi
 level that works: a structural change so the mistake cannot be made, then a check
 whose failure names the fix and which fails on the code of a pull request in the
 cluster, and a prose rule only for a judgement call a check cannot make. When
-`systemize.enforcement_table` is configured, it reads that table first: a pattern
+`systemize.enforcement_table` is configured, it reads that table before proposing a prose rule: a pattern
 that repeats a rule marked `judgement, unenforced` is a reason to reconsider a
 check, and the proposal updates the rule's row in the same patch. Its tracker route
 also needs payload-specific approval. The [triage](agentic-dev-kit/workflows/triage-friction-log.md)

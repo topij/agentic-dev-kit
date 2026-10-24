@@ -235,8 +235,8 @@ On a cadence (weekly works well):
   `systemize.pattern_threshold` — and only *then* proposes a fix. It tries a
   structural change first, then a check that fails on the past mistake, and writes a
   prose rule only for a judgement call no check can make. The optional
-  `systemize.enforcement_table` records what enforces each rule, so a rule that
-  keeps being broken shows up as unenforced.
+  `systemize.enforcement_table` records what enforces each rule; a pattern that
+  repeats a rule marked `judgement, unenforced` there is a cue to add a check.
 
 Single incidents route **down** (to the tracker); repeated patterns route **up**
 (to a check or a rule). That asymmetry is deliberate — it's what keeps your rule set small
