@@ -307,6 +307,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # in this repository's history, so neither it nor its case set means anything
     # in an adopter's tree.
     ("scripts/review_eval.py", REPO_ONLY_ROLE),
+    # The skill-routing check (#1221) scores the kit's own adapter descriptions
+    # against a case set of kit-skill prompts, so it means nothing in an adopter's tree.
+    ("scripts/skill_routing_eval.py", REPO_ONLY_ROLE),
     # Assembles panel launch prompts by QUOTING the contract out of
     # docs/agentic-dev-kit/fallback-review-panel.md at run time (#214). That
     # coupling is why it is tracked beside the doctrine rather than left
@@ -396,6 +399,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_runtime_parity_matrix.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_smoke.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_review_eval.py", REPO_ONLY_ROLE),
+    ("scripts/tests/test_skill_routing_eval.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
     ("scripts/tests/test_adoption_fixtures.py", REPO_ONLY_ROLE),
@@ -483,10 +487,15 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # adopter cannot refresh the adapters or shared workflows while keeping an
     # older account of which ones are supposed to exist.
     ("docs/agentic-dev-kit/ticket-execution-environment.md", "doctrine"),
+    # Linked from the parallel and systemize/triage workflows, which /upgrade
+    # refreshes; an untracked target would leave those links dangling.
+    ("docs/agentic-dev-kit/parallel-verification.md", "doctrine"),
+    ("docs/agentic-dev-kit/writing-for-agents.md", "doctrine"),
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
     ("docs/agentic-dev-kit/live-validation-evidence.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/review-eval/reviewer-eval.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/review-eval/cases.yaml", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/skill-routing/cases.json", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an

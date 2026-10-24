@@ -592,7 +592,8 @@ with its header row if it does not exist. When the key is absent, report the tab
 unconfigured and skip this paragraph.
 
 Prefer the narrowest shared repository source. Do not edit a Claude or Codex adapter unless the
-finding is genuinely about that runtime's invocation or capability translation.
+finding is genuinely about that runtime's invocation or capability translation. Draft
+the edit by [`writing-for-agents.md`](../writing-for-agents.md).
 
 State each proposal's net line change on the files it edits (lines added minus lines
 removed, per file and in total, as `git diff --numstat` prints it for the proposed
