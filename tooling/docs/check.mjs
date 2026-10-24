@@ -27,7 +27,7 @@ export function inspectMarkdown(source) {
     links.push($(element).attr(element.tagName === 'img' ? 'src' : 'href'));
   });
   const diagrams = markdown.parse(source, {}).filter(
-    token => token.type === 'fence' && token.info.trim() === 'mermaid',
+    token => token.type === 'fence' && token.info.trim().split(/\s+/)[0] === 'mermaid',
   ).map(token => ({ code: token.content, line: token.map[0] + 1 }));
   return { anchors, links, diagrams };
 }

@@ -59,6 +59,10 @@ test('only real Mermaid fences become renders', () => {
   assert.deepEqual(result.diagrams, [{ code: 'flowchart LR\nA-->B\n', line: 9 }]);
 });
 
+test('Mermaid language tags with additional info are still checked', () => {
+  assert.equal(inspectMarkdown('```mermaid title=example\nflowchart LR\nA-->B\n```').diagrams.length, 1);
+});
+
 test('browser renders previews, rejects malformed Mermaid and retains source evidence', async t => {
   const root = await fixture(t);
   const result = await renderDiagrams([
