@@ -109,6 +109,13 @@ interpretation; an evaluation score is not a review of the PR being merged. The
 case set depends on this kit's history and is a maintainer tool, not an adopter
 installation requirement.
 
+When writing or editing an instruction an agent reads (a workflow, a skill, a rule
+or `AGENTS.md`), follow [writing for agents](agentic-dev-kit/writing-for-agents.md).
+`AGENTS.md` has a line budget in `doc_budgets`; when the budget check warns, fold or
+move text instead of adding more. Before changing `dev_session.sh`, the lane launcher
+or the lane identity chain, read the
+[parallel verification matrix](agentic-dev-kit/parallel-verification.md).
+
 When changing a skill adapter's `description`, run
 `uv run scripts/skill_routing_eval.py`; `make test` runs it too. It scores the
 prompts in [`skill-routing/cases.json`](agentic-dev-kit/skill-routing/cases.json)
@@ -157,7 +164,12 @@ its approval step decides which entries to file, archive, or park. A budget warn
 alone does not authorize a tracker write or archive sweep.
 
 `post-merge-systemize` reads merged PR review findings for recurring root causes.
-It proposes a shared-rule change only when the configured pattern threshold is met.
+It proposes a shared-rule change only when the configured pattern threshold is met,
+and chooses the change in order: a structural change, then a check shown failing on
+a pull request in the cluster, then a prose rule for a judgement call. The proposal
+names its level and why each higher one does not work, and reports its net line
+change. In this repository [`kit-enforcement.md`](kit-enforcement.md) is the
+enforcement table it reads and updates.
 The [triage](agentic-dev-kit/workflows/triage-friction-log.md) and
 [systemize](agentic-dev-kit/workflows/post-merge-systemize.md) definitions specify
 their preflight, state, approval, and recovery rules.
