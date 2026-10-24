@@ -4,9 +4,9 @@ CHANGED (config keys): a `doc_budgets` entry in `config/dev-model.yaml` may now 
 `archive`. Use that for an instruction file such as `AGENTS.md`, which has no history
 file to sweep into, and write a `remedy` that names consolidation. Over budget,
 `check_doc_budget.py` then prints `⚠ <path> is <n> lines (budget ~<b>): <remedy>.`
-instead of an archive sweep. An `archive:` key whose value is empty or not a path
+instead of an archive sweep. An `archive:` key whose value is empty or not a string
 (`false`, a number, a list) now stops the engine with exit 2; omit the key instead. An
-empty `remedy` stops it with exit 2 as well. Existing entries with a path `archive` and
+empty or non-string `remedy` stops it with exit 2 as well. Existing entries with a path `archive` and
 a non-empty `remedy` need no change.
 
 The kit's own config adds an `AGENTS.md` entry. Your config is yours, so nothing is

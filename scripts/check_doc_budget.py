@@ -105,12 +105,12 @@ def _load_doc_budgets(config_path: Path) -> list[tuple[str, int, str | None, str
             # An `archive:` with no value, or with `false` or a list, is a typo, not an
             # archive-less entry: an archive-less entry omits the key. Printed through
             # str() it would tell the reader to sweep into "None" or "False".
-            raise ValueError(f"doc_budgets[{i}] has an empty or non-path 'archive'; omit the key instead")
+            raise ValueError(f"doc_budgets[{i}] has an empty or non-string 'archive'; omit the key instead")
         remedy = entry.get("remedy")
         if "remedy" in entry and not (isinstance(remedy, str) and remedy.strip()):
             # With no archive the remedy is the whole warning, so an empty one would
             # print a warning that says nothing.
-            raise ValueError(f"doc_budgets[{i}] has an empty 'remedy'")
+            raise ValueError(f"doc_budgets[{i}] has an empty or non-string 'remedy'")
         try:
             out.append(
                 (
@@ -142,7 +142,7 @@ def render(statuses: list[DocStatus], *, quiet: bool) -> str:
     lines: list[str] = []
     for s in statuses:
         if s.over and s.archive is None:
-            lines.append(f"⚠ {s.path} is {s.lines} lines (budget ~{s.budget}): {s.remedy_text}.")
+            lines.append(f"⚠ {s.path} is {s.lines} lines (budget ~{s.budget}): {s.remedy_text.rstrip('.')}.")
         elif s.over:
             lines.append(
                 f"⚠ {s.path} is {s.lines} lines (budget ~{s.budget}) — an archive "

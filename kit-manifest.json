@@ -72,7 +72,7 @@
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "9c58a4053841713dc13d306eae9baa5e1c7bc2f451ae736d84116b1a9b95b965"
+      "sha256": "f96ee462858be70773908fc88b9008438dd6237e40eecae12cb393e277dfad1a"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
@@ -163,11 +163,11 @@
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
-      "sha256": "f481a26a790f951ab2b6925365c098ef9f22e32fb7d2d19a66dff773408afaf2"
+      "sha256": "62abed189c463de71cb09aa8c395241d33f97ce88cf39e5c267d36734e71565e"
     },
     "scripts/check_memory_budget.py": {
       "role": "engine",
-      "sha256": "7077ec30d7f07faf29c2c18b2195031b03e6a6a967e83ec6431c0c9c968bb934"
+      "sha256": "307ee622b68d264474d774ba94d24d821a6e02ae28da97a975c63d5849319dc2"
     },
     "scripts/check_record_prose.py": {
       "role": "engine",
@@ -699,7 +699,7 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "dcdd372053b3d34a7ad31c3150ebfde1ddc61b38616b9319e1ea06aa160dee71"
+      "sha256": "7885c717f24906af6ee45b8138ad7e44432749487e0c7f1b4ce054f4840c2458"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "5902456cae744b26fa3b9b080212c88676802b4a99cdc87e055bc5d5ca02ed36"
+      "sha256": "d9df12b775f34a09814a9fcadf24e1de4426f75beaacf4ffc6016f6341ebe261"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

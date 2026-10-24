@@ -444,7 +444,7 @@ def _run_doc_budget(tmp_path, config_text, *extra):
 def test_check_doc_budget_accepts_an_entry_without_archive_and_prints_its_remedy(tmp_path):
     """#1176: an instruction file has no history file to sweep into, so its entry
     omits `archive:`. Over budget, the warning is its remedy, not an archive sweep."""
-    config = 'doc_budgets:\n  - path: AGENTS.md\n    budget: 2\n    remedy: "fold rules under {budget} lines"\n'
+    config = 'doc_budgets:\n  - path: AGENTS.md\n    budget: 2\n    remedy: "fold rules under {budget} lines."\n'
     result = _run_doc_budget(tmp_path, config)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == "⚠ AGENTS.md is 3 lines (budget ~2): fold rules under 2 lines."
@@ -473,16 +473,16 @@ def test_check_doc_budget_refuses_an_archive_key_with_no_value(tmp_path):
         config = f'doc_budgets:\n  - path: AGENTS.md\n    budget: 2\n    {archive}\n    remedy: "x"\n'
         result = _run_doc_budget(tmp_path, config)
         assert result.returncode == 2, (archive, result.stdout)
-        assert "empty or non-path 'archive'" in result.stderr, archive
+        assert "empty or non-string 'archive'" in result.stderr, archive
     for archive in ("archive: false", "archive: 0"):
         config = f'doc_budgets:\n  - path: AGENTS.md\n    budget: 2\n    {archive}\n    remedy: "x"\n'
         result = _run_doc_budget(tmp_path, config)
         assert result.returncode == 2, (archive, result.stdout)
-    for remedy in ("remedy:", 'remedy: ""'):
+    for remedy in ("remedy:", 'remedy: ""', 'remedy: "   "', "remedy: 5"):
         config = f"doc_budgets:\n  - path: AGENTS.md\n    budget: 2\n    {remedy}\n"
         result = _run_doc_budget(tmp_path, config)
         assert result.returncode == 2, (remedy, result.stdout)
-        assert "empty 'remedy'" in result.stderr, remedy
+        assert "empty or non-string 'remedy'" in result.stderr, remedy
 
 
 # ── repo_root(): the marker walk, and its fallback ──────────────────────────

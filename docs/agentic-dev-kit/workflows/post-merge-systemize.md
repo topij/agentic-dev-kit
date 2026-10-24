@@ -570,11 +570,13 @@ finding is genuinely about that runtime's invocation or capability translation.
 
 State each proposal's net line change on the files it edits (lines added minus lines
 removed, per file and in total, as `git diff --numstat` prints it for the proposed
-patch), and re-read it from the staged patch before the pull request opens. A proposal that adds lines also names the existing text
+patch), and re-read it with `git diff --cached --numstat` from the staged patch before
+the pull request opens. A proposal that adds lines also names the existing text
 it considered folding the rule into, and why that did not fit. A rule folded into the
 text it extends adds fewer lines than the same rule written beside it, and an instruction
 file with a `doc_budgets` entry in `config/dev-model.yaml` (the shipped config has one
-for `AGENTS.md`) warns at session start once it outgrows its budget.
+for `AGENTS.md`) is reported over budget by `check_doc_budget.py`, which the runtimes'
+SessionStart hooks run.
 
 Add a provenance marker beside each proposed rule:
 
