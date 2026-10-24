@@ -685,8 +685,9 @@ models:
   # scripts/tests/test_init_sh.py holds that set. Everywhere else a workflow's
   # tier reaches a session only when the cockpit or the operator applies the
   # value by hand — the delegation tool's `model` parameter,
-  # `claude -p --model/--effort`, `codex -m` and `-c model_reasoning_effort=`. The VALUES below name controls each client was
-  # observed to accept (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27;
+  # `claude -p --model/--effort`, `codex -m` and `-c model_reasoning_effort=`.
+  # The VALUES below name controls each client was observed to accept
+  # (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27;
   # saved_plans/capability-tier-calibration-live-validation_2026-08-27.md):
   #
   #   claude — model aliases the client resolved and reported back in the

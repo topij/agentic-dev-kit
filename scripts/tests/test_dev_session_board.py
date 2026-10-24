@@ -244,3 +244,87 @@ def test_a_cockpit_poll_names_the_lane_that_holds_the_prs_watch_state(
         repo, repo.root, 41, DEVKIT_STATE_ROOT=str(repo.sessions / "alpha" / "state")
     )
     assert "lane session" not in chosen.stderr
+
+
+def _sessions_dir_from(repo_root: Path, env: dict[str, str]) -> str:
+    return subprocess.run(
+        ["bash", "-c", f'source "{ENGINE_DIR / "lib" / "repo_root.sh"}"; '
+         f'devkit_default_sessions_dir "{repo_root}"'],
+        env=env, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def test_a_bare_primary_keeps_the_invoking_checkouts_sibling(tmp_path: Path) -> None:
+    bare = tmp_path / "bare.git"
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    _git(seed, "init", "-q", "-b", "trunk")
+    _git(seed, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "s")
+    subprocess.run(["git", "clone", "-q", "--bare", str(seed), str(bare)], check=True)
+    linked = tmp_path / "nested" / "wt"
+    _git(bare, "worktree", "add", "-q", str(linked), "trunk")
+    resolved = _sessions_dir_from(linked, dict(os.environ))
+    assert resolved == str(tmp_path / "nested" / "dev-model-sessions")
+
+
+def test_a_primary_that_is_not_a_directory_falls_back(tmp_path: Path) -> None:
+    # A git that names a primary which no longer exists on disk.
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    fake = shim / "git"
+    fake.write_text(
+        "#!/bin/sh\nprintf 'worktree %s\\0HEAD 0\\0\\0' "
+        f"'{tmp_path / 'gone' / 'primary'}'\n",
+        encoding="utf-8",
+    )
+    fake.chmod(0o755)
+    checkout = tmp_path / "here" / "checkout"
+    checkout.mkdir(parents=True)
+    env = {**os.environ, "PATH": f"{shim}{os.pathsep}{os.environ['PATH']}"}
+    assert _sessions_dir_from(checkout, env) == str(tmp_path / "here" / "dev-model-sessions")
+
+
+def test_untracked_files_alone_make_two_lanes_overlap(repo: Repo) -> None:
+    alpha, beta = (_new(repo, s) for s in ("alpha", "beta"))
+    (alpha / "new.txt").write_text("a\n", encoding="utf-8")
+    (beta / "new.txt").write_text("b\n", encoding="utf-8")
+    board = _board(repo)
+    assert board["alpha"][6] == "beta"
+    assert board["beta"][6] == "alpha"
+
+
+def test_a_base_that_reads_as_an_option_is_not_passed_to_git(repo: Repo) -> None:
+    _new(repo, "alpha")
+    (repo.sessions / "alpha" / "base").write_text(
+        f"--output={repo.root.parent / 'injected'}\n", encoding="utf-8"
+    )
+    assert _board(repo)["alpha"][6] == "?"
+    assert not list(repo.root.parent.glob("injected*"))
+
+
+def test_a_wrapper_that_died_before_any_receipt_is_lost(repo: Repo) -> None:
+    _new(repo, "alpha")
+    _attempt(repo.sessions / "alpha", pid=_dead_pid())
+    assert _board(repo)["alpha"][5] == "lost"
+
+
+def test_the_watch_board_marks_a_row_whose_run_state_changed(repo: Repo) -> None:
+    _new(repo, "alpha")
+    session = repo.sessions / "alpha"
+    _attempt(session, pid=os.getpid())
+    sigfile = repo.root.parent / "sigfile"
+    sigfile.write_text("", encoding="utf-8")
+
+    def frame() -> list[str]:
+        rendered = subprocess.run(
+            ["bash", "-c", f'source "{repo.engine(repo.root)}"; _list_render "{sigfile}"'],
+            cwd=repo.root, env=repo.env, check=True, capture_output=True, text=True,
+        ).stdout
+        return next(line.split() for line in rendered.splitlines() if "alpha" in line.split()[:2])
+
+    assert frame()[0] == "alpha"  # baseline: nothing marked
+    assert frame()[0] == "alpha"  # unchanged: nothing marked
+    _receipt(session, "observed")
+    row = frame()
+    assert row[:2] == ["*", "alpha"]
+    assert row[6] == "running"

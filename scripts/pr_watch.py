@@ -246,18 +246,21 @@ _STATE_ROOT = _resolve_state_root(
 STATE_DIR = _STATE_ROOT / "pr-watch"
 
 
-def _default_sessions_dir(repo_root: Path) -> Path | None:
-    """The lane sessions container ``dev_session.sh`` uses, or None.
+def _default_sessions_dir(repo_root: Path) -> Path:
+    """The lane sessions container ``dev_session.sh`` uses.
 
     Mirrors ``devkit_default_sessions_dir`` in ``scripts/lib/repo_root.sh``:
     ``$DEVKIT_SESSIONS_DIR`` when set (a relative value is taken from the cwd,
     as the shell engine does), else a ``dev-model-sessions/`` sibling of the
     repository's primary worktree, the first record of ``git worktree list``.
-    None when git cannot answer or the primary is bare.
+    When git cannot answer, the primary is bare, or it is not an existing
+    absolute directory, the sibling of ``repo_root`` is used, as the shell
+    engine does.
     """
     explicit = os.environ.get("DEVKIT_SESSIONS_DIR")
     if explicit:
         return Path(os.path.abspath(explicit))
+    primary = repo_root
     try:
         listed = subprocess.run(
             ["git", "-C", str(repo_root), "worktree", "list", "--porcelain", "-z"],
@@ -266,16 +269,17 @@ def _default_sessions_dir(repo_root: Path) -> Path | None:
             check=True,
         ).stdout
     except (OSError, subprocess.SubprocessError):
-        return None
+        listed = b""
     first: list[bytes] = []
     for field in listed.split(b"\0"):
         if not field:
             break
         first.append(field)
-    if not first or not first[0].startswith(b"worktree ") or b"bare" in first[1:]:
-        return None
-    primary = Path(os.fsdecode(first[0][len(b"worktree "):]))
-    return primary.parent / "dev-model-sessions" if primary.is_absolute() else None
+    if first and first[0].startswith(b"worktree ") and b"bare" not in first[1:]:
+        candidate = Path(os.fsdecode(first[0][len(b"worktree "):]))
+        if candidate.is_absolute() and candidate.is_dir():
+            primary = candidate
+    return primary.parent / "dev-model-sessions"
 
 
 def lane_state_hint(pr: int) -> str | None:
@@ -297,7 +301,7 @@ def lane_state_hint(pr: int) -> str | None:
         if _STATE_ROOT != REPO_ROOT / "state":
             return None
         sessions = _default_sessions_dir(REPO_ROOT)
-        if sessions is None or not sessions.is_dir():
+        if not sessions.is_dir():
             return None
         scopes = sorted(
             entry.name

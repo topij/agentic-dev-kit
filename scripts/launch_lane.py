@@ -94,8 +94,9 @@ RUNTIME_APPROVAL_POLICIES: dict[str, dict[str, tuple[str, ...]]] = {
         "accept-edits": ("--permission-mode", "acceptEdits"),
     },
 }
-# Compute tiers (Principle #7). `--tier` names one of the neutral keys under
-# `models.tiers`; the engine reads `models.runtime_mappings.<runtime>.<tier>` and
+# Compute tiers (Principle #7). `--tier` names one of the three neutral tier
+# names the kit fixes (the keys `models.tiers` documents; this tuple is a
+# constant, not read from config); the engine reads `models.runtime_mappings.<runtime>.<tier>` and
 # emits that runtime's own controls in a fixed argv slot after the approval
 # contribution. A scalar value is the one control the runtime's mapping names (a
 # Claude model alias, a Codex effort level, as the config comment defines); a map
@@ -1029,7 +1030,8 @@ def _reported_usage(transport: str, final_bytes: bytes) -> dict[str, Any] | None
         return None
     try:
         value, _end = json.JSONDecoder().raw_decode(final_bytes.decode("utf-8").strip())
-    except (UnicodeDecodeError, json.JSONDecodeError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        # ValueError covers JSONDecodeError and the integer-length limit.
         return None
     if not isinstance(value, dict) or value.get("type") != "result":
         return None

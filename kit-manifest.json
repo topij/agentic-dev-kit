@@ -191,7 +191,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "665d6c0d70b831b91a0588405ac5cec4ff427bf59bf8992bdbeca80b591fb134"
+      "sha256": "5b351c25b8a64d0444309b5de378aae5f452d2ce81ece47a87edc80dae48e09f"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -226,7 +226,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "ede1da4b0f23ea3303f03f40ea6c634e9a6e3edaa7ef08bdbaa3954999235a4c"
+      "sha256": "86496e5f9e6956573658f7c60d02c98f93bea8dc67382aa5a50feb40a7782506"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -607,7 +607,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "c138561cc01d58633665e6c1f94d689edaf17d0ba4d317c2822c8c887c700c43"
+      "sha256": "232077962dc5b181ab798164c253ed1e03144f62bd856bf511e5070215f3ed9e"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -659,7 +659,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "73888423b0699683f1f131b8c4f873b4246d5aa88efc6ebb99107c81e0156f1a"
+      "sha256": "e36f15bf68261e841de6c641562d9e8529234e145a420790aee7cb993427545b"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -699,7 +699,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "1f2a6ad05a1296a484610d060ba1ce6bfc4c3fea0191231c362a29e0c1c15a6d"
+      "sha256": "593162e066103a6ca894f73f45508999270f243accaff9dbdb923ae387eda81f"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "3473228a21c6d9ab4a1b88834b04420ca31e5b0deccd1b8574c7d7dea41e8615"
+      "sha256": "18998e51619ce35053d56dc4eec50c29243490fc4c25edbed21f8eb7057152e0"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

@@ -103,7 +103,7 @@ not a lowercase slug.
 
 What this does:
 
-1. Creates a git **worktree** in the sibling `dev-model-sessions/` directory (a linked
+1. Creates a git **worktree** in the `dev-model-sessions/` directory beside your primary checkout (a linked
    worktree sharing this repo's objects — not a full clone).
 2. Creates a fresh branch using `vcs.dev_branch_prefix`, branched off the configured
    `origin/<vcs.protected_branch>` by default — **not** off your current branch. That's

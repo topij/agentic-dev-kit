@@ -167,7 +167,7 @@ def _fake_claude(
         "no-denial-list": "sys.stdout.write(json.dumps({k: v for k, v in good.items() if k != 'permission_denials'}) + '\\n')",
         # The token and cost fields a real result object carries beside the text.
         "with-usage": "sys.stdout.write(json.dumps({**good, 'usage': {'input_tokens': 12, 'output_tokens': 34, 'cache_read_input_tokens': 5, 'service_tier': 'standard'}, 'total_cost_usd': 0.0123, 'num_turns': 3, 'duration_ms': 4567, 'modelUsage': {'claude-haiku-x': {'inputTokens': 12, 'outputTokens': 34, 'costUSD': 0.0123}}}) + '\\n')",
-        "odd-usage": "sys.stdout.write(json.dumps({**good, 'usage': 'lots', 'total_cost_usd': True, 'modelUsage': ['x'], 'num_turns': '3'}) + '\\n')",
+        "odd-usage": "sys.stdout.write(json.dumps({**good, 'usage': {'input_tokens': True, 'output_tokens': False}, 'total_cost_usd': True, 'modelUsage': ['x'], 'num_turns': '3'}) + '\\n')",
     }[output]
     path.write_text(
         "#!/usr/bin/env python3\n"

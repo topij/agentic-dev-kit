@@ -23,9 +23,9 @@
 #
 # `list --watch [interval]` is a live board: it re-renders every <interval>
 # seconds (default 30) and marks rows whose state changed since the last render
-# (a CI ✓/✗/… flip, a new commit, a DIRTY-count change, or a PR-state change)
-# with a `*` until Ctrl-C. Bare `list` is a one-shot snapshot, byte-identical to
-# before.
+# (a CI ✓/✗/… flip, a new commit, a DIRTY-count change, a RUN or OVERLAP
+# change, or a PR-state change) with a `*` until Ctrl-C. Bare `list` is a
+# one-shot snapshot with the same columns and the full sandbox path.
 #
 # `new` prints a copy-paste line that cd's into the worktree, exports the
 # sandbox, and prints a runtime-configured launch command — or `source
@@ -52,8 +52,8 @@
 # across many lanes (e.g. a parallel-workflow fan-out path), or for
 # eyeballing the current contract.
 #
-# Sessions live outside the repo (a sibling `dev-model-sessions/` dir by
-# default; override with $DEVKIT_SESSIONS_DIR), so the repo tree stays clean
+# Sessions live outside the repo (a `dev-model-sessions/` dir beside the primary
+# worktree by default; override with $DEVKIT_SESSIONS_DIR), so the repo tree stays clean
 # and cron — which sets neither env var — is completely unaffected.
 
 set -euo pipefail
@@ -85,7 +85,7 @@ DEFAULT_BASE="${DEV_SESSION_BASE:-$PROTECTED_BRANCH}"
 CONFIGURED_PREFIX="$(devkit_config_scalar "$CONFIG_FILE" vcs "" dev_branch_prefix || true)"
 DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 
-# Sessions container (sibling of the repo by default). Each session is one
+# Sessions container (beside the primary worktree by default). Each session is one
 # subdir holding wt/ (worktree) + state/ (sandbox) + activate (env snippet).
 SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(devkit_default_sessions_dir "$REPO_ROOT")}"
 case "$SESSIONS_DIR" in
@@ -508,13 +508,16 @@ PY
 
 # Per-lane RUN and OVERLAP cells, one `scope <TAB> run <TAB> overlap` line per
 # session that has a worktree. Read-only: it reads session files and runs
-# `git diff`/`git status`, and writes nothing.
+# `git diff`/`git status`, and writes nothing. Each git call has its own 15s
+# timeout and lanes are read one after another, so a hung worktree filesystem
+# slows a frame by up to a minute per lane; a timed-out lane shows `?`.
 #
 # RUN comes from the supported headless wrapper's own evidence in the session dir
 # (scripts/launch_lane.py): no `launch-attempt.json` is `—` (an interactive lane,
 # or a headless one not yet launched); an attempt whose receipt is absent is
-# `starting`; a receipt with status `observed` is `running` while the recorded
-# parent pid is alive and `lost` once it is not; any other receipt status
+# `starting` and one whose receipt has status `observed` is `running`, each
+# while the recorded parent pid is alive; either is `lost` once that pid is
+# gone (the wrapper died before writing a terminal receipt); any other receipt status
 # (`completed`, `failed`, `interrupted`, `rejected`) is shown as written. An
 # unreadable or malformed file is `?`, never a guess. `running` is a display
 # hint, not authority: a recycled pid can keep it on after the wrapper died.
@@ -542,6 +545,19 @@ def git(worktree, *args):
     return [p.decode("utf-8", "surrogateescape") for p in out.split(b"\0") if p]
 
 
+def wrapper_alive(attempt):
+    pid = (attempt.get("parent_process") or {}).get("pid")
+    if type(pid) is not int or pid <= 0:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
 def run_state(session):
     attempt_path = session / "launch-attempt.json"
     if not attempt_path.exists():
@@ -549,23 +565,23 @@ def run_state(session):
     try:
         attempt = json.loads(attempt_path.read_text(encoding="utf-8"))
         receipt_path = session / f"launch-receipt-{attempt['descriptor_id']}.json"
-        if not receipt_path.exists():
-            return "starting"
-        status = json.loads(receipt_path.read_text(encoding="utf-8"))["status"]
+        status = (
+            json.loads(receipt_path.read_text(encoding="utf-8"))["status"]
+            if receipt_path.exists()
+            else None
+        )
     except Exception:
         return "?"
-    if status != "observed":
+    if status not in (None, "observed"):
         return str(status) if isinstance(status, str) and status.isalpha() else "?"
-    pid = (attempt.get("parent_process") or {}).get("pid")
-    if type(pid) is not int or pid <= 0:
+    # No receipt yet, or only the child's observation: the wrapper's own pid
+    # decides between still going and died before writing a terminal receipt.
+    alive = wrapper_alive(attempt)
+    if alive is None:
         return "?"
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
+    if not alive:
         return "lost"
-    except PermissionError:
-        pass
-    return "running"
+    return "starting" if status is None else "running"
 
 
 def footprint(session):
@@ -573,6 +589,10 @@ def footprint(session):
     base_file = session / "base"
     base = base_file.read_text(encoding="utf-8").strip() if base_file.is_file() else ""
     base = base or default_base
+    # `base` is operator input written by `new --base`; one that git could read
+    # as an option is not a footprint we can compute.
+    if base.startswith("-"):
+        raise ValueError("base looks like an option")
     remote = f"refs/remotes/origin/{base}"
     try:
         git(worktree, "rev-parse", "--verify", "-q", remote)
@@ -763,7 +783,7 @@ _list_render() {
         # prefix → the cell is just "<scope>/state" and the row no longer wraps
         # past the terminal width (the long-absolute-path mess on small terminals).
         # A path outside SESSIONS_DIR (unusual) falls back to ~-abbreviation. Bare
-        # `list` is untouched — it keeps the full absolute path (byte-identical AC).
+        # `list` keeps the full absolute path.
         local sandbox_disp="$sandbox"
         if [[ "$sandbox_disp" == "$SESSIONS_DIR/"* ]]; then
             sandbox_disp="${sandbox_disp#"$SESSIONS_DIR"/}"

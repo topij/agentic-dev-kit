@@ -27,8 +27,8 @@ approval policy: Claude `--model`/`--effort`, Codex `-m`/`-c model_reasoning_eff
 missing, or a value is not one plain word. Without `--tier` nothing changes. To use it,
 check that `models.runtime_mappings` maps every tier you will pass, for each runtime.
 
-CHANGED (report shape): the launch request in `launch-attempt.json` and every
-`launch-receipt-*.json` carries `request.compute` (`tier`, `model`, `effort`, `argv`; all
+CHANGED (report shape): the launch request in `launch-attempt.json`, and every
+`launch-receipt-*.json` that carries a `request` (all but a `rejected` one), carries `request.compute` (`tier`, `model`, `effort`, `argv`; all
 null or empty without `--tier`), and the terminal receipt carries `terminal.usage`: the
 token, cost, per-model, turn and duration figures a Claude JSON result reports, or `null`
 (#1174). A reader that compares a request binding field by field must include `compute`.
