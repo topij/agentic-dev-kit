@@ -90,6 +90,7 @@ class Settings:
     subprocess_timeout_seconds: int = 60
     refuted_flag_min_findings: int = 5
     refuted_flag_percent: int = 50
+    enforcement_table: str | None = None
 
     def window_days_for(self, requested: int) -> int:
         if requested not in (self.lookback_days, self.backfill_days):
@@ -299,6 +300,35 @@ def load_settings(start: Path | None = None) -> Settings:
         if not heartbeat.startswith(STATE_DIRNAME + "/"):
             raise SystemizeError("systemize.heartbeat_pattern must begin with state.dirname/")
 
+    # Optional (#1222): the shared-rule route reads and updates this table when it is
+    # configured, and reports it unconfigured otherwise, so an older adopter config
+    # keeps working. It is tracked source a rule PR edits, never derived output.
+    table: str | None = None
+    if "enforcement_table" in section:
+        table = _relative_fragment(section["enforcement_table"], "systemize.enforcement_table")
+        # The route writes rows into this file, so it must be a Markdown table: a
+        # hook, workflow or config path here would be edited by a rule PR. Compared
+        # case-folded, since `State/x.md` is `state/x.md` on a case-insensitive disk.
+        folded = PurePosixPath(table.casefold())
+        reserved = (report_root_rel.casefold(), STATE_DIRNAME.casefold(), ".git")
+        if (
+            table != table.strip()
+            or table.endswith("/")
+            or folded.suffix != ".md"
+            or any(folded.is_relative_to(PurePosixPath(r)) for r in reserved)
+        ):
+            raise SystemizeError(
+                "systemize.enforcement_table must name a .md file outside report_root, state.dirname and .git"
+            )
+        # A rule PR appends rows here, so it must not rewrite what the run reads as input.
+        inputs = {*CONTROL_INPUTS}
+        for key in ("paths.friction_log", "paths.handoff"):
+            value = _get(config, key)
+            if isinstance(value, str) and value:
+                inputs.add(value)
+        if str(folded) in {str(PurePosixPath(p.casefold())) for p in inputs}:
+            raise SystemizeError("systemize.enforcement_table must not name a systemize control input")
+
     rendered = [p for p in (cache, digest_pattern, report, heartbeat) if p is not None]
     if len(rendered) != len(set(rendered)):
         raise SystemizeError("configured systemize artifact patterns collide")
@@ -338,4 +368,5 @@ def load_settings(start: Path | None = None) -> Settings:
         subprocess_timeout_seconds=timeout,
         refuted_flag_min_findings=flag_min,
         refuted_flag_percent=flag_percent,
+        enforcement_table=table,
     )

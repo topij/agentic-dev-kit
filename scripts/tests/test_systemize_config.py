@@ -93,6 +93,24 @@ def test_heartbeat_keys_are_required_only_engine_backed(tmp_path: Path, key: str
         ("heartbeat_pattern", '"state/cache/merged-prs_{window}_{mode}_{date}.json"', "collide"),
         ("heartbeat_job", '""', "heartbeat_job"),
         ("fetch_engine", "../fetch.py", "filename beneath paths.engines"),
+        ("enforcement_table", '""', "enforcement_table must be a non-empty string"),
+        ("enforcement_table", "/etc/rules.md", "repository-relative"),
+        ("enforcement_table", ".", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "reports/enforcement.md", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "state/enforcement.md", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "State/enforcement.md", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", ".git/rules.md", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "docs", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "docs/", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "scripts/hooks/pre-push", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", ".github/workflows/ci.yml", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "'docs/rules.md '", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "' docs/rules.md'", "must name a .md file outside report_root, state.dirname and .git"),
+        ("enforcement_table", "AGENTS.md", "must not name a systemize control input"),
+        ("enforcement_table", "claude.md", "must not name a systemize control input"),
+        ("enforcement_table", "docs/agentic-dev-kit/workflows/post-merge-systemize.md", "must not name a systemize control input"),
+        ("enforcement_table", "docs/handoff.md", "must not name a systemize control input"),
+        ("enforcement_table", "Docs/Friction-Log.md", "must not name a systemize control input"),
     ],
 )
 def test_invalid_values_stop_naming_the_invariant(tmp_path: Path, key, value, message) -> None:
@@ -199,3 +217,12 @@ def test_timeout_can_be_configured_and_older_config_uses_default(tmp_path: Path)
     assert settings.subprocess_timeout_seconds == 3
     legacy = load_settings(make_repo(tmp_path / "legacy", config_edit=_drop("subprocess_timeout_seconds")))
     assert legacy.subprocess_timeout_seconds == 60
+
+
+def test_the_enforcement_table_is_optional_and_read_from_config(tmp_path: Path) -> None:
+    """#1222: the shared-rule route's enforcement table lives where the config says;
+    an older config without the key still loads and reports it unconfigured."""
+    settings = load_settings(make_repo(tmp_path, config_edit=_set("enforcement_table", "docs/rules-table.md")))
+    assert settings.enforcement_table == "docs/rules-table.md"
+    legacy = load_settings(make_repo(tmp_path / "legacy", config_edit=_drop("enforcement_table")))
+    assert legacy.enforcement_table is None
