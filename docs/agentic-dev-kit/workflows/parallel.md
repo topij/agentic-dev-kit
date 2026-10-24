@@ -12,9 +12,10 @@ Treat `cheap`, `default`, and `expensive` as neutral capability tiers and transl
 them through `models.runtime_mappings` only when the current runtime supports that
 control. A workflow invocation means `/name` in Claude or `$name` in Codex.
 
-Engine: `<engine-dir>/dev_session.sh`. Sessions live in a
-sibling `dev-model-sessions/` dir by default (override with `DEVKIT_SESSIONS_DIR`);
-your CI/cron runner sets neither env var, so it's unaffected.
+Engine: `<engine-dir>/dev_session.sh`. Sessions live in a `dev-model-sessions/` dir
+beside the repository's primary checkout by default, the same one from any linked
+worktree or lane (override with `DEVKIT_SESSIONS_DIR`); your CI/cron runner sets
+neither env var, so it's unaffected.
 
 **A lane inherits the cockpit's MCP access.** `dev_session.sh new` copies a repo-root
 `.mcp.json` into each lane worktree, so every lane can reach the same MCP servers the
@@ -51,9 +52,22 @@ With no argument (or `parallel list`), run and render the table of active sessio
 <engine-dir>/dev_session.sh list
 ```
 
-Columns: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted count) · SANDBOX
-path`. This is the orientation surface when you're juggling several sessions — report
-it as-is, then stop. Read-only.
+Columns: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted count) · RUN ·
+OVERLAP · SANDBOX path`. This is the orientation surface when you're juggling several
+sessions — report it as-is, then stop. Read-only.
+
+- **RUN** is the headless wrapper's own evidence in the session directory: `—` for a
+  lane with no launch attempt (interactive, or not launched yet), `starting`,
+  `running` while the wrapper's process is alive, `lost` when the wrapper died before
+  writing a terminal receipt, or the terminal receipt's status (`completed`, `failed`,
+  `interrupted`, `rejected`). `?` means a file could not be read or held a value the
+  board cannot trust, such as a pid that names no single process. `running` comes
+  from a process check and is a hint, not proof.
+- **OVERLAP** names the other active lanes that change at least one of the same files
+  (committed against the lane's base, uncommitted, or untracked). Two names in each
+  other's OVERLAP cell are the pair to sequence: merge one, then rebase the other.
+  A lane whose footprint cannot be read shows `?` and is left out of the others'
+  comparison, so their `—` does not clear them against it while any lane shows `?`.
 
 ### Live board — `parallel list --watch [interval]`
 
@@ -68,8 +82,8 @@ lane that never moves — run the polling board instead:
 
 It re-renders on the interval and **marks with a leading `*`** (bold on a TTY) every
 row whose state changed since the previous render — the change set is CI ✓/✗/…, a new
-commit (HEAD moved), a DIRTY-count change, or a PR-state change (draft↔ready, review
-decision). The first frame is the baseline (nothing marked); Ctrl-C stops it. On an
+commit (HEAD moved), a DIRTY-count change, a RUN or OVERLAP change, or a PR-state change
+(draft↔ready, review decision). The first frame is the baseline (nothing marked); Ctrl-C stops it. On an
 interactive terminal an unbounded watch repaints **in place** on the alternate screen
 buffer (like `top`) — each frame replaces the last rather than scrolling a fresh copy
 into your terminal history, and your pre-watch screen is restored when you Ctrl-C out
@@ -183,7 +197,7 @@ deliberately:
    Interactive `new` prints launch or activation guidance for the **operator's own
    shell**, so it can only *suggest* the tier — the operator applies it (model and
    reasoning effort, if exposed) when starting the session. The supported
-   **unattended/headless** wrapper does not apply the suggested tier; see
+   **unattended/headless** wrapper applies it when you pass `--tier <tier>`; see
    [Unattended / headless launch](parallel-headless.md#unattended--headless-launch--new---headless).
 
 After launch, **this** session is the cockpit: `list` (or `list --watch` for an
@@ -242,10 +256,19 @@ suggestion and the operator applies it through the runtime's own controls — on
 `--model <alias>` and `--effort <level>` at launch, on Codex `-m <model>` and
 `-c model_reasoning_effort=<level>`; the aliases and levels `models.runtime_mappings`
 names are the ones each client accepted when calibrated (the `models` comment in
-`config/dev-model.yaml` carries the stamp). `models.runtime_mappings` itself is
-advisory on both runtimes: no shipped engine reads it. The supported headless wrapper
-deliberately inherits the client's compute on both runtimes and carries neither control:
-the launcher establishes worktree, environment, identity, and receipt authority only.
+`config/dev-model.yaml` carries the stamp). `models.runtime_mappings` is advisory on
+both runtimes except on one route: `launch_lane.py --tier <cheap|default|expensive>`
+reads `models.runtime_mappings.<runtime>.<tier>` and puts that runtime's own controls on
+the lane's argv, right after the approval policy (Claude `--model`/`--effort`, Codex
+`-m`/`-c model_reasoning_effort=`). It refuses a tier the config does not map, and a
+value that is not one plain word (letters, digits, `.`, `_`, `-`; so a bracketed or
+`provider:`-style model id is refused, not passed), before any launch attempt exists.
+It does not check
+that the client knows the value: a Claude `--effort` it does not recognise warns and
+runs at the default, so the receipt's `request.compute` records what was requested,
+not what the client applied. The resolved compute is bound into the launch request and
+the receipt, so the parent and child must agree on it. Without `--tier` the wrapper
+inherits the client's compute.
 What "inherit" resolves to differs by trust route — a Claude lane under the wrapper's
 `--setting-sources ""` runs the product default model and effort, not the operator's
 user settings, while a Codex lane runs the user's `config.toml` model and effort
@@ -255,8 +278,18 @@ controls; without the complete descriptor environment and observer/receipt chain
 remains unsupported for state-writing lanes on either runtime.
 
 **Unspecified tier.** Without an explicit model or effort selection, an interactive
-lane uses the agent client's defaults when started. A supported headless lane uses
-the trust-route resolution above. A suggested tier alone changes neither.
+lane uses the agent client's defaults when started. A supported headless lane started
+without `--tier` uses the trust-route resolution above. A suggested tier alone changes
+neither.
+
+**What a lane cost.** A Claude lane's terminal receipt carries `terminal.usage`: the
+token counts, `total_cost_usd`, per-model figures (`modelUsage`), turn count and
+duration from the runtime's own JSON result. They are the runtime's figures, numeric
+fields only, and do not change the verdict. `terminal.usage.models` is keyed by the
+runtime's full model ids and can list an auxiliary model beside the main one, so read
+it beside `request.compute.model` (often an alias such as `opus`) rather than
+expecting the two to match exactly. A
+Codex lane records `usage: null`, because its final-text transport carries no figures.
 
 ### Joint wrap-up — the cockpit owns the handoff
 
@@ -403,7 +436,17 @@ seen-set and receipt land in the same sandbox the merge gate reads:
 ```
 
 The receipt command uses the `head` from the exact poll whose diff was independently
-reviewed and refuses if a push landed before recording. For a `self` lane, once this
+reviewed and refuses if a push landed before recording.
+
+The wrapper resolves the sessions directory from the repository's primary worktree, so
+when that primary is an ordinary checkout it works the same from the primary checkout,
+a linked cockpit worktree, or inside the lane's own worktree. A repository whose git
+directory lives elsewhere (`--separate-git-dir`, a submodule) resolves it beside the
+invoking checkout instead; set `DEVKIT_SESSIONS_DIR` there. **Poll a lane's PR through this wrapper, not with bare
+`pr_watch.py`.** A bare poll from the cockpit reads the cockpit's `state/`, where the
+lane's receipt and settle baseline are not, so a finished lane's PR reports as
+unreviewed and unsettled. `pr_watch.py` prints a warning naming the lane when it sees
+that case. For a `self` lane, once this
 scope-aware `pr-watch` has converged, merge through the deterministic class gate:
 
 ```bash

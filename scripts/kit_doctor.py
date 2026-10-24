@@ -378,6 +378,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_check_memory_budget.py", "test"),
     ("scripts/tests/test_ci_workflow.py", "test"),
     ("scripts/tests/test_lane_launcher.py", "test"),
+    ("scripts/tests/test_dev_session_board.py", "test"),
     ("scripts/tests/test_init_sh.py", "test"),
     ("scripts/tests/test_kit_doctor.py", "test"),
     ("scripts/tests/test_kit_repo_only.py", "test"),
