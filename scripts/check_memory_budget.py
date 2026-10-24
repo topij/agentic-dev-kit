@@ -32,8 +32,8 @@ never block). ``--strict`` makes it exit 1 when over budget (soft CI signal).
 Why this isn't driven by ``config/dev-model.yaml``'s ``doc_budgets`` list
 (unlike ``check_doc_budget.py``): that list is iterated unconditionally by
 ``check_doc_budget.py`` — every entry's ``path`` is resolved relative to the
-repo root and required to exist, with mandatory ``archive``/``remedy``
-fields. The memory index lives *outside* the repo at a path keyed by this
+repo root and required to exist, and ``budget`` and ``remedy`` are required
+beside it. The memory index lives *outside* the repo at a path keyed by this
 machine's Claude Code config dir and this repo's absolute path (not portable
 across clones/machines, and not swept to an in-repo archive file), so adding
 it as a ``doc_budgets`` entry would make every ``check_doc_budget.py`` run
