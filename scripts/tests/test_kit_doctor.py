@@ -2308,6 +2308,9 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
         "scripts/tests/test_review_eval.py",
         "docs/agentic-dev-kit/review-eval/reviewer-eval.md",
         "docs/agentic-dev-kit/review-eval/cases.yaml",
+        "scripts/skill_routing_eval.py",
+        "scripts/tests/test_skill_routing_eval.py",
+        "docs/agentic-dev-kit/skill-routing/cases.json",
     }
     assert {
         rel for rel, role in kit_doctor.KIT_OWNED if role == kit_doctor.REPO_ONLY_ROLE

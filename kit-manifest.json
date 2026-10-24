@@ -54,6 +54,10 @@
       "role": "doctrine",
       "sha256": "00f69821dfab13dca3d96973085a578366d21da7ac0d3d1254868a3c80f51960"
     },
+    "docs/agentic-dev-kit/skill-routing/cases.json": {
+      "role": "repo-only",
+      "sha256": "a65a02cf359a12f6e4d70d2910c27fadbfb487c431b44014f645708f3650c6fe"
+    },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
       "sha256": "f82c190510d21fc7ea1c803b15d1047cc5dae7b2d684fb185af54499b0cf2a25"
@@ -210,7 +214,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "718516cb66bc022aaf041389efc77af20df4a073b3913454d646c02cf441751c"
+      "sha256": "e5ec1ffd4763e52ba24ef054460ac1f6119fdc028b01c0571ca5e1c86ef67fa8"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -617,6 +621,10 @@
       "role": "engine",
       "sha256": "cab754c7e18d917e561cede5d141d5c6bf76653373f5fa19026a66df69830022"
     },
+    "scripts/skill_routing_eval.py": {
+      "role": "repo-only",
+      "sha256": "51f41d7b979989c48925e5de7d6b4222eda17108bd98a9f93b23df2c38745117"
+    },
     "scripts/sweep_scratch.py": {
       "required_by": [
         "scripts/panel_prompt.py",
@@ -691,7 +699,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "7a6d68be7295f0cca7544f50023611d0efdf90c68bb118973d21275852cc5c5c"
+      "sha256": "b04aeae316d27b94666114ce80843ae4e89cc220c96670a2251278fa03dd76db"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -764,6 +772,10 @@
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
       "sha256": "347b840ae8cfcdf15ad677519ebff65c1675b2e06c3c915c4a2e24bcc06bbc22"
+    },
+    "scripts/tests/test_skill_routing_eval.py": {
+      "role": "repo-only",
+      "sha256": "96326330388c6d34f907625ad1e948190b32a47b55ef3d89e09fca3568ebb8f8"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
