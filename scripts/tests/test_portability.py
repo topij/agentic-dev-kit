@@ -21734,3 +21734,26 @@ def test_pr_watch_runs_the_handoff_test_before_the_opening_review() -> None:
     assert mutated != text
     with pytest.raises(AssertionError):
         _assert_pr_watch_handoff_test_ordering(mutated)
+
+
+def test_rule_proposals_report_their_net_line_change() -> None:
+    """#1176: a systemize shared-rule proposal states its net line change and the
+    text it considered folding into, and the run report carries both; a triage
+    ticket that changes a standing instruction asks its implementing PR for the
+    same figure. Pinned so the instruction set's growth stays visible per proposal."""
+    require_kit_source()
+    workflows = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+    systemize = " ".join((workflows / "post-merge-systemize.md").read_text(encoding="utf-8").split())
+    assert "State each proposal's net line change on the files it edits" in systemize
+    assert "names the existing text it considered folding the rule into" in systemize
+    assert (
+        "each shared-rule proposal's net line change and the text it considered folding into" in systemize
+    ), "the report's Include list must carry the field"
+    triage = " ".join((workflows / "triage-friction-log.md").read_text(encoding="utf-8").split())
+    assert "report its net line change on those files" in triage
+    assert "names the existing text the change would extend or fold into" in triage
+    assert "says in its payload why it cannot fold into it" in triage
+    assert "and why that did not fit" in systemize
+    assert "git diff --cached --numstat" in systemize
+    session_start = " ".join((workflows / "session-start.md").read_text(encoding="utf-8").split())
+    assert "with the entry's remedy as the action; don't consolidate inline" in session_start
