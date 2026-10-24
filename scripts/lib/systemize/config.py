@@ -90,6 +90,7 @@ class Settings:
     subprocess_timeout_seconds: int = 60
     refuted_flag_min_findings: int = 5
     refuted_flag_percent: int = 50
+    enforcement_table: str | None = None
 
     def window_days_for(self, requested: int) -> int:
         if requested not in (self.lookback_days, self.backfill_days):
@@ -299,6 +300,20 @@ def load_settings(start: Path | None = None) -> Settings:
         if not heartbeat.startswith(STATE_DIRNAME + "/"):
             raise SystemizeError("systemize.heartbeat_pattern must begin with state.dirname/")
 
+    # Optional (#1222): the shared-rule route reads and updates this table when it is
+    # configured, and reports it unconfigured otherwise, so an older adopter config
+    # keeps working. It is tracked source a rule PR edits, never derived output.
+    table: str | None = None
+    if "enforcement_table" in section:
+        table = _relative_fragment(section["enforcement_table"], "systemize.enforcement_table")
+        pure = PurePosixPath(table)
+        if pure in (PurePosixPath("."), PurePosixPath("")) or pure.is_relative_to(
+            PurePosixPath(report_root_rel)
+        ) or pure.is_relative_to(PurePosixPath(STATE_DIRNAME)):
+            raise SystemizeError(
+                "systemize.enforcement_table must name a tracked file outside report_root and state.dirname"
+            )
+
     rendered = [p for p in (cache, digest_pattern, report, heartbeat) if p is not None]
     if len(rendered) != len(set(rendered)):
         raise SystemizeError("configured systemize artifact patterns collide")
@@ -338,4 +353,5 @@ def load_settings(start: Path | None = None) -> Settings:
         subprocess_timeout_seconds=timeout,
         refuted_flag_min_findings=flag_min,
         refuted_flag_percent=flag_percent,
+        enforcement_table=table,
     )

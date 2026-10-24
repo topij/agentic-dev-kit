@@ -15432,6 +15432,7 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         "subprocess_timeout_seconds",
         "refuted_flag_min_findings",
         "refuted_flag_percent",
+        "enforcement_table",
     }
     assert systemize["analysis_tier"] in config["models"]["tiers"]
     assert isinstance(systemize["operator_logins"], list)
@@ -21757,3 +21758,21 @@ def test_rule_proposals_report_their_net_line_change() -> None:
     assert "git diff --cached --numstat" in systemize
     session_start = " ".join((workflows / "session-start.md").read_text(encoding="utf-8").split())
     assert "with the entry's remedy as the action; don't consolidate inline" in session_start
+
+
+def test_shared_rule_proposals_climb_the_enforcement_ladder() -> None:
+    """#1222: before writing a rule, systemize's shared-rule route tries a structural
+    change, then a check proven to fail on a past pull request, and records the level;
+    the report carries the level and the proof, and triage applies the same order."""
+    require_kit_source()
+    workflows = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+    systemize = " ".join((workflows / "post-merge-systemize.md").read_text(encoding="utf-8").split())
+    assert "Choose its level in this order and take the first that works" in systemize
+    for level in ("**Structural change**", "**Check**: a lint rule, test or hook whose failure message names the fix", "**Prose rule**"):
+        assert level in systemize, level
+    assert "names the level it chose and why each higher level does not work" in systemize
+    assert "run against the code of at least one pull request in the cluster it fails" in systemize
+    assert "When `systemize.enforcement_table` is configured, read that table" in systemize
+    assert "its enforcement level and, for a check, its proof" in systemize, "the report's Include list must carry the fields"
+    triage = " ".join((workflows / "triage-friction-log.md").read_text(encoding="utf-8").split())
+    assert "chooses its fix level as `post-merge-systemize`'s shared-rule route does" in triage

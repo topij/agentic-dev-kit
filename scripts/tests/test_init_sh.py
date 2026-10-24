@@ -510,6 +510,8 @@ def test_installer_adds_the_shared_systemize_config_to_an_existing_schema(
     parsed = yaml.safe_load(_config(repo))
     expected_systemize = yaml.safe_load(shipped_config())["systemize"]
     expected_systemize["operator_logins"] = []
+    # The kit's own narrative files are kit-*.md; an adopter gets the plain name.
+    expected_systemize["enforcement_table"] = "docs/enforcement.md"
     assert "added systemize workflow config" in result.stdout
     assert parsed["systemize"] == expected_systemize
     assert parsed["kit"]["version"] == 2

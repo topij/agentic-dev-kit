@@ -230,6 +230,11 @@ systemize:
   # points at source or config while keeping the filename configurable.
   report_root: reports
   report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  # The enforcement table (#1222): each standing rule beside what enforces it, so a
+  # repeat of an unenforced rule shows up as a candidate for a check. Tracked source
+  # the shared-rule route edits in its own patch. Omit the key to run without one.
+  # This repository's narrative files are kit-*.md; init.sh writes docs/enforcement.md.
+  enforcement_table: docs/kit-enforcement.md
   # Optional deterministic integration, resolved beneath paths.engines: all
   # absent selects the documented LLM-only path, all present selects
   # engine-backed mode, and a partial set stops rather than mixing

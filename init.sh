@@ -1372,6 +1372,8 @@ migrate_kit_schema() {
   digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
   report_root: reports
   report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  # Each standing rule beside what enforces it; the shared-rule route edits it.
+  enforcement_table: docs/enforcement.md
   # Optional deterministic integration, resolved beneath paths.engines.
   fetch_engine: fetch_merged_prs.py
   digest_engine: digest_merged_prs.py

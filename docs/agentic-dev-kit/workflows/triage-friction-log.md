@@ -414,6 +414,14 @@ payload, and attributes the defect to the code it names, not to the pull request
 reported it. When the entry already links a ticket for it, present the archive choice
 first.
 
+A proposed ticket for a recurring mistake chooses its fix level as
+`post-merge-systemize`'s shared-rule route does: a structural change, then a check whose
+failure message names the fix, then a prose rule only for a judgement call. Its payload
+names the level, why each higher level does not work, and for a check the past
+occurrence the check must be shown failing on. When `systemize.enforcement_table` is
+configured, the payload also names the table row the implementing pull request adds or
+updates.
+
 A proposed ticket whose fix adds to or changes a standing instruction (`AGENTS.md`,
 `CLAUDE.md`, `.claude/rules/`, or a shared workflow doc) names the existing text the
 change would extend or fold into, and its proposed payload asks the implementing pull

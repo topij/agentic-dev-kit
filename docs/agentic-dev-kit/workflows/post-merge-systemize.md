@@ -40,7 +40,8 @@ Every value used below comes from that merged configuration:
   values are not restated here. `systemize.refuted_flag_min_findings` and
   `systemize.refuted_flag_percent` are optional, like `subprocess_timeout_seconds`:
   a configuration that omits them reads `5` and `50`, and the digest records the
-  values it applied.
+  values it applied. `systemize.enforcement_table` is optional too: a configuration
+  that omits it runs the shared-rule route without an enforcement table.
 - A workflow invocation means the current runtime's native adapter: `/name` in Claude
   Code or `$name` in Codex.
 
@@ -62,6 +63,8 @@ Validate values as well as presence:
   `pattern_threshold` is no greater than `max_findings_prs_per_run`.
 - `refuted_flag_min_findings` and `refuted_flag_percent`, when present, are positive
   integers, not booleans, and `refuted_flag_percent` is at most `100`.
+- `enforcement_table`, when present, is a repository-relative file path without `..`,
+  outside `report_root` and `state.dirname`.
 - `tracker_severity` is one of the canonical severities defined in Step 1.
 - `operator_logins` is a sequence of unique, non-empty forge logins. Normalize by
   trimming ASCII whitespace and lowercasing ASCII letters while preserving every other
@@ -243,7 +246,8 @@ attempt so a retry can distinguish proposed, attempted, and completed actions. I
 the forge repository, window, protected-branch head, config fingerprint, execution mode,
 capability preflight, cache/digest locations, capped-input status, candidate clusters,
 route dispositions, each shared-rule proposal's net line change and the text it
-considered folding into, the dispatch records below, external identifiers actually created,
+considered folding into, its enforcement level and, for a check, its proof (pull request,
+revision, command and failing output), whether the enforcement table was configured, the dispatch records below, external identifiers actually created,
 incomplete actions, and the next safe resume step. Do not record a tracker identifier,
 notification receipt, review receipt, or pull-request URL that was not actually returned
 by that integration or observed by the marker read-back below.
@@ -563,9 +567,31 @@ pull-request count.
 
 ### Shared-rule route
 
-A cluster meeting `systemize.pattern_threshold` may produce the smallest instruction,
-shared-workflow, or config edit that would have prevented the root cause. Prefer the
-narrowest shared repository source. Do not edit a Claude or Codex adapter unless the
+A cluster meeting `systemize.pattern_threshold` may produce the smallest change that
+would have prevented the root cause. Choose its level in this order and take the first
+that works (Principle #8, *Mechanism over memory*):
+
+1. **Structural change**: change the code, layout or config so the mistake cannot be
+   made.
+2. **Check**: a lint rule, test or hook whose failure message names the fix.
+3. **Prose rule**: an instruction, shared-workflow or config-comment edit, only for a
+   judgement call a check cannot make.
+
+The proposal names the level it chose and why each higher level does not work. A
+proposed check carries its proof: run against the code of at least one pull request in
+the cluster it fails, and on the patched base it passes. The proof names that pull
+request, the revision, the command and the failing output. A check that cannot be shown
+failing on a real past mistake is not proposed as a check.
+
+When `systemize.enforcement_table` is configured, read that table before proposing a
+prose rule. A cluster whose root cause matches a row marked `judgement, unenforced` is a
+recurrence of an unenforced rule: say so, and reconsider level 2 before writing more
+prose. Each shared-rule proposal adds or updates its row (the rule, where it is written,
+and what enforces it, or `judgement, unenforced`) in the same patch, creating the file
+with its header row if it does not exist. When the key is absent, report the table as
+unconfigured and skip this paragraph.
+
+Prefer the narrowest shared repository source. Do not edit a Claude or Codex adapter unless the
 finding is genuinely about that runtime's invocation or capability translation.
 
 State each proposal's net line change on the files it edits (lines added minus lines
