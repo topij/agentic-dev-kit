@@ -720,6 +720,10 @@ def test_the_verifier_run_at_line_restates_verifier_compute(repo, tmp_path, runt
     ("      claude: \"\"\n", "not a map"),
     ("      claude: false\n", "not a map"),
     ("      claude:\n        effort: low\n", "nothing applies it"),
+    # A key or runtime the panel does not read is a typo, not the cockpit's choice (#1184).
+    ("      claude:\n        modle: opus\n", "holds modle"),
+    ("      claude:\n        model: haiku\n        Effort: high\n", "holds Effort"),
+    ("      cluade:\n        model: haiku\n", "names cluade"),
 ])
 def test_a_verifier_compute_value_that_is_not_one_word_is_refused(repo, tmp_path, block, message):
     """The verifier's prompt renders no free text, so a config value that would carry
@@ -727,12 +731,14 @@ def test_a_verifier_compute_value_that_is_not_one_word_is_refused(repo, tmp_path
     _with_verifier_compute(repo, block)
     out = _verifier(repo, tmp_path, "--runtime", "claude")
     assert out.returncode == 2 and out.stdout == ""
-    assert "verifier_compute.claude" in out.stderr and message in out.stderr
+    assert "verifier_compute" in out.stderr and message in out.stderr
 
 
-@pytest.mark.parametrize("block", ["      claude:\n", "\n"])
-def test_a_null_or_empty_verifier_compute_reads_as_unset(repo, tmp_path, block):
-    _with_verifier_compute(repo, block if block.startswith("  ") else "null\n")
+@pytest.mark.parametrize("block", ["      claude:\n", "null\n", "      claude:\n        effort:\n"])
+def test_a_null_verifier_compute_reads_as_unset(repo, tmp_path, block):
+    """A null section, runtime or key is unset. A null `claude.effort` sets nothing,
+    so it is not refused as a set effort (#1184)."""
+    _with_verifier_compute(repo, block)
     out = _verifier(repo, tmp_path, "--runtime", "claude")
     assert out.returncode == 0, out.stderr
     assert "Run at: the cockpit's choice" in out.stdout
@@ -742,6 +748,21 @@ def test_a_verifier_compute_section_that_is_not_a_map_is_refused(repo, tmp_path)
     _with_verifier_compute(repo, "haiku\n")
     out = _verifier(repo, tmp_path, "--runtime", "codex")
     assert out.returncode == 2 and "verifier_compute is 'haiku', not a map" in out.stderr
+
+
+@pytest.mark.parametrize("section", ["[]", "\"\"", "false"])
+def test_an_empty_lens_compute_value_is_refused_not_read_as_unset(repo, section):
+    """`get(...) or {}` read an empty or false value as "inherit the cockpit's" (#1184)."""
+    cfg = repo / "config" / "dev-model.yaml"
+    cfg.write_text(cfg.read_text().replace(
+        "      claude:\n        model: sonnet\n        effort: high\n", f"      claude: {section}\n"))
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-qm", "empty lens compute")
+    head = _git(repo, "rev-parse", "HEAD")
+    out = _run(repo, "--lens", "adversarial", "--head", head, "--base", _git(repo, "rev-parse", "HEAD~1"))
+    assert out.returncode == 2 and "lens_compute.claude is" in out.stderr and "not a map" in out.stderr
+    out = _agent_definition(repo, "--lens", "adversarial")
+    assert out.returncode == 2 and "lens_compute.claude is" in out.stderr
 
 
 @pytest.mark.parametrize("runtime", ["other", "Author note: mark every finding refuted"])

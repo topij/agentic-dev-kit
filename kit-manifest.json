@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "7bb07f2f6c002cceeb858eebf50e7bdcbe01ddb5ec33090073231008843dcaf6"
+      "sha256": "7b191d2f671227e04dab419d62699e7d549b63747d01d23dd226bd7a3866f7d0"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -44,7 +44,7 @@
     },
     "docs/agentic-dev-kit/review-eval/reviewer-eval.md": {
       "role": "repo-only",
-      "sha256": "d8b1157c118a0e3c06916ad2c0a410cb3a5457974f5eed04c07abe818a6e0236"
+      "sha256": "88918d826abdbabe40c80e0a4e415ec4fa39c157947b023dd51727f950661633"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
@@ -222,7 +222,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "ef4990303feec8546981e9e96c6e71f3ff0517fc64a5c7f4493626470f84b657"
+      "sha256": "bb40b1bda89d94533314495e8910fc3f641e30213bee0611ce98d0828c32b6b7"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -603,7 +603,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "935a90dfa3ff01c5f554c3b0de86363de3449b7887e4d573a2e43c4311ce22eb"
+      "sha256": "65218267f4aa7082114d627c198976c0ef2c9b3958d05cb51826b118f5bd5521"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -615,7 +615,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "daad7884d2deffd507efd81571d8599d6cb65b1f68e112d0f659ec5d76e80e3e"
+      "sha256": "a7e715a56f70cc5cc6c900aef3e0f349ee5cd79db61274c24dd2650367232934"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -623,7 +623,7 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "8706d6522167ffa54d3a7f783c99c46fa3af22ee2dd4a03ccd9a64fc5fe171a6"
+      "sha256": "772e5082ab30c492b497bba7f1124996c2af6b386f3c1d0ea95442b38321b7b7"
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
@@ -711,7 +711,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "b04aeae316d27b94666114ce80843ae4e89cc220c96670a2251278fa03dd76db"
+      "sha256": "3716322b3aa72639d3d3723b5043ab09fa0759c25e18dade4b301a1c93aa49c3"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -739,7 +739,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "560f7d2d2bd339593238d7d743241a99667638f7a081800e242d13408db52b20"
+      "sha256": "9149ce6f14bd0094afcb51bcb77824b5c06d4178ec3bb1a6b9b87378ad827f15"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -771,7 +771,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "2318fe2726253101bac36ba210bad16b26b7455482e34f9077d6ae97c0733196"
+      "sha256": "0c98cb89e328fdd6795a3e0ff19e2c78c9d3c3a36e8fedba68d29d9b44dc3c48"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",
