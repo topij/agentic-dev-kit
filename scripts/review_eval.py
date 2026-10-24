@@ -55,6 +55,7 @@ import contextlib
 import hashlib
 import json
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -84,7 +85,9 @@ _CASE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _CITATION = re.compile(r"(?<![\w./-])(/?(?:[\w.-]+/)*[\w.-]+\.\w+):[ ]?L?(\d+)(?:[-–]L?(\d+))?")
 # An absolute path counts only inside the lens's own tree (`lens-<lens>-<short sha>/`),
 # and then by the part after it: the kit checkout holds the fixed file at the same tail.
-_LENS_TREE = re.compile(r"(?:^|/)lens-[\w-]+-[0-9a-f]{7}/")
+# Its short sha is as long as the one the runner names the tree with.
+SHORT_SHA = 7
+_LENS_TREE = re.compile(rf"(?:^|/)lens-[\w-]+-[0-9a-f]{{{SHORT_SHA}}}/")
 # A finding opens its own line: `F3 HIGH`, `**F3.`, `### F3 —`, `- F3:`, `1. **F3**`.
 # The number must be followed by emphasis, punctuation, a severity or the line's end,
 # so a line in a finding's body that opens `F3 is the same class` opens nothing (#1182).
@@ -267,8 +270,11 @@ def citations(report: str) -> list[dict[str, Any]]:
                 if not trees:
                     continue
                 path = path[trees[-1].end():]
-                if ".." in path.split("/"):
-                    continue  # resolves outside the lens's tree
+            # A `.` segment is dropped and a `..` resolved; a path that still climbs
+            # out leaves the lens's tree, relative or absolute (#1180).
+            path = posixpath.normpath(path)
+            if path == ".." or path.startswith("../"):
+                continue
             start = int(match.group(2))
             end = int(match.group(3)) if match.group(3) else start
             found.append({"path": path, "lines": [start, max(start, end)], "number": number})
@@ -471,7 +477,7 @@ def _run_in_round(root: Path, case: dict[str, Any], role: str, label: str, *, co
         record = sweep_scratch.create_review_round(scratch_root, case["head"], settings, root)
     except (sweep_scratch.ConfigError, OSError, ValueError) as exc:
         raise RunError(f"{label}: cannot allocate a review round: {exc}") from exc
-    tree = Path(record["path"]) / f"{role}-{case['head'][:7]}"
+    tree = Path(record["path"]) / f"{role}-{case['head'][:SHORT_SHA]}"
     name = role.removeprefix("lens-")
     escaped = False
     try:
