@@ -12,9 +12,10 @@ Treat `cheap`, `default`, and `expensive` as neutral capability tiers and transl
 them through `models.runtime_mappings` only when the current runtime supports that
 control. A workflow invocation means `/name` in Claude or `$name` in Codex.
 
-Engine: `<engine-dir>/dev_session.sh`. Sessions live in a
-sibling `dev-model-sessions/` dir by default (override with `DEVKIT_SESSIONS_DIR`);
-your CI/cron runner sets neither env var, so it's unaffected.
+Engine: `<engine-dir>/dev_session.sh`. Sessions live in a `dev-model-sessions/` dir
+beside the repository's primary checkout by default, the same one from any linked
+worktree or lane (override with `DEVKIT_SESSIONS_DIR`); your CI/cron runner sets
+neither env var, so it's unaffected.
 
 **A lane inherits the cockpit's MCP access.** `dev_session.sh new` copies a repo-root
 `.mcp.json` into each lane worktree, so every lane can reach the same MCP servers the
@@ -51,9 +52,19 @@ With no argument (or `parallel list`), run and render the table of active sessio
 <engine-dir>/dev_session.sh list
 ```
 
-Columns: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted count) · SANDBOX
-path`. This is the orientation surface when you're juggling several sessions — report
-it as-is, then stop. Read-only.
+Columns: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted count) · RUN ·
+OVERLAP · SANDBOX path`. This is the orientation surface when you're juggling several
+sessions — report it as-is, then stop. Read-only.
+
+- **RUN** is the headless wrapper's own evidence in the session directory: `—` for a
+  lane with no launch attempt (interactive, or not launched yet), `starting`,
+  `running` while the wrapper's process is alive, `lost` when the wrapper died before
+  writing a terminal receipt, or the terminal receipt's status (`completed`, `failed`,
+  `interrupted`, `rejected`). `?` means a file could not be read. `running` comes from
+  a process check and is a hint, not proof.
+- **OVERLAP** names the other active lanes that change at least one of the same files
+  (committed against the lane's base, uncommitted, or untracked). Two names in each
+  other's OVERLAP cell are the pair to sequence: merge one, then rebase the other.
 
 ### Live board — `parallel list --watch [interval]`
 
@@ -68,8 +79,8 @@ lane that never moves — run the polling board instead:
 
 It re-renders on the interval and **marks with a leading `*`** (bold on a TTY) every
 row whose state changed since the previous render — the change set is CI ✓/✗/…, a new
-commit (HEAD moved), a DIRTY-count change, or a PR-state change (draft↔ready, review
-decision). The first frame is the baseline (nothing marked); Ctrl-C stops it. On an
+commit (HEAD moved), a DIRTY-count change, a RUN or OVERLAP change, or a PR-state change
+(draft↔ready, review decision). The first frame is the baseline (nothing marked); Ctrl-C stops it. On an
 interactive terminal an unbounded watch repaints **in place** on the alternate screen
 buffer (like `top`) — each frame replaces the last rather than scrolling a fresh copy
 into your terminal history, and your pre-watch screen is restored when you Ctrl-C out
@@ -403,7 +414,15 @@ seen-set and receipt land in the same sandbox the merge gate reads:
 ```
 
 The receipt command uses the `head` from the exact poll whose diff was independently
-reviewed and refuses if a push landed before recording. For a `self` lane, once this
+reviewed and refuses if a push landed before recording.
+
+The wrapper resolves the sessions directory from the repository's primary worktree, so
+it works the same from the primary checkout, a linked cockpit worktree, or inside the
+lane's own worktree. **Poll a lane's PR through this wrapper, not with bare
+`pr_watch.py`.** A bare poll from the cockpit reads the cockpit's `state/`, where the
+lane's receipt and settle baseline are not, so a finished lane's PR reports as
+unreviewed and unsettled. `pr_watch.py` prints a warning naming the lane when it sees
+that case. For a `self` lane, once this
 scope-aware `pr-watch` has converged, merge through the deterministic class gate:
 
 ```bash

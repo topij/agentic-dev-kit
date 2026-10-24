@@ -54,8 +54,8 @@ Keep that three-way split in mind and every verb below makes sense.
 | *(you use the printed guidance)* | Launches or activates the lane in a **new terminal** | No | — |
 
 Even `new` doesn't touch *your* working tree: the worktree it creates is a separate
-directory under a sibling `dev-model-sessions/` folder (override with
-`DEVKIT_SESSIONS_DIR`).
+directory under a `dev-model-sessions/` folder beside your primary checkout (override
+with `DEVKIT_SESSIONS_DIR`).
 
 ---
 
@@ -69,8 +69,9 @@ scripts/dev_session.sh list          # or just run parallel with no argument
 ```
 
 You get one row per lane: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted
-count) · SANDBOX path`. Nothing is created or changed. If there are no lanes, the table
-is empty.
+count) · RUN · OVERLAP · SANDBOX path`. RUN says whether a headless lane is running,
+finished or lost; OVERLAP names other lanes changing the same files. Nothing is
+created or changed. If there are no lanes, the table is empty.
 
 **Follow it live** while a batch is in flight:
 

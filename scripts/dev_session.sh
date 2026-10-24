@@ -87,7 +87,7 @@ DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 
 # Sessions container (sibling of the repo by default). Each session is one
 # subdir holding wt/ (worktree) + state/ (sandbox) + activate (env snippet).
-SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(dirname "$REPO_ROOT")/dev-model-sessions}"
+SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(devkit_default_sessions_dir "$REPO_ROOT")}"
 case "$SESSIONS_DIR" in
     /*) ;;
     *) SESSIONS_DIR="$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$SESSIONS_DIR")" ;;
@@ -506,9 +506,106 @@ PY
     echo "  When done:         \"${BASH_SOURCE[0]}\" rm $scope"
 }
 
+# Per-lane RUN and OVERLAP cells, one `scope <TAB> run <TAB> overlap` line per
+# session that has a worktree. Read-only: it reads session files and runs
+# `git diff`/`git status`, and writes nothing.
+#
+# RUN comes from the supported headless wrapper's own evidence in the session dir
+# (scripts/launch_lane.py): no `launch-attempt.json` is `—` (an interactive lane,
+# or a headless one not yet launched); an attempt whose receipt is absent is
+# `starting`; a receipt with status `observed` is `running` while the recorded
+# parent pid is alive and `lost` once it is not; any other receipt status
+# (`completed`, `failed`, `interrupted`, `rejected`) is shown as written. An
+# unreadable or malformed file is `?`, never a guess. `running` is a display
+# hint, not authority: a recycled pid can keep it on after the wrapper died.
+#
+# OVERLAP names the other lanes that change at least one of the same files. A
+# lane's footprint is `git diff --name-only <base>...HEAD` (against
+# origin/<base> when that ref exists) plus its uncommitted and untracked paths.
+# `plan` checks footprints before launch; this is the same check while the batch
+# runs, when sequencing two PRs still helps. A lane whose footprint cannot be
+# read shows `?` and is left out of everyone else's comparison.
+_lane_extras() {
+    [[ -d "$SESSIONS_DIR" ]] || return 0
+    python3 - "$SESSIONS_DIR" "$DEFAULT_BASE" <<'PY' 2>/dev/null || true
+import json, os, subprocess, sys
+from pathlib import Path
+
+sessions, default_base = Path(sys.argv[1]), sys.argv[2]
+
+
+def git(worktree, *args):
+    out = subprocess.run(
+        ["git", "-C", str(worktree), *args],
+        capture_output=True, timeout=15, check=True,
+    ).stdout
+    return [p.decode("utf-8", "surrogateescape") for p in out.split(b"\0") if p]
+
+
+def run_state(session):
+    attempt_path = session / "launch-attempt.json"
+    if not attempt_path.exists():
+        return "—"
+    try:
+        attempt = json.loads(attempt_path.read_text(encoding="utf-8"))
+        receipt_path = session / f"launch-receipt-{attempt['descriptor_id']}.json"
+        if not receipt_path.exists():
+            return "starting"
+        status = json.loads(receipt_path.read_text(encoding="utf-8"))["status"]
+    except Exception:
+        return "?"
+    if status != "observed":
+        return str(status) if isinstance(status, str) and status.isalpha() else "?"
+    pid = (attempt.get("parent_process") or {}).get("pid")
+    if type(pid) is not int or pid <= 0:
+        return "?"
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return "lost"
+    except PermissionError:
+        pass
+    return "running"
+
+
+def footprint(session):
+    worktree = session / "wt"
+    base_file = session / "base"
+    base = base_file.read_text(encoding="utf-8").strip() if base_file.is_file() else ""
+    base = base or default_base
+    remote = f"refs/remotes/origin/{base}"
+    try:
+        git(worktree, "rev-parse", "--verify", "-q", remote)
+        ref = remote
+    except subprocess.CalledProcessError:
+        ref = base
+    files = set(git(worktree, "diff", "--name-only", "-z", f"{ref}...HEAD"))
+    files.update(git(worktree, "diff", "--name-only", "-z", "HEAD"))
+    files.update(git(worktree, "ls-files", "--others", "--exclude-standard", "-z"))
+    return files
+
+
+rows = []
+for session in sorted(p for p in sessions.iterdir() if (p / "wt").is_dir()):
+    try:
+        files = footprint(session)
+    except Exception:
+        files = None
+    rows.append((session.name, run_state(session), files))
+
+for scope, run, files in rows:
+    if files is None:
+        overlap = "?"
+    else:
+        others = [o for o, _r, of in rows if o != scope and of and files & of]
+        overlap = ",".join(others) if others else "—"
+    print(f"{scope}\t{run}\t{overlap}")
+PY
+}
+
 # Gather one TAB-separated record per active session, the shared data behind both
 # bare `list` and `list --watch`:
-#   scope <TAB> branch <TAB> pr <TAB> ci <TAB> dirty <TAB> sandbox <TAB> sig
+#   scope <TAB> branch <TAB> pr <TAB> ci <TAB> dirty <TAB> run <TAB> overlap <TAB> sandbox <TAB> sig <TAB> pr_ok
 # `sig` is the change-tracking signature watch mode diffs on. It folds in the
 # short HEAD sha and the PR state/draft/review on top of the displayed columns, so
 # a new commit or a PR-state flip (draft→open, review approved) is detected even
@@ -518,6 +615,8 @@ PY
 # can't hang a watch loop.
 _collect_board() {
     local d scope worktree branch head dirty pr ci pr_json parsed num state draft review sig pr_ok
+    local extras run overlap
+    extras="$(_lane_extras)"
     for d in "$SESSIONS_DIR"/*/; do
         worktree="${d}wt"
         [[ -d "$worktree" ]] || continue
@@ -555,10 +654,14 @@ print("\t".join([num, ci, str(d.get("state") or ""), str(d.get("isDraft")), str(
             fi
             pr="#$num"
         fi
-        sig="${branch}|${head}|${pr}|${ci}|${dirty}|${state}|${draft}|${review}"
+        run="$(printf '%s\n' "$extras" | awk -F'\t' -v s="$scope" '$1==s{print $2; exit}')"
+        overlap="$(printf '%s\n' "$extras" | awk -F'\t' -v s="$scope" '$1==s{print $3; exit}')"
+        [[ -n "$run" ]] || run="?"
+        [[ -n "$overlap" ]] || overlap="?"
+        sig="${branch}|${head}|${pr}|${ci}|${dirty}|${state}|${draft}|${review}|${run}|${overlap}"
         # Trailing pr_ok lets _list_render distinguish "gh failed/timed out this
         # frame" (carry forward last-known PR data) from a real PR change.
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scope" "$branch" "$pr" "$ci" "$dirty" "${d}state" "$sig" "$pr_ok"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "${d}state" "$sig" "$pr_ok"
     done
 }
 
@@ -589,14 +692,15 @@ cmd_list() {
         return
     fi
 
-    # Bare one-shot board — byte-identical to the pre-watch output.
-    printf "%-16s %-26s %-7s %-4s %-7s %s\n" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "SANDBOX"
-    printf "%-16s %-26s %-7s %-4s %-7s %s\n" "----" "------" "--" "--" "-----" "-------"
+    # Bare one-shot board — the same columns as the watch board, with the full
+    # absolute sandbox path.
+    printf "%-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "RUN" "OVERLAP" "SANDBOX"
+    printf "%-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "----" "------" "--" "--" "-----" "---" "-------" "-------"
     [[ -d "$SESSIONS_DIR" ]] || { echo "(no sessions — $SESSIONS_DIR does not exist yet)"; return 0; }
-    local found=0 scope branch pr ci dirty sandbox sig pr_ok
-    while IFS=$'\t' read -r scope branch pr ci dirty sandbox sig pr_ok; do
+    local found=0 scope branch pr ci dirty run overlap sandbox sig pr_ok
+    while IFS=$'\t' read -r scope branch pr ci dirty run overlap sandbox sig pr_ok; do
         found=1
-        printf "%-16s %-26s %-7s %-4s %-7s %s\n" "$scope" "$branch" "$pr" "$ci" "$dirty" "$sandbox"
+        printf "%-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "$sandbox"
     done < <(_collect_board)
     [[ "$found" -eq 1 ]] || echo "(no active sessions)"
 }
@@ -626,8 +730,8 @@ _list_render() {
     local had_baseline=0
     [[ -s "$sigfile" ]] && had_baseline=1
 
-    printf "%-2s %-16s %-26s %-7s %-4s %-7s %s\n" "" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "SANDBOX"
-    printf "%-2s %-16s %-26s %-7s %-4s %-7s %s\n" "" "----" "------" "--" "--" "-----" "-------"
+    printf "%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "RUN" "OVERLAP" "SANDBOX"
+    printf "%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "" "----" "------" "--" "--" "-----" "---" "-------" "-------"
 
     # The snapshot always opens with a sentinel line so even an empty-board frame
     # leaves a non-empty file — otherwise the next frame reads "no baseline" and
@@ -636,10 +740,10 @@ _list_render() {
     local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/dev_session_sig.XXXXXX")"
     printf '#baseline\n' > "$tmp"
 
-    local found=0 scope branch pr ci dirty sandbox sig pr_ok prev marker
-    local c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review
+    local found=0 scope branch pr ci dirty run overlap sandbox sig pr_ok prev marker
+    local c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review c_run c_overlap
     local p_pr p_ci p_state p_draft p_review p_skip
-    while IFS=$'\t' read -r scope branch pr ci dirty sandbox sig pr_ok; do
+    while IFS=$'\t' read -r scope branch pr ci dirty run overlap sandbox sig pr_ok; do
         found=1
         prev="$(awk -F'\t' -v s="$scope" '$1==s{print $2; exit}' "$sigfile")"
         # Carry forward the PR-derived columns when gh failed/timed out this frame
@@ -648,10 +752,10 @@ _list_render() {
         # (branch/head/dirty) stay live, so a real commit or dirty-count change in
         # the same frame still marks.
         if [[ "$pr_ok" -eq 0 && -n "$prev" ]]; then
-            IFS='|' read -r c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review <<< "$sig"
-            IFS='|' read -r p_skip p_skip p_pr p_ci p_skip p_state p_draft p_review <<< "$prev"
+            IFS='|' read -r c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review c_run c_overlap <<< "$sig"
+            IFS='|' read -r p_skip p_skip p_pr p_ci p_skip p_state p_draft p_review p_skip <<< "$prev"
             pr="$p_pr"; ci="$p_ci"
-            sig="${c_branch}|${c_head}|${p_pr}|${p_ci}|${c_dirty}|${p_state}|${p_draft}|${p_review}"
+            sig="${c_branch}|${c_head}|${p_pr}|${p_ci}|${c_dirty}|${p_state}|${p_draft}|${p_review}|${c_run}|${c_overlap}"
         fi
         printf '%s\t%s\n' "$scope" "$sig" >> "$tmp"
         # Compact the sandbox for the live board: every sandbox lives under the
@@ -669,9 +773,9 @@ _list_render() {
         marker=""
         [[ "$had_baseline" -eq 1 && "$prev" != "$sig" ]] && marker="*"
         if [[ -n "$marker" && -t 1 ]]; then
-            printf '\033[1m%-2s %-16s %-26s %-7s %-4s %-7s %s\033[0m\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$sandbox_disp"
+            printf '\033[1m%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\033[0m\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "$sandbox_disp"
         else
-            printf '%-2s %-16s %-26s %-7s %-4s %-7s %s\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$sandbox_disp"
+            printf '%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "$sandbox_disp"
         fi
     done < <(_collect_board)
     mv -f "$tmp" "$sigfile"

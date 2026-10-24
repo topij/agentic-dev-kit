@@ -127,7 +127,8 @@ scripts/dev_session.sh list --watch        # re-render every 30s
 ```
 
 The live board marks every row that changed since the last frame with a leading `*` —
-a CI flip, a new commit, the DIRTY count moving, a PR-state change — and surfaces a
+a CI flip, a new commit, the DIRTY count moving, a RUN or OVERLAP change, a PR-state
+change — and surfaces a
 silently-dead lane that stops moving. Use it as the cockpit's ambient board while a
 batch runs; full behavior (piped output, `--max-iters`, per-call timeouts) is in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#live-board--parallel-list---watch-interval).

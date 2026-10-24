@@ -245,6 +245,76 @@ _STATE_ROOT = _resolve_state_root(
 )
 STATE_DIR = _STATE_ROOT / "pr-watch"
 
+
+def _default_sessions_dir(repo_root: Path) -> Path | None:
+    """The lane sessions container ``dev_session.sh`` uses, or None.
+
+    Mirrors ``devkit_default_sessions_dir`` in ``scripts/lib/repo_root.sh``:
+    ``$DEVKIT_SESSIONS_DIR`` when set (a relative value is taken from the cwd,
+    as the shell engine does), else a ``dev-model-sessions/`` sibling of the
+    repository's primary worktree, the first record of ``git worktree list``.
+    None when git cannot answer or the primary is bare.
+    """
+    explicit = os.environ.get("DEVKIT_SESSIONS_DIR")
+    if explicit:
+        return Path(os.path.abspath(explicit))
+    try:
+        listed = subprocess.run(
+            ["git", "-C", str(repo_root), "worktree", "list", "--porcelain", "-z"],
+            capture_output=True,
+            timeout=10,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    first: list[bytes] = []
+    for field in listed.split(b"\0"):
+        if not field:
+            break
+        first.append(field)
+    if not first or not first[0].startswith(b"worktree ") or b"bare" in first[1:]:
+        return None
+    primary = Path(os.fsdecode(first[0][len(b"worktree "):]))
+    return primary.parent / "dev-model-sessions" if primary.is_absolute() else None
+
+
+def lane_state_hint(pr: int) -> str | None:
+    """A warning when this run reads the repo-root store but a lane holds this PR.
+
+    A cockpit poll without ``DEVKIT_STATE_ROOT`` and outside any lane marker
+    reads ``<repo>/state``, while a headless lane's receipt, seen-set and settle
+    baseline live in its own sandbox. The report then shows the lane's PR as
+    unreviewed and unsettled, which reads like a lane that claimed work it did
+    not do (#563). This names the lane so the caller can poll through
+    ``dev_session.sh pr-watch <scope>``. It changes no gate: the report this run
+    builds is unchanged, and a run that already chose its root (env var or
+    marker) gets no hint. Any failure to look returns None; the loop never
+    crashes for a hint.
+    """
+    try:
+        if os.environ.get("DEVKIT_STATE_ROOT"):
+            return None
+        if _STATE_ROOT != REPO_ROOT / "state":
+            return None
+        sessions = _default_sessions_dir(REPO_ROOT)
+        if sessions is None or not sessions.is_dir():
+            return None
+        scopes = sorted(
+            entry.name
+            for entry in sessions.iterdir()
+            if (entry / "state" / "pr-watch" / f"{pr}.json").is_file()
+        )
+    except OSError:
+        return None
+    if not scopes:
+        return None
+    named = ", ".join(scopes)
+    return (
+        f"warning: this run reads {_STATE_ROOT}, but lane session(s) {named} under "
+        f"{sessions} hold watch state for PR #{pr}. Their review receipt and settle "
+        f"baseline are not visible here; poll with `dev_session.sh pr-watch <scope>`."
+    )
+
 # ------------------------------------------------------- review-bot knowledge
 #
 # Which comment bodies are auto-noise, which signal a *down* reviewer, and which
@@ -6932,6 +7002,10 @@ def main(argv: list[str] | None = None) -> int:
     except (RuntimeError, KeyError, ValueError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+    hint = lane_state_hint(pr)
+    if hint:
+        print(hint, file=sys.stderr)
 
     if args.mark_seen:
         # No `gh` call here on purpose: re-deriving the ack set from a fresh
