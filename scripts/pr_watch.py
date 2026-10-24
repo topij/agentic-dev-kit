@@ -254,8 +254,9 @@ def _default_sessions_dir(repo_root: Path) -> Path:
     as the shell engine does), else a ``dev-model-sessions/`` sibling of the
     repository's primary worktree, the first record of ``git worktree list``.
     When git cannot answer, the primary is bare, or it is not an existing
-    absolute directory, the sibling of ``repo_root`` is used, as the shell
-    engine does.
+    absolute directory holding a ``.git`` entry (a separate git dir or a
+    submodule lists its git directory there), the sibling of ``repo_root`` is
+    used, as the shell engine does.
     """
     explicit = os.environ.get("DEVKIT_SESSIONS_DIR")
     if explicit:
@@ -277,7 +278,7 @@ def _default_sessions_dir(repo_root: Path) -> Path:
         first.append(field)
     if first and first[0].startswith(b"worktree ") and b"bare" not in first[1:]:
         candidate = Path(os.fsdecode(first[0][len(b"worktree "):]))
-        if candidate.is_absolute() and candidate.is_dir():
+        if candidate.is_absolute() and candidate.is_dir() and (candidate / ".git").exists():
             primary = candidate
     return primary.parent / "dev-model-sessions"
 

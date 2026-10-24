@@ -519,7 +519,8 @@ PY
 # while the recorded parent pid is alive; either is `lost` once that pid is
 # gone (the wrapper died before writing a terminal receipt); any other receipt status
 # (`completed`, `failed`, `interrupted`, `rejected`) is shown as written. An
-# unreadable or malformed file is `?`, never a guess. `running` is a display
+# unreadable or malformed file, or a recorded pid that names no single
+# process, is `?`, never a guess. `running` is a display
 # hint, not authority: a recycled pid can keep it on after the wrapper died.
 #
 # OVERLAP names the other lanes that change at least one of the same files. A
@@ -563,24 +564,35 @@ def wrapper_alive(attempt):
 
 
 # run_state and wrapper_alive must not raise on any file content: an exception
-# here empties the whole board's RUN and OVERLAP, so each guard is explicit and
-# pinned by a test rather than caught wholesale.
+# here empties the whole board's RUN and OVERLAP, so each guard is explicit
+# rather than caught wholesale, and the board tests feed each one bad input.
+def read_json(path):
+    # A FIFO or device in the session dir must not hang or flood the board.
+    if not path.is_file():
+        raise ValueError("not a regular file")
+    with path.open("rb") as handle:
+        data = handle.read((1 << 20) + 1)
+    if len(data) > 1 << 20:
+        raise ValueError("too large")
+    return json.loads(data.decode("utf-8"))
+
+
 def run_state(session):
     attempt_path = session / "launch-attempt.json"
-    if not attempt_path.exists():
-        return "—"
     try:
-        attempt = json.loads(attempt_path.read_text(encoding="utf-8"))
+        if not os.path.lexists(attempt_path):
+            return "—"
+        attempt = read_json(attempt_path)
         receipt_path = session / f"launch-receipt-{attempt['descriptor_id']}.json"
-        status = (
-            json.loads(receipt_path.read_text(encoding="utf-8"))["status"]
-            if receipt_path.exists()
-            else None
-        )
+        has_receipt = os.path.lexists(receipt_path)
+        status = read_json(receipt_path)["status"] if has_receipt else None
     except Exception:
         return "?"
+    if has_receipt and not (isinstance(status, str) and status.isalpha()):
+        # A receipt that exists but carries no plain-word status, null included.
+        return "?"
     if status not in (None, "observed"):
-        return str(status) if isinstance(status, str) and status.isalpha() else "?"
+        return status
     # No receipt yet, or only the child's observation: the wrapper's own pid
     # decides between still going and died before writing a terminal receipt.
     alive = wrapper_alive(attempt)

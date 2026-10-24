@@ -21,8 +21,9 @@ devkit_find_repo_root() {
 # sessions live in (#479). The primary worktree is the first record of
 # `git worktree list`, which every linked worktree of one repository reports
 # identically. A bare primary (no working tree), a primary that is not an
-# existing absolute directory, or a git that cannot list worktrees, keeps the
-# old answer: the sibling of the checkout passed in. scripts/pr_watch.py
+# existing absolute directory holding a `.git` entry (a separate git dir or a
+# submodule lists its git directory there), or a git that cannot list
+# worktrees, keeps the old answer: the sibling of the checkout passed in. scripts/pr_watch.py
 # mirrors this in `_default_sessions_dir`; change both together.
 devkit_default_sessions_dir() {
     local repo_root="$1" primary
@@ -38,7 +39,10 @@ if not first or not first[0].startswith(b"worktree ") or b"bare" in first[1:]:
     raise SystemExit(1)
 sys.stdout.buffer.write(first[0][len(b"worktree "):])
 ' 2>/dev/null)" || primary=""
-    [[ -n "$primary" && "$primary" == /* && -d "$primary" ]] || primary="$repo_root"
+    # A separate git dir or a submodule lists its git directory, not a checkout,
+    # as the first worktree: accept only a directory that holds a `.git` entry.
+    [[ -n "$primary" && "$primary" == /* && -d "$primary" && -e "$primary/.git" ]] \
+        || primary="$repo_root"
     printf '%s/dev-model-sessions\n' "$(dirname "$primary")"
 }
 

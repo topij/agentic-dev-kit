@@ -60,8 +60,9 @@ sessions — report it as-is, then stop. Read-only.
   lane with no launch attempt (interactive, or not launched yet), `starting`,
   `running` while the wrapper's process is alive, `lost` when the wrapper died before
   writing a terminal receipt, or the terminal receipt's status (`completed`, `failed`,
-  `interrupted`, `rejected`). `?` means a file could not be read. `running` comes from
-  a process check and is a hint, not proof.
+  `interrupted`, `rejected`). `?` means a file could not be read or held a value the
+  board cannot trust, such as a pid that names no single process. `running` comes
+  from a process check and is a hint, not proof.
 - **OVERLAP** names the other active lanes that change at least one of the same files
   (committed against the lane's base, uncommitted, or untracked). Two names in each
   other's OVERLAP cell are the pair to sequence: merge one, then rebase the other.
@@ -260,9 +261,11 @@ both runtimes except on one route: `launch_lane.py --tier <cheap|default|expensi
 reads `models.runtime_mappings.<runtime>.<tier>` and puts that runtime's own controls on
 the lane's argv, right after the approval policy (Claude `--model`/`--effort`, Codex
 `-m`/`-c model_reasoning_effort=`). It refuses a tier the config does not map, and a
-value that is not one plain word, before any launch attempt exists. The resolved
-compute is bound into the launch request and the receipt, so the parent and child
-must agree on it. Without `--tier` the wrapper inherits the client's compute.
+value that is not one plain word, before any launch attempt exists. It does not check
+that the client knows the value: a Claude `--effort` it does not recognise warns and
+runs at the default, so the receipt's `request.compute` records what was requested,
+not what the client applied. The resolved compute is bound into the launch request and
+the receipt, so the parent and child must agree on it. Without `--tier` the wrapper inherits the client's compute.
 What "inherit" resolves to differs by trust route — a Claude lane under the wrapper's
 `--setting-sources ""` runs the product default model and effort, not the operator's
 user settings, while a Codex lane runs the user's `config.toml` model and effort

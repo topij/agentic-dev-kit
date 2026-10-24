@@ -149,7 +149,7 @@ def test_overlap_names_lanes_that_change_the_same_file(repo: Repo) -> None:
     assert board["gamma"][6] == "alpha"
 
 
-def _attempt(session: Path, *, pid: int, descriptor_id: str = "d1") -> None:
+def _attempt(session: Path, *, pid: object, descriptor_id: str = "d1") -> None:
     (session / "launch-attempt.json").write_text(
         json.dumps(
             {"status": "starting", "descriptor_id": descriptor_id,
@@ -246,6 +246,13 @@ def test_a_cockpit_poll_names_the_lane_that_holds_the_prs_watch_state(
         repo, repo.root, 41, DEVKIT_STATE_ROOT=str(repo.sessions / "alpha" / "state")
     )
     assert "lane session" not in chosen.stderr
+    # A root chosen by a marker, with no env var, gets none either.
+    marked = repo.root.parent / "marked-state"
+    marked.mkdir()
+    (repo.root / ".devkit_state_root").write_text(f"{marked}\n", encoding="utf-8")
+    by_marker = _pr_watch_mark_seen(repo, repo.root, 41)
+    assert by_marker.returncode == 0, by_marker.stderr
+    assert "lane session" not in by_marker.stderr
 
 
 def _shell_sessions_dir(repo_root: Path, env: dict[str, str]) -> str:
@@ -284,6 +291,35 @@ def test_a_bare_primary_keeps_the_invoking_checkouts_sibling(tmp_path: Path, _se
     _git(bare, "worktree", "add", "-q", str(linked), "trunk")
     resolved = _sessions_dir_from(linked, dict(os.environ))
     assert resolved == str(tmp_path / "nested" / "dev-model-sessions")
+
+
+@SESSIONS_DIR_RESOLVERS
+def test_a_separate_git_dir_keeps_the_checkouts_sibling(tmp_path: Path, _sessions_dir_from) -> None:
+    # git lists the separate git dir itself as the first worktree.
+    checkout = tmp_path / "here" / "checkout"
+    checkout.parent.mkdir()
+    (tmp_path / "gits").mkdir()
+    subprocess.run(
+        ["git", "init", "-q", "--separate-git-dir", str(tmp_path / "gits" / "x.git"), str(checkout)],
+        check=True,
+    )
+    resolved = _sessions_dir_from(checkout, dict(os.environ))
+    assert resolved == str(tmp_path / "here" / "dev-model-sessions")
+
+
+@SESSIONS_DIR_RESOLVERS
+def test_a_submodule_keeps_its_own_checkouts_sibling(tmp_path: Path, _sessions_dir_from) -> None:
+    # git lists <super>/.git/modules/<name> as a submodule's first worktree.
+    seed = tmp_path / "seed"
+    seed.mkdir()
+    _git(seed, "init", "-q", "-b", "trunk")
+    _git(seed, "-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "s")
+    sup = tmp_path / "super"
+    sup.mkdir()
+    _git(sup, "init", "-q", "-b", "trunk")
+    _git(sup, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(seed), "kit")
+    resolved = _sessions_dir_from(sup / "kit", dict(os.environ))
+    assert resolved == str(sup / "dev-model-sessions")
 
 
 @SESSIONS_DIR_RESOLVERS
@@ -328,8 +364,12 @@ def test_a_wrapper_that_died_before_any_receipt_is_lost(repo: Repo) -> None:
     assert _board(repo)["alpha"][5] == "lost"
 
 
-@pytest.mark.parametrize("pid", [0, -1, 2**31, 2**64], ids=["zero", "group", "int32", "huge"])
-def test_a_pid_that_names_no_single_process_is_not_read_as_alive(repo: Repo, pid: int) -> None:
+@pytest.mark.parametrize(
+    "pid",
+    [0, -1, 2**31, 2**64, "123", 1.5, True],
+    ids=["zero", "group", "int32", "huge", "string", "float", "bool"],
+)
+def test_a_pid_that_names_no_single_process_is_not_read_as_alive(repo: Repo, pid: object) -> None:
     # 0 and negative pids address process groups, so os.kill succeeds on them;
     # pids past the C int range make os.kill raise instead.
     _new(repo, "alpha")
@@ -346,6 +386,34 @@ def test_a_live_pid_owned_by_someone_else_still_counts_as_alive(repo: Repo) -> N
     _new(repo, "alpha")
     _attempt(repo.sessions / "alpha", pid=1)
     assert _board(repo)["alpha"][5] == "starting"
+
+
+@pytest.mark.parametrize("status", [None, 5, ["completed"]], ids=["null", "number", "list"])
+def test_a_receipt_without_a_plain_word_status_is_unknown(repo: Repo, status: object) -> None:
+    _new(repo, "alpha")
+    _new(repo, "beta")
+    session = repo.sessions / "alpha"
+    _attempt(session, pid=os.getpid())
+    (session / "launch-receipt-d1.json").write_text(
+        json.dumps({"status": status, "descriptor_id": "d1"}), encoding="utf-8"
+    )
+    board = _board(repo)
+    assert board["alpha"][5] == "?"
+    assert board["beta"][5] == "—"
+
+
+def test_a_session_file_that_is_not_a_regular_file_never_blocks_the_board(repo: Repo) -> None:
+    _new(repo, "alpha")
+    _new(repo, "beta")
+    os.mkfifo(repo.sessions / "alpha" / "launch-attempt.json")
+    listed = subprocess.run(
+        ["bash", str(repo.engine(repo.root)), "list"],
+        cwd=repo.root, env=repo.env, capture_output=True, text=True, timeout=60,
+    )
+    assert listed.returncode == 0, listed.stderr
+    rows = {line.split()[0]: line.split() for line in listed.stdout.splitlines()[1:]}
+    assert rows["alpha"][5] == "?"
+    assert rows["beta"][5] == "—"
 
 
 def test_one_malformed_attempt_file_costs_only_its_own_row(repo: Repo) -> None:

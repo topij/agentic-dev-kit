@@ -7,7 +7,8 @@ engine was invoked from (#479). `dev_session.sh pr-watch <scope>` now works from
 a lane worktree. If you ran either engine from a linked worktree without
 `DEVKIT_SESSIONS_DIR`, sessions it created sat beside that worktree; set
 `DEVKIT_SESSIONS_DIR` to that directory to keep reaching them, or finish them first.
-A bare primary keeps the old default.
+A bare primary, and a checkout whose git directory lives elsewhere (`--separate-git-dir`,
+a submodule), keep the old default.
 
 CHANGED (report shape): `dev_session.sh list` and `list --watch` print two new columns,
 `RUN` and `OVERLAP`, between `DIRTY` and `SANDBOX`. A script that parses the board by
