@@ -15,7 +15,9 @@ ownership of their other keys. Neither comparison changes the drift gate.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -314,6 +316,68 @@ def _unsafe_adopter_path(root: Path, rel: str) -> str | None:
     return None
 
 
+def _baseline_adapter_revision(adopter_root: Path) -> tuple[str | None, str]:
+    """Read optional provenance without turning an unusable baseline into ownership."""
+    reason = _unsafe_adopter_path(adopter_root, "kit-manifest.json")
+    if reason:
+        return None, f"baseline unavailable: {reason}"
+    try:
+        baseline = json.loads((adopter_root / "kit-manifest.json").read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValueError, RecursionError):
+        return None, "baseline unavailable: no readable install manifest"
+    revision = baseline.get("kit_commit") if isinstance(baseline, dict) else None
+    if not isinstance(revision, str) or re.fullmatch(r"(?:[0-9a-f]{40}|[0-9a-f]{64})", revision) is None:
+        return None, "baseline unavailable: kit_commit is not a full commit id"
+    return revision, ""
+
+
+def _baseline_adapter_text(
+    source_root: Path, revision: str, rel: str, runtime: str, slug: str, workflow_path: str,
+) -> tuple[str | None, str]:
+    """Read a historical render as data; never import or execute historical code."""
+    # A caller's Git location overrides must not redirect the history lookup away
+    # from the kit checkout explicitly supplied to the adapter report.
+    env = {key: value for key, value in os.environ.items() if key not in {
+        "GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE",
+    }}
+    # The manifest names original objects and ancestry. Local replacements or
+    # grafts must not manufacture provenance for an adopter-authored description.
+    env["GIT_GRAFT_FILE"] = os.devnull
+
+    def git(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "--no-replace-objects", "-C", str(source_root), *args], env=env,
+            capture_output=True, text=True, encoding="utf-8", timeout=10,
+        )
+
+    try:
+        root = git("rev-parse", "--show-toplevel")
+        if root.returncode or Path(root.stdout.strip()).resolve() != source_root.resolve():
+            return None, "baseline unavailable: source is not a kit Git checkout root"
+        ancestor = git("merge-base", "--is-ancestor", revision, "HEAD")
+        if ancestor.returncode:
+            return None, "baseline unavailable: fetch the recorded kit commit and its ancestry into the source kit"
+        previous = git("show", f"{revision}:{rel}")
+        if previous.returncode:
+            return None, "baseline unavailable: adapter is absent from the recorded kit commit"
+        text = previous.stdout
+        metadata = _frontmatter(text)
+        description = metadata.get("description", "")
+        if metadata.get("name") != slug:
+            return None, "baseline unavailable: historical adapter is not a recognized kit render"
+        # Historical descriptions are accepted only inside a known complete render.
+        # Authored policy, altered invocation controls and unknown template bodies
+        # stay preserved, even when committed in the supplied source history.
+        versions = (1, 2, CURRENT_TEMPLATE_VERSION) if runtime == "codex" else (CURRENT_TEMPLATE_VERSION,)
+        if any(text == render_adapter(runtime, slug, description, workflow_path,
+                                      template_version=version) for version in versions):
+            return text, ""
+        return None, "baseline unavailable: historical adapter is not a recognized kit render"
+    except (OSError, UnicodeError, ValueError, subprocess.TimeoutExpired):
+        return None, "baseline unavailable: historical adapter could not be read"
+
+
 def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatus]:
     """Compare an adopter against adapters rendered from a source kit checkout."""
 
@@ -335,6 +399,7 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                 "policy.allow_implicit_invocation: false; inspect the source kit"
             )
 
+    baseline_revision, baseline_gap = _baseline_adapter_revision(adopter_root)
     statuses: list[AdapterStatus] = []
     for runtime in RUNTIMES:
         for slug in WORKFLOW_SLUGS:
@@ -364,7 +429,7 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
             )
             binding = _adapter_status(
                 adopter_root, runtime, slug, rel, current, description,
-                workflow_path, retired,
+                workflow_path, retired, source_root, baseline_revision, baseline_gap,
             )
             statuses.append(binding)
             if retired is not None:
@@ -479,6 +544,9 @@ def _adapter_status(
     description: str,
     workflow_path: str,
     retired: AdapterStatus | None,
+    source_root: Path,
+    baseline_revision: str | None,
+    baseline_gap: str,
 ) -> AdapterStatus:
     """Classify the adapter at its current path."""
 
@@ -520,13 +588,19 @@ def _adapter_status(
                 "kit-stale",
                 "matches an earlier rendered form; refresh freely",
             )
-    return AdapterStatus(
-        runtime,
-        slug,
-        rel,
-        "adopter-owned",
-        "does not match a rendered kit form; report and leave unchanged",
-    )
+    if baseline_revision is not None:
+        previous, baseline_gap = _baseline_adapter_text(
+            source_root, baseline_revision, rel, runtime, slug, workflow_path,
+        )
+        if previous is not None and adopter_text == previous:
+            return AdapterStatus(
+                runtime, slug, rel, "kit-stale",
+                f"matches the rendered form at install baseline {baseline_revision}; refresh freely",
+            )
+    detail = "does not match a rendered kit form; report and leave unchanged"
+    if baseline_gap:
+        detail += f"; {baseline_gap}"
+    return AdapterStatus(runtime, slug, rel, "adopter-owned", detail)
 
 
 def _retired_command_status(

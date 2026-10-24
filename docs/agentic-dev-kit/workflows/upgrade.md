@@ -1,6 +1,6 @@
 # Upgrade
 
-Upgrade this repo's agentic-dev-kit installation. Runs on a branch. After preflight,
+Upgrade this repo's agentic-dev-kit installation in its assigned task worktree. After preflight,
 Step 2 replaces `init.sh` with the fetched kit's copy to refresh the installer.
 Template refresh respects the baseline's recorded `not_installed` decisions;
 a partial record skips template copies. Seeded docs use `init.sh --no-clobber`,
@@ -44,6 +44,49 @@ test -f "$REPO/config/dev-model.yaml" && echo "has config" || echo "NO CONFIG"
   schema to migrate from. Say so plainly rather than guessing a config into existence.
 - **Config present** → continue. `kit.version` tells you the schema generation; its
   absence means v1 (pre-`runtime:`, pre-`models.tiers`).
+
+### Select the task worktree
+
+Before editing the adopter, reuse the worktree already assigned to this upgrade,
+including the current checkout when it is the assigned task worktree. An explicit
+operator instruction to use a particular checkout takes precedence. Do not switch
+the primary checkout or reuse another session's worktree. Read-only inspection may
+run there; edits, verification and commits belong in the task worktree.
+
+For reuse, verify its repository identity, task branch and existing changes, bind
+`REPO` to its absolute root, and set `UPGRADE_BRANCH` to that task branch. Preserve
+unrelated changes; an ambiguous assignment needs clarification rather than a reset.
+Do not create a nested worktree inside an already assigned one.
+
+When no worktree is assigned, select `UPGRADE_REMOTE` from the adopter's Git remotes
+and `UPGRADE_BASE` from the merged config's `vcs.protected_branch`. Choose a fresh
+`UPGRADE_BRANCH` under the adopter's task-branch convention and an absolute
+`UPGRADE_WORKTREE` path outside its automation and scratch-cleanup roots. Include a
+unique task suffix in the branch and path; a date alone can collide with another
+upgrade. Set those variables explicitly, then run this creation block:
+
+```bash
+: "${REPO:?REPO is not set — re-run the config check}"
+: "${UPGRADE_REMOTE:?select the adopter remote}"
+: "${UPGRADE_BASE:?read vcs.protected_branch from the merged config}"
+: "${UPGRADE_BRANCH:?choose a fresh task branch}"
+: "${UPGRADE_WORKTREE:?choose an absolute task-worktree path}"
+case "$UPGRADE_WORKTREE" in /*) ;; *) exit 1 ;; esac
+git -C "$REPO" fetch "$UPGRADE_REMOTE" \
+  "refs/heads/$UPGRADE_BASE:refs/remotes/$UPGRADE_REMOTE/$UPGRADE_BASE" || exit 1
+UPGRADE_START="$(git -C "$REPO" rev-parse --verify \
+  "refs/remotes/$UPGRADE_REMOTE/$UPGRADE_BASE^{commit}")" || exit 1
+git -C "$REPO" worktree add --no-track -b "$UPGRADE_BRANCH" \
+  "$UPGRADE_WORKTREE" "$UPGRADE_START" || exit 1
+REPO="$UPGRADE_WORKTREE"
+cd "$REPO" || exit 1
+```
+
+A failed fetch or a branch/path collision stops the step. Never delete an existing
+branch or worktree to make it succeed. The fresh branch starts at the fetched base,
+not at the caller's current feature branch, and has no upstream to the protected
+branch. On its first publication use `git -C "$REPO" push -u "$UPGRADE_REMOTE" HEAD`.
+For an assigned worktree, establish its intended publication remote before that push.
 
 Also fetch the kit you are upgrading *to*. If a non-empty `/tmp/agentic-dev-kit` already
 exists the clone fails and the step stops — inspect that checkout or move it aside rather
@@ -172,6 +215,14 @@ that path is `adopter-owned`, and the skill path beside it is then reported
 preference to a same-named command and installing one would silently replace theirs. The source kit's own adapters must first
 equal what its renderer produces, or the command refuses: a broken generator cannot
 classify an adopter by comparing it with itself.
+
+When a description changed, the report also compares the installed skill with a
+known rendered form at the adopter manifest's `kit_commit`. This needs that commit
+and its ancestry in the source kit checkout; a shallow clone may not contain them.
+A per-path `baseline unavailable` detail means preserve the adapter and inspect the
+missing evidence. Fetch the recorded commit's history into `$KIT` and rerun the
+report before deciding whether it is stale. Historical code is never executed;
+unknown historical template bodies and authored additions remain `adopter-owned`.
 
 A Codex `agents/openai.yaml` row beside an `adopter-owned` `SKILL.md` is also
 `adopter-owned`, even when the interface is absent: do not install kit policy for
@@ -414,15 +465,16 @@ A baseline **older than the changelog itself** also finds nothing, and that is n
 either: the file records nothing before the PR it starts at, and says so in its own
 header.
 
-## Step 2 — Branch, refresh the migrator, then migrate
+## Step 2 — Assert the task branch, refresh the migrator, then migrate
 
-**Branch first.** Everything from here mutates the repo — config, hooks, rendered
-docs — so the "runs on a branch" guarantee has to be established *before* the first
-mutation, not before the file copies in Step 3:
+**Re-assert the selected destination.** Step 0 selected the task worktree and
+branch. Everything from here mutates the adopter, so stop if that binding is missing
+or the checkout has moved to another branch; do not create or switch a branch here:
 
 ```bash
-cd "$REPO" || exit 1
-git checkout -b chore/kit-upgrade || exit 1
+cd "${REPO:?REPO is not set — re-run Step 0}" || exit 1
+: "${UPGRADE_BRANCH:?UPGRADE_BRANCH is not set — re-run Step 0}"
+test "$(git symbolic-ref --quiet --short HEAD)" = "$UPGRADE_BRANCH" || exit 1
 ```
 
 **Then refresh `init.sh` itself before running it.** This is the step that is easy to get
@@ -890,6 +942,51 @@ entries are exactly where the risk is.
 - **`.claude/settings.json`** — if this repo has its own, **merge** the kit's hooks and
   permissions into it rather than replacing; it likely carries project-specific entries.
 
+### Refresh generated Claude lens definitions
+
+After refreshing `panel_prompt.py`, compare the configured Claude lens definitions
+with a fresh render, even when `review.fallback_panel` did not change. The generator's
+contract can change independently of configuration. Use the adopter's merged config,
+including its `review.fallback_panel.lenses`, `lens_compute.claude` and `paths.engines`;
+never copy the kit checkout's `.claude/agents/` definitions into the adopter.
+
+This step applies only when the adopter uses Claude lens definitions and the upgrade
+plan installs `panel_prompt.py` with its dependencies. If that engine was declined or
+is unavailable, report the regeneration gap and preserve existing definitions; do not
+install a declined engine just to quiet the report. If the plan retains a locally
+patched generator, make that limitation explicit before judging its output.
+
+For each configured lens, set `UPGRADE_LENS` to its name and `UPGRADE_PREVIEW_DIR` to
+an existing absolute, session-owned scratch directory outside the repository. Render
+a preview with the refreshed **installed** engine and an explicit adopter root:
+
+```bash
+: "${REPO:?REPO is not set — re-run Step 0}"
+: "${UPGRADE_LENS:?choose a lens from the adopter config}"
+: "${UPGRADE_PREVIEW_DIR:?select the session-owned preview directory}"
+case "$UPGRADE_PREVIEW_DIR" in /*) ;; *) exit 1 ;; esac
+DEFINITION_PREVIEW="$(mktemp "$UPGRADE_PREVIEW_DIR/lens-definition.XXXXXX")" || exit 1
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/panel_prompt.py \
+  --root "${REPO:?REPO is not set — re-run Step 0}" \
+  --runtime claude --lens "$UPGRADE_LENS" --agent-definition \
+  > "$DEFINITION_PREVIEW" || exit 1
+```
+
+Compare that preview with `$REPO/.claude/agents/<lens>.md` before writing the
+installed definition. A failed render stops this lens's refresh; its partial preview
+is not a replacement. Leave an identical definition alone. Refresh an unchanged
+previous kit-generated definition after establishing that provenance; reconcile and
+preserve adopter-authored additions instead of overwriting them based on a generated
+header. Install a missing definition only when the upgrade plan calls for it. Do not
+delete definitions for removed or renamed lenses automatically: inspect their callers
+and retain or migrate them deliberately.
+
+Rerun the refreshed doctor's lens-definition report against the adopter root after
+reconciliation, and report any remaining difference with its disposition. Generated
+Claude definitions carry Claude compute; this step does not create Codex agent
+files. A definition written during a Claude session may only become available in a
+new session, so file reconciliation alone is not evidence the runtime loaded it.
+
 **Then record the baseline — this step is not optional, and its omission is what made
 `differs` unjudgeable for every adopter until now:**
 
@@ -1018,7 +1115,10 @@ cannot report staleness at all; re-run it with `--manifest` as shown above.
 
 > **Known gotcha:** the `state_paths` tests fail when run from inside a worktree carrying
 > a `.devkit_state_root` marker — the fixture neutralizes the environment but not marker
-> discovery. Run the gate from the main checkout, and see kit issue #10.
+> discovery. Verify in the assigned task worktree without that marker. If the assigned
+> tree carries one, use a separate marker-free verification worktree at the candidate
+> commit and record that directory with the result. Do not move verification into the
+> primary checkout or delete another session's marker.
 
 ## Step 6 — Record the friction, then hand off
 

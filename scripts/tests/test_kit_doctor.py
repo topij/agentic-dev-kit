@@ -1017,6 +1017,169 @@ def test_previous_generated_codex_adapter_is_refreshable_not_adopter_owned(
         assert "take the kit's file" in policy.detail
 
 
+@pytest.fixture
+def adapter_history(adapter_source):
+    def git(*args):
+        return subprocess.run(["git", "-C", str(adapter_source), *args], check=True,
+                              capture_output=True, text=True).stdout.strip()
+    git("init", "-b", "main")
+    git("config", "user.name", "Test")
+    git("config", "user.email", "test@example.invalid")
+    git("add", ".")
+    git("commit", "-m", "historical render")
+    return adapter_source, git("rev-parse", "HEAD"), git
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("slug", ["wrap-up", "upgrade"])
+@pytest.mark.parametrize("edited", [False, True])
+def test_baseline_description_change_preserves_authored_edits(
+    tmp_path, adapter_history, runtime, slug, edited,
+):
+    source, revision, git = adapter_history
+    adopter = tmp_path / "adopter"
+    rel = runtime_adapters._adapter_path(runtime, slug)
+    old = (source / rel).read_text()
+    _write(adopter / rel, old + ("\nAdopter policy.\n" if edited else ""))
+    _write(adopter / "kit-manifest.json", json.dumps({"kit_commit": revision}))
+    _write(source / rel, runtime_adapters.render_adapter(
+        runtime, slug, "Changed description.", f"docs/agentic-dev-kit/workflows/{slug}.md",
+    ))
+    git("add", ".")
+    git("commit", "-m", "new description")
+    before = (adopter / rel).read_bytes()
+    rows = {row.path: row for row in runtime_adapters.compare_adapters(source, adopter)}
+    assert rows[rel].state == ("adopter-owned" if edited else "kit-stale")
+    if not edited:
+        assert revision in rows[rel].detail
+    assert (adopter / rel).read_bytes() == before
+    if runtime == "codex" and slug == "upgrade":
+        policy = runtime_adapters.CODEX_INTERFACE_PATH.format(slug=slug)
+        assert rows[policy].state == ("adopter-owned" if edited else "missing")
+
+
+@pytest.mark.parametrize("gap", ["missing", "invalid", "unavailable", "historical-policy", "non-ancestor"])
+def test_unproven_baseline_adapter_stays_preserved(tmp_path, adapter_history, gap):
+    source, revision, git = adapter_history
+    adopter = tmp_path / "adopter"
+    rel = runtime_adapters._adapter_path("codex", "wrap-up")
+    old = (source / rel).read_text()
+    if gap == "historical-policy":
+        old += "\nHistorical authored policy.\n"
+        _write(source / rel, old)
+        git("add", ".")
+        git("commit", "-m", "authored policy")
+        revision = git("rev-parse", "HEAD")
+    elif gap == "non-ancestor":
+        git("switch", "--orphan", "different-history")
+    _write(adopter / rel, old)
+    if gap != "missing":
+        value = {"invalid": "main", "unavailable": "0" * 40}.get(gap, revision)
+        _write(adopter / "kit-manifest.json", json.dumps({"kit_commit": value}))
+    _write(source / rel, runtime_adapters.render_adapter(
+        "codex", "wrap-up", "Changed description.", "docs/agentic-dev-kit/workflows/wrap-up.md",
+    ))
+    # An orphan branch needs the other current source files restored too.
+    if gap == "non-ancestor":
+        git("checkout", revision, "--", ".")
+        _write(source / rel, runtime_adapters.render_adapter(
+            "codex", "wrap-up", "Changed description.", "docs/agentic-dev-kit/workflows/wrap-up.md",
+        ))
+    git("add", ".")
+    git("commit", "-m", "current render")
+    row = next(row for row in runtime_adapters.compare_adapters(source, adopter) if row.path == rel)
+    assert row.state == "adopter-owned"
+    assert "baseline unavailable" in row.detail
+    assert (adopter / rel).read_text() == old
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("replacement", ["commit", "blob", "namespace"])
+def test_baseline_history_ignores_replacement_objects(
+    tmp_path, adapter_history, monkeypatch, runtime, replacement,
+):
+    source, revision, git = adapter_history
+    adopter = tmp_path / "adopter"
+    rel = runtime_adapters._adapter_path(runtime, "wrap-up")
+    shared = "docs/agentic-dev-kit/workflows/wrap-up.md"
+    original = (source / rel).read_text()
+    authored = runtime_adapters.render_adapter(
+        runtime, "wrap-up", "Adopter policy: retain local instructions.", shared,
+    )
+    _write(adopter / rel, authored)
+    _write(adopter / "kit-manifest.json", json.dumps({"kit_commit": revision}))
+    _write(source / rel, runtime_adapters.render_adapter(
+        runtime, "wrap-up", "Current kit description.", shared,
+    ))
+    git("add", ".")
+    git("commit", "-m", "current render")
+    current = git("rev-parse", "HEAD")
+    _write(source / rel, authored)
+    git("add", ".")
+    if replacement == "blob":
+        replaced = git("rev-parse", f"{revision}:{rel}")
+        synthetic = git("rev-parse", f":{rel}")
+    else:
+        replaced = revision
+        synthetic = git("commit-tree", git("write-tree"), "-m", "replacement view")
+    git("reset", "--hard", current)
+    if replacement == "namespace":
+        git("update-ref", f"refs/test-replacements/{replaced}", synthetic)
+        monkeypatch.setenv("GIT_REPLACE_REF_BASE", "refs/test-replacements/")
+    else:
+        git("replace", replaced, synthetic)
+    assert git("--no-replace-objects", "show", f"{revision}:{rel}") == original.strip()
+    row = next(row for row in runtime_adapters.compare_adapters(source, adopter) if row.path == rel)
+    assert row.state == "adopter-owned"
+    assert (adopter / rel).read_text() == authored
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("graft_source", ["repository", "environment"])
+def test_baseline_history_rejects_grafted_ancestry(
+    tmp_path, adapter_history, monkeypatch, runtime, graft_source,
+):
+    source, revision, git = adapter_history
+    adopter = tmp_path / "adopter"
+    rel = runtime_adapters._adapter_path(runtime, "wrap-up")
+    original = (source / rel).read_text()
+    _write(adopter / rel, original)
+    _write(adopter / "kit-manifest.json", json.dumps({"kit_commit": revision}))
+    git("switch", "--orphan", "unrelated-history")
+    git("checkout", revision, "--", ".")
+    _write(source / rel, runtime_adapters.render_adapter(
+        runtime, "wrap-up", "Current kit description.", "docs/agentic-dev-kit/workflows/wrap-up.md",
+    ))
+    git("add", ".")
+    git("commit", "-m", "unrelated current render")
+    current = git("rev-parse", "HEAD")
+    graft = source / ".git/info/grafts" if graft_source == "repository" else tmp_path / "grafts"
+    _write(graft, f"{current} {revision}\n")
+    if graft_source == "environment":
+        monkeypatch.setenv("GIT_GRAFT_FILE", str(graft))
+    row = next(row for row in runtime_adapters.compare_adapters(source, adopter) if row.path == rel)
+    assert row.state == "adopter-owned"
+    assert "baseline unavailable" in row.detail
+    assert (adopter / rel).read_text() == original
+
+
+def test_baseline_history_ignores_callers_git_location(tmp_path, adapter_history, monkeypatch):
+    source, revision, git = adapter_history
+    adopter = tmp_path / "adopter"
+    rel = runtime_adapters._adapter_path("claude", "wrap-up")
+    _write(adopter / rel, (source / rel).read_text())
+    _write(adopter / "kit-manifest.json", json.dumps({"kit_commit": revision}))
+    _write(source / rel, runtime_adapters.render_adapter(
+        "claude", "wrap-up", "Changed description.", "docs/agentic-dev-kit/workflows/wrap-up.md",
+    ))
+    git("add", ".")
+    git("commit", "-m", "current render")
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "missing-git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(adopter))
+    rows = {row.path: row for row in runtime_adapters.compare_adapters(source, adopter)}
+    assert rows[rel].state == "kit-stale"
+
+
 @pytest.mark.evidence
 def test_authored_adapter_change_is_reported_and_preserved_for_each_runtime(
     tmp_path, adapter_source

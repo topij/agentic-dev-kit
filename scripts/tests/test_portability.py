@@ -19673,6 +19673,126 @@ def test_upgrade_verification_stops_at_the_failed_command(
     assert (result.returncode == 0) == (failure == "none")
 
 
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_creation_uses_remote_base_and_leaves_primary_untouched(tmp_path: Path) -> None:
+    remote, primary, task = (tmp_path / name for name in ("remote", "primary", "task tree"))
+    remote.mkdir()
+    _git(remote, "init", "-b", "trunk")
+    _git(remote, "config", "user.name", "Test")
+    _git(remote, "config", "user.email", "test@example.invalid")
+    _git(remote, "commit", "--allow-empty", "-m", "base")
+    _git(tmp_path, "clone", str(remote), str(primary))
+    _git(primary, "config", "user.name", "Test")
+    _git(primary, "config", "user.email", "test@example.invalid")
+    _git(primary, "switch", "-c", "unrelated-feature")
+    _git(primary, "commit", "--allow-empty", "-m", "unrelated")
+    (primary / "local-note").write_text("keep me")
+    original_head = _git(primary, "rev-parse", "HEAD").stdout.strip()
+    original_status = _git(primary, "status", "--porcelain").stdout
+    _git(remote, "commit", "--allow-empty", "-m", "new remote base")
+    base = _git(remote, "rev-parse", "HEAD").stdout.strip()
+    workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
+    section = workflow.split("### Select the task worktree", 1)[1]
+    block = section.split("```bash\n", 1)[1].split("```", 1)[0]
+    env = dict(os.environ, REPO=str(primary), UPGRADE_REMOTE="origin",
+               UPGRADE_BASE="trunk", UPGRADE_BRANCH="chore/upgrade-test",
+               UPGRADE_WORKTREE=str(task))
+    result = subprocess.run(["bash", "-c", block], cwd=primary, env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert _git(task, "rev-parse", "HEAD").stdout.strip() == base
+    assert _git(task, "branch", "--show-current").stdout.strip() == "chore/upgrade-test"
+    assert subprocess.run(
+        ["git", "config", "--get", "branch.chore/upgrade-test.merge"],
+        cwd=task, capture_output=True,
+    ).returncode != 0
+    assert _git(primary, "branch", "--show-current").stdout.strip() == "unrelated-feature"
+    assert _git(primary, "rev-parse", "HEAD").stdout.strip() == original_head
+    assert _git(primary, "status", "--porcelain").stdout == original_status
+    # Repeating the creation must stop at the collision without removing either tree.
+    again = subprocess.run(["bash", "-c", block], cwd=primary, env=env,
+                           capture_output=True, text=True)
+    assert again.returncode != 0
+    assert (primary / "local-note").read_text() == "keep me"
+    assert _git(task, "rev-parse", "HEAD").stdout.strip() == base
+    env["UPGRADE_WORKTREE"] = str(tmp_path / "must-not-exist")
+    env["UPGRADE_BRANCH"] = "chore/must-not-exist"
+    env["UPGRADE_BASE"] = "missing-base"
+    refused = subprocess.run(["bash", "-c", block], cwd=primary, env=env,
+                             capture_output=True, text=True)
+    assert refused.returncode != 0
+    assert not Path(env["UPGRADE_WORKTREE"]).exists()
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize("binding", ["assigned", "wrong-branch", "missing-root", "missing-branch", "detached"])
+def test_upgrade_step_two_reuses_only_the_bound_branch(tmp_path: Path, binding: str) -> None:
+    repo = tmp_path / "assigned"
+    repo.mkdir()
+    _git(repo, "init", "-b", "chore/assigned")
+    _git(repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+         "commit", "--allow-empty", "-m", "base")
+    if binding == "detached":
+        _git(repo, "checkout", "--detach")
+    workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
+    step = workflow.split("## Step 2 —", 1)[1].split("## Step 3", 1)[0]
+    block = step.split("```bash\n", 1)[1].split("```", 1)[0]
+    assert "git checkout -b" not in workflow
+    assert "Run the gate from the main checkout" not in workflow
+    env = dict(os.environ, REPO=str(repo), UPGRADE_BRANCH="chore/assigned")
+    if binding == "wrong-branch":
+        env["UPGRADE_BRANCH"] = "chore/other"
+    elif binding == "missing-root":
+        env.pop("REPO")
+    elif binding == "missing-branch":
+        env.pop("UPGRADE_BRANCH")
+    before = _git(repo, "branch", "--show-current").stdout
+    result = subprocess.run(["bash", "-c", block], cwd=repo, env=env,
+                            capture_output=True, text=True)
+    assert (result.returncode == 0) == (binding == "assigned")
+    assert _git(repo, "branch", "--show-current").stdout == before
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+@pytest.mark.parametrize("render_fails", [False, True])
+def test_upgrade_lens_preview_uses_adopter_root_without_overwriting_definition(
+    tmp_path: Path, render_fails: bool,
+) -> None:
+    repo, preview, bins = (tmp_path / name for name in ("adopter tree", "previews", "bin"))
+    for directory in (repo, preview, bins):
+        directory.mkdir()
+    definition = repo / ".claude/agents/custom.md"
+    definition.parent.mkdir(parents=True)
+    definition.write_text("adopter-authored definition\n")
+    calls = tmp_path / "calls"
+    uv = bins / "uv"
+    uv.write_text(
+        '#!/bin/sh\n'
+        'printf "%s\\n" "$@" > "$LENS_CALLS"\n'
+        'printf "rendered preview\\n"\n'
+        'exit "$LENS_EXIT"\n'
+    )
+    uv.chmod(0o755)
+    workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
+    section = workflow.split("### Refresh generated Claude lens definitions", 1)[1]
+    block = section.split("```bash\n", 1)[1].split("```", 1)[0]
+    block = block.replace("<engine-dir>", "scripts/devkit")
+    env = dict(os.environ, PATH=str(bins) + os.pathsep + os.environ["PATH"],
+               REPO=str(repo), UPGRADE_LENS="custom", UPGRADE_PREVIEW_DIR=str(preview),
+               LENS_CALLS=str(calls), LENS_EXIT="17" if render_fails else "0")
+    result = subprocess.run(["bash", "-c", block], cwd=tmp_path, env=env,
+                            capture_output=True, text=True)
+    assert result.returncode == (1 if render_fails else 0)
+    assert calls.read_text().splitlines() == [
+        "run", str(repo / "scripts/devkit/panel_prompt.py"), "--root", str(repo),
+        "--runtime", "claude", "--lens", "custom", "--agent-definition",
+    ]
+    assert definition.read_text() == "adopter-authored definition\n"
+    assert next(preview.iterdir()).read_text() == "rendered preview\n"
+    assert "do not install a declined engine" in " ".join(section.split())
+    assert "reconcile and preserve adopter-authored additions" in " ".join(section.split())
+
+
 _RECENT_INTRO = (
     "# Handoff\n\n## Recent sessions\n\n"
     "Keep this live introduction.\n\n> An introductory quotation.\n\n"
