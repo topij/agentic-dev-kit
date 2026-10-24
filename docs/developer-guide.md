@@ -25,6 +25,10 @@ ownership `adopt` must inspect. Re-running `init.sh` migrates config and renders
 unclaimed templates; it does not replace the drift inspection and file refresh in
 `upgrade`.
 
+For a refusal or unexpected report, use the [troubleshooting table](troubleshooting.md).
+For upgrades and file edits, consult the [ownership reference](ownership.md).
+For changes to these guides, run the [documentation checks](documentation-checks.md).
+
 ## Run a development session
 
 1. Invoke `session-start`. It reads the configured handoff and friction log, the

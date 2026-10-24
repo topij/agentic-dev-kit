@@ -61,6 +61,9 @@ history does not establish ownership. Claude lens definitions are previewed from
 the adopter's merged configuration before replacement. Shared hook installation
 has a separate explicit step because linked worktrees share Git administration.
 
+See the [ownership reference](ownership.md) for edit and replacement boundaries,
+including generated bindings, lane state and retained evidence.
+
 ### Source map
 
 | Component | Code or contract | Responsibility |

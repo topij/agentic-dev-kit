@@ -1,0 +1,20 @@
+{
+  "name": "devkit-documentation-checks",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test check.test.mjs",
+    "check": "node check.mjs README.md docs/developer-guide.md docs/getting-started.md docs/architecture.md docs/parallel-dev.md docs/parallel-howto.md docs/troubleshooting.md docs/ownership.md docs/documentation-checks.md",
+    "verify": "npm test && npm run check"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0",
+    "github-slugger": "2.0.0",
+    "markdown-it": "15.0.3",
+    "mermaid": "12.2.0",
+    "playwright": "1.64.1"
+  }
+}

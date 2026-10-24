@@ -25,6 +25,9 @@ and Linux. `panel_prompt.py` and `check_record_prose.py` call `git --no-lazy-fet
 Runtime engines use the stdlib-only `kitconfig.py` reader; this repository's
 test command supplies PyYAML separately.
 
+If a step stops, use [Troubleshooting](troubleshooting.md) to identify the owning
+command, evidence to keep and the next authorized action.
+
 ## 1 · Adopt the kit
 
 Click **Use this template** on GitHub and clone the result, or copy the kit's
