@@ -609,6 +609,34 @@ def test_relative_runtime_command_uses_only_the_trusted_executable_path(
 
 
 @pytest.mark.evidence
+def test_missing_absolute_runtime_command_is_refused_without_the_trusted_path_remedy(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    absent = tmp_path / "absent-dir" / "lane-runtime"
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    config = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config.replace(
+            f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
+            f"codex_headless_command: [{json.dumps(str(absent))}]",
+        ),
+        encoding="utf-8",
+    )
+    launcher = _load_launcher(engine_dir)
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    message = str(refused.value)
+    assert repr(str(absent)) in message
+    assert "does not exist or is not executable" in message
+    assert "not looked up on the trusted path" in message
+    assert launcher.SAFE_EXECUTABLE_PATH not in message
+    assert "link the binary" not in message
+
+
+@pytest.mark.evidence
 def test_unresolvable_runtime_command_refusal_names_the_host_placement_remedy(
     tmp_path: Path,
 ) -> None:

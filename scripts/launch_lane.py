@@ -777,6 +777,14 @@ def _config_for_launcher(
         # The refusal names its remedy (#629): a user-local install is linked onto
         # the trusted path by the host, never admitted by widening the path or the
         # gitignored overlay, which would let an unreviewed file pick the binary.
+        # An absolute command is used as written and never looked up, so that
+        # branch names the file instead of the trusted directories.
+        if Path(executable).is_absolute():
+            raise LaunchError(
+                f"configured {runtime} launcher is unavailable: {executable!r} does "
+                "not exist or is not executable (an absolute command is used as "
+                "written, not looked up on the trusted path)"
+            )
         raise LaunchError(
             f"configured {runtime} launcher is unavailable on the trusted path: "
             f"{executable!r} is not an executable in {SAFE_EXECUTABLE_PATH}; for a "

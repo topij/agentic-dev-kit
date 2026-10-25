@@ -183,11 +183,14 @@ launch resumes a lane that stopped without a terminal state (below). Resolve all
 the merged config; never restate them in an adapter or fixture. A user-local runtime
 install, such as `~/.local/bin/claude`, is outside the wrapper's trusted executable
 path by design. The supported route is host placement: link the binary into one of the
-trusted directories (`ln -s ~/.local/bin/claude /opt/homebrew/bin/claude`, for
-example), and the refusal names those directories. Do not name the absolute binary in
-the tracked config, which would hand one host's layout to every checkout, and the
-gitignored local overlay does not accept these keys: a file nobody reviews would then
-choose the binary the wrapper runs.
+trusted directories (the system defaults plus `/opt/homebrew/bin`, `/usr/local/bin` and
+`/opt/local/bin`) and keep the bare command name in the config. On macOS with Homebrew,
+for example, `ln -s ~/.local/bin/claude /opt/homebrew/bin/claude`. A bare name the
+wrapper cannot find is refused with those directories named; an absolute command is
+used as written and never looked up, so its refusal names the file. Do not name the
+absolute binary in the tracked config, which would hand one host's layout to every
+checkout, and the gitignored local overlay does not accept these keys: a file nobody
+reviews would then choose the binary the wrapper runs.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
 dispatch or direct `codex exec` / `claude -p` call does not: worktree `cwd`,

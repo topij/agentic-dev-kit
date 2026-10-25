@@ -353,8 +353,9 @@ cmd_new() {
     fi
 
     # Activation snippet: the sandbox is this session's state/ (writes isolate
-    # here); DEVKIT_ROOT points the read-cascade's prod twin at the MAIN
-    # checkout so the session can still reuse its fresh caches read-only.
+    # here); DEVKIT_ROOT points the read-cascade's prod twin at the checkout that
+    # issued the session (the primary, or a linked cockpit worktree it was run
+    # from) so the session can still reuse that checkout's fresh caches read-only.
     cat > "$session_dir/activate" <<ACTIVATE
 # source this to enter the '$scope' dev session
 cd "$activate_worktree" || return 1
@@ -1207,6 +1208,13 @@ cmd_rm() {
     echo "✓ session '$scope' removed."
 }
 
+# The header comment above, without its `#` markers: every comment line after the
+# shebang up to the first line that is not a comment, so the help text follows the
+# header as it is edited rather than a line range that has to be moved with it.
+_header_help() {
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
+}
+
 # Print one subcommand's usage line from the header above. `<sub> --help` stops
 # here, before the subcommand parses anything, so a runtime can read a retained
 # engine's interface without creating a lane (#454). Only a first argument of
@@ -1218,7 +1226,7 @@ _subcommand_usage() {
         ls) sub=list ;;
         remove) sub=rm ;;
     esac
-    sed -n '2,57p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' \
+    _header_help \
         | awk -v sub_name="$sub" '$1 == "scripts/dev_session.sh" && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
 }
 
@@ -1241,9 +1249,7 @@ main() {
         merge) cmd_merge "$@" ;;
         rm|remove) cmd_rm "$@" ;;
         print-contract) cmd_print_contract "$@" ;;
-        ""|-h|--help|help)
-            sed -n '2,57p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-            ;;
+        ""|-h|--help|help) _header_help ;;
         *) _die "unknown subcommand '$sub' (try: new | list | path | pr-watch | merge | rm | print-contract)" ;;
     esac
 }

@@ -556,21 +556,18 @@ def test_new_help_names_every_flag_new_accepts(repo: Repo) -> None:
         assert f"[{flag}" in usage, flag
 
 
-def test_top_level_help_prints_the_whole_header_and_nothing_past_it(repo: Repo) -> None:
-    # Both help paths print a fixed line range of the header; a header edit that
-    # moves its end must move that range too. The header's help text ends with the
-    # blank comment line after the print-contract paragraph.
+def test_top_level_help_prints_the_header_comment_block_and_nothing_past_it(
+    repo: Repo,
+) -> None:
+    # The header is every comment line after the shebang up to the first line that
+    # is not a comment. Help must print all of it, so an edit to the header cannot
+    # leave a paragraph out, and nothing after it.
     printed = repo.run(repo.root, "help")
     assert printed.returncode == 0, printed.stderr
     header = []
     for line in repo.engine(repo.root).read_text(encoding="utf-8").splitlines()[1:]:
         if not line.startswith("#"):
             break
-        header.append(line)
-    end = next(
-        index
-        for index, line in enumerate(header)
-        if line.rstrip() == "#" and index > 0 and "eyeballing" in header[index - 1]
-    )
-    expected = [line[2:] if line.startswith("# ") else line[1:] for line in header[: end + 1]]
-    assert printed.stdout.splitlines() == expected
+        header.append(line[2:] if line.startswith("# ") else line[1:])
+    assert header and header[-1].strip()
+    assert printed.stdout.splitlines() == header
