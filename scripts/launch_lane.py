@@ -1727,8 +1727,6 @@ def _signal_process_group(
     # that reaches the EPERM branch:
     # - leader exited or exiting, no other member: the reap empties the group, the
     #   retry answers ESRCH, and the group is gone;
-    # - leader exited or exiting, a live member that can be signalled: the retry
-    #   delivers;
     # - leader reaped, a member that still answers EPERM (another owner, or a
     #   zombie its new parent has not reaped yet): refused;
     # - leader still running when the grace ends: refused without a retry.
@@ -1749,6 +1747,18 @@ def _signal_process_group(
         return
     except PermissionError as exc:
         raise LaunchError(error) from exc
+
+
+def _relay_signal(process_group: int, signum: int) -> None:
+    # Called from the launcher's signal handler, so nothing may escape it: an
+    # exception raised there surfaces at whatever line the main flow was on. ESRCH
+    # is a group already gone. EPERM is either a group holding only the unreaped
+    # leader (macOS, #1238), which needs no relay, or a member that cannot be
+    # signalled. A signal caught while a round runs routes the launch to
+    # _terminate_process_group, which refuses that member; one caught after the
+    # round's group check found the group empty.
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(process_group, signum)
 
 
 def _terminate_process_group(
@@ -1934,14 +1944,7 @@ def launch(
     def relay(signum: int, _frame: object) -> None:
         caught.append(signum)
         if process is not None:
-            # EPERM here is either a group holding only the unreaped zombie leader
-            # (macOS, #1238), which needs no relay, or a member that cannot be
-            # signalled. A signal caught while a round runs routes the launch to
-            # _terminate_process_group, which refuses that member; one caught after
-            # the round's group check found the group empty. Raising from a signal
-            # handler would instead surface at whatever line the main flow was on.
-            with contextlib.suppress(ProcessLookupError, PermissionError):
-                os.killpg(process.pid, signum)
+            _relay_signal(process.pid, signum)
 
     previous_handlers = {
         signum: signal.signal(signum, relay) for signum in (signal.SIGINT, signal.SIGTERM)

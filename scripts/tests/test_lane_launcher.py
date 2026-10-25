@@ -3275,6 +3275,7 @@ class _FakeLeader:
 
     def __init__(self, pid: int, returncode: int | None, running_polls: int = 0) -> None:
         self.pid = pid
+        self.returncode: int | None = None
         self._returncode = returncode
         self._running_polls = running_polls
 
@@ -3282,7 +3283,8 @@ class _FakeLeader:
         if self._running_polls:
             self._running_polls -= 1
             return None
-        return self._returncode
+        self.returncode = self._returncode
+        return self.returncode
 
 
 def test_an_exiting_leader_that_becomes_reapable_is_not_refused(
@@ -3330,6 +3332,94 @@ def test_a_group_that_keeps_answering_eperm_is_still_refused(
         launcher._terminate_process_group(leader, 1)
 
     assert sent == [(4242, signal.SIGTERM)] * expected_signals
+
+
+def _scripted_killpg(script: dict[int, list[BaseException | None]]):
+    """A killpg that answers each signal from its own queue (None delivers) and
+    answers ESRCH once a queue is empty; returns (killpg, sent)."""
+    sent: list[int] = []
+
+    def killpg(_process_group: int, signum: int) -> None:
+        sent.append(signum)
+        queue = script.setdefault(signum, [])
+        answer = queue.pop(0) if queue else ProcessLookupError(3, "No such process")
+        if answer is not None:
+            raise answer
+
+    return killpg, sent
+
+
+def _eperm() -> PermissionError:
+    return PermissionError(1, "Operation not permitted")
+
+
+def test_termination_waits_for_an_exiting_leader_on_the_sigterm_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The leader is still exiting when SIGTERM is sent; the leg's grace must reach
+    # the wait, or the first poll refuses.
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [_eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+
+    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+
+    assert returncode == 0
+    assert sent[:2] == [signal.SIGTERM, signal.SIGTERM]
+    assert signal.SIGKILL not in sent
+
+
+def test_termination_waits_for_an_exiting_leader_on_the_sigkill_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # SIGTERM is delivered but the group outlives the grace; on the force-stop leg
+    # the leader is exiting, so the retry must send SIGKILL again after the wait.
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    waits = iter([None, 0])
+    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: next(waits))
+
+    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+
+    assert returncode == 0
+    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+
+
+def test_a_force_stop_that_keeps_answering_eperm_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm(), _eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: None)
+
+    with pytest.raises(launcher.LaunchError, match="cannot force-stop the child process group"):
+        launcher._terminate_process_group(_FakeLeader(4242, 0), 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [PermissionError(1, "Operation not permitted"), ProcessLookupError(3, "No such process")],
+    ids=["eperm", "esrch"],
+)
+def test_the_signal_relay_never_raises_from_the_handler(
+    monkeypatch: pytest.MonkeyPatch, answer: BaseException
+) -> None:
+    launcher = _load_launcher()
+    sent: list[tuple[int, int]] = []
+
+    def killpg(process_group: int, signum: int) -> None:
+        sent.append((process_group, signum))
+        raise answer
+
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+
+    launcher._relay_signal(4242, signal.SIGTERM)
+
+    assert sent == [(4242, signal.SIGTERM)]
 
 
 @pytest.mark.evidence
