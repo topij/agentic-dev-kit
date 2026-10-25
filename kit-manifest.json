@@ -72,11 +72,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "182fe298be636cf5da24d0f2feda1a9ac01abf14a1cdb68a0384701cda3d077b"
+      "sha256": "f09fc4e21ac65461e45d74839c07949daf72a3b3839e63cd2f640c6d6540b48c"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "5e82ade7d6aa9414d66e8c2a1a94613c01a9154fca80813cb378de20f7b76ce1"
+      "sha256": "4baa62cf797676a9fd5c0d20be9e666378a655751fdb7995f87b435b176e35bc"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -226,7 +226,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "1fa64d39d435c6951d9240f2e6739a17822da36c9d112c54179f86496cf3f4da"
+      "sha256": "61cb83b803bae99dd095dd3a1e3b1a18cb0f6d608882bc8acf517278b2b75888"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "515ee76949e882e243e904088a9a453999efd76dcbbdf3db247086c73de40ec0"
+      "sha256": "f10ec0c5aa2ab021c8aa9c1100754884f1e572316878320e5c00b21393b11fe5"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

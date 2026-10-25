@@ -178,8 +178,10 @@ PERMISSION_RULE_LISTS = ("allow", "deny", "ask")
 # line wrapped in backticks, or one followed by more lines, is no terminal state.
 # For `no-pr` and `blocked` the rest of the line is the reason, which must be
 # printable text (`str.isprintable`: no control, format, or non-space separator
-# characters, so no C1 escape or bidi override reaches a receipt reader). A successful run whose final text has none is a nonterminal stop: the wrapper
-# resumes it (Claude) or records it `stalled`.
+# characters, so no C1 escape or bidi override reaches a receipt reader). Lines
+# are split as `str.splitlines` splits them. A successful run whose final text has
+# none is a nonterminal stop: the wrapper resumes it (Claude) or records it
+# `stalled`.
 LANE_TERMINAL_LINE = re.compile(
     r"LANE-TERMINAL: (?:pr-ready #(?P<pr>[1-9][0-9]{0,9})"
     r"|(?P<state>no-pr|blocked) (?P<reason>\S.{0,199}))"
@@ -1899,6 +1901,8 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
         # failed, denied or interrupted round is never resumed — a stall is a stop
         # before the end, not a failure.
         while lane_state is None:
+            if caught:
+                break
             if len(resumes) >= profile.max_resumes:
                 stall_reason = (
                     f"final text named no terminal state after {len(resumes)} "
@@ -1923,6 +1927,10 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
             round_final = session_dir / f"launch-final-{descriptor_id}-resume-{round_number}.txt"
             _reserve_empty_regular_file(round_final)
             round_argv = profile.resume_argv(session_id)
+            # Checked again immediately before the fork: a signal that lands while
+            # the round is being prepared must not start one more model round.
+            if caught:
+                break
             # Recorded as soon as the round starts and completed below, so a
             # LaunchError on the way (a termination or evidence read that
             # refuses) still reaches the receipt with this round in it.
@@ -1993,7 +2001,7 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
                     "permission_denials": round_denials,
                     "usage": _reported_usage(final_text_transport, round_bytes),
                     "lane_state": lane_state,
-                    "error": round_error,
+                    "error": "launcher interrupted" if caught else round_error,
                     "finished_at": dt.datetime.now(dt.timezone.utc)
                     .isoformat()
                     .replace("+00:00", "Z"),
@@ -2017,6 +2025,21 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
                 )
                 return 128 + caught[0] if caught else 70
             last_final_bytes = round_bytes
+        if caught:
+            _terminal_receipt(
+                receipt_path,
+                attempt,
+                status="interrupted",
+                returncode=returncode,
+                caught_signal=caught[0],
+                final_message=final_message,
+                error="launcher interrupted",
+                final_text_transport=final_text_transport,
+                final_text=launch_text,
+                permission_denials=permission_denials,
+                resumes=resumes,
+            )
+            return 128 + caught[0]
         _terminal_receipt(
             receipt_path,
             attempt,

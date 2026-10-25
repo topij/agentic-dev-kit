@@ -3215,3 +3215,30 @@ def test_a_refusal_during_a_resume_round_still_records_the_round(
     assert round_one["round"] == 1
     assert round_one["session_id"] == FAKE_SESSION_ID
     assert round_one["error"] == "round did not finish"
+
+
+def test_a_signal_while_a_resume_round_is_prepared_starts_no_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="sleep"
+    )
+    launcher = _load_launcher(engine)
+    real = launcher._claude_session_id
+
+    def signal_then_answer(final_bytes: bytes) -> str | None:
+        # Lands after the loop head's check, while the round is being prepared.
+        os.kill(os.getpid(), signal.SIGTERM)
+        return real(final_bytes)
+
+    monkeypatch.setattr(launcher, "_claude_session_id", signal_then_answer)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt)]
+    )
+
+    assert result == 128 + signal.SIGTERM
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "interrupted"
+    assert receipt["terminal"]["resumes"] == []
+    assert not (sessions / "probe" / "resume.pid").exists()

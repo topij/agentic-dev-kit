@@ -147,8 +147,8 @@ across runtimes, `parallel.descriptor_ttl_seconds` supplies descriptor lifetime,
 `parallel.observation_timeout_seconds` bounds the child observation handshake, and
 `parallel.termination_grace_seconds` bounds graceful cleanup before forced process-
 group termination, and `parallel.max_resumes` bounds how many times one launch resumes
-a lane that stopped without a terminal state (below). Resolve all through the merged config; never restate them in an
-adapter or fixture. A user-local runtime install is outside the wrapper's trusted
+a lane that stopped without a terminal state (below). Resolve all through the merged
+config; never restate them in an adapter or fixture. A user-local runtime install is outside the wrapper's trusted
 executable path by design: name the absolute binary in the command.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
@@ -171,13 +171,15 @@ stopped to wait for a watcher or for its own subagents (`#514`, `#564`), so the
 launcher checks for the end instead of trusting the instruction. The contract asks
 the lane to end its final text with one plain-text line: `LANE-TERMINAL: pr-ready
 #<n>`, `LANE-TERMINAL: no-pr <reason>` or `LANE-TERMINAL: blocked <reason>`. The
-wrapper reads only the last non-blank line and needs the whole line to match, so a
-line quoted earlier, wrapped in backticks or followed by more lines is no terminal
-state. For `no-pr` and `blocked` the rest of the line is the reason: up to 200 characters of
-printable text in Python's `str.isprintable` sense, so no control characters (C0, DEL
-or C1), no format characters such as bidi overrides or zero-width spaces, and no
-separator other than the ordinary space.
-The receipt records what it declared as `terminal.lane_state`.
+wrapper splits the final text as Python's `str.splitlines` does, so a vertical tab,
+form feed, file or record separator, U+0085, U+2028 or U+2029 also ends a line. It
+reads only the last non-blank line, with surrounding whitespace stripped, and needs the
+whole line to match: a line quoted earlier, wrapped in backticks or followed by more
+lines is no terminal state. For `no-pr` and `blocked` the rest of the line is the
+reason: up to 200 characters of printable text in Python's `str.isprintable` sense, so
+no control characters (C0, DEL or C1), no format characters such as bidi overrides or
+zero-width spaces, and no separator other than the ordinary space. The receipt records
+what it declared as `terminal.lane_state`.
 
 A successful run without that line is a nonterminal stop. For a Claude lane the
 wrapper resumes the same runtime session (`--resume <session_id>`) with one fixed
@@ -189,12 +191,16 @@ launch argv's command, trust step, approval policy, settings profile and compute
 only `--resume <session_id>`. The session id must be a canonical UUID. Each round
 reserves its own `launch-final-<id>-resume-<n>.txt`, gets the same process-group and
 lineage cleanup as the launch, and is recorded in `terminal.resumes` with its argv,
-digests, return code, denials, usage and terminal state. A failed, denied or
+digests, return code, denials, usage and terminal state. A round that a refusal cuts
+short (a termination or evidence read the wrapper refuses) is still recorded, with the
+fields it never reached `null` and `error` set to `round did not finish`; an
+interrupted round's `error` is `launcher interrupted`. A signal that lands before a
+round starts stops the loop without starting one. A failed, denied or
 interrupted round, at launch or on resume, is never resumed. While a round runs, the
 receipt stays `observed`, so the board shows `running`.
 
-Observed live with Claude Code 2.1.310 on 2026-10-25, launcher at `ed46e646`, from a
-clone whose primary checkout was that commit: a `--tier cheap` lane told to answer only
+Observed live with Claude Code 2.1.310 on 2026-10-25, from a clone whose primary
+checkout was a commit since reworded as `c60680a4` (same tree): a `--tier cheap` lane told to answer only
 `READY` ended its launch round without the line, was resumed in the same session under
 `dontAsk` and the lane profile, ended with a `no-pr` line, and was recorded `completed`
 with one entry in `terminal.resumes`.

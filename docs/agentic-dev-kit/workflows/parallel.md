@@ -64,9 +64,9 @@ sessions — report it as-is, then stop. Read-only.
   its terminal state after its resumes ([`parallel-headless.md`](parallel-headless.md),
   *Terminal state and bounded resume*). `completed` covers every terminal state a lane
   declares, `blocked` included, so the board does not tell a blocked lane from a
-  finished one: `terminal.lane_state` in the receipt says which. `?` means a file could not be read or held a value the
-  board cannot trust, such as a pid that names no single process. `running` comes
-  from a process check and is a hint, not proof.
+  finished one: `terminal.lane_state` in the receipt says which. `?` means a file
+  could not be read or held a value the board cannot trust, such as a pid that names
+  no single process. `running` comes from a process check and is a hint, not proof.
 - **OVERLAP** names the other active lanes that change at least one of the same files
   (committed against the lane's base, uncommitted, or untracked). Two names in each
   other's OVERLAP cell are the pair to sequence: merge one, then rebase the other.
