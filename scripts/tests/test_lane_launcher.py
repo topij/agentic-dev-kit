@@ -3432,6 +3432,7 @@ def _gh_answer(**fields: object) -> str:
         (_gh_answer(body=None), "42", "github-issues", "is not that issue"),
         (_gh_answer(number=7), "42", "github-issues", "is not that issue"),
         ("sys.stdout.write(json.dumps({'number': 42, 'title': 't', 'body': chr(0xD800), 'url': 'https://github.com/o/r/issues/42'}))\n", "42", "github-issues", "not UTF-8 text"),
+        ("sys.stdout.write(json.dumps({'number': 42, 'title': chr(0xD800), 'body': 'b', 'url': 'https://github.com/o/r/issues/42'}))\n", "42", "github-issues", "not UTF-8 text"),
         (GOOD_TICKET, "0", "github-issues", "positive issue number"),
         (GOOD_TICKET, "4x", "github-issues", "positive issue number"),
         (GOOD_TICKET, "42", "linear", "only the github-issues tracker backend"),

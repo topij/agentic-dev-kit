@@ -11,7 +11,8 @@ launch attempt when any of these holds:
 - `gh` is not on the trusted path;
 - the read fails or times out;
 - the answer's number, title or body is missing or malformed;
-- its url is not exactly `<tracker.url>/<n>`;
+- its url is not exactly `<tracker.url>/<n>`, with any trailing slash on
+  `tracker.url` dropped;
 - its title or body contains `TICKET>>>`.
 
 Without `--ticket` nothing changes. To use it, have `gh` authenticated and on the

@@ -253,7 +253,8 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
         )
     # The answer must be this tracker's issue: `gh issue view` also answers for a
     # pull request with the same number, and resolves the repository from the
-    # worktree's remotes, so the url is held to `<tracker.url>/<n>` exactly.
+    # worktree's remotes, so the url is held to `<tracker.url>/<n>` exactly, after
+    # dropping any trailing slash from `tracker.url`.
     tracker_url = get(config, "tracker.url", None)
     if not isinstance(tracker_url, str) or not tracker_url.startswith("https://"):
         raise LaunchError("--ticket needs tracker.url, the https:// issues url of the tracker")

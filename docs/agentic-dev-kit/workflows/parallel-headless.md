@@ -99,9 +99,9 @@ request records `ticket` (`number`, `url`, `block_sha256`). The launch is refuse
 64) before any attempt record when the number is not a positive integer,
 `tracker.backend` is not `github-issues`, `tracker.url` is not an `https://` url, `gh`
 is not on the trusted path, the read fails or times out, the answer's number, title or
-body is missing or malformed, its url is not exactly `<tracker.url>/<n>` (which refuses a
-pull request with that number and an issue of another repository or host), or its title
-or body contains `TICKET>>>`.
+body is missing or malformed, its url is not exactly `<tracker.url>/<n>`, with any
+trailing slash on `tracker.url` dropped (which refuses a pull request with that number
+and an issue of another repository or host), or its title or body contains `TICKET>>>`.
 
 `--tier` applies the plan step's effort tier through `models.runtime_mappings`; without
 it the lane inherits the client's compute. [`parallel.md`](parallel.md#per-lane-effort-tier-risk--reasoning-effort--model)

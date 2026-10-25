@@ -65,26 +65,28 @@ Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12
   but does not exclude an order- or time-dependent test. `~/Library/LaunchAgents` holds
   no job for this repository, and no other local session for it was listed. Writer not
   identified. A `make test` stamp run in a standalone clone outside the worktree set
-  avoided it. - **A failed `dev_session.sh new` leaves a session neither `rm` nor `new`
-  clears.** Severity L, kept for accumulation. On 2026-10-25, in a single-branch clone
-  whose fetch refspec lacked `main`, `new live3 --headless` failed at `git worktree add`
+  avoided it.
+- **A failed `dev_session.sh new` leaves a session neither `rm` nor `new` clears.**
+  Severity L, kept for accumulation. On 2026-10-25, in a single-branch clone whose
+  fetch refspec lacked `main`, `new live3 --headless` failed at `git worktree add`
   (`invalid reference: origin/main`) after creating `dev-model-sessions/live3/`.
   `rm live3 --force` then refused (`no session 'live3' at …/live3/wt`) and `new live3`
-  refused (`session 'live3' already exists`), naming `--force` as the way out. The smoke
-  run moved on under a new scope name; `new --force` was not tried. - **Discarding a
-  lane deletes its usage record.** Severity M, input to
+  refused (`session 'live3' already exists`), naming `--force` as the way out. The
+  smoke run moved on under a new scope name; `new --force` was not tried.
+- **Discarding a lane deletes its usage record.** Severity M, input to
   [#1174](https://github.com/topij/agentic-dev-kit/issues/1174). A smoke lane at
-  `a2bb8a46` (`new smoke-tier --headless --runtime claude`, then
-  `launch_lane.py --tier cheap`) wrote `terminal.usage` into
+  `a2bb8a46` (`new smoke-tier --headless --runtime claude`, then `launch_lane.py
+  --tier cheap`) wrote `terminal.usage` into
   `<session>/launch-receipt-<descriptor_id>.json`. `dev_session.sh rm smoke-tier` then
-  removed the whole session directory, and the receipt with it; no other copy of those
-  figures exists. #1174's ranking report reads "recent lanes" from recorded rows, so it
-  needs a home for usage that outlives `rm`. Without one, it sees only the lanes that
-  have not yet been cleaned up. - **A fast lane did not show RUN `starting` in one smoke
-  run.** Severity L, kept for accumulation. In the same smoke run, a one-second poll of
-  `dev_session.sh list` showed `running` at its first sample, then `completed` about
-  eight seconds later. `starting` is real but lasts under a poll interval here, so a
-  board watch cannot be used to confirm it.
+  removed the whole session directory, and the receipt with it; no other copy of
+  those figures exists. #1174's ranking report reads "recent lanes" from recorded rows,
+  so it needs a home for usage that outlives `rm`. Without one, it sees only the lanes
+  that have not yet been cleaned up.
+- **A fast lane did not show RUN `starting` in one smoke run.** Severity L, kept for
+  accumulation. In the same smoke run, a one-second poll of `dev_session.sh list` showed
+  `running` at its first sample, then `completed` about eight seconds later. `starting`
+  is real but lasts under a poll interval here, so a board watch cannot be used to
+  confirm it.
 
 ## 2026-10-21
 
