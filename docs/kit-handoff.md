@@ -232,12 +232,17 @@ neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. Whether #514, #564, 
 #1081, #628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 with the
 shipped profile under `dontAsk` (stamped in `parallel-headless.md`), compounds of profile-allowed
 `git` commands ran and a chain with a refused part was denied whole; the runtime's
-read-only class that #628's 2.1.250 denials concern was not re-probed. Proposals not yet
-taken: the first-launch blockers (#1109, #629, #454), a documented cloud-session lane
-route, and standing mandates (#472, which the review sequences after a terminal state and a cost record). Still
-open from #1235: #1173's default tier and a tier carried in the descriptor, and #1174's
-ranking report and per-lane budget. Until #1109 lands, a live lane check
-needs a clone whose primary checkout is the branch under test.
+read-only class that #628's 2.1.250 denials concern was not re-probed. #1241 took
+the first-launch blockers on routes the operator chose on 2026-10-25: a
+lane is held to its repository by Git common directory, so a linked worktree can issue
+one (#1109); a user-local runtime install is placed on the trusted path by the host,
+and the overlay still refuses `parallel.<runtime>_headless_command` (#629);
+`dev_session.sh <subcommand> --help` is side-effect free, which is only part of #454.
+Whether #1109 and #629 are done is the operator's call. Proposals not yet taken: a
+documented cloud-session lane route, and standing mandates (#472, which the review
+sequences after a terminal state and a cost record). Still open from #1235: #1173's
+default tier and a tier carried in the descriptor, and #1174's ranking report and
+per-lane budget.
 **Owner:** [#1238](https://github.com/topij/agentic-dev-kit/issues/1238),
 [#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
 [#1174](https://github.com/topij/agentic-dev-kit/issues/1174),
@@ -248,13 +253,11 @@ needs a clone whose primary checkout is the branch under test.
 [#472](https://github.com/topij/agentic-dev-kit/issues/472); the review document above
 (a claude.ai link, not in the repository).
 
-▶ Next: the first-launch blockers, which the review proposes as one safety-critical PR
-with the two-lens panel. Read each ticket first and choose its route with the operator:
-#1109 leaves open sharing one canonical repository identity or refusing early with an
-explanation; #629 leaves open documenting host placement or admitting
-`parallel.<runtime>_headless_command` to the local overlay; #454's side-effect-free
-`dev_session.sh --help` is only part of it, beside capability negotiation and a Codex
-launch contract, so a PR doing only that leaves #454 open.
+▶ Next: choose the next proposal with the operator: the documented cloud-session lane
+route, #472's standing mandates, or #454's remainder (capability negotiation in the
+shared workflow for an adopter-retained engine, an extension contract for adopter
+state environment and destructive-path guards, the partial-adopter fixture, and a
+Codex launch through such an engine). #1238 and #1239 are smaller follow-ups.
 
 ### Consumer upgrades
 

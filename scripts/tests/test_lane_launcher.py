@@ -302,6 +302,7 @@ def _install_repo(
     max_resumes: str | None = "1",
     rewrite_profile: bool = False,
     extra_config: str = "",
+    linked_issuer: bool = False,
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -323,7 +324,13 @@ def _install_repo(
     _git(repo, "commit", "-m", "seed")
     _git(repo, "remote", "add", "origin", str(remote))
     _git(repo, "push", "-u", "origin", "trunk")
-    engine_dir = repo / "scripts" / "devkit"
+    # The issuer is the checkout the engine and config live in: the primary, or
+    # a linked cockpit worktree of the same repository (#1109).
+    issuer = repo
+    if linked_issuer:
+        issuer = tmp_path / "cockpit"
+        _git(repo, "worktree", "add", "-b", "feat/cockpit", str(issuer), "trunk")
+    engine_dir = issuer / "scripts" / "devkit"
     shutil.copytree(ENGINE_DIR, engine_dir)
     fake_codex = tmp_path / "fake-codex"
     _fake_codex(
@@ -348,8 +355,8 @@ def _install_repo(
         resume=resume,
         rewrite_profile=rewrite_profile,
     )
-    (repo / "config").mkdir()
-    (repo / "config" / "dev-model.yaml").write_text(
+    (issuer / "config").mkdir()
+    (issuer / "config" / "dev-model.yaml").write_text(
         "paths:\n"
         "  handoff: handoff.md\n"
         "  friction_log: friction-log.md\n"
@@ -381,7 +388,7 @@ def _install_repo(
         + extra_config,
         encoding="utf-8",
     )
-    profile_path = repo / "config" / "claude-lane-settings.json"
+    profile_path = issuer / "config" / "claude-lane-settings.json"
     if profile is None:
         profile = LANE_PROFILE
     if isinstance(profile, bytes):
@@ -400,7 +407,7 @@ def _install_repo(
             "--runtime",
             runtime,
         ],
-        cwd=repo,
+        cwd=issuer,
         env=env,
         check=True,
         capture_output=True,
@@ -483,7 +490,7 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     assert receipt["expected"]["environment"] == descriptor["env"]
     assert receipt["observed"]["environment"] == descriptor["env"]
     assert receipt["observed"]["worktree"] == descriptor["worktree"]
-    assert receipt["observed"]["repo_root"] == str(repo)
+    assert receipt["observed"]["git_common_dir"] == str((repo / ".git").resolve())
     assert final["cwd"] == descriptor["worktree"]
     assert final["branch"] == descriptor["branch"]
     assert final["env"] == descriptor["env"]
@@ -601,6 +608,139 @@ def test_relative_runtime_command_uses_only_the_trusted_executable_path(
     assert not hostile_marker.exists()
 
 
+def _set_codex_command(descriptor: dict[str, object], tmp_path: Path, command: str) -> None:
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    config = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config.replace(
+            f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
+            f"codex_headless_command: [{json.dumps(command)}]",
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.evidence
+def test_missing_absolute_runtime_command_is_refused_without_the_trusted_path_remedy(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    absent = str(tmp_path / "absent-dir" / "lane-runtime")
+    _set_codex_command(descriptor, tmp_path, absent)
+    launcher = _load_launcher(engine_dir)
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    message = str(refused.value)
+    assert repr(absent) in message
+    assert "does not exist or is not executable" in message
+    assert "not looked up on the trusted path" in message
+    assert launcher.SAFE_EXECUTABLE_PATH not in message
+    assert "link the binary" not in message
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("command", ["./lane-runtime", "bin/lane-runtime", "../cwd/lane-runtime"])
+def test_relative_runtime_command_with_a_directory_part_is_refused_even_when_it_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    # The file exists relative to the launcher's cwd, so shutil.which would accept
+    # it there; the child would exec the same relative path from the lane worktree.
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    cwd = tmp_path / "cwd"
+    present = (cwd / command).resolve()
+    present.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(tmp_path / "fake-codex", present)
+    monkeypatch.chdir(cwd)
+    _set_codex_command(descriptor, tmp_path, command)
+    launcher = _load_launcher(engine_dir)
+    assert shutil.which(command, path=launcher.SAFE_EXECUTABLE_PATH) == command
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    assert str(refused.value) == (
+        f"configured codex launcher {command!r} is a relative path; name a bare "
+        "command on the trusted path or an absolute path"
+    )
+
+
+@pytest.mark.evidence
+def test_unresolvable_runtime_command_refusal_names_the_host_placement_remedy(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    config = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config.replace(
+            f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
+            'codex_headless_command: ["devkit-absent-lane-runtime"]',
+        ),
+        encoding="utf-8",
+    )
+    launcher = _load_launcher(engine_dir)
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    message = str(refused.value)
+    assert "unavailable on the trusted path" in message
+    assert "'devkit-absent-lane-runtime'" in message
+    assert launcher.SAFE_EXECUTABLE_PATH in message
+    assert "link the binary into one of those directories" in message
+
+
+@pytest.mark.evidence
+def test_descriptor_issued_from_a_linked_worktree_launches(tmp_path: Path) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, linked_issuer=True
+    )
+    cockpit = (tmp_path / "cockpit").resolve()
+    assert descriptor["repo_root"] == str(cockpit)
+
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    final = _lane_json(
+        Path(receipt["terminal"]["final_message_path"]).read_text(encoding="utf-8")
+    )
+    common_dir = str((repo / ".git").resolve())
+    assert receipt["status"] == "completed"
+    assert receipt["expected"]["git_common_dir"] == common_dir
+    assert receipt["observed"]["git_common_dir"] == common_dir
+    assert final["cwd"] == descriptor["worktree"]
+    assert final["env"]["DEVKIT_ROOT"] == str(cockpit)
+
+
+@pytest.mark.evidence
+def test_lane_worktree_from_a_foreign_repository_is_refused(tmp_path: Path) -> None:
+    # Hostile mutation for #1109: replace the lane worktree with a separate clone
+    # that agrees with the descriptor on its worktree path, branch, head, base and
+    # both origin URLs, but is another repository, so its Git common directory is
+    # its own. The old path comparison refused this clone too (its common-dir
+    # parent is the clone itself); the common-directory comparison is what must
+    # keep refusing it now that a linked issuer is accepted.
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    worktree = Path(descriptor["worktree"])
+    marker = (worktree / ".devkit_state_root").read_bytes()
+    shutil.rmtree(worktree)
+    _git(Path(descriptor["repo_root"]), "worktree", "prune")
+    _git(tmp_path, "clone", "-q", "-b", "trunk", descriptor["origin_url"], str(worktree))
+    _git(worktree, "checkout", "-q", "-b", descriptor["branch"], descriptor["lane_oid"])
+    (worktree / ".devkit_state_root").write_bytes(marker)
+    assert _git(worktree, "remote", "get-url", "--push", "origin") == descriptor["origin_push_url"]
+
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+
+    assert result.returncode != 0
+    assert "child observation disagrees on git_common_dir" in result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+
+
 @pytest.mark.evidence
 @pytest.mark.parametrize(
     ("key", "foreign"),
@@ -663,7 +803,7 @@ def test_correct_descriptor_cannot_launch_in_a_wrong_worktree() -> None:
         "worktree": "/sessions/lane/wt",
         "session_dir": "/sessions/lane",
         "state_root": "/sessions/lane/state",
-        "repo_root": "/repo",
+        "git_common_dir": "/repo/.git",
         "origin_url": "origin",
         "origin_push_url": "origin",
         "branch": "dev/lane",
@@ -702,7 +842,7 @@ def test_caller_supplied_identity_without_independent_observation_is_rejected() 
 @pytest.mark.parametrize(
     ("field", "foreign"),
     (
-        ("repo_root", "/foreign"),
+        ("git_common_dir", "/foreign/.git"),
         ("branch", "dev/foreign"),
         ("base", "foreign-base"),
         ("state_root", "/foreign-state"),
@@ -719,7 +859,7 @@ def test_foreign_identity_mutations_are_rejected(field: str, foreign: str) -> No
         "worktree": "/sessions/lane/wt",
         "session_dir": "/sessions/lane",
         "state_root": "/sessions/lane/state",
-        "repo_root": "/repo",
+        "git_common_dir": "/repo/.git",
         "origin_url": "origin",
         "origin_push_url": "origin",
         "branch": "dev/lane",
@@ -1409,7 +1549,7 @@ def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
         == hashlib.sha256(envelope["result"].encode()).hexdigest()
     )
     assert receipt["terminal"]["final_text_sha256"] != receipt["terminal"]["final_message_sha256"]
-    assert receipt["observed"]["repo_root"] == str(repo)
+    assert receipt["observed"]["git_common_dir"] == str((repo / ".git").resolve())
 
 
 @pytest.mark.evidence

@@ -768,14 +768,41 @@ def _config_for_launcher(
     ):
         raise LaunchError("config parallel.termination_grace_seconds must be positive")
     executable = command[0]
+    # Three shapes of command[0], decided by Path.is_absolute() and dirname():
+    # - absolute: used as written, never looked up;
+    # - bare name (empty dirname): looked up on SAFE_EXECUTABLE_PATH only;
+    # - relative with a directory part (`./claude`, `bin/claude`, `../claude`):
+    #   refused. shutil.which ignores its path for this shape and checks the
+    #   launcher's cwd, while the child execs argv[0] after chdir into the lane
+    #   worktree, so the file checked and the file run could differ, and the
+    #   lane can write the second one.
+    if not Path(executable).is_absolute() and os.path.dirname(executable):
+        raise LaunchError(
+            f"configured {runtime} launcher {executable!r} is a relative path; name "
+            "a bare command on the trusted path or an absolute path"
+        )
     resolved_executable = (
         str(Path(executable).resolve())
         if Path(executable).is_absolute()
         else shutil.which(executable, path=SAFE_EXECUTABLE_PATH)
     )
     if not resolved_executable or not os.access(resolved_executable, os.X_OK):
+        # The refusal names its remedy (#629): a user-local install is linked onto
+        # the trusted path by the host, never admitted by widening the path or the
+        # gitignored overlay, which would let an unreviewed file pick the binary.
+        # An absolute command is never looked up, so that branch names the file
+        # instead of the trusted directories.
+        if Path(executable).is_absolute():
+            raise LaunchError(
+                f"configured {runtime} launcher is unavailable: {executable!r} does "
+                "not exist or is not executable (an absolute command is used as "
+                "written, not looked up on the trusted path)"
+            )
         raise LaunchError(
-            f"configured {runtime} launcher is unavailable on the trusted path"
+            f"configured {runtime} launcher is unavailable on the trusted path: "
+            f"{executable!r} is not an executable in {SAFE_EXECUTABLE_PATH}; for a "
+            "user-local install, link the binary into one of those directories "
+            "(see parallel-headless.md)"
         )
     return (
         RuntimeProfile(
@@ -1025,14 +1052,17 @@ def _close_nonstandard_descriptors() -> None:
     raise LaunchError("cannot enumerate inherited file descriptors before runtime exec")
 
 
-def _observed_identity(process_nonce: str) -> dict[str, Any]:
-    cwd = Path.cwd().resolve()
-    git_top = Path(_git(cwd, "rev-parse", "--show-toplevel")).resolve()
+def _git_common_dir(cwd: Path) -> Path:
     common_raw = Path(_git(cwd, "rev-parse", "--git-common-dir"))
     common_dir = (cwd / common_raw).resolve() if not common_raw.is_absolute() else common_raw.resolve()
     if common_dir.name != ".git":
         raise LaunchError("Git common directory does not identify a repository root")
-    repository = common_dir.parent.resolve()
+    return common_dir
+
+
+def _observed_identity(process_nonce: str) -> dict[str, Any]:
+    cwd = Path.cwd().resolve()
+    git_top = Path(_git(cwd, "rev-parse", "--show-toplevel")).resolve()
     session_dir = cwd.parent.resolve()
     state_root = (session_dir / "state").resolve()
     marker = _read_stable_regular_file(cwd / ".devkit_state_root").decode().strip()
@@ -1058,7 +1088,7 @@ def _observed_identity(process_nonce: str) -> dict[str, Any]:
         "session_dir": str(session_dir),
         "state_root": str(state_root),
         "marker_state_root": str(marker_root),
-        "repo_root": str(repository),
+        "git_common_dir": str(_git_common_dir(cwd)),
         "origin_url": _git(cwd, "remote", "get-url", "origin"),
         "origin_push_url": _git(cwd, "remote", "get-url", "--push", "origin"),
         "branch": branch,
@@ -1079,7 +1109,15 @@ def _observed_identity(process_nonce: str) -> dict[str, Any]:
 
 
 def _expected_identity(descriptor: dict[str, Any]) -> dict[str, Any]:
-    return {
+    # Repository identity is the Git common directory, not a checkout path
+    # (#1109). `repo_root` names the checkout whose config and engine authorize
+    # the launch, and the caller has already held it to the launcher's own
+    # config root; from a linked cockpit worktree that is the linked checkout,
+    # while every lane worktree's common directory is the primary's `.git`.
+    # Both checkouts of one repository share that directory, and a checkout of
+    # any other repository does not, so the comparison refuses the same foreign
+    # lanes the path comparison did and stops refusing a linked issuer.
+    expected = {
         key: descriptor[key]
         for key in (
             "scope",
@@ -1096,6 +1134,8 @@ def _expected_identity(descriptor: dict[str, Any]) -> dict[str, Any]:
             "merge_class",
         )
     } | {"environment": dict(descriptor["env"])}
+    expected["git_common_dir"] = str(_git_common_dir(Path(descriptor["repo_root"])))
+    return expected
 
 
 def _validate_observation(expected: dict[str, Any], observed: dict[str, Any]) -> None:
@@ -1104,7 +1144,7 @@ def _validate_observation(expected: dict[str, Any], observed: dict[str, Any]) ->
         "worktree",
         "session_dir",
         "state_root",
-        "repo_root",
+        "git_common_dir",
         "origin_url",
         "origin_push_url",
         "branch",

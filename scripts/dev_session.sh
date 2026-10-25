@@ -21,6 +21,12 @@
 #   scripts/dev_session.sh rm <scope> [--force] [--keep-branch]
 #   scripts/dev_session.sh print-contract
 #
+# `<subcommand> --help` (or `-h`) as the first argument prints that subcommand's
+# usage line and exits without touching the repository or the sessions directory.
+# Only the first argument asks for it: `merge <scope> --help` is a merge. Like every
+# subcommand it first needs this script's preamble to pass (a .git above it and
+# vcs.protected_branch in config).
+#
 # `list --watch [interval]` is a live board: it re-renders every <interval>
 # seconds (default 30) and marks rows whose state changed since the last render
 # (a CI ✓/✗/… flip, a new commit, a DIRTY-count change, a RUN or OVERLAP
@@ -350,8 +356,9 @@ cmd_new() {
     fi
 
     # Activation snippet: the sandbox is this session's state/ (writes isolate
-    # here); DEVKIT_ROOT points the read-cascade's prod twin at the MAIN
-    # checkout so the session can still reuse its fresh caches read-only.
+    # here); DEVKIT_ROOT points the read-cascade's prod twin at the checkout that
+    # issued the session (the primary, or a linked cockpit worktree it was run
+    # from) so the session can still reuse that checkout's fresh caches read-only.
     cat > "$session_dir/activate" <<ACTIVATE
 # source this to enter the '$scope' dev session
 cd "$activate_worktree" || return 1
@@ -1204,9 +1211,39 @@ cmd_rm() {
     echo "✓ session '$scope' removed."
 }
 
+# The header comment above, without its `#` markers: every comment line after the
+# shebang up to the first line that is not a comment, so the help text follows the
+# header as it is edited rather than a line range that has to be moved with it.
+_header_help() {
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
+}
+
+# Print one subcommand's usage line from the header above. `<sub> --help` stops
+# here, before the subcommand parses anything, so a runtime can read a retained
+# engine's interface without creating a lane (#454). Only a first argument of
+# -h/--help asks for it: later in the line it keeps its old meaning, which for
+# `pr-watch <scope> --help` is pr_watch.py's own help.
+_subcommand_usage() {
+    local sub="$1"
+    case "$sub" in
+        ls) sub=list ;;
+        remove) sub=rm ;;
+    esac
+    _header_help \
+        | awk -v sub_name="$sub" '$1 == "scripts/dev_session.sh" && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
+}
+
 main() {
     local sub="${1:-}"
     [[ $# -gt 0 ]] && shift || true
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        case "$sub" in
+            new|list|ls|path|pr-watch|merge|rm|remove|print-contract)
+                _subcommand_usage "$sub"
+                return 0
+                ;;
+        esac
+    fi
     case "$sub" in
         new) cmd_new "$@" ;;
         list|ls) cmd_list "$@" ;;
@@ -1215,9 +1252,7 @@ main() {
         merge) cmd_merge "$@" ;;
         rm|remove) cmd_rm "$@" ;;
         print-contract) cmd_print_contract "$@" ;;
-        ""|-h|--help|help)
-            sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-            ;;
+        ""|-h|--help|help) _header_help ;;
         *) _die "unknown subcommand '$sub' (try: new | list | path | pr-watch | merge | rm | print-contract)" ;;
     esac
 }

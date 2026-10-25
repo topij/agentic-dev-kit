@@ -1,10 +1,11 @@
-"""dev_session.sh: where the sessions container resolves, and the board's RUN and
-OVERLAP columns.
+"""dev_session.sh: where the sessions container resolves, the board's RUN and
+OVERLAP columns, and the read-only help surface.
 
 The sessions container must resolve to the same directory from the primary
 checkout, a linked cockpit worktree and a lane worktree (#479). The board reads
 each lane's headless-wrapper evidence for RUN and its changed files for OVERLAP;
-both are read-only displays.
+both are read-only displays. `<subcommand> --help` prints that subcommand's usage
+and touches nothing (#454).
 """
 
 from __future__ import annotations
@@ -498,3 +499,109 @@ def test_the_watch_board_marks_a_row_whose_run_or_overlap_changed(repo: Repo) ->
     row = frame()
     assert row[:2] == ["*", "alpha"]
     assert row[7] == "beta"
+
+
+HELP_SUBCOMMANDS = {
+    "new": "new",
+    "list": "list",
+    "ls": "list",
+    "path": "path",
+    "pr-watch": "pr-watch",
+    "merge": "merge",
+    "rm": "rm",
+    "remove": "rm",
+    "print-contract": "print-contract",
+}
+
+
+def _repository_snapshot(repo: Repo) -> tuple[str, str, str, list[str]]:
+    return (
+        _git(repo.root, "branch", "--list"),
+        _git(repo.root, "worktree", "list", "--porcelain"),
+        _git(repo.root, "status", "--porcelain", "--ignored"),
+        sorted(path.name for path in repo.root.parent.iterdir()),
+    )
+
+
+@pytest.mark.parametrize("flag", ["--help", "-h"])
+@pytest.mark.parametrize("subcommand", sorted(HELP_SUBCOMMANDS))
+def test_subcommand_help_prints_its_usage_and_changes_nothing(
+    repo: Repo, subcommand: str, flag: str
+) -> None:
+    before = _repository_snapshot(repo)
+
+    result = repo.run(repo.root, subcommand, flag)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith(
+        f"usage: scripts/dev_session.sh {HELP_SUBCOMMANDS[subcommand]}"
+    ), result.stdout
+    assert len(result.stdout.splitlines()) == 1
+    assert _repository_snapshot(repo) == before
+    assert not repo.sessions.exists()
+
+
+def test_new_help_names_every_flag_new_accepts(repo: Repo) -> None:
+    usage = repo.run(repo.root, "new", "--help").stdout
+    source = repo.engine(repo.root).read_text(encoding="utf-8")
+    start = source.index("cmd_new() {")
+    body = source[start : source.index("\n}\n", start)]
+    accepted = {
+        line.strip().split(")")[0]
+        for line in body.splitlines()
+        if line.strip().startswith("--") and ")" in line
+    }
+    assert accepted
+    for flag in accepted:
+        assert f"[{flag}" in usage, flag
+
+
+def test_top_level_help_prints_the_header_comment_block_and_nothing_past_it(
+    repo: Repo,
+) -> None:
+    # The header is every comment line after the shebang up to the first line that
+    # is not a comment. Help must print all of it, so an edit to the header cannot
+    # leave a paragraph out, and nothing after it.
+    printed = repo.run(repo.root, "help")
+    assert printed.returncode == 0, printed.stderr
+    header = []
+    for line in repo.engine(repo.root).read_text(encoding="utf-8").splitlines()[1:]:
+        if not line.startswith("#"):
+            break
+        header.append(line[2:] if line.startswith("# ") else line[1:])
+    assert header and header[-1].strip()
+    assert printed.stdout.splitlines() == header
+
+
+@pytest.mark.parametrize(
+    ("args", "error"),
+    [
+        (("path", "probe", "--help"), "no session 'probe'"),
+        (("merge", "probe", "--help"), "no session 'probe'"),
+        (("rm", "probe", "--help"), "unknown flag: --help"),
+        (("new", "probe", "--help"), "unknown flag: --help"),
+    ],
+    ids=["path", "merge", "rm", "new"],
+)
+def test_a_later_help_flag_is_not_a_help_request(
+    repo: Repo, args: tuple[str, ...], error: str
+) -> None:
+    # Only a first argument asks for help; later in the line `--help` reaches the
+    # subcommand, so `merge <scope> --help` is a merge (here of a missing session).
+    before = _repository_snapshot(repo)
+
+    result = repo.run(repo.root, *args)
+
+    assert result.returncode != 0
+    assert not result.stdout.startswith("usage:")
+    assert error in result.stderr
+    assert _repository_snapshot(repo) == before
+
+
+@pytest.mark.parametrize("flag", ["--help", "-h"])
+def test_help_after_an_unknown_subcommand_still_refuses_it(repo: Repo, flag: str) -> None:
+    result = repo.run(repo.root, "bogus", flag)
+
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "unknown subcommand 'bogus'" in result.stderr
