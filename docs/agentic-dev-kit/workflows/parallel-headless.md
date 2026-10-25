@@ -151,9 +151,11 @@ allowed, one refused part ends the run, and one simple command per call is the s
 default. It also tells every lane to write commit messages and pull-request text to
 files under the worktree's `<state.dirname>/lane/`, never to stage that directory
 (`init.sh` adds `state/` to `.gitignore` only when it can), to pass them with `git
-commit -F` and `gh pr create --body-file`, to put its verification result in the body
-before opening and report anything later in its final text, and to undo a worktree
-change with `git restore`. The shipped profile grants `Bash(git restore:*)` for the
+commit -F` and `gh pr create --body-file`, and to undo a worktree change with `git
+restore`. A headless lane is also told to put its verification result in the body before
+opening and to report anything later, including a draft-exception lane's remote result,
+in its final text instead of editing the body; an interactive lane keeps the ordinary
+`gh pr comment` replies of `pr-watch.md`. The shipped profile grants `Bash(git restore:*)` for the
 last and grants neither `gh pr edit`, which could retarget a pull request's base, nor
 `gh pr comment`, whose `--delete-last`, `--edit-last` and `--repo` reach other comments
 and repositories. A lane's ticket arrives through `launch_lane.py --ticket`, so the

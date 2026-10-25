@@ -29,9 +29,9 @@ descriptor's `prompt_preamble`) gains three instructions (#1011, #628):
   simple command per call is the safe default;
 - write commit messages and pull-request text under `<state.dirname>/lane/` in the
   worktree, never stage that directory, and pass the files with `git commit -F` and
-  `gh pr create --body-file`; put the verification result in the body before opening
-  and report anything later in the final text, without editing or commenting on the
-  pull request;
+  `gh pr create --body-file`; a headless lane puts the verification result in the body
+  before opening and reports anything later, including a draft-exception lane's remote
+  result, in its final text instead of editing or commenting on the pull request;
 - undo worktree changes with `git restore`.
 
 The "wait on anything" rule now says to poll with one simple check per call, not with

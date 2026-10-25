@@ -50,39 +50,41 @@ Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12
   Severity M, recurrence of the 2026-10-22 entry ``An unidentified `pr_watch` write
   failed a `make test` stamp``. On 2026-10-25, `make test` at `80fb1177` in
   `.claude/worktrees/lane-terminal` ran every test green (`5833 passed, 1 skipped`) and
-  still exited 2 on the real-state guard (#428). The guard named `state/pr-watch/1236.json`,
-  born 02:41 and modified 12:08, with keys `head`, `max_total`, `max_total_backend` and
-  `settle_since`. The cockpit made no `pr_watch` call during that run. Two worktrees with no
-  suite running gained `1236.json` and `1237.json` between 12:07 and 12:20, while review
-  lenses were running. A fresh `1237.json` appeared in `lane-terminal` at 12:54:27, while the
-  cockpit ran only read-only commands there. At that point no `pr_watch` or `claude -p` process was listed. The
-  project's hooks (`pr_followup_hook.py`, two SessionStart budget checks) have no write
-  path. A bisect of `test_lane_launcher.py` found that neither half writes on its own,
-  while the whole file (about two and a half minutes) does, so the writer is not a test.
-  `~/Library/LaunchAgents` holds no job for this repository, and no other local session
-  for it was listed. Writer not identified. A `make test` stamp run in a standalone clone
-  outside the worktree set avoided it.
-- **A failed `dev_session.sh new` leaves a session neither `rm` nor `new` clears.**
-  Severity L, kept for accumulation. On 2026-10-25, in a single-branch clone whose
-  fetch refspec lacked `main`, `new live3 --headless` failed at `git worktree add`
+  still exited 2 on the real-state guard (#428). The guard named
+  `state/pr-watch/1236.json`, born 02:41 and modified 12:08, with keys `head`,
+  `max_total`, `max_total_backend` and `settle_since`. The cockpit made no `pr_watch`
+  call during that run. Two worktrees with no suite running gained `1236.json` and
+  `1237.json` between 12:07 and 12:20, while review lenses were running. A fresh
+  `1237.json` appeared in `lane-terminal` at 12:54:27, while the cockpit ran only
+  read-only commands there. At that point no `pr_watch` or `claude -p` process was
+  listed. The project's hook processes (`pr_followup_hook.py`, `check_doc_budget.py`,
+  `check_memory_budget.py`) write no file, but `pr_followup_hook.py`'s injected text
+  tells the receiving agent to run `pr_watch.py`, so a cockpit or lens agent following
+  it in a worktree is not excluded. A bisect of `test_lane_launcher.py` found that
+  neither half writes on its own while the whole file does; that fits an external writer
+  but does not exclude an order- or time-dependent test. `~/Library/LaunchAgents` holds
+  no job for this repository, and no other local session for it was listed. Writer not
+  identified. A `make test` stamp run in a standalone clone outside the worktree set
+  avoided it. - **A failed `dev_session.sh new` leaves a session neither `rm` nor `new`
+  clears.** Severity L, kept for accumulation. On 2026-10-25, in a single-branch clone
+  whose fetch refspec lacked `main`, `new live3 --headless` failed at `git worktree add`
   (`invalid reference: origin/main`) after creating `dev-model-sessions/live3/`.
   `rm live3 --force` then refused (`no session 'live3' at …/live3/wt`) and `new live3`
-  refused (`session 'live3' already exists`), naming `--force` as the way out. The
-  smoke run moved on under a new scope name; `new --force` was not tried.
-- **Discarding a lane deletes its usage record.** Severity M, input to
+  refused (`session 'live3' already exists`), naming `--force` as the way out. The smoke
+  run moved on under a new scope name; `new --force` was not tried. - **Discarding a
+  lane deletes its usage record.** Severity M, input to
   [#1174](https://github.com/topij/agentic-dev-kit/issues/1174). A smoke lane at
-  `a2bb8a46` (`new smoke-tier --headless --runtime claude`, then `launch_lane.py
-  --tier cheap`) wrote `terminal.usage` into
+  `a2bb8a46` (`new smoke-tier --headless --runtime claude`, then
+  `launch_lane.py --tier cheap`) wrote `terminal.usage` into
   `<session>/launch-receipt-<descriptor_id>.json`. `dev_session.sh rm smoke-tier` then
-  removed the whole session directory, and the receipt with it; no other copy of
-  those figures exists. #1174's ranking report reads "recent lanes" from recorded rows,
-  so it needs a home for usage that outlives `rm`. Without one, it sees only the lanes
-  that have not yet been cleaned up.
-- **A fast lane did not show RUN `starting` in one smoke run.** Severity L, kept for
-  accumulation. In the same smoke run, a one-second poll of `dev_session.sh list` showed
-  `running` at its first sample, then `completed` about eight seconds later. `starting`
-  is real but lasts under a poll interval here, so a board watch cannot be used to
-  confirm it.
+  removed the whole session directory, and the receipt with it; no other copy of those
+  figures exists. #1174's ranking report reads "recent lanes" from recorded rows, so it
+  needs a home for usage that outlives `rm`. Without one, it sees only the lanes that
+  have not yet been cleaned up. - **A fast lane did not show RUN `starting` in one smoke
+  run.** Severity L, kept for accumulation. In the same smoke run, a one-second poll of
+  `dev_session.sh list` showed `running` at its first sample, then `completed` about
+  eight seconds later. `starting` is real but lasts under a poll interval here, so a
+  board watch cannot be used to confirm it.
 
 ## 2026-10-21
 

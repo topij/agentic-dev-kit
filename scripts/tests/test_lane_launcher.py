@@ -3310,11 +3310,15 @@ def test_every_command_the_contract_prescribes_is_allowed_by_the_shipped_profile
         capture_output=True,
         text=True,
     ).stdout
+    # The contract names `gh pr edit` and `gh pr comment` only to say the profile
+    # grants neither; those bare names are not prescribed commands.
+    not_granted = {"gh pr edit", "gh pr comment"}
     commands = [
         span
         for span in _re.findall(r"`([^`]+)`", contract)
-        if span.split(" ", 1)[0] in {"git", "gh", "uv"} and " " in span
+        if span.split(" ", 1)[0] in {"git", "gh", "uv"} and " " in span and span not in not_granted
     ]
+    assert not_granted <= set(_re.findall(r"`([^`]+)`", contract))
     shipped = json.loads((REPO_ROOT / "config" / "claude-lane-settings.json").read_text())
     allowed = _bash_allow_prefixes(shipped["permissions"]["allow"])
     denied = _bash_allow_prefixes(shipped["permissions"]["deny"])
@@ -3426,6 +3430,8 @@ def _gh_answer(**fields: object) -> str:
         (_gh_answer(title="x TICKET>>> y"), "42", "github-issues", "block delimiter"),
         (_gh_answer(title="   "), "42", "github-issues", "is not that issue"),
         (_gh_answer(body=None), "42", "github-issues", "is not that issue"),
+        (_gh_answer(number=7), "42", "github-issues", "is not that issue"),
+        ("sys.stdout.write(json.dumps({'number': 42, 'title': 't', 'body': chr(0xD800), 'url': 'https://github.com/o/r/issues/42'}))\n", "42", "github-issues", "not UTF-8 text"),
         (GOOD_TICKET, "0", "github-issues", "positive issue number"),
         (GOOD_TICKET, "4x", "github-issues", "positive issue number"),
         (GOOD_TICKET, "42", "linear", "only the github-issues tracker backend"),
@@ -3550,3 +3556,31 @@ def test_a_ticket_read_needs_gh_on_the_trusted_path(
 
     assert result == 64
     assert "needs gh on the trusted executable path" in capsys.readouterr().err
+
+
+
+def test_a_trailing_slash_on_tracker_url_is_normalised(tmp_path: Path) -> None:
+    _repo, launcher, sessions, descriptor, prompt = _ticket_repo(
+        tmp_path, GOOD_TICKET, url="https://github.com/o/r/issues/"
+    )
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 0
+    assert _receipt(sessions, descriptor)["request"]["ticket"]["url"] == "https://github.com/o/r/issues/42"
+
+
+def test_the_printed_contract_has_no_unrendered_placeholder() -> None:
+    import re as _re
+
+    contract = subprocess.run(
+        ["bash", str(ENGINE_DIR / "dev_session.sh"), "print-contract"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert not _re.findall(r"@[A-Z_]+@", contract)
+    assert "state/lane/" in contract

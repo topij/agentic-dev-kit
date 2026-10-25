@@ -294,6 +294,13 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
     # that could close the block early is refused rather than escaped.
     if any(TICKET_CLOSE in ticket[field] for field in ("title", "body")):
         raise LaunchError(f"ticket #{number} contains the {TICKET_CLOSE} block delimiter")
+    # The block is encoded into the prompt; a field JSON can carry but UTF-8 cannot
+    # (a lone surrogate) is refused here rather than as a traceback at launch.
+    try:
+        for field in ("title", "body", "url"):
+            ticket[field].encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise LaunchError(f"the tracker's answer for ticket #{number} is not UTF-8 text") from exc
     return {key: ticket[key] for key in ("number", "title", "body", "url")}
 
 
