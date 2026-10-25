@@ -99,8 +99,7 @@ retired. On 2026-10-23, `sweep_scratch.py --json` at `d07cf199` in report mode
 kept `cb1751f8…`, `review-72a279dd…` and `review-a2d753b4…` for an unparseable `.git`
 file each; removing them is the operator's call (friction log, 2026-10-23).
 `state/review-evidence/` retention remains scoped to #861.
-**Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
-[#997](https://github.com/topij/agentic-dev-kit/issues/997),
+**Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#1185](https://github.com/topij/agentic-dev-kit/issues/1185),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
@@ -191,8 +190,7 @@ The preserved `fabed73e` implementation is design evidence; the
 round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
 was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
 timeout and report-containment findings.
-**Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
-[#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
+**Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify cs-toolkit's real scheduled-run receipts and the documented trusted
 launcher boundary; installed wrapper code alone does not establish live invocation
@@ -223,6 +221,31 @@ delivered #1182.
 
 ▶ Next: #1156 — judge the clean-case findings every verifier confirmed (real defect
 or false alarm) and grow the case set before ranking verifier tiers.
+
+### Parallel lanes
+
+**Status:** the 2026-10-24 review of the parallel-lane capabilities
+(https://claude.ai/artifact/XqWRnuWfgwxTry4k8ZoXoL) ranked the proposals. #1235
+(`c37e47b7`) made lane state visible and applied compute tiers; #1236 (`1213e980`) added
+the `LANE-TERMINAL:` line and bounded resume; #1237 (`035c07c8`) prescribed file-based
+lane messages, granted `git restore` and added `launch_lane.py --ticket`. Operator
+decisions on 2026-10-25 that no single PR holds: a resume continues the bound launch
+with no new descriptor; `parallel.max_resumes` ships as 1; the lane profile grants
+neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. Whether #514, #564, #1011,
+#1081, #628 and #271 are done is the operator's call; #628's premise no longer holds at
+Claude Code 2.1.310 (the stamped probe is in `parallel-headless.md`). Proposals not yet
+taken: the first-launch blockers (#1109, #629, #454), a documented cloud-session lane
+route, and standing mandates (#472, after #1174). Until #1109 lands, a live lane check
+needs a clone whose primary checkout is the branch under test.
+**Owner:** [#1238](https://github.com/topij/agentic-dev-kit/issues/1238),
+[#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
+[#1174](https://github.com/topij/agentic-dev-kit/issues/1174),
+[#1173](https://github.com/topij/agentic-dev-kit/issues/1173); the review document above.
+
+▶ Next: the first-launch blockers as one safety-critical PR with the two-lens panel —
+#1109 (judge repository identity by the common git dir so a linked worktree can issue a
+descriptor), #629 (let the local overlay set `parallel.<runtime>_headless_command`), #454
+(a side-effect-free `dev_session.sh --help`).
 
 ### Consumer upgrades
 
