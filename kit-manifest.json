@@ -72,7 +72,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "7c204499808bc01f773561bc1a6f0c82ae86f0581a5487ce18b3ff0da9b6a6c4"
+      "sha256": "d195e862fcb3f1e6758a6f66c2598a1d73b1acaed1b3d1b2a4e9b6954df4e504"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -191,7 +191,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "e7ce7215d1acca98cbf550f370ed438a9df48837f4bd313e5abc7674852eb09e"
+      "sha256": "df18b3cc9626c6b5441683b138bd9c429dbe9f2707a1ce3c40c5c024bac32116"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -226,7 +226,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "b3e7412daee8bb450bbd6647547263d763a9ac4a50555c7cde92a04dd316052f"
+      "sha256": "44775660d2d6befcb6f6a70e3b0dbacd96e588feec331cc2c385d2b1274ac3b5"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -659,7 +659,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "587df6286efee1917a8ecfd3e280e7f731384a87059591e7b5f97c5a36c55475"
+      "sha256": "a42157826eca42a19796f24c7839d02fe9f346e1b8be91a031c9a74ab40c163b"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -699,7 +699,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "7926988d317a21b4fc1bea51943360ab202ac577e323d03dbc60418a21cdc981"
+      "sha256": "2551c6e3057648b58973fcd41da274be4d1765dee4a6c341ddcdebe340cc0dc7"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "67b5cd35e293f6d47bd5ce0d086aad4b7f7c9c8bb875b61541c7e16b4836c9cf"
+      "sha256": "1f0b3f136d3a7eaf6f6f37e8c03cc8dc1d63d1bf37c74319620c20b0a6c2a1db"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

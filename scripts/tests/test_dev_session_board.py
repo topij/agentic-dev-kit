@@ -571,3 +571,37 @@ def test_top_level_help_prints_the_header_comment_block_and_nothing_past_it(
         header.append(line[2:] if line.startswith("# ") else line[1:])
     assert header and header[-1].strip()
     assert printed.stdout.splitlines() == header
+
+
+@pytest.mark.parametrize(
+    ("args", "error"),
+    [
+        (("path", "probe", "--help"), "no session 'probe'"),
+        (("merge", "probe", "--help"), "no session 'probe'"),
+        (("rm", "probe", "--help"), "unknown flag: --help"),
+        (("new", "probe", "--help"), "unknown flag: --help"),
+    ],
+    ids=["path", "merge", "rm", "new"],
+)
+def test_a_later_help_flag_is_not_a_help_request(
+    repo: Repo, args: tuple[str, ...], error: str
+) -> None:
+    # Only a first argument asks for help; later in the line `--help` reaches the
+    # subcommand, so `merge <scope> --help` is a merge (here of a missing session).
+    before = _repository_snapshot(repo)
+
+    result = repo.run(repo.root, *args)
+
+    assert result.returncode != 0
+    assert not result.stdout.startswith("usage:")
+    assert error in result.stderr
+    assert _repository_snapshot(repo) == before
+
+
+@pytest.mark.parametrize("flag", ["--help", "-h"])
+def test_help_after_an_unknown_subcommand_still_refuses_it(repo: Repo, flag: str) -> None:
+    result = repo.run(repo.root, "bogus", flag)
+
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "unknown subcommand 'bogus'" in result.stderr

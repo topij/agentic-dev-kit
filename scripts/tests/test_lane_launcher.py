@@ -608,26 +608,25 @@ def test_relative_runtime_command_uses_only_the_trusted_executable_path(
     assert not hostile_marker.exists()
 
 
-@pytest.mark.evidence
-@pytest.mark.parametrize("shape", ["absolute", "relative"])
-def test_missing_runtime_command_with_a_path_is_refused_without_the_trusted_path_remedy(
-    tmp_path: Path, shape: str
-) -> None:
-    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
-    absent = (
-        str(tmp_path / "absent-dir" / "lane-runtime")
-        if shape == "absolute"
-        else "./absent-dir/lane-runtime"
-    )
+def _set_codex_command(descriptor: dict[str, object], tmp_path: Path, command: str) -> None:
     config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
     config = config_path.read_text(encoding="utf-8")
     config_path.write_text(
         config.replace(
             f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
-            f"codex_headless_command: [{json.dumps(absent)}]",
+            f"codex_headless_command: [{json.dumps(command)}]",
         ),
         encoding="utf-8",
     )
+
+
+@pytest.mark.evidence
+def test_missing_absolute_runtime_command_is_refused_without_the_trusted_path_remedy(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    absent = str(tmp_path / "absent-dir" / "lane-runtime")
+    _set_codex_command(descriptor, tmp_path, absent)
     launcher = _load_launcher(engine_dir)
 
     with pytest.raises(launcher.LaunchError) as refused:
@@ -639,6 +638,32 @@ def test_missing_runtime_command_with_a_path_is_refused_without_the_trusted_path
     assert "not looked up on the trusted path" in message
     assert launcher.SAFE_EXECUTABLE_PATH not in message
     assert "link the binary" not in message
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("command", ["./lane-runtime", "bin/lane-runtime", "../cwd/lane-runtime"])
+def test_relative_runtime_command_with_a_directory_part_is_refused_even_when_it_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    # The file exists relative to the launcher's cwd, so shutil.which would accept
+    # it there; the child would exec the same relative path from the lane worktree.
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    cwd = tmp_path / "cwd"
+    present = (cwd / command).resolve()
+    present.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(tmp_path / "fake-codex", present)
+    monkeypatch.chdir(cwd)
+    _set_codex_command(descriptor, tmp_path, command)
+    launcher = _load_launcher(engine_dir)
+    assert shutil.which(command, path=launcher.SAFE_EXECUTABLE_PATH) == command
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    assert str(refused.value) == (
+        f"configured codex launcher {command!r} is a relative path; name a bare "
+        "command on the trusted path or an absolute path"
+    )
 
 
 @pytest.mark.evidence

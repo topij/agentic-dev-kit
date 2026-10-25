@@ -186,10 +186,11 @@ path by design. The supported route is host placement: link the binary into one 
 trusted directories (the system defaults plus `/opt/homebrew/bin`, `/usr/local/bin` and
 `/opt/local/bin`) and keep the bare command name in the config. On macOS with Homebrew,
 for example, `ln -s ~/.local/bin/claude /opt/homebrew/bin/claude`. A bare name the
-wrapper cannot find is refused with those directories named; a command with a path,
-absolute or relative such as `./claude`, is used as written and never looked up, so
-its refusal names the file. Do not name the
-absolute binary in the tracked config, which would hand one host's layout to every
+wrapper cannot find is refused with those directories named; an absolute command is
+used as written and never looked up, so its refusal names the file; and a relative
+path with a directory part, such as `./claude`, is refused outright, because it would
+be checked from the launcher's working directory but run from the lane worktree. Do not
+name the absolute binary in the tracked config, which would hand one host's layout to every
 checkout, and the gitignored local overlay does not accept these keys: a file nobody
 reviews would then choose the binary the wrapper runs.
 

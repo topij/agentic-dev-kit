@@ -23,7 +23,9 @@
 #
 # `<subcommand> --help` (or `-h`) as the first argument prints that subcommand's
 # usage line and exits without touching the repository or the sessions directory.
-# Only the first argument asks for it: `merge <scope> --help` is a merge.
+# Only the first argument asks for it: `merge <scope> --help` is a merge. Like every
+# subcommand it first needs this script's preamble to pass (a .git above it and
+# vcs.protected_branch in config).
 #
 # `list --watch [interval]` is a live board: it re-renders every <interval>
 # seconds (default 30) and marks rows whose state changed since the last render

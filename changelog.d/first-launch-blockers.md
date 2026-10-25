@@ -21,7 +21,9 @@ is unchanged. If you read the receipt's `observed.repo_root`, read
 which is the primary checkout's `.git` directory, not a checkout.
 
 CHANGED (CLI surface): `dev_session.sh <subcommand> --help` (or `-h`) as the first
-argument prints that subcommand's usage line and exits 0 without creating anything.
+argument prints that subcommand's usage line and exits 0 without creating anything,
+once the engine's own preamble passes: it needs a `.git` above the script and
+`vcs.protected_branch` in config, and without them every subcommand exits 1.
 For most subcommands it used to exit 1 with `unknown flag: --help`, or a slug error.
 `print-contract --help` used to print the whole lane contract and exit 0; it now prints
 the usage line, so call `print-contract` with no arguments to get the contract. Later
@@ -30,9 +32,14 @@ in the line `--help` keeps its old meaning: `merge <scope> --help` merges, and
 whole header comment, which adds the paragraph on subcommand help, the last line of the
 `print-contract` paragraph, and the paragraph on where sessions live.
 
-A configured `parallel.<runtime>_headless_command` the launcher cannot find is still
-refused. For a bare command name the message now names the trusted directories and the
-remedy: for a user-local runtime install, link the binary into one of those directories
-on the host (`parallel-headless.md`). For a command with a path, absolute or relative
-such as `./claude`, which is used as written and never looked up, it names the file. The local overlay still does not accept these
-keys.
+CHANGED (gate semantics): a configured `parallel.<runtime>_headless_command` whose
+first word is a relative path with a directory part (`./claude`, `bin/claude`) is now
+refused. It used to be checked against the launcher's working directory and then run
+from the lane worktree, so the file checked and the file run could differ. Name a bare
+command on the trusted path or an absolute path instead.
+
+A configured command the launcher cannot find is still refused. For a bare command name
+the message now names the trusted directories and the remedy: for a user-local runtime
+install, link the binary into one of those directories on the host
+(`parallel-headless.md`). For an absolute command, which is used as written and never
+looked up, it names the file. The local overlay still does not accept these keys.

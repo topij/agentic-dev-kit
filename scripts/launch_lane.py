@@ -768,6 +768,19 @@ def _config_for_launcher(
     ):
         raise LaunchError("config parallel.termination_grace_seconds must be positive")
     executable = command[0]
+    # Three shapes of command[0], decided by Path.is_absolute() and dirname():
+    # - absolute: used as written, never looked up;
+    # - bare name (empty dirname): looked up on SAFE_EXECUTABLE_PATH only;
+    # - relative with a directory part (`./claude`, `bin/claude`, `../claude`):
+    #   refused. shutil.which ignores its path for this shape and checks the
+    #   launcher's cwd, while the child execs argv[0] after chdir into the lane
+    #   worktree, so the file checked and the file run could differ, and the
+    #   lane can write the second one.
+    if not Path(executable).is_absolute() and os.path.dirname(executable):
+        raise LaunchError(
+            f"configured {runtime} launcher {executable!r} is a relative path; name "
+            "a bare command on the trusted path or an absolute path"
+        )
     resolved_executable = (
         str(Path(executable).resolve())
         if Path(executable).is_absolute()
@@ -777,14 +790,12 @@ def _config_for_launcher(
         # The refusal names its remedy (#629): a user-local install is linked onto
         # the trusted path by the host, never admitted by widening the path or the
         # gitignored overlay, which would let an unreviewed file pick the binary.
-        # A command with a directory part is used as written and never looked up:
-        # an absolute one above, and a relative one such as `./claude`, which
-        # shutil.which checks against the cwd whenever dirname() is non-empty. That
-        # branch names the file instead of the trusted directories.
-        if Path(executable).is_absolute() or os.path.dirname(executable):
+        # An absolute command is never looked up, so that branch names the file
+        # instead of the trusted directories.
+        if Path(executable).is_absolute():
             raise LaunchError(
                 f"configured {runtime} launcher is unavailable: {executable!r} does "
-                "not exist or is not executable (a command with a path is used as "
+                "not exist or is not executable (an absolute command is used as "
                 "written, not looked up on the trusted path)"
             )
         raise LaunchError(

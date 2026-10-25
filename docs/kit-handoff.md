@@ -233,7 +233,7 @@ neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. Whether #514, #564, 
 shipped profile under `dontAsk` (stamped in `parallel-headless.md`), compounds of profile-allowed
 `git` commands ran and a chain with a refused part was denied whole; the runtime's
 read-only class that #628's 2.1.250 denials concern was not re-probed. #1241 took
-proposal 4, the first-launch blockers, on routes the operator chose on 2026-10-25: a
+the first-launch blockers on routes the operator chose on 2026-10-25: a
 lane is held to its repository by Git common directory, so a linked worktree can issue
 one (#1109); a user-local runtime install is placed on the trusted path by the host,
 and the overlay still refuses `parallel.<runtime>_headless_command` (#629);
