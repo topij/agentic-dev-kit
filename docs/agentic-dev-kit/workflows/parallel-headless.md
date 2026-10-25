@@ -89,8 +89,15 @@ the wrapper refuses a descriptor whose runtime has no configured command.
 python3 <engine-dir>/launch_lane.py \
   --descriptor <session>/launch-descriptor.json \
   --prompt-file <task-prompt> \
-  [--tier <cheap|default|expensive>]
+  [--tier <cheap|default|expensive>] \
+  [--ticket <issue-number>]
 ```
+
+`--ticket` has the launcher read that GitHub issue with the trusted `gh` before launch
+and append it after the task prompt, between `<<<TICKET` and `TICKET>>>` lines. The
+request records `ticket` (`number`, `url`, `block_sha256`). A read that fails, an answer
+that is not that issue, a ticket containing `TICKET>>>`, or a `tracker.backend` other
+than `github-issues` refuses the launch (exit 64) before any attempt record.
 
 `--tier` applies the plan step's effort tier through `models.runtime_mappings`; without
 it the lane inherits the client's compute. [`parallel.md`](parallel.md#per-lane-effort-tier-risk--reasoning-effort--model)
@@ -128,6 +135,17 @@ command **shape** and not of command name: a `for … do cat … done` loop and 
 accepted plain `grep` and `cat` (`#628`), and under `dont-ask` such a denial is
 terminal for the whole lane rather than a round trip. So a lane can read whatever its
 process can read, and the receipt cannot show a read the runtime never asked about.
+
+**Routine lane steps go through forms the profile accepts** (`#1011`, `#1081`, `#628`).
+The lane contract tells every lane to keep each shell call to one simple command, to
+write commit messages and pull-request text to files under the worktree's
+`<state.dirname>/lane/` (which git ignores) and pass them with `git commit -F` and
+`gh pr create --body-file`, to put its verification result in the body before opening,
+to add anything later with `gh pr comment --body-file` rather than editing the pull
+request, and to undo a worktree change with `git restore`. The shipped profile grants
+`Bash(git restore:*)` and `Bash(gh pr comment:*)` for the last two and still grants no
+`gh pr edit`, which could retarget a pull request's base. A lane's ticket arrives
+through `launch_lane.py --ticket`, so the profile grants no tracker read either.
 
 **What the allow list bounds is the lane's task, not its reach** — see the profile
 discussion below, where `#606` states the two directions in which "bounds what a lane

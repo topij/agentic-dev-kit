@@ -46,6 +46,13 @@ Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12
 
 ## 2026-10-25
 
+- **A failed `dev_session.sh new` leaves a session neither `rm` nor `new` clears.**
+  Severity L, kept for accumulation. On 2026-10-25, in a single-branch clone whose
+  fetch refspec lacked `main`, `new live3 --headless` failed at `git worktree add`
+  (`invalid reference: origin/main`) after creating `dev-model-sessions/live3/`.
+  `rm live3 --force` then refused (`no session 'live3' at …/live3/wt`) and `new live3`
+  refused (`session 'live3' already exists`), naming `--force` as the way out. The
+  smoke run moved on under a new scope name; `new --force` was not tried.
 - **Discarding a lane deletes its usage record.** Severity M, input to
   [#1174](https://github.com/topij/agentic-dev-kit/issues/1174). A smoke lane at
   `a2bb8a46` (`new smoke-tier --headless --runtime claude`, then `launch_lane.py

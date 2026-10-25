@@ -188,6 +188,13 @@ deliberately:
    tracker is reachable; if your forge and tracker post a linkback on the lane's PR, that
    comment is an earlier and cheaper place to catch the difference.
 
+   **A headless lane launched with `launch_lane.py --ticket <n>` needs neither step.** The
+   launcher reads the GitHub issue itself before launch, appends it to the prompt in a
+   delimited block, binds its number, URL and digest into the receipt's request, and
+   refuses the launch when the read fails, so such a brief is always ticket-sourced and
+   has no summary-sourced fallback to reconcile (`#271`). It reads only the
+   `github-issues` backend; on another tracker, put the ticket text in the prompt file.
+
    > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
    > follow it for this session — don't infer it from this kickoff, which is
    > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe
