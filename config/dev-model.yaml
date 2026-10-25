@@ -69,7 +69,8 @@ parallel:
   # Keep each command an argv sequence: the wrapper never invokes a shell, so a
   # launcher value cannot smuggle shell syntax into the child. A user-local
   # install (~/.local/bin, for example) is outside the wrapper's trusted lookup
-  # path by design; name the absolute binary here instead.
+  # path by design; link it into a trusted directory on the host rather than
+  # naming a host-specific absolute path here (parallel-headless.md).
   #
   # The three *_transport keys per runtime are DECLARATIONS the wrapper checks,
   # not free choices: it owns the vocabulary and refuses a transport the named

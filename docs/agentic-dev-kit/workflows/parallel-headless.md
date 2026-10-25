@@ -181,8 +181,13 @@ handshake, and `parallel.termination_grace_seconds` bounds graceful cleanup befo
 forced process-group termination, and `parallel.max_resumes` bounds how many times one
 launch resumes a lane that stopped without a terminal state (below). Resolve all through
 the merged config; never restate them in an adapter or fixture. A user-local runtime
-install is outside the wrapper's trusted executable path by design: name the absolute
-binary in the command.
+install, such as `~/.local/bin/claude`, is outside the wrapper's trusted executable
+path by design. The supported route is host placement: link the binary into one of the
+trusted directories (`ln -s ~/.local/bin/claude /opt/homebrew/bin/claude`, for
+example), and the refusal names those directories. Do not name the absolute binary in
+the tracked config, which would hand one host's layout to every checkout, and the
+gitignored local overlay does not accept these keys: a file nobody reviews would then
+choose the binary the wrapper runs.
 
 The wrapper is the supported mechanism because it owns the guarantees a native agent
 dispatch or direct `codex exec` / `claude -p` call does not: worktree `cwd`,
@@ -274,6 +279,16 @@ or missing final text. A parent killed before
 it can finalize leaves the exclusive attempt record, so retry cannot silently reuse
 the descriptor. Issue a fresh lane descriptor only after accounting for the partial
 lane and attempt.
+
+The repository a lane must belong to is named by its Git common directory, not a
+checkout path. The descriptor's repository root is the checkout whose config and engine
+issue and authorize the launch, and the wrapper holds it to its own config root; the
+child then holds its worktree's common directory to that checkout's. The primary
+checkout and every linked worktree of a repository share one common directory, so a
+descriptor issued from a linked cockpit worktree launches as one issued from the primary
+does, and a checkout of any other repository is refused even when its path, branch,
+commits and origin URLs all match. The receipt records the comparison as
+`expected.git_common_dir` and `observed.git_common_dir`.
 
 The rewrite seal detects corruption or replacement of the supplied descriptor while
 kit-owned session evidence remains intact. It is not a security boundary against a

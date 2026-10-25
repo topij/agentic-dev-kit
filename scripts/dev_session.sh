@@ -21,6 +21,9 @@
 #   scripts/dev_session.sh rm <scope> [--force] [--keep-branch]
 #   scripts/dev_session.sh print-contract
 #
+# `<subcommand> --help` (or `-h`) as the first argument prints that subcommand's
+# usage line and exits without touching the repository or the sessions directory.
+#
 # `list --watch [interval]` is a live board: it re-renders every <interval>
 # seconds (default 30) and marks rows whose state changed since the last render
 # (a CI ✓/✗/… flip, a new commit, a DIRTY-count change, a RUN or OVERLAP
@@ -1204,9 +1207,32 @@ cmd_rm() {
     echo "✓ session '$scope' removed."
 }
 
+# Print one subcommand's usage line from the header above. `<sub> --help` stops
+# here, before the subcommand parses anything, so a runtime can read a retained
+# engine's interface without creating a lane (#454). Only a first argument of
+# -h/--help asks for it: later in the line it keeps its old meaning, which for
+# `pr-watch <scope> --help` is pr_watch.py's own help.
+_subcommand_usage() {
+    local sub="$1"
+    case "$sub" in
+        ls) sub=list ;;
+        remove) sub=rm ;;
+    esac
+    sed -n '2,57p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' \
+        | awk -v sub_name="$sub" '$1 == "scripts/dev_session.sh" && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
+}
+
 main() {
     local sub="${1:-}"
     [[ $# -gt 0 ]] && shift || true
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        case "$sub" in
+            new|list|ls|path|pr-watch|merge|rm|remove|print-contract)
+                _subcommand_usage "$sub"
+                return 0
+                ;;
+        esac
+    fi
     case "$sub" in
         new) cmd_new "$@" ;;
         list|ls) cmd_list "$@" ;;
@@ -1216,7 +1242,7 @@ main() {
         rm|remove) cmd_rm "$@" ;;
         print-contract) cmd_print_contract "$@" ;;
         ""|-h|--help|help)
-            sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+            sed -n '2,57p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
             ;;
         *) _die "unknown subcommand '$sub' (try: new | list | path | pr-watch | merge | rm | print-contract)" ;;
     esac

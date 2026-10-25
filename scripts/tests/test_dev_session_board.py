@@ -1,10 +1,11 @@
-"""dev_session.sh: where the sessions container resolves, and the board's RUN and
-OVERLAP columns.
+"""dev_session.sh: where the sessions container resolves, the board's RUN and
+OVERLAP columns, and the read-only help surface.
 
 The sessions container must resolve to the same directory from the primary
 checkout, a linked cockpit worktree and a lane worktree (#479). The board reads
 each lane's headless-wrapper evidence for RUN and its changed files for OVERLAP;
-both are read-only displays.
+both are read-only displays. `<subcommand> --help` prints that subcommand's usage
+and touches nothing (#454).
 """
 
 from __future__ import annotations
@@ -498,3 +499,78 @@ def test_the_watch_board_marks_a_row_whose_run_or_overlap_changed(repo: Repo) ->
     row = frame()
     assert row[:2] == ["*", "alpha"]
     assert row[7] == "beta"
+
+
+HELP_SUBCOMMANDS = {
+    "new": "new",
+    "list": "list",
+    "ls": "list",
+    "path": "path",
+    "pr-watch": "pr-watch",
+    "merge": "merge",
+    "rm": "rm",
+    "remove": "rm",
+    "print-contract": "print-contract",
+}
+
+
+def _repository_snapshot(repo: Repo) -> tuple[str, str, str, list[str]]:
+    return (
+        _git(repo.root, "branch", "--list"),
+        _git(repo.root, "worktree", "list", "--porcelain"),
+        _git(repo.root, "status", "--porcelain", "--ignored"),
+        sorted(path.name for path in repo.root.parent.iterdir()),
+    )
+
+
+@pytest.mark.parametrize("flag", ["--help", "-h"])
+@pytest.mark.parametrize("subcommand", sorted(HELP_SUBCOMMANDS))
+def test_subcommand_help_prints_its_usage_and_changes_nothing(
+    repo: Repo, subcommand: str, flag: str
+) -> None:
+    before = _repository_snapshot(repo)
+
+    result = repo.run(repo.root, subcommand, flag)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.startswith(
+        f"usage: scripts/dev_session.sh {HELP_SUBCOMMANDS[subcommand]}"
+    ), result.stdout
+    assert len(result.stdout.splitlines()) == 1
+    assert _repository_snapshot(repo) == before
+    assert not repo.sessions.exists()
+
+
+def test_new_help_names_every_flag_new_accepts(repo: Repo) -> None:
+    usage = repo.run(repo.root, "new", "--help").stdout
+    source = repo.engine(repo.root).read_text(encoding="utf-8")
+    start = source.index("cmd_new() {")
+    body = source[start : source.index("\n}\n", start)]
+    accepted = {
+        line.strip().split(")")[0]
+        for line in body.splitlines()
+        if line.strip().startswith("--") and ")" in line
+    }
+    assert accepted
+    for flag in accepted:
+        assert f"[{flag}" in usage, flag
+
+
+def test_top_level_help_prints_the_whole_header_and_nothing_past_it(repo: Repo) -> None:
+    # Both help paths print a fixed line range of the header; a header edit that
+    # moves its end must move that range too. The header's help text ends with the
+    # blank comment line after the print-contract paragraph.
+    printed = repo.run(repo.root, "help")
+    assert printed.returncode == 0, printed.stderr
+    header = []
+    for line in repo.engine(repo.root).read_text(encoding="utf-8").splitlines()[1:]:
+        if not line.startswith("#"):
+            break
+        header.append(line)
+    end = next(
+        index
+        for index, line in enumerate(header)
+        if line.rstrip() == "#" and index > 0 and "eyeballing" in header[index - 1]
+    )
+    expected = [line[2:] if line.startswith("# ") else line[1:] for line in header[: end + 1]]
+    assert printed.stdout.splitlines() == expected
