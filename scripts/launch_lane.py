@@ -278,7 +278,8 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
             timeout=TICKET_READ_TIMEOUT_SECONDS,
         )
         ticket = json.loads(result.stdout)
-    except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        # ValueError covers a JSON decode error and a gh answer that is not UTF-8.
         raise LaunchError(f"cannot read ticket #{number} from the tracker") from exc
     if (
         not isinstance(ticket, dict)

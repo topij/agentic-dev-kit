@@ -72,11 +72,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "0a0eedc7bbc61bc94d3c6533601983a9ad20eae17d54b71a6c02943ed607bf6d"
+      "sha256": "cd33ba74a9d1cc2f2a1dd4506e1002e26d1aaca8f0756e396e3fbaa4862f285b"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "85a9f87e5fb0d1e3d292a999d6552ebfd959a808db1b4b3aa9dc4131a067fa8e"
+      "sha256": "5dc49dd1876504abfd7ec579d1c9a4d002bac87061a3bbc7fd858a5bee268184"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -191,7 +191,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "57ffaefcc1d0416596684d88e9f5bf7123ca4cded5ce415984d5823d74180687"
+      "sha256": "6d000da0ed52d6b55c20458b1d6ad8b17d8c31da5596566072564edcbb627af4"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -226,7 +226,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "f8d4a091826e2b292954d1785179971fbf7f8561146f590cc6825aac3f88f899"
+      "sha256": "177e3015bfe177b436e1f89297b585da7580d7ae531816fd18c09800190614d5"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "51a389ebb0d73ab29006b718ee0a322211e9c859740a579d1860e10fe757ea0c"
+      "sha256": "35fcad2aeaa50da92b5e25c188a9ebcbddf3cc9811545aef0a9b226d5cd72c39"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

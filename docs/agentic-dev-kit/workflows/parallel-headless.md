@@ -157,7 +157,9 @@ change with `git restore`. The shipped profile grants `Bash(git restore:*)` for 
 last and grants neither `gh pr edit`, which could retarget a pull request's base, nor
 `gh pr comment`, whose `--delete-last`, `--edit-last` and `--repo` reach other comments
 and repositories. A lane's ticket arrives through `launch_lane.py --ticket`, so the
-profile grants no tracker read either.
+profile grants no tracker read either; probed at 2.1.310 on 2026-10-25 under the lane's
+own flags, `gh issue view` was denied. A probe that drops `--setting-sources ""` loads
+the operator's own settings and can show it allowed, which says nothing about a lane.
 
 **What the allow list bounds is the lane's task, not its reach** — see the profile
 discussion below, where `#606` states the two directions in which "bounds what a lane

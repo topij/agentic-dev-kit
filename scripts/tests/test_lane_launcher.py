@@ -3362,7 +3362,7 @@ def _ticket_repo(
 
 GOOD_TICKET = (
     "args = sys.argv[1:]\n"
-    "open(os.path.join(os.getcwd(), '..', 'gh-call.json'), 'w').write(json.dumps({'args': args, 'cwd': os.getcwd(), 'gh_repo': 'GH_REPO' in os.environ}))\n"
+    "open(os.path.join(os.getcwd(), '..', 'gh-call.json'), 'w').write(json.dumps({'args': args, 'cwd': os.getcwd(), 'gh_repo': 'GH_REPO' in os.environ, 'path': os.environ.get('PATH'), 'devkit': sorted(k for k in os.environ if k.startswith('DEVKIT_'))}))\n"
     "print(json.dumps({'number': int(args[2]), 'title': 'Ship the thing', 'body': 'Do A.\\nThen do B.', 'url': 'https://github.com/o/r/issues/' + args[2]}))\n"
 )
 
@@ -3372,6 +3372,7 @@ def test_a_ticket_launch_appends_the_issue_and_binds_it(
 ) -> None:
     _repo, launcher, sessions, descriptor, prompt, = _ticket_repo(tmp_path, GOOD_TICKET)
     monkeypatch.setenv("GH_REPO", "foreign/repo")
+    monkeypatch.setenv("DEVKIT_FOREIGN_LANE", "must-be-removed")
 
     result = launcher.main(
         ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
@@ -3403,6 +3404,9 @@ def test_a_ticket_launch_appends_the_issue_and_binds_it(
     # Read from the lane worktree, with the caller's repository override removed.
     assert Path(call["cwd"]).resolve() == Path(descriptor["worktree"]).resolve()
     assert call["gh_repo"] is False
+    # gh runs on the trusted path with no lane or kit identity of its own.
+    assert call["path"] == launcher.SAFE_EXECUTABLE_PATH
+    assert call["devkit"] == []
 
 
 def _gh_answer(**fields: object) -> str:
@@ -3483,3 +3487,63 @@ def test_a_ticket_launch_needs_the_tracker_url(
     assert result == 64
     assert "needs tracker.url" in capsys.readouterr().err
     assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+
+@pytest.mark.parametrize(
+    ("gh_script", "url", "error"),
+    [
+        (GOOD_TICKET, "http://github.com/o/r/issues", "needs tracker.url"),
+        (_gh_answer() + "sys.exit(1)\n", "https://github.com/o/r/issues", "cannot read ticket #42"),
+        ("sys.stdout.buffer.write(b'\\xff\\xfe')\n", "https://github.com/o/r/issues", "cannot read ticket #42"),
+    ],
+)
+def test_more_ticket_reads_that_refuse_before_any_attempt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], gh_script: str, url: str, error: str
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, gh_script, url=url)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert error in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+def test_a_ticket_read_that_hangs_is_cut_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(
+        tmp_path, "import time\ntime.sleep(30)\n"
+    )
+    monkeypatch.setattr(launcher, "TICKET_READ_TIMEOUT_SECONDS", 1)
+    started = time.monotonic()
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert time.monotonic() - started < 20
+    assert "cannot read ticket #42" in capsys.readouterr().err
+
+
+def test_a_ticket_read_needs_gh_on_the_trusted_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET)
+    real_which = launcher.shutil.which
+    monkeypatch.setattr(
+        launcher.shutil,
+        "which",
+        lambda name, *args, **kwargs: None if name == "gh" else real_which(name, *args, **kwargs),
+    )
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert "needs gh on the trusted executable path" in capsys.readouterr().err
