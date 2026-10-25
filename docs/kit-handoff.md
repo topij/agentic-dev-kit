@@ -229,12 +229,14 @@ lane messages, granted `git restore` and added `launch_lane.py --ticket`. Operat
 decisions on 2026-10-25 that no single PR holds: a resume continues the bound launch
 with no new descriptor; `parallel.max_resumes` ships as 1; the lane profile grants
 neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. Whether #514, #564, #1011,
-#1081, #628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 under
-the lane's own flags (stamped in `parallel-headless.md`), compounds of profile-allowed
+#1081, #628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 with the
+shipped profile under `dontAsk` (stamped in `parallel-headless.md`), compounds of profile-allowed
 `git` commands ran and a chain with a refused part was denied whole; the runtime's
 read-only class that #628's 2.1.250 denials concern was not re-probed. Proposals not yet
 taken: the first-launch blockers (#1109, #629, #454), a documented cloud-session lane
-route, and standing mandates (#472, after #1174). Until #1109 lands, a live lane check
+route, and standing mandates (#472, which the review sequences after a terminal state and a cost record). Still
+open from #1235: #1173's default tier and a tier carried in the descriptor, and #1174's
+ranking report and per-lane budget. Until #1109 lands, a live lane check
 needs a clone whose primary checkout is the branch under test.
 **Owner:** [#1238](https://github.com/topij/agentic-dev-kit/issues/1238),
 [#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
