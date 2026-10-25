@@ -3044,7 +3044,10 @@ def test_interrupting_a_resume_round_stops_it_and_records_the_round(tmp_path: Pa
         assert len(receipt["terminal"]["resumes"]) == 1, receipt["terminal"]
         [round_one] = receipt["terminal"]["resumes"]
         assert round_one["round"] == 1
-        assert round_one["error"] == "launcher interrupted"
+        # Either documented outcome: the round's termination can itself be refused
+        # (macOS can answer EPERM for a group that is exiting), which leaves the
+        # placeholder rather than the interrupted error.
+        assert round_one["error"] in {"launcher interrupted", "round did not finish"}
         with pytest.raises(ProcessLookupError):
             os.kill(resume_pid, 0)
     finally:
@@ -3228,7 +3231,7 @@ def test_a_signal_while_a_resume_round_is_prepared_starts_no_round(
     real = launcher._claude_session_id
 
     def signal_then_answer(final_bytes: bytes) -> str | None:
-        # Lands after the loop head's check, while the round is being prepared.
+        # Lands while the round is being prepared, before the pre-fork check.
         os.kill(os.getpid(), signal.SIGTERM)
         return real(final_bytes)
 

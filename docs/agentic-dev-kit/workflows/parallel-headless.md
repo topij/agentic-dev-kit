@@ -144,7 +144,7 @@ exists, and a missing key refuses the same way; no config value widens a lane to
 unrestricted. Shared across runtimes, `parallel.descriptor_ttl_seconds` supplies
 descriptor lifetime, `parallel.observation_timeout_seconds` bounds the child observation
 handshake, and `parallel.termination_grace_seconds` bounds graceful cleanup before
-forced process- group termination, and `parallel.max_resumes` bounds how many times one
+forced process-group termination, and `parallel.max_resumes` bounds how many times one
 launch resumes a lane that stopped without a terminal state (below). Resolve all through
 the merged config; never restate them in an adapter or fixture. A user-local runtime
 install is outside the wrapper's trusted executable path by design: name the absolute
@@ -180,25 +180,26 @@ C1), no format characters such as bidi overrides or zero-width spaces, and no se
 other than the ordinary space. The receipt records what it declared as
 `terminal.lane_state`.
 
-A successful run without that line is a nonterminal stop. For a Claude lane the
-wrapper resumes the same runtime session (`--resume <session_id>`) with one fixed
-nudge that restates the terminal rule and names nothing new to do, at most
-`parallel.max_resumes` times. A resume continues the launch the wrapper already
-bound and needs no new descriptor: it runs from the same wrapper process, in the
-worktree, with the scrubbed environment and the launch's lineage nonce, and with the
-launch argv's command, trust step, approval policy, settings profile and compute plus
-only `--resume <session_id>`. The session id must be a canonical UUID. Each round
-reserves its own `launch-final-<id>-resume-<n>.txt`, gets the same process-group and
-lineage cleanup as the launch, and is recorded in `terminal.resumes` with its argv,
-digests, return code, denials, usage and terminal state. A round that a refusal cuts
-short (a termination or evidence read the wrapper refuses) is still recorded, with the
-fields it never reached `null` and `error` set to `round did not finish`; an
-interrupted round's `error` is `launcher interrupted`, unless a refusal also cut it
-short, which leaves `round did not finish`. A signal that lands before a round starts
-stops the loop without starting one, and one that lands after the lane has declared its
-terminal state leaves the receipt `completed`. A failed, denied or
-interrupted round, at launch or on resume, is never resumed. While a round runs, the
-receipt stays `observed`, so the board shows `running`.
+A successful run without that line is a nonterminal stop. For a Claude lane the wrapper
+resumes the same runtime session (`--resume <session_id>`) with one fixed nudge that
+restates the terminal rule and names nothing new to do, at most `parallel.max_resumes`
+times. A resume continues the launch the wrapper already bound and needs no new
+descriptor: it runs from the same wrapper process, in the worktree, with the scrubbed
+environment and the launch's lineage nonce, and with the launch argv's command, trust
+step, approval policy, settings profile and compute plus only `--resume <session_id>`.
+The session id must be a canonical UUID. Each round reserves its own
+`launch-final-<id>-resume-<n>.txt`, gets the same process-group and lineage cleanup as
+the launch, and is recorded in `terminal.resumes` with its argv, digests, return code,
+denials, usage and terminal state. A round that a refusal cuts short (a termination or
+evidence read the wrapper refuses) is still recorded, with the fields it never reached
+`null` and `error` set to `round did not finish`; an interrupted round's `error` is
+`launcher interrupted`, unless a refusal also cut it short, which leaves
+`round did not finish`. A signal that lands before a round starts stops the loop without
+starting one. A signal the wrapper records after it has read a declared terminal state
+leaves the receipt `completed`; one recorded before that read, at launch or while a
+resume round runs, records the lane `interrupted`. A failed, denied or interrupted
+round, at launch or on resume, is never resumed. While a round runs, the receipt stays
+`observed`, so the board shows `running`.
 
 Observed live with Claude Code 2.1.310 on 2026-10-25, from a clone whose primary
 checkout was a commit since rebased, with the same tree, as `c60680a4`: a `--tier cheap`
