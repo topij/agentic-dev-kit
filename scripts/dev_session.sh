@@ -135,7 +135,7 @@ _lane_contract() {
 LANE CONTRACT (binding):
 - Actively poll your PR's CI at a bounded cadence (e.g. `gh pr checks <PR#>` every few minutes, capped around 30 min) until it is fully green. Never stop to idly wait on a "monitor", a timer, or someone else's watcher — you are the one polling.
 - Your run ends ONLY at the terminal state. Never stop early to wait for a watcher, monitor, or timer of any kind — if you need to wait on anything, poll it yourself with a bounded until-loop.
-- End your FINAL TEXT with exactly one plain-text line naming that terminal state, with nothing after it: `LANE-TERMINAL: pr-ready #<PR number>` (your PR is open, ready, and its CI is green), `LANE-TERMINAL: no-pr <reason>` (the task is finished and needed no pull request), or `LANE-TERMINAL: blocked <reason>` (you cannot go on without the cockpit). Write it without backticks. A final text without that line is read as a stop before the end, and the launcher resumes you.
+- End your FINAL TEXT with exactly one plain-text line naming that terminal state, with nothing after it: `LANE-TERMINAL: pr-ready #<PR number>` (your PR is open, ready, and its CI is green), `LANE-TERMINAL: no-pr <reason>` (the task is finished and needed no pull request), or `LANE-TERMINAL: blocked <reason>` (you cannot go on without the cockpit). Write it without backticks. A final text without that line is read as a stop before the end: the lane launcher may resume you, or record the lane stalled.
 - Open completed work ready for review by default. Draft is ONLY for a material unfinished-work window that must already exist on the remote pull request because required forge-hosted validation cannot run before the pull request exists. If the branch can be completed and validated locally first, finish it and open ready.
 - Immediately after a ready creation, run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-ready` before the watch-and-fix loop so a silently drifted draft bit cannot starve review.
 - If that exception applies, after `gh pr create --draft` run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-draft`, finish the required remote work and body, then run `gh pr ready <pr>` and `--assert-ready` before the watch-and-fix loop. A finished PR left in draft is a PR that never gets reviewed.
@@ -519,7 +519,7 @@ PY
 # `starting` and one whose receipt has status `observed` is `running`, each
 # while the recorded parent pid is alive; either is `lost` once that pid is
 # gone (the wrapper died before writing a terminal receipt); any other receipt status
-# (`completed`, `failed`, `interrupted`, `rejected`) is shown as written. An
+# (`completed`, `stalled`, `failed`, `interrupted`, `rejected`) is shown as written. An
 # unreadable or malformed file, or a recorded pid that names no single
 # process, is `?`, never a guess. `running` is a display
 # hint, not authority: a recycled pid can keep it on after the wrapper died.

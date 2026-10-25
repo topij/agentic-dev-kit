@@ -14,7 +14,7 @@ same session up to `parallel.max_resumes` times. A lane that still names no term
 state, or cannot be resumed (any Codex lane, `max_resumes: 0`, a result with no
 canonical session id), is recorded with the new receipt status `stalled`. A task prompt
 that tells the lane to reply with an exact text must leave room for the closing
-`LANE-TERMINAL:` line, or every run of it stalls.
+`LANE-TERMINAL:` line; otherwise each run costs a resume round and can stall.
 
 ADDED (engine CLI surface): `launch_lane.py` exits 75 for a `stalled` lane. A caller
 that treated every nonzero exit as a failure now also sees a stall there; one that

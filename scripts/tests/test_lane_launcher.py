@@ -160,6 +160,7 @@ def _fake_claude(
     terminal: str = "line",
     session_id: str = FAKE_SESSION_ID,
     resume: str = "ok",
+    rewrite_profile: bool = False,
 ) -> None:
     """A stand-in for `claude -p --output-format json`: prompt on stdin, one JSON
     result object on stdout. `output` selects a hostile stdout shape.
@@ -168,8 +169,10 @@ def _fake_claude(
     (`line`), never (`none`), or only in a `--resume` round (`after-resume`).
     `resume` is what a `--resume` round does instead of answering normally: exit 3
     (`exit`), report a permission denial (`denied`), record its pid and hang
-    (`sleep`), or leave a SIGTERM-ignoring child in its process group
-    (`descendant`)."""
+    (`sleep`), leave a SIGTERM-ignoring child in its process group
+    (`descendant`) or in a new session (`detached`), print a non-JSON line
+    (`garbage`), or answer under a fresh session id (`fresh-session`).
+    `rewrite_profile` makes the launch round overwrite the `--settings` file."""
     sleep_line = "time.sleep(60)" if sleep else ""
     corrupt_line = (
         "[p.write_text('{}\\n', encoding='utf-8') for p in Path.cwd().parent.glob('launch-receipt-*.json')]"
@@ -209,6 +212,15 @@ def _fake_claude(
             "  Path.cwd().parent.joinpath('resume.pid').write_text(str(os.getpid()), encoding='utf-8')\n"
             "  time.sleep(60)"
         ),
+        "detached": (
+            "if resuming:\n"
+            "  child = subprocess.Popen([sys.executable, '-c', "
+            "'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'], "
+            "start_new_session=True)\n"
+            "  Path.cwd().parent.joinpath('resume-detached.pid').write_text(str(child.pid), encoding='utf-8')"
+        ),
+        "garbage": "if resuming: sys.stdout.write('not json\\n'); sys.stdout.flush(); sys.exit(0)",
+        "fresh-session": "if resuming: good['session_id'] = str(uuid.uuid4())",
         "descendant": (
             "if resuming:\n"
             "  child = subprocess.Popen([sys.executable, '-c', "
@@ -218,10 +230,18 @@ def _fake_claude(
     }[resume]
     path.write_text(
         "#!/usr/bin/env python3\n"
-        "import hashlib, json, os, signal, subprocess, sys, time\n"
+        "import hashlib, json, os, signal, subprocess, sys, time, uuid\n"
         "from pathlib import Path\n"
         "args = sys.argv[1:]\n"
         "resuming = '--resume' in args\n"
+        + (
+            "if not resuming:\n"
+            "  Path(args[args.index('--settings') + 1]).write_text("
+            "'{\"permissions\": {\"allow\": [\"Bash(git status:*)\"]}}\\n', encoding='utf-8')\n"
+            if rewrite_profile
+            else ""
+        )
+        + 
         f"{prompt_line}\n"
         "result = {\n"
         "  'cwd': str(Path.cwd().resolve()),\n"
@@ -233,6 +253,7 @@ def _fake_claude(
         "  'contract_first': prompt.startswith('LANE CONTRACT (binding):'),\n"
         "  'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest(),\n"
         "  'lineage_nonce_present': 'ADK_LAUNCH_PROCESS_NONCE' in os.environ,\n"
+        "  'lineage_nonce': os.environ.get('ADK_LAUNCH_PROCESS_NONCE'),\n"
         "  'pid': os.getpid(),\n"
         "  'argv': args,\n"
         "}\n"
@@ -279,6 +300,7 @@ def _install_repo(
     session_id: str = FAKE_SESSION_ID,
     resume: str = "ok",
     max_resumes: str | None = "1",
+    rewrite_profile: bool = False,
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -323,6 +345,7 @@ def _install_repo(
         terminal=terminal,
         session_id=session_id,
         resume=resume,
+        rewrite_profile=rewrite_profile,
     )
     (repo / "config").mkdir()
     (repo / "config" / "dev-model.yaml").write_text(
@@ -2770,6 +2793,8 @@ def test_terminal_line_is_read_from_the_last_non_blank_line(
         "LANE-TERMINAL:  no-pr two spaces",
         "lane-terminal: no-pr lower case",
         "LANE-TERMINAL: no-pr " + "x" * 201,
+        "LANE-TERMINAL: no-pr bell\x07in reason",
+        "LANE-TERMINAL: blocked \x1b[31mred",
     ],
 )
 def test_anything_else_is_no_terminal_state(text: str) -> None:
@@ -2875,6 +2900,15 @@ def test_a_nonterminal_claude_stop_is_resumed_once_under_the_bound_policy(
     assert seen["cwd"] == str(Path(descriptor["worktree"]).resolve())
     assert seen["env"] == descriptor["env"]
     assert seen["lineage_nonce_present"] is True
+    launch_seen = _lane_json(
+        json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())["result"]
+    )
+    # The same lineage nonce as the launch round, so the launch's lineage
+    # cleanup reaches the resume round's descendants.
+    assert seen["lineage_nonce"] == launch_seen["lineage_nonce"]
+    assert hashlib.sha256(seen["lineage_nonce"].encode()).hexdigest() == (
+        receipt["request"]["process_nonce_sha256"]
+    )
     assert seen["gh_repo_present"] is False
     assert seen["prompt_sha256"] == round_one["prompt_sha256"]
     assert seen["contract_first"] is False
@@ -3046,3 +3080,100 @@ def test_max_resumes_must_be_a_non_negative_integer(tmp_path: Path, value: str |
     assert result.returncode == 64
     assert "parallel.max_resumes must be a non-negative integer" in result.stderr
     assert not (sessions / "probe" / "launch-attempt.json").exists()
+
+
+@pytest.mark.evidence
+def test_a_profile_rewritten_during_the_launch_round_refuses_the_resume(
+    tmp_path: Path,
+) -> None:
+    repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", rewrite_profile=True
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "settings profile changed after launch" in receipt["terminal"]["error"]
+    assert receipt["terminal"]["resumes"] == []
+    profile = repo / "config" / "claude-lane-settings.json"
+    assert hashlib.sha256(profile.read_bytes()).hexdigest() != (
+        receipt["request"]["approval_policy"]["settings_profile_sha256"]
+    )
+
+
+@pytest.mark.evidence
+def test_a_resume_round_with_malformed_output_fails_the_lane(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="garbage"
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "not one complete JSON object" in receipt["terminal"]["error"]
+    [round_one] = receipt["terminal"]["resumes"]
+    assert round_one["returncode"] == 0
+
+
+@pytest.mark.evidence
+def test_each_resume_round_resumes_the_session_the_previous_round_reported(
+    tmp_path: Path,
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="fresh-session", max_resumes="2"
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 75, result.stderr
+    first, second = _receipt(sessions, descriptor)["terminal"]["resumes"]
+    assert first["session_id"] == FAKE_SESSION_ID
+    reported = json.loads(Path(first["final_message_path"]).read_bytes())["session_id"]
+    assert reported != FAKE_SESSION_ID
+    assert second["session_id"] == reported
+    assert second["argv"][second["argv"].index("--resume") + 1] == reported
+
+
+@pytest.mark.evidence
+def test_a_resume_round_cannot_leave_a_detached_descendant_behind(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="detached"
+    )
+    pid_path = sessions / "probe" / "resume-detached.pid"
+    detached_pid: int | None = None
+    try:
+        # Output goes to files, not pipes: the detached child inherits stderr, and
+        # a pipe would hold the run open until the child exited on its own,
+        # hiding whether the launcher killed it.
+        with (tmp_path / "out").open("w") as out, (tmp_path / "err").open("w") as err:
+            started = time.monotonic()
+            returncode = subprocess.run(
+                [
+                    sys.executable,
+                    str(engine / "launch_lane.py"),
+                    "--descriptor",
+                    str(descriptor["descriptor_path"]),
+                    "--prompt-file",
+                    str(prompt),
+                ],
+                env=env,
+                stdout=out,
+                stderr=err,
+                check=False,
+            ).returncode
+        assert returncode == 70, (tmp_path / "err").read_text()
+        assert time.monotonic() - started < 30
+        detached_pid = int(pid_path.read_text(encoding="utf-8"))
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "detached launch-lineage" in receipt["terminal"]["error"]
+        with pytest.raises(ProcessLookupError):
+            os.kill(detached_pid, 0)
+    finally:
+        if detached_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(detached_pid, signal.SIGKILL)

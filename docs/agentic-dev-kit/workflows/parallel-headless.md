@@ -172,7 +172,9 @@ launcher checks for the end instead of trusting the instruction. The contract as
 the lane to end its final text with one plain-text line: `LANE-TERMINAL: pr-ready
 #<n>`, `LANE-TERMINAL: no-pr <reason>` or `LANE-TERMINAL: blocked <reason>`. The
 wrapper reads only the last non-blank line and needs the whole line to match, so a
-line quoted earlier, wrapped in backticks or followed by prose is no terminal state.
+line quoted earlier, wrapped in backticks or followed by more lines is no terminal
+state. For `no-pr` and `blocked` the rest of the line is the reason, up to 200
+characters and with no control characters.
 The receipt records what it declared as `terminal.lane_state`.
 
 A successful run without that line is a nonterminal stop. For a Claude lane the
@@ -188,16 +190,22 @@ lineage cleanup as the launch, and is recorded in `terminal.resumes` with its ar
 digests, return code, denials, usage and terminal state. A failed, denied or
 interrupted round, at launch or on resume, is never resumed. While a round runs, the
 receipt stays `observed`, so the board shows `running`.
-Observed live with Claude Code 2.1.310 on 2026-10-25, launcher at `52c26401`: a
-`--tier cheap` lane told to answer only `READY` ended its launch round without the line,
-was resumed in the same session under `dontAsk` and the lane profile, closed with a
-`no-pr` line, and was recorded `completed` with one entry in `terminal.resumes`.
 
 A lane that still names no terminal state is recorded `stalled` and the wrapper exits
 75; one that cannot be resumed is recorded `stalled` at once. That covers a Codex lane,
 whose final-message file carries no session id, `max_resumes: 0`, and a result with no
 canonical session id. Exit statuses: 0 `completed`, 75 `stalled`, 70 `failed`, 64
 refused before launch, 128+N interrupted by signal N.
+
+`completed` and exit 0 cover every declared terminal state, `blocked` included: a
+caller that must tell a blocked lane from a finished one reads `terminal.lane_state`.
+
+Before each resume round the wrapper re-reads the settings profile and refuses, failing
+the lane, unless its digest still equals the request's `settings_profile_sha256`: the
+launch round can write files, and the profile is one. The executable path and the
+worktree, the other launch-time values a resume reuses, are not re-checked; the launch
+round execs by path in the same way. The wrapper checks that the lane *declared* an end,
+not that a `pr-ready #<n>` names a real, ready pull request.
 
 The nudge does not restate the lane's PR or CI state; the lane reads that itself.
 `terminal.usage` covers the launch round only, so a lane's total is it plus every

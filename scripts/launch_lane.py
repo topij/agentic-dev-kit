@@ -175,25 +175,27 @@ PERMISSION_RULE_LISTS = ("allow", "deny", "ask")
 # (`_lane_contract` in dev_session.sh) asks every lane to end its final text with
 # exactly one of these lines. Only the last non-blank line is read, so a line the
 # lane quotes earlier in its text never counts, and a match is the whole line: a
-# line wrapped in backticks or followed by prose is no terminal state. A
-# successful run whose final text has none is a nonterminal stop: the wrapper
+# line wrapped in backticks, or one followed by more lines, is no terminal state.
+# For `no-pr` and `blocked` the rest of the line is the reason, which may not carry
+# control characters. A successful run whose final text has none is a nonterminal stop: the wrapper
 # resumes it (Claude) or records it `stalled`.
 LANE_TERMINAL_LINE = re.compile(
     r"LANE-TERMINAL: (?:pr-ready #(?P<pr>[1-9][0-9]{0,9})"
-    r"|(?P<state>no-pr|blocked) (?P<reason>\S.{0,199}))"
+    r"|(?P<state>no-pr|blocked) (?P<reason>[^\s\x00-\x1f\x7f][^\x00-\x1f\x7f]{0,199}))"
 )
 # The one message a resume round sends. Fixed text, so a resume carries no
 # authority the original prompt did not: it names nothing new to do and restates
 # only the contract's own terminal rule.
 RESUME_NUDGE = (
-    "Your previous turn ended without a terminal state, so the lane launcher has "
-    "resumed you. You are not finished. Continue the task from where you stopped. "
-    "Do not wait for a watcher, monitor, notification or background task: run what "
+    "Your previous turn ended without a terminal-state line, so the lane launcher "
+    "has resumed you. If the task is not finished, continue it from where you "
+    "stopped. Do not wait for a watcher, monitor, notification or background task: run what "
     "you need in the foreground, and poll anything you are waiting on yourself with "
     "a bounded loop. When you reach a terminal state, end your final text with "
     "exactly one plain-text line and nothing after it: `LANE-TERMINAL: pr-ready "
     "#<PR number>`, `LANE-TERMINAL: no-pr <reason>` or `LANE-TERMINAL: blocked "
-    "<reason>`, written without the backticks.\n"
+    "<reason>`, written without the backticks. If you had already reached a "
+    "terminal state, do not repeat any step: end your reply with that line now.\n"
 )
 # Exit status of a run that ended without a terminal state (EX_TEMPFAIL): distinct
 # from success (0), a launcher refusal (64) and a failed lane (70).
@@ -602,6 +604,27 @@ def _compute_for_runtime(runtime: str, config: dict[str, Any], tier: str | None)
         argv += ["-m", model] if model else []
         argv += ["-c", f"model_reasoning_effort={effort}"] if effort else []
     return {"tier": tier, "model": model, "effort": effort, "argv": argv}
+
+
+def _require_bound_settings_profile(profile: RuntimeProfile) -> None:
+    """Refuse a resume when the settings profile is not the one the launch bound.
+
+    The launch round is a process that can write files, the profile among them,
+    and a resume passes the same `--settings <path>`. Re-reading it here keeps a
+    resume round under the policy the request's digest names. The executable
+    path and the worktree are the other launch-time values a resume reuses; they
+    are not re-checked (the launch round execs by path too), which
+    parallel-headless.md records as a limit.
+    """
+    path = profile.approval["settings_profile_path"]
+    if path is None:
+        return
+    raw = _read_stable_regular_file(Path(path))
+    if _sha256(raw) != profile.approval["settings_profile_sha256"]:
+        raise LaunchError(
+            "lane settings profile changed after launch; refusing to resume under a "
+            "policy the launch did not bind"
+        )
 
 
 def _max_resumes(config: dict[str, Any]) -> int:
@@ -1892,6 +1915,7 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
                     "carries no resumable session id"
                 )
                 break
+            _require_bound_settings_profile(profile)
             round_number = len(resumes) + 1
             round_final = session_dir / f"launch-final-{descriptor_id}-resume-{round_number}.txt"
             _reserve_empty_regular_file(round_final)

@@ -293,6 +293,9 @@ runtime's full model ids and can list an auxiliary model beside the main one, so
 it beside `request.compute.model` (often an alias such as `opus`) rather than
 expecting the two to match exactly. A
 Codex lane records `usage: null`, because its final-text transport carries no figures.
+`terminal.usage` covers the launch round only: a resumed lane's total adds each
+`terminal.resumes[].usage` ([`parallel-headless.md`](parallel-headless.md),
+*Terminal state and bounded resume*).
 
 ### Joint wrap-up — the cockpit owns the handoff
 
