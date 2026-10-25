@@ -191,6 +191,12 @@ digests, return code, denials, usage and terminal state. A failed, denied or
 interrupted round, at launch or on resume, is never resumed. While a round runs, the
 receipt stays `observed`, so the board shows `running`.
 
+Observed live with Claude Code 2.1.310 on 2026-10-25, launcher at `ed46e646`, from a
+clone whose primary checkout was that commit: a `--tier cheap` lane told to answer only
+`READY` ended its launch round without the line, was resumed in the same session under
+`dontAsk` and the lane profile, ended with a `no-pr` line, and was recorded `completed`
+with one entry in `terminal.resumes`.
+
 A lane that still names no terminal state is recorded `stalled` and the wrapper exits
 75; one that cannot be resumed is recorded `stalled` at once. That covers a Codex lane,
 whose final-message file carries no session id, `max_resumes: 0`, and a result with no
