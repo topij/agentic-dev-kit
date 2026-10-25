@@ -44,6 +44,23 @@ Archived without filing: TRI-13, the `2026-10-11` entry `Each #1063 lens pass fo
 
 Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12 TRI-13`, `park TRI-04 TRI-06 TRI-07 TRI-09 TRI-10 TRI-11 TRI-14`. Approver: `topij`.
 
+## 2026-10-25
+
+- **Discarding a lane deletes its usage record.** Severity M, input to
+  [#1174](https://github.com/topij/agentic-dev-kit/issues/1174). A smoke lane at
+  `a2bb8a46` (`new smoke-tier --headless --runtime claude`, then `launch_lane.py
+  --tier cheap`) wrote `terminal.usage` into
+  `<session>/launch-receipt-<descriptor_id>.json`. `dev_session.sh rm smoke-tier` then
+  removed the whole session directory, and the receipt with it; no other copy of
+  those figures exists. #1174's ranking report reads "recent lanes" from recorded rows,
+  so it needs a home for usage that outlives `rm`. Without one, it sees only the lanes
+  that have not yet been cleaned up.
+- **A fast lane did not show RUN `starting` in one smoke run.** Severity L, kept for
+  accumulation. In the same smoke run, a one-second poll of `dev_session.sh list` showed
+  `running` at its first sample, then `completed` about eight seconds later. `starting`
+  is real but lasts under a poll interval here, so a board watch cannot be used to
+  confirm it.
+
 ## 2026-10-21
 
 - **Review fixtures initially escaped their allocated round through pytest defaults.**

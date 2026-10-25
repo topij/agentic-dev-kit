@@ -196,6 +196,14 @@ def test_run_reports_the_headless_wrappers_own_evidence(repo: Repo) -> None:
     }
 
 
+def test_a_stalled_lane_is_shown_as_stalled(repo: Repo) -> None:
+    # launch_lane.py's status for a lane that ended without naming a terminal state.
+    _new(repo, "stuck")
+    _attempt(repo.sessions / "stuck", pid=_dead_pid())
+    _receipt(repo.sessions / "stuck", "stalled")
+    assert _board(repo)["stuck"][5] == "stalled"
+
+
 def test_a_receipt_status_is_shown_only_when_it_is_a_plain_word(repo: Repo) -> None:
     _new(repo, "odd")
     _attempt(repo.sessions / "odd", pid=_dead_pid())

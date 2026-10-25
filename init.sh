@@ -1074,6 +1074,7 @@ migrate_parallel_schema() {
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
   termination_grace_seconds: 5
+  max_resumes: 1
 '
     echo "added parallel launcher config to config/dev-model.yaml"
   fi
@@ -1091,6 +1092,7 @@ migrate_parallel_schema() {
   ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
   ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
   ensure_parallel_key termination_grace_seconds '  termination_grace_seconds: 5'
+  ensure_parallel_key max_resumes '  max_resumes: 1'
 }
 
 # The Claude lane settings profile — the ONE settings source an unattended Claude

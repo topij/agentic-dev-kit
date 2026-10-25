@@ -1276,7 +1276,8 @@ elif "LANE-" in prompt:
     hang("lane")
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
     token = "" if os.environ.get("FAKE_CODEX_LANE_NO_TOKEN") == "1" else re.search(r"LANE-[0-9a-f]+", prompt).group(0)
-    final = f"{{token}} {{branch}}".strip()
+    # The smoke prompt asks for the token line, then the closing terminal-state line.
+    final = f"{{token}} {{branch}}".strip() + "\nLANE-TERMINAL: no-pr read-only smoke task"
 else:
     hang("lens")
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=cwd, capture_output=True, text=True).stdout.strip()
@@ -1447,7 +1448,7 @@ elif "-----BEGIN LENS PROMPT-----" in prompt:
 elif "LANE-" in prompt:
     branch = subprocess.run(["git", "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True).stdout.strip()
     token = "" if os.environ.get("FAKE_CLAUDE_LANE_NO_TOKEN") == "1" else re.search(r"LANE-[0-9a-f]+", prompt).group(0)
-    result = f"{{token}} {{branch}}".strip()
+    result = f"{{token}} {{branch}}".strip() + "\nLANE-TERMINAL: no-pr read-only smoke task"
 else:
     result = f"Reviewed {{head}}."
 transcript.append({{"type": "assistant", "version": VERSION, "cwd": str(cwd), "effort": effort, "message": {{"model": model_id}}}})

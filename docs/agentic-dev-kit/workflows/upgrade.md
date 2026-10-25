@@ -576,13 +576,15 @@ done
 
 The refreshed migrator also owns the additive `parallel:` launcher block. It preserves
 each existing flat value and adds only missing `codex_headless_command`,
-`descriptor_ttl_seconds`, `observation_timeout_seconds`, and
-`termination_grace_seconds` keys, the per-runtime `*_transport` declarations, and the
+`descriptor_ttl_seconds`, `observation_timeout_seconds`, `termination_grace_seconds`,
+and `max_resumes` keys, the per-runtime `*_transport` declarations, and the
 per-runtime approval policy — `codex_approval_policy`, `claude_approval_policy`, and
 `claude_settings_profile`. A same-named key nested under another child is not a
 flat launcher key and does not suppress the shipped default. The command is an argv
 sequence consumed without a shell; the lifetime, observation bound, and termination
-grace must remain positive integers for descriptor issuance and launch; each
+grace must remain positive integers for descriptor issuance and launch;
+`max_resumes` must remain a non-negative integer, where 0 records a stall without
+resuming; each
 approval policy must stay inside the wrapper's vocabulary (Codex `read-only` /
 `workspace-write`, Claude `dont-ask` / `accept-edits`) — an unrestricted spelling
 refuses at launch. The same run seeds the Claude lane settings profile at the path
