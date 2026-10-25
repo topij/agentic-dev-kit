@@ -2000,8 +2000,6 @@ def launch(
         # failed, denied or interrupted round is never resumed — a stall is a stop
         # before the end, not a failure.
         while lane_state is None:
-            if caught:
-                break
             if len(resumes) >= profile.max_resumes:
                 stall_reason = (
                     f"final text named no terminal state after {len(resumes)} "
@@ -2124,7 +2122,9 @@ def launch(
                 )
                 return 128 + caught[0] if caught else 70
             last_final_bytes = round_bytes
-        if caught:
+        # A signal recorded once the lane has declared its terminal state does not
+        # undo that declaration: the work is done and the receipt says so.
+        if caught and lane_state is None:
             _terminal_receipt(
                 receipt_path,
                 attempt,

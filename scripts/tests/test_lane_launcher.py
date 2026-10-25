@@ -3047,6 +3047,7 @@ def test_interrupting_a_resume_round_stops_it_and_records_the_round(tmp_path: Pa
         assert len(receipt["terminal"]["resumes"]) == 1, receipt["terminal"]
         [round_one] = receipt["terminal"]["resumes"]
         assert round_one["round"] == 1
+        assert round_one["error"] == "launcher interrupted"
         with pytest.raises(ProcessLookupError):
             os.kill(resume_pid, 0)
     finally:
@@ -3245,6 +3246,43 @@ def test_a_signal_while_a_resume_round_is_prepared_starts_no_round(
     assert receipt["status"] == "interrupted"
     assert receipt["terminal"]["resumes"] == []
     assert not (sessions / "probe" / "resume.pid").exists()
+
+
+SPLITLINES_SEPARATORS = ["\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]
+
+
+@pytest.mark.parametrize("separator", SPLITLINES_SEPARATORS)
+def test_every_splitlines_separator_ends_a_line(separator: str) -> None:
+    launcher = _load_launcher()
+    line = "LANE-TERMINAL: pr-ready #42"
+    assert launcher._lane_terminal_state(("text" + separator + line).encode())["pr"] == 42
+    assert launcher._lane_terminal_state((line + separator + "more").encode()) is None
+
+
+def test_a_signal_after_the_lane_declared_its_terminal_state_keeps_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path, runtime="claude")
+    launcher = _load_launcher(engine)
+    real = launcher._lane_terminal_state
+
+    def declare_then_signal(final_text: bytes | None) -> dict[str, object] | None:
+        state = real(final_text)
+        os.kill(os.getpid(), signal.SIGTERM)
+        return state
+
+    monkeypatch.setattr(launcher, "_lane_terminal_state", declare_then_signal)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt)]
+    )
+
+    assert result == 0
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["terminal"]["lane_state"]["state"] == "no-pr"
+
+
 # ---- routine lane steps and the launcher-read ticket (#1011, #1081, #628, #271) ----
 
 
