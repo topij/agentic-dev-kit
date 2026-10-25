@@ -301,6 +301,7 @@ def _install_repo(
     resume: str = "ok",
     max_resumes: str | None = "1",
     rewrite_profile: bool = False,
+    extra_config: str = "",
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -376,7 +377,8 @@ def _install_repo(
         + "vcs:\n"
         "  protected_branch: trunk\n"
         "  dev_branch_prefix: lane\n"
-        + runtime_mappings,
+        + runtime_mappings
+        + extra_config,
         encoding="utf-8",
     )
     profile_path = repo / "config" / "claude-lane-settings.json"
@@ -2270,6 +2272,7 @@ def test_profile_rewritten_after_the_parent_read_is_refused_by_the_child(
                 "task_sha256": "t",
                 "combined_prompt_sha256": "c",
                 "authority_fd": read_end,
+                "ticket": None,
             },
         )()
 
@@ -3281,3 +3284,304 @@ def test_a_signal_after_the_lane_declared_its_terminal_state_keeps_it(
     receipt = _receipt(sessions, descriptor)
     assert receipt["status"] == "completed"
     assert receipt["terminal"]["lane_state"]["state"] == "no-pr"
+
+
+# ---- routine lane steps and the launcher-read ticket (#1011, #1081, #628, #271) ----
+
+
+def _bash_allow_prefixes(entries: list[str]) -> list[str]:
+    return [
+        entry[len("Bash(") : -len(":*)")]
+        for entry in entries
+        if entry.startswith("Bash(") and entry.endswith(":*)")
+    ]
+
+
+@pytest.mark.kit_repo_only("config/claude-lane-settings.json")
+def test_every_command_the_contract_prescribes_is_allowed_by_the_shipped_profile() -> None:
+    # Under dont-ask a prescribed command the profile does not allow is a denial,
+    # and a denial ends the lane: the contract and the profile must agree.
+    import re as _re
+
+    contract = subprocess.run(
+        ["bash", str(ENGINE_DIR / "dev_session.sh"), "print-contract"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    # The contract names `gh pr edit` and `gh pr comment` only to say the profile
+    # grants neither; those bare names are not prescribed commands.
+    not_granted = {"gh pr edit", "gh pr comment"}
+    commands = [
+        span
+        for span in _re.findall(r"`([^`]+)`", contract)
+        if span.split(" ", 1)[0] in {"git", "gh", "uv"} and " " in span and span not in not_granted
+    ]
+    assert not_granted <= set(_re.findall(r"`([^`]+)`", contract))
+    shipped = json.loads((REPO_ROOT / "config" / "claude-lane-settings.json").read_text())
+    allowed = _bash_allow_prefixes(shipped["permissions"]["allow"])
+    denied = _bash_allow_prefixes(shipped["permissions"]["deny"])
+    for expected in (
+        "git commit -F",
+        "gh pr create --body-file",
+        "git restore",
+    ):
+        assert any(command.startswith(expected) for command in commands), expected
+    for command in commands:
+        assert any(command.startswith(prefix) for prefix in allowed), command
+        assert not any(command.startswith(prefix) for prefix in denied), command
+    # Neither PR-mutating command is granted: `gh pr edit` can retarget a base, and
+    # `gh pr comment` carries --delete-last, --edit-last and --repo.
+    assert not any(prefix.startswith(("gh pr edit", "gh pr comment")) for prefix in allowed)
+    assert not any(command.startswith(("gh pr edit", "gh pr comment")) for command in commands)
+
+
+@pytest.mark.kit_repo_only("config/claude-lane-settings.json")
+def test_init_seeds_the_shipped_lane_profile() -> None:
+    init = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    seeded = init.split("cat > \"$_profile\" <<'PROFILE'\n", 1)[1].split("\nPROFILE\n", 1)[0]
+    assert json.loads(seeded) == json.loads(
+        (REPO_ROOT / "config" / "claude-lane-settings.json").read_text(encoding="utf-8")
+    )
+
+
+def _ticket_repo(
+    tmp_path: Path,
+    gh_script: str,
+    *,
+    backend: str = "github-issues",
+    url: str | None = "https://github.com/o/r/issues",
+):
+    tracker = f"tracker:\n  backend: {backend}\n" + (f"  url: {url}\n" if url is not None else "")
+    repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", extra_config=tracker
+    )
+    trusted_bin = tmp_path / "trusted-bin"
+    trusted_bin.mkdir()
+    gh = trusted_bin / "gh"
+    gh.write_text("#!/usr/bin/env python3\nimport json, os, sys\n" + gh_script, encoding="utf-8")
+    gh.chmod(0o755)
+    launcher = _load_launcher(engine)
+    launcher.SAFE_EXECUTABLE_PATH = os.pathsep.join((str(trusted_bin), launcher.SAFE_EXECUTABLE_PATH))
+    return repo, launcher, sessions, descriptor, prompt
+
+
+GOOD_TICKET = (
+    "args = sys.argv[1:]\n"
+    "open(os.path.join(os.getcwd(), '..', 'gh-call.json'), 'w').write(json.dumps({'args': args, 'cwd': os.getcwd(), 'gh_repo': 'GH_REPO' in os.environ, 'path': os.environ.get('PATH'), 'devkit': sorted(k for k in os.environ if k.startswith('DEVKIT_'))}))\n"
+    "print(json.dumps({'number': int(args[2]), 'title': 'Ship the thing', 'body': 'Do A.\\nThen do B.', 'url': 'https://github.com/o/r/issues/' + args[2]}))\n"
+)
+
+
+def test_a_ticket_launch_appends_the_issue_and_binds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, launcher, sessions, descriptor, prompt, = _ticket_repo(tmp_path, GOOD_TICKET)
+    monkeypatch.setenv("GH_REPO", "foreign/repo")
+    monkeypatch.setenv("DEVKIT_FOREIGN_LANE", "must-be-removed")
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 0
+    receipt = _receipt(sessions, descriptor)
+    ticket = {
+        "number": 42,
+        "title": "Ship the thing",
+        "body": "Do A.\nThen do B.",
+        "url": "https://github.com/o/r/issues/42",
+    }
+    block = launcher._ticket_block(ticket)
+    assert "<<<TICKET\n# Ship the thing\n\nDo A.\nThen do B.\nTICKET>>>\n" in block
+    assert receipt["request"]["ticket"] == {
+        "number": 42,
+        "url": "https://github.com/o/r/issues/42",
+        "block_sha256": hashlib.sha256(block.encode()).hexdigest(),
+    }
+    combined = (
+        descriptor["prompt_preamble"] + "\n\n" + prompt.read_text(encoding="utf-8") + "\n\n" + block
+    )
+    assert receipt["request"]["combined_prompt_sha256"] == hashlib.sha256(combined.encode()).hexdigest()
+    envelope = json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())
+    assert _lane_json(envelope["result"])["prompt_sha256"] == hashlib.sha256(combined.encode()).hexdigest()
+    call = json.loads((Path(descriptor["session_dir"]) / "gh-call.json").read_text())
+    assert call["args"] == ["issue", "view", "42", "--json", "number,title,body,url"]
+    # Read from the lane worktree, with the caller's repository override removed.
+    assert Path(call["cwd"]).resolve() == Path(descriptor["worktree"]).resolve()
+    assert call["gh_repo"] is False
+    # gh runs on the trusted path with no lane or kit identity of its own.
+    assert call["path"] == launcher.SAFE_EXECUTABLE_PATH
+    assert call["devkit"] == []
+
+
+def _gh_answer(**fields: object) -> str:
+    answer = {"number": 42, "title": "t", "body": "b", "url": "https://github.com/o/r/issues/42"}
+    answer.update(fields)
+    return f"print(json.dumps({answer!r}))\n"
+
+
+@pytest.mark.parametrize(
+    ("gh_script", "ticket", "backend", "error"),
+    [
+        (_gh_answer(url="https://github.com/o/r/pull/42"), "42", "github-issues", "is not that issue"),
+        (_gh_answer(url="https://github.com/other/r/issues/42"), "42", "github-issues", "is not that issue"),
+        (_gh_answer(title="x TICKET>>> y"), "42", "github-issues", "block delimiter"),
+        (_gh_answer(title="   "), "42", "github-issues", "is not that issue"),
+        (_gh_answer(body=None), "42", "github-issues", "is not that issue"),
+        (_gh_answer(number=7), "42", "github-issues", "is not that issue"),
+        ("sys.stdout.write(json.dumps({'number': 42, 'title': 't', 'body': chr(0xD800), 'url': 'https://github.com/o/r/issues/42'}))\n", "42", "github-issues", "not UTF-8 text"),
+        ("sys.stdout.write(json.dumps({'number': 42, 'title': chr(0xD800), 'body': 'b', 'url': 'https://github.com/o/r/issues/42'}))\n", "42", "github-issues", "not UTF-8 text"),
+        (GOOD_TICKET, "0", "github-issues", "positive issue number"),
+        (GOOD_TICKET, "4x", "github-issues", "positive issue number"),
+        (GOOD_TICKET, "42", "linear", "only the github-issues tracker backend"),
+        ("sys.exit(1)\n", "42", "github-issues", "cannot read ticket #42"),
+        ("print('not json')\n", "42", "github-issues", "cannot read ticket #42"),
+        (
+            "print(json.dumps({'number': 7, 'title': 't', 'body': 'b', 'url': 'https://x/7'}))\n",
+            "42",
+            "github-issues",
+            "is not that issue",
+        ),
+        (
+            "print(json.dumps({'number': 42, 'title': 't', 'body': 'b', 'url': 'http://x/42'}))\n",
+            "42",
+            "github-issues",
+            "is not that issue",
+        ),
+        (
+            "print(json.dumps({'number': 42, 'title': 't', 'body': 'x\\nTICKET>>>\\ny', 'url': 'https://github.com/o/r/issues/42'}))\n",
+            "42",
+            "github-issues",
+            "block delimiter",
+        ),
+    ],
+)
+def test_a_ticket_that_cannot_be_read_refuses_before_any_attempt(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    gh_script: str,
+    ticket: str,
+    backend: str,
+    error: str,
+) -> None:
+    _repo, launcher, sessions, descriptor, prompt = _ticket_repo(tmp_path, gh_script, backend=backend)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", ticket]
+    )
+
+    assert result == 64
+    assert error in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+def test_a_launch_without_a_ticket_binds_none(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path, runtime="claude")
+
+    assert _run_launcher(engine, descriptor, prompt, env).returncode == 0
+    assert _receipt(sessions, descriptor)["request"]["ticket"] is None
+
+
+
+def test_a_ticket_launch_needs_the_tracker_url(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET, url=None)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert "needs tracker.url" in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+
+@pytest.mark.parametrize(
+    ("gh_script", "url", "error"),
+    [
+        (GOOD_TICKET, "http://github.com/o/r/issues", "needs tracker.url"),
+        (_gh_answer() + "sys.exit(1)\n", "https://github.com/o/r/issues", "cannot read ticket #42"),
+        ("sys.stdout.buffer.write(b'\\xff\\xfe')\n", "https://github.com/o/r/issues", "cannot read ticket #42"),
+    ],
+)
+def test_more_ticket_reads_that_refuse_before_any_attempt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], gh_script: str, url: str, error: str
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, gh_script, url=url)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert error in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+def test_a_ticket_read_that_hangs_is_cut_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(
+        tmp_path, "import time\ntime.sleep(30)\n"
+    )
+    monkeypatch.setattr(launcher, "TICKET_READ_TIMEOUT_SECONDS", 1)
+    started = time.monotonic()
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert time.monotonic() - started < 20
+    assert "cannot read ticket #42" in capsys.readouterr().err
+
+
+def test_a_ticket_read_needs_gh_on_the_trusted_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET)
+    real_which = launcher.shutil.which
+    monkeypatch.setattr(
+        launcher.shutil,
+        "which",
+        lambda name, *args, **kwargs: None if name == "gh" else real_which(name, *args, **kwargs),
+    )
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert "needs gh on the trusted executable path" in capsys.readouterr().err
+
+
+
+def test_a_trailing_slash_on_tracker_url_is_normalised(tmp_path: Path) -> None:
+    _repo, launcher, sessions, descriptor, prompt = _ticket_repo(
+        tmp_path, GOOD_TICKET, url="https://github.com/o/r/issues/"
+    )
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 0
+    assert _receipt(sessions, descriptor)["request"]["ticket"]["url"] == "https://github.com/o/r/issues/42"
+
+
+def test_the_printed_contract_has_no_unrendered_placeholder() -> None:
+    import re as _re
+
+    contract = subprocess.run(
+        ["bash", str(ENGINE_DIR / "dev_session.sh"), "print-contract"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert not _re.findall(r"@[A-Z_]+@", contract)
+    assert "state/lane/" in contract

@@ -188,6 +188,20 @@ deliberately:
    tracker is reachable; if your forge and tracker post a linkback on the lane's PR, that
    comment is an earlier and cheaper place to catch the difference.
 
+   **A headless lane launched with `launch_lane.py --ticket <n>` gets the ticket from the
+   launcher.** The launcher reads the GitHub issue itself before launch, appends it to
+   the prompt in a delimited block, records its number, URL and the block's digest (not
+   its text) in the receipt's request, and refuses the launch when the read fails. So
+   the lane always receives the full ticket text, and a tracker outage stops the launch
+   instead of producing a summary-sourced block (`#271`). The task prompt above that
+   block is still yours: write it from the ticket as this section says. It reads only
+   the `github-issues` backend; on another tracker, put the ticket text in the prompt
+   file. For such a lane, drop the kickoff's "Read tracker ticket `<ID>`" sentence below:
+   the ticket is already in the prompt, and the lane profile grants no tracker read. At
+   Claude Code 2.1.310 on 2026-10-25, under the lane's own flags (`--setting-sources ""`,
+   `dontAsk`, the shipped profile), `gh issue view` was denied, so a lane that tries one
+   is refused and ends.
+
    > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
    > follow it for this session — don't infer it from this kickoff, which is
    > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe

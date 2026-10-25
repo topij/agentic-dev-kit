@@ -1173,6 +1173,7 @@ seed_claude_lane_profile() {
       "Bash(git fetch:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(git restore:*)",
       "Bash(git push -u origin:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr view:*)",

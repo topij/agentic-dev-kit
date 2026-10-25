@@ -118,23 +118,30 @@ HEADLESS=0
 # bind a freshly spawned lane. Keep this the SINGLE source of the contract
 # text — any doc that quotes it should quote it, not restate it independently.
 _lane_contract() {
-    local handoff friction protected
-    local escaped_engine_dir escaped_handoff escaped_friction escaped_protected
+    local handoff friction protected state_dir
+    local escaped_engine_dir escaped_handoff escaped_friction escaped_protected escaped_state_dir
     handoff="$(_config_scalar paths "" handoff)"
     friction="$(_config_scalar paths "" friction_log)"
     protected="$(_config_scalar vcs "" protected_branch)"
+    # The lane writes its message files under the worktree's own state directory,
+    # which the lane's engine state never uses (that goes to the sandbox). init.sh
+    # adds it to .gitignore only when it can, so the contract tells the lane not
+    # to stage it rather than claiming git ignores it.
+    state_dir="$(_config_scalar state "" dirname)"
     escaped_engine_dir="$(_sed_replacement "$ENGINE_DIR_REL")"
     escaped_handoff="$(_sed_replacement "${handoff:-<configured handoff>}")"
     escaped_friction="$(_sed_replacement "${friction:-<configured friction log>}")"
     escaped_protected="$(_sed_replacement "${protected:-the protected branch}")"
+    escaped_state_dir="$(_sed_replacement "${state_dir:-state}")"
     sed \
         -e "s|@ENGINE_DIR@|$escaped_engine_dir|g" \
         -e "s|@HANDOFF@|$escaped_handoff|g" \
         -e "s|@FRICTION_LOG@|$escaped_friction|g" \
-        -e "s|@PROTECTED_BRANCH@|$escaped_protected|g" <<'CONTRACT'
+        -e "s|@PROTECTED_BRANCH@|$escaped_protected|g" \
+        -e "s|@STATE_DIR@|$escaped_state_dir|g" <<'CONTRACT'
 LANE CONTRACT (binding):
 - Actively poll your PR's CI at a bounded cadence (e.g. `gh pr checks <PR#>` every few minutes, capped around 30 min) until it is fully green. Never stop to idly wait on a "monitor", a timer, or someone else's watcher — you are the one polling.
-- Your run ends ONLY at the terminal state. Never stop early to wait for a watcher, monitor, or timer of any kind — if you need to wait on anything, poll it yourself with a bounded until-loop.
+- Your run ends ONLY at the terminal state. Never stop early to wait for a watcher, monitor, or timer of any kind — if you need to wait on anything, poll it yourself: one simple check per call, repeated at a bounded cadence.
 - End your FINAL TEXT with exactly one plain-text line naming that terminal state, with nothing after it: `LANE-TERMINAL: pr-ready #<PR number>` (your PR is open, ready, and its CI is green), `LANE-TERMINAL: no-pr <reason>` (the task is finished and needed no pull request), or `LANE-TERMINAL: blocked <reason>` (you cannot go on without the cockpit). Write it without backticks. A final text without that line is read as a stop before the end: the lane launcher may resume you, or record the lane stalled.
 - Open completed work ready for review by default. Draft is ONLY for a material unfinished-work window that must already exist on the remote pull request because required forge-hosted validation cannot run before the pull request exists. If the branch can be completed and validated locally first, finish it and open ready.
 - Immediately after a ready creation, run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-ready` before the watch-and-fix loop so a silently drifted draft bit cannot starve review.
@@ -145,6 +152,9 @@ LANE CONTRACT (binding):
 - If you spawn sub-agents of your own, hold them to the same rule: they return findings in their final text rather than relying exclusively on peer messages.
 - Never edit @HANDOFF@ or @FRICTION_LOG@ — those are cockpit-owned shared narrative files. Put your handoff (what shipped, lessons, deferrals) in the PR body instead.
 - Run `git branch --show-current` before every commit to confirm you are on your own lane branch, never @PROTECTED_BRANCH@.
+- Every part of a shell command must be a command your lane is allowed to run: a loop, chain or pipe runs only when each part is allowed, and one refused part refuses the whole call and ends your run. When unsure, run one simple command per call.
+- Write commit messages and pull-request text to files under `@STATE_DIR@/lane/` in your worktree, never stage that directory, and pass the files by name: `git commit -F @STATE_DIR@/lane/<name>.txt`, `gh pr create --body-file @STATE_DIR@/lane/<name>.md`. In a headless lane, whose permission profile grants neither `gh pr edit` nor `gh pr comment`, put your verification result in the body before you open the PR, report anything after opening in your FINAL TEXT, and under the draft exception put the remote result there too: a headless lane cannot finish the body, so this replaces the draft bullet's `and body` step.
+- To undo a change in your worktree (restoring a mutation test, say), use `git restore <path>`.
 CONTRACT
 }
 
