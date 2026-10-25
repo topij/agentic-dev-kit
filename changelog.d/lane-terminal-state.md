@@ -24,6 +24,7 @@ CHANGED (report shape): the launch request carries `request.max_resumes`, and ev
 terminal receipt carries `terminal.lane_state` (`state`, `pr`, `reason`, or `null`) and
 `terminal.resumes`, one entry per resume round with its own argv, digests, return code,
 denials, usage, terminal state and error; a round cut short by a refusal is recorded
-with the fields it never reached `null` and `error` `round did not finish`. `terminal.usage` still covers the launch round
-alone; add each `terminal.resumes[].usage` for the lane's total. `dev_session.sh list`
-shows `stalled` in the RUN column.
+with the fields it never reached `null` and `error` `round did not finish`.
+`terminal.usage` still covers the launch round alone; add each
+`terminal.resumes[].usage` for the lane's total. `dev_session.sh list` shows `stalled`
+in the RUN column.
