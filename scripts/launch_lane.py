@@ -2031,8 +2031,8 @@ def launch(
             round_final = session_dir / f"launch-final-{descriptor_id}-resume-{round_number}.txt"
             _reserve_empty_regular_file(round_final)
             round_argv = profile.resume_argv(session_id)
-            # Checked again immediately before the fork: a signal that lands while
-            # the round is being prepared must not start one more model round.
+            # Checked immediately before the fork: a signal that lands while the
+            # round is being prepared must not start one more model round.
             if caught:
                 break
             # Recorded as soon as the round starts and completed below, so a
