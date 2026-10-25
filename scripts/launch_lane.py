@@ -176,12 +176,13 @@ PERMISSION_RULE_LISTS = ("allow", "deny", "ask")
 # exactly one of these lines. Only the last non-blank line is read, so a line the
 # lane quotes earlier in its text never counts, and a match is the whole line: a
 # line wrapped in backticks, or one followed by more lines, is no terminal state.
-# For `no-pr` and `blocked` the rest of the line is the reason, which may not carry
-# control characters. A successful run whose final text has none is a nonterminal stop: the wrapper
+# For `no-pr` and `blocked` the rest of the line is the reason, which must be
+# printable text (`str.isprintable`: no control, format, or non-space separator
+# characters, so no C1 escape or bidi override reaches a receipt reader). A successful run whose final text has none is a nonterminal stop: the wrapper
 # resumes it (Claude) or records it `stalled`.
 LANE_TERMINAL_LINE = re.compile(
     r"LANE-TERMINAL: (?:pr-ready #(?P<pr>[1-9][0-9]{0,9})"
-    r"|(?P<state>no-pr|blocked) (?P<reason>[^\s\x00-\x1f\x7f][^\x00-\x1f\x7f]{0,199}))"
+    r"|(?P<state>no-pr|blocked) (?P<reason>\S.{0,199}))"
 )
 # The one message a resume round sends. Fixed text, so a resume carries no
 # authority the original prompt did not: it names nothing new to do and restates
@@ -218,6 +219,8 @@ def _lane_terminal_state(final_text: bytes | None) -> dict[str, Any] | None:
         return None
     if match["pr"]:
         return {"state": "pr-ready", "pr": int(match["pr"]), "reason": None}
+    if not match["reason"].isprintable():
+        return None
     return {"state": match["state"], "pr": None, "reason": match["reason"]}
 
 
@@ -1920,6 +1923,25 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
             round_final = session_dir / f"launch-final-{descriptor_id}-resume-{round_number}.txt"
             _reserve_empty_regular_file(round_final)
             round_argv = profile.resume_argv(session_id)
+            # Recorded as soon as the round starts and completed below, so a
+            # LaunchError on the way (a termination or evidence read that
+            # refuses) still reaches the receipt with this round in it.
+            round_entry: dict[str, Any] = {
+                "round": round_number,
+                "session_id": session_id,
+                "argv": round_argv,
+                "prompt_sha256": _sha256(RESUME_NUDGE.encode()),
+                "final_message_path": str(round_final),
+                "final_message_sha256": None,
+                "final_text_sha256": None,
+                "returncode": None,
+                "permission_denials": None,
+                "usage": None,
+                "lane_state": None,
+                "error": "round did not finish",
+                "finished_at": None,
+            }
+            resumes.append(round_entry)
             process = _fork_resume_child(
                 round_argv,
                 worktree=descriptor["worktree"],
@@ -1963,13 +1985,8 @@ def launch(descriptor_path: Path, prompt_path: Path, tier: str | None = None) ->
                     f"{profile.approval['declared']}"
                 )
             lane_state = None if (caught or round_error) else _lane_terminal_state(round_text)
-            resumes.append(
+            round_entry.update(
                 {
-                    "round": round_number,
-                    "session_id": session_id,
-                    "argv": round_argv,
-                    "prompt_sha256": _sha256(RESUME_NUDGE.encode()),
-                    "final_message_path": str(round_final),
                     "final_message_sha256": _sha256(round_bytes) if round_bytes else None,
                     "final_text_sha256": _sha256(round_text) if round_text else None,
                     "returncode": round_returncode,

@@ -55,8 +55,8 @@ Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12
   those figures exists. #1174's ranking report reads "recent lanes" from recorded rows,
   so it needs a home for usage that outlives `rm`. Without one, it sees only the lanes
   that have not yet been cleaned up.
-- **A fast lane never shows RUN `starting`.** Severity L, kept for accumulation. In the
-  same smoke run, a one-second poll of `dev_session.sh list` showed `running` at its
+- **A fast lane did not show RUN `starting` in one smoke run.** Severity L, kept
+  for accumulation. In the same smoke run, a one-second poll of `dev_session.sh list` showed `running` at its
   first sample, then `completed` about eight seconds later. `starting` is real but
   lasts under a poll interval here, so a board watch cannot be used to confirm it.
 

@@ -173,8 +173,10 @@ the lane to end its final text with one plain-text line: `LANE-TERMINAL: pr-read
 #<n>`, `LANE-TERMINAL: no-pr <reason>` or `LANE-TERMINAL: blocked <reason>`. The
 wrapper reads only the last non-blank line and needs the whole line to match, so a
 line quoted earlier, wrapped in backticks or followed by more lines is no terminal
-state. For `no-pr` and `blocked` the rest of the line is the reason, up to 200
-characters and with no control characters.
+state. For `no-pr` and `blocked` the rest of the line is the reason: up to 200 characters of
+printable text in Python's `str.isprintable` sense, so no control characters (C0, DEL
+or C1), no format characters such as bidi overrides or zero-width spaces, and no
+separator other than the ordinary space.
 The receipt records what it declared as `terminal.lane_state`.
 
 A successful run without that line is a nonterminal stop. For a Claude lane the

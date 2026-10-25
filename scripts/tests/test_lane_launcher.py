@@ -2795,6 +2795,10 @@ def test_terminal_line_is_read_from_the_last_non_blank_line(
         "LANE-TERMINAL: no-pr " + "x" * 201,
         "LANE-TERMINAL: no-pr bell\x07in reason",
         "LANE-TERMINAL: blocked \x1b[31mred",
+        "LANE-TERMINAL: no-pr done \x9b31m",
+        "LANE-TERMINAL: no-pr done \u202e evil",
+        "LANE-TERMINAL: no-pr \u200bhidden",
+        "LANE-TERMINAL: no-pr a\u00a0b",
     ],
 )
 def test_anything_else_is_no_terminal_state(text: str) -> None:
@@ -3037,6 +3041,7 @@ def test_interrupting_a_resume_round_stops_it_and_records_the_round(tmp_path: Pa
         assert process.returncode == 128 + signal.SIGTERM, (stdout, stderr)
         receipt = _receipt(sessions, descriptor)
         assert receipt["status"] == "interrupted"
+        assert len(receipt["terminal"]["resumes"]) == 1, receipt["terminal"]
         [round_one] = receipt["terminal"]["resumes"]
         assert round_one["round"] == 1
         with pytest.raises(ProcessLookupError):
@@ -3177,3 +3182,36 @@ def test_a_resume_round_cannot_leave_a_detached_descendant_behind(tmp_path: Path
         if detached_pid is not None:
             with contextlib.suppress(ProcessLookupError):
                 os.kill(detached_pid, signal.SIGKILL)
+
+
+def test_a_refusal_during_a_resume_round_still_records_the_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(
+        tmp_path, runtime="claude", terminal="none"
+    )
+    launcher = _load_launcher(engine)
+    real = launcher._processes_with_launch_nonce
+    calls = {"n": 0}
+
+    def refuse_after_launch(nonce: str) -> dict[int, str]:
+        calls["n"] += 1
+        # The first probe follows the launch round; refuse from the resume round on.
+        if calls["n"] > 1:
+            raise launcher.LaunchError("cannot bind a launch-lineage process identity")
+        return real(nonce)
+
+    monkeypatch.setattr(launcher, "_processes_with_launch_nonce", refuse_after_launch)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt)]
+    )
+
+    assert result == 70
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "launch-lineage process identity" in receipt["terminal"]["error"]
+    [round_one] = receipt["terminal"]["resumes"]
+    assert round_one["round"] == 1
+    assert round_one["session_id"] == FAKE_SESSION_ID
+    assert round_one["error"] == "round did not finish"
