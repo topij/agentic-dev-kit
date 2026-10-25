@@ -3318,14 +3318,16 @@ def test_every_command_the_contract_prescribes_is_allowed_by_the_shipped_profile
     for expected in (
         "git commit -F",
         "gh pr create --body-file",
-        "gh pr comment",
         "git restore",
     ):
         assert any(command.startswith(expected) for command in commands), expected
     for command in commands:
         assert any(command.startswith(prefix) for prefix in allowed), command
         assert not any(command.startswith(prefix) for prefix in denied), command
-    assert not any(prefix.startswith("gh pr edit") for prefix in allowed)
+    # Neither PR-mutating command is granted: `gh pr edit` can retarget a base, and
+    # `gh pr comment` carries --delete-last, --edit-last and --repo.
+    assert not any(prefix.startswith(("gh pr edit", "gh pr comment")) for prefix in allowed)
+    assert not any(command.startswith(("gh pr edit", "gh pr comment")) for command in commands)
 
 
 @pytest.mark.kit_repo_only("config/claude-lane-settings.json")
@@ -3337,11 +3339,16 @@ def test_init_seeds_the_shipped_lane_profile() -> None:
     )
 
 
-def _ticket_repo(tmp_path: Path, gh_script: str, *, backend: str = "github-issues"):
+def _ticket_repo(
+    tmp_path: Path,
+    gh_script: str,
+    *,
+    backend: str = "github-issues",
+    url: str | None = "https://github.com/o/r/issues",
+):
+    tracker = f"tracker:\n  backend: {backend}\n" + (f"  url: {url}\n" if url is not None else "")
     repo, engine, sessions, descriptor, prompt, env = _install_repo(
-        tmp_path,
-        runtime="claude",
-        extra_config=f"tracker:\n  backend: {backend}\n",
+        tmp_path, runtime="claude", extra_config=tracker
     )
     trusted_bin = tmp_path / "trusted-bin"
     trusted_bin.mkdir()
@@ -3398,9 +3405,20 @@ def test_a_ticket_launch_appends_the_issue_and_binds_it(
     assert call["gh_repo"] is False
 
 
+def _gh_answer(**fields: object) -> str:
+    answer = {"number": 42, "title": "t", "body": "b", "url": "https://github.com/o/r/issues/42"}
+    answer.update(fields)
+    return f"print(json.dumps({answer!r}))\n"
+
+
 @pytest.mark.parametrize(
     ("gh_script", "ticket", "backend", "error"),
     [
+        (_gh_answer(url="https://github.com/o/r/pull/42"), "42", "github-issues", "is not that issue"),
+        (_gh_answer(url="https://github.com/other/r/issues/42"), "42", "github-issues", "is not that issue"),
+        (_gh_answer(title="x TICKET>>> y"), "42", "github-issues", "block delimiter"),
+        (_gh_answer(title="   "), "42", "github-issues", "is not that issue"),
+        (_gh_answer(body=None), "42", "github-issues", "is not that issue"),
         (GOOD_TICKET, "0", "github-issues", "positive issue number"),
         (GOOD_TICKET, "4x", "github-issues", "positive issue number"),
         (GOOD_TICKET, "42", "linear", "only the github-issues tracker backend"),
@@ -3419,7 +3437,7 @@ def test_a_ticket_launch_appends_the_issue_and_binds_it(
             "is not that issue",
         ),
         (
-            "print(json.dumps({'number': 42, 'title': 't', 'body': 'x\\nTICKET>>>\\ny', 'url': 'https://x/42'}))\n",
+            "print(json.dumps({'number': 42, 'title': 't', 'body': 'x\\nTICKET>>>\\ny', 'url': 'https://github.com/o/r/issues/42'}))\n",
             "42",
             "github-issues",
             "block delimiter",
@@ -3450,3 +3468,18 @@ def test_a_launch_without_a_ticket_binds_none(tmp_path: Path) -> None:
 
     assert _run_launcher(engine, descriptor, prompt, env).returncode == 0
     assert _receipt(sessions, descriptor)["request"]["ticket"] is None
+
+
+
+def test_a_ticket_launch_needs_the_tracker_url(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET, url=None)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert "needs tracker.url" in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()

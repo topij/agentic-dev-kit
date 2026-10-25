@@ -95,9 +95,13 @@ python3 <engine-dir>/launch_lane.py \
 
 `--ticket` has the launcher read that GitHub issue with the trusted `gh` before launch
 and append it after the task prompt, between `<<<TICKET` and `TICKET>>>` lines. The
-request records `ticket` (`number`, `url`, `block_sha256`). A read that fails, an answer
-that is not that issue, a ticket containing `TICKET>>>`, or a `tracker.backend` other
-than `github-issues` refuses the launch (exit 64) before any attempt record.
+request records `ticket` (`number`, `url`, `block_sha256`). The launch is refused (exit
+64) before any attempt record when the number is not a positive integer,
+`tracker.backend` is not `github-issues`, `tracker.url` is not an `https://` url, `gh`
+is not on the trusted path, the read fails or times out, the answer's number, title or
+body is missing or malformed, its url is not exactly `<tracker.url>/<n>` (which refuses a
+pull request with that number and an issue of another repository or host), or its title
+or body contains `TICKET>>>`.
 
 `--tier` applies the plan step's effort tier through `models.runtime_mappings`; without
 it the lane inherits the client's compute. [`parallel.md`](parallel.md#per-lane-effort-tier-risk--reasoning-effort--model)
@@ -137,15 +141,23 @@ terminal for the whole lane rather than a round trip. So a lane can read whateve
 process can read, and the receipt cannot show a read the runtime never asked about.
 
 **Routine lane steps go through forms the profile accepts** (`#1011`, `#1081`, `#628`).
-The lane contract tells every lane to keep each shell call to one simple command, to
-write commit messages and pull-request text to files under the worktree's
-`<state.dirname>/lane/` (which git ignores) and pass them with `git commit -F` and
-`gh pr create --body-file`, to put its verification result in the body before opening,
-to add anything later with `gh pr comment --body-file` rather than editing the pull
-request, and to undo a worktree change with `git restore`. The shipped profile grants
-`Bash(git restore:*)` and `Bash(gh pr comment:*)` for the last two and still grants no
-`gh pr edit`, which could retarget a pull request's base. A lane's ticket arrives
-through `launch_lane.py --ticket`, so the profile grants no tracker read either.
+The record of compound commands is mixed: at 2.1.250 a `for` loop and a `;` chain of
+accepted reads were denied (above), while `make test; echo …` ran (below). Probed at
+Claude Code 2.1.310 on 2026-10-25 with the shipped profile under `dontAsk`: an `&&`
+chain, a pipe, a `for` loop and a `;` chain of allowed `git` commands all ran, and
+`git status --short && touch probe-denied.txt` was denied whole. The lane contract
+therefore states the rule both records agree on: every part of a command must be
+allowed, one refused part ends the run, and one simple command per call is the safe
+default. It also tells every lane to write commit messages and pull-request text to
+files under the worktree's `<state.dirname>/lane/`, never to stage that directory
+(`init.sh` adds `state/` to `.gitignore` only when it can), to pass them with `git
+commit -F` and `gh pr create --body-file`, to put its verification result in the body
+before opening and report anything later in its final text, and to undo a worktree
+change with `git restore`. The shipped profile grants `Bash(git restore:*)` for the
+last and grants neither `gh pr edit`, which could retarget a pull request's base, nor
+`gh pr comment`, whose `--delete-last`, `--edit-last` and `--repo` reach other comments
+and repositories. A lane's ticket arrives through `launch_lane.py --ticket`, so the
+profile grants no tracker read either.
 
 **What the allow list bounds is the lane's task, not its reach** — see the profile
 discussion below, where `#606` states the two directions in which "bounds what a lane

@@ -251,6 +251,13 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
             f"--ticket reads only the github-issues tracker backend (tracker.backend is "
             f"{backend!r}); put the ticket text in the prompt file instead"
         )
+    # The answer must be this tracker's issue: `gh issue view` also answers for a
+    # pull request with the same number, and resolves the repository from the
+    # worktree's remotes, so the url is held to `<tracker.url>/<n>` exactly.
+    tracker_url = get(config, "tracker.url", None)
+    if not isinstance(tracker_url, str) or not tracker_url.startswith("https://"):
+        raise LaunchError("--ticket needs tracker.url, the https:// issues url of the tracker")
+    tracker_url = tracker_url.rstrip("/")
     gh = shutil.which("gh", path=SAFE_EXECUTABLE_PATH)
     if gh is None:
         raise LaunchError("--ticket needs gh on the trusted executable path")
@@ -279,8 +286,7 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
         or not isinstance(ticket.get("title"), str)
         or not ticket["title"].strip()
         or not isinstance(ticket.get("body"), str)
-        or not isinstance(ticket.get("url"), str)
-        or not ticket["url"].startswith("https://")
+        or ticket.get("url") != f"{tracker_url}/{number}"
     ):
         raise LaunchError(f"the tracker's answer for ticket #{number} is not that issue")
     # The block is delimited so the lane can tell the ticket from the task; text

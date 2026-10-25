@@ -123,9 +123,10 @@ _lane_contract() {
     handoff="$(_config_scalar paths "" handoff)"
     friction="$(_config_scalar paths "" friction_log)"
     protected="$(_config_scalar vcs "" protected_branch)"
-    # The lane writes its message files under the worktree's own state directory:
-    # git already ignores it (init.sh appends it to .gitignore), and the lane's
-    # engine state goes to the sandbox, not there.
+    # The lane writes its message files under the worktree's own state directory,
+    # which the lane's engine state never uses (that goes to the sandbox). init.sh
+    # adds it to .gitignore only when it can, so the contract tells the lane not
+    # to stage it rather than claiming git ignores it.
     state_dir="$(_config_scalar state "" dirname)"
     escaped_engine_dir="$(_sed_replacement "$ENGINE_DIR_REL")"
     escaped_handoff="$(_sed_replacement "${handoff:-<configured handoff>}")"
@@ -151,8 +152,8 @@ LANE CONTRACT (binding):
 - If you spawn sub-agents of your own, hold them to the same rule: they return findings in their final text rather than relying exclusively on peer messages.
 - Never edit @HANDOFF@ or @FRICTION_LOG@ — those are cockpit-owned shared narrative files. Put your handoff (what shipped, lessons, deferrals) in the PR body instead.
 - Run `git branch --show-current` before every commit to confirm you are on your own lane branch, never @PROTECTED_BRANCH@.
-- Keep every shell call to ONE simple command: no `for` or `while` loops, no `;`, `&&` or `||` chains, no pipes, and no multi-line arguments. A headless lane's permission check refuses compound and multi-line commands even when each part is allowed, and a refusal ends your run.
-- Write commit messages and pull-request text to files under `@STATE_DIR@/lane/` in your worktree (git ignores that directory) and pass them by file: `git commit -F @STATE_DIR@/lane/<name>.txt`, `gh pr create --body-file @STATE_DIR@/lane/<name>.md`. Put your verification result in the body before you open the PR. To add anything after that, post `gh pr comment <PR#> --body-file @STATE_DIR@/lane/<name>.md`; do not edit the PR.
+- Every part of a shell command must be a command your lane is allowed to run: a loop, chain or pipe runs only when each part is allowed, and one refused part refuses the whole call and ends your run. When unsure, run one simple command per call.
+- Write commit messages and pull-request text to files under `@STATE_DIR@/lane/` in your worktree, never stage that directory, and pass the files by name: `git commit -F @STATE_DIR@/lane/<name>.txt`, `gh pr create --body-file @STATE_DIR@/lane/<name>.md`. Put your verification result in the body before you open the PR. Report anything after that in your FINAL TEXT; do not edit or comment on the PR.
 - To undo a change in your worktree (restoring a mutation test, say), use `git restore <path>`.
 CONTRACT
 }

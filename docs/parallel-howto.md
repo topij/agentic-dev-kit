@@ -190,12 +190,16 @@ observed/terminal receipt:
 ```bash
 python3 scripts/launch_lane.py \
   --descriptor <session>/launch-descriptor.json \
-  --prompt-file <task-prompt>
+  --prompt-file <task-prompt> \
+  [--tier <cheap|default|expensive>] \
+  [--ticket <issue-number>]
 ```
 
 The contract covers ready-by-default PRs, the bounded draft exception, ready-state
-assertions, active CI polling, narrative ownership, and branch checks. See the exact
-contract text with:
+assertions, active CI polling, narrative ownership, branch checks, the closing
+`LANE-TERMINAL:` line, which parts of a shell command must be allowed, message files
+under `<state.dirname>/lane/`, and restoring with `git restore`. See the exact contract
+text with:
 
 ```bash
 scripts/dev_session.sh print-contract

@@ -194,6 +194,9 @@ deliberately:
    refuses the launch when the read fails, so such a brief is always ticket-sourced and
    has no summary-sourced fallback to reconcile (`#271`). It reads only the
    `github-issues` backend; on another tracker, put the ticket text in the prompt file.
+   For such a lane, drop the kickoff's "Read tracker ticket `<ID>`" sentence below: the
+   ticket is already in the prompt, and the lane profile grants no tracker read, so a
+   lane that tries one is refused and ends.
 
    > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
    > follow it for this session — don't infer it from this kickoff, which is

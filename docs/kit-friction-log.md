@@ -46,6 +46,22 @@ Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12
 
 ## 2026-10-25
 
+- **Something writes `pr_watch` state into linked worktrees' `state/` (recurrence).**
+  Severity M, recurrence of the 2026-10-22 entry ``An unidentified `pr_watch` write
+  failed a `make test` stamp``. On 2026-10-25, `make test` at `80fb1177` in
+  `.claude/worktrees/lane-terminal` ran every test green (`5833 passed, 1 skipped`) and
+  still exited 2 on the real-state guard (#428). The guard named `state/pr-watch/1236.json`,
+  born 02:41 and modified 12:08, with keys `head`, `max_total`, `max_total_backend` and
+  `settle_since`. The cockpit made no `pr_watch` call during that run. Two worktrees with no
+  suite running gained `1236.json` and `1237.json` between 12:07 and 12:20, while review
+  lenses were running. A fresh `1237.json` appeared in `lane-terminal` at 12:54:27, while the
+  cockpit ran only read-only commands there. At that point no `pr_watch` or `claude -p` process was listed. The
+  project's hooks (`pr_followup_hook.py`, two SessionStart budget checks) have no write
+  path. A bisect of `test_lane_launcher.py` found that neither half writes on its own,
+  while the whole file (about two and a half minutes) does, so the writer is not a test.
+  `~/Library/LaunchAgents` holds no job for this repository, and no other local session
+  for it was listed. Writer not identified. A `make test` stamp run in a standalone clone
+  outside the worktree set avoided it.
 - **A failed `dev_session.sh new` leaves a session neither `rm` nor `new` clears.**
   Severity L, kept for accumulation. On 2026-10-25, in a single-branch clone whose
   fetch refspec lacked `main`, `new live3 --headless` failed at `git worktree add`

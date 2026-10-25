@@ -1180,7 +1180,6 @@ seed_claude_lane_profile() {
       "Bash(gh pr list:*)",
       "Bash(gh pr checks:*)",
       "Bash(gh pr ready:*)",
-      "Bash(gh pr comment:*)",
       "Bash(gh run view:*)",
       "Bash(gh repo view:*)",
       "Bash(uv run scripts/pr_watch.py:*)",
