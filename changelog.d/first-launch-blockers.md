@@ -9,6 +9,10 @@ belongs to any other repository is still refused, now as
 needs only `scripts/launch_lane.py`. A lane issued from a linked worktree gets that
 worktree as `DEVKIT_ROOT`, so its read-only prod-state fallback is the cockpit
 worktree's `state/`, as an interactive lane created from a linked worktree already had.
+A lane's own worktree shares that common directory too, so a descriptor issued from
+inside a lane now launches as well; the old refusal of that case came only from the
+path comparison, and `parallel-headless.md` says why issuer identity is no boundary
+against a lane.
 
 CHANGED (report / return shape): the launch receipt's `expected` and `observed` maps
 carry `git_common_dir`, and `observed` no longer carries `repo_root`. `expected.repo_root`
@@ -21,12 +25,14 @@ argument prints that subcommand's usage line and exits 0 without creating anythi
 For most subcommands it used to exit 1 with `unknown flag: --help`, or a slug error.
 `print-contract --help` used to print the whole lane contract and exit 0; it now prints
 the usage line, so call `print-contract` with no arguments to get the contract. Later
-in the line `--help` keeps its old meaning. `dev_session.sh help` now prints the whole
-header comment, which adds the paragraph on where sessions live.
+in the line `--help` keeps its old meaning: `merge <scope> --help` merges, and
+`pr-watch <scope> --help` is `pr_watch.py`'s help. `dev_session.sh help` now prints the
+whole header comment, which adds the paragraph on subcommand help, the last line of the
+`print-contract` paragraph, and the paragraph on where sessions live.
 
-A configured `parallel.<runtime>_headless_command` the launcher cannot resolve is still
+A configured `parallel.<runtime>_headless_command` the launcher cannot find is still
 refused. For a bare command name the message now names the trusted directories and the
 remedy: for a user-local runtime install, link the binary into one of those directories
-on the host (`parallel-headless.md`). For an absolute command, which is used as written
-and never looked up, it names the file. The local overlay still does not accept these
+on the host (`parallel-headless.md`). For a command with a path, absolute or relative
+such as `./claude`, which is used as written and never looked up, it names the file. The local overlay still does not accept these
 keys.

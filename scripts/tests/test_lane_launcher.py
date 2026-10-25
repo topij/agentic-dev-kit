@@ -609,17 +609,22 @@ def test_relative_runtime_command_uses_only_the_trusted_executable_path(
 
 
 @pytest.mark.evidence
-def test_missing_absolute_runtime_command_is_refused_without_the_trusted_path_remedy(
-    tmp_path: Path,
+@pytest.mark.parametrize("shape", ["absolute", "relative"])
+def test_missing_runtime_command_with_a_path_is_refused_without_the_trusted_path_remedy(
+    tmp_path: Path, shape: str
 ) -> None:
     _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
-    absent = tmp_path / "absent-dir" / "lane-runtime"
+    absent = (
+        str(tmp_path / "absent-dir" / "lane-runtime")
+        if shape == "absolute"
+        else "./absent-dir/lane-runtime"
+    )
     config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
     config = config_path.read_text(encoding="utf-8")
     config_path.write_text(
         config.replace(
             f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
-            f"codex_headless_command: [{json.dumps(str(absent))}]",
+            f"codex_headless_command: [{json.dumps(absent)}]",
         ),
         encoding="utf-8",
     )
@@ -629,7 +634,7 @@ def test_missing_absolute_runtime_command_is_refused_without_the_trusted_path_re
         launcher._config_for_launcher("codex")
 
     message = str(refused.value)
-    assert repr(str(absent)) in message
+    assert repr(absent) in message
     assert "does not exist or is not executable" in message
     assert "not looked up on the trusted path" in message
     assert launcher.SAFE_EXECUTABLE_PATH not in message
@@ -688,9 +693,11 @@ def test_descriptor_issued_from_a_linked_worktree_launches(tmp_path: Path) -> No
 @pytest.mark.evidence
 def test_lane_worktree_from_a_foreign_repository_is_refused(tmp_path: Path) -> None:
     # Hostile mutation for #1109: replace the lane worktree with a separate clone
-    # that agrees with the descriptor on everything a path comparison could see
-    # — its path, branch, head, base and both origin URLs — but is another
-    # repository, so its Git common directory is its own.
+    # that agrees with the descriptor on its worktree path, branch, head, base and
+    # both origin URLs, but is another repository, so its Git common directory is
+    # its own. The old path comparison refused this clone too (its common-dir
+    # parent is the clone itself); the common-directory comparison is what must
+    # keep refusing it now that a linked issuer is accepted.
     _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
     worktree = Path(descriptor["worktree"])
     marker = (worktree / ".devkit_state_root").read_bytes()
