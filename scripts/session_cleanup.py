@@ -206,12 +206,13 @@ class Registry:
         # Round statuses: "removed" is retired; "allocated" refuses unless the
         # caller records a keep reason, and a kept round still retires with the
         # inventory; "removing" is an interrupted retirement and always refuses,
-        # because only resuming it is safe. An allocated round whose path is
-        # already gone still refuses: its retirement records it removed cheaply.
-        pending = [r for r in record["rounds"] if r["status"] != "removed" and not r.get("kept")]
-        if any(r["status"] == "removing" for r in pending):
+        # because only resuming it is safe, and a keep reason does not exempt it.
+        # An allocated round whose path is already gone still refuses: its
+        # retirement records it removed cheaply.
+        if any(r["status"] == "removing" for r in record["rounds"]):
             raise sweep.ConfigError("an earlier round's retirement was interrupted; resume it with "
                                     "preview/apply --round before allocating another")
+        pending = [r for r in record["rounds"] if r["status"] != "removed" and not r.get("kept")]
         if pending and not (keep_previous and keep_previous.strip()):
             ids = ", ".join(r["receipt"]["id"] for r in pending)
             raise sweep.ConfigError(f"earlier round {ids} is not retired; retire it with seal, preview "
@@ -244,10 +245,19 @@ class Registry:
         record["worktrees"].append({"path": str(path), "identity": list(sweep._identity(str(path))),
                                     "head": git(path, "rev-parse", "HEAD"), "runtime": runtime,
                                     "branch": git(path, "rev-parse", "--abbrev-ref", "HEAD")})
+        record["complete"] = False
         self.save(record)
 
     def track_process(self, record: dict, pid: int) -> None:
         self.require_open(record)
+        # A round's approval token binds the registered writers, as the
+        # inventory's does, so the writer list freezes while any round holds
+        # an approval it has not finished: "allocated" with an approval (apply
+        # stopped on an active user) and "removing" refuse; "removed" is done.
+        for entry in record["rounds"]:
+            if entry.get("approval") and entry["status"] != "removed":
+                raise sweep.ConfigError(f"round {entry['receipt']['id']} has an approved retirement in "
+                                        "progress; finish it with apply --round before registering writers")
         if pid <= 1:
             raise sweep.ConfigError("invalid process id")
         os.kill(pid, 0)
@@ -448,16 +458,17 @@ class Registry:
         preview["processes_finished_attestation"] = True
         result = preview["paths"][0]
         if preview["active_users"]:
-            preview["complete"] = False
-            return preview
+            entry["last_result"] = {**preview, "complete": False}
+            self.save(record)
+            return entry["last_result"]
         self.retire_round(record, entry, result, lambda: self.verify_seal(record, entry["seal"]))
         if result["action"] == "absent":
             entry["status"] = "removed"
-        preview["complete"] = result["action"] in {"removed", "absent"}
+        entry["last_result"] = {**preview, "complete": result["action"] in {"removed", "absent"}}
         record["complete"] = (not record["worktrees"]
                               and all(r["status"] == "removed" for r in record["rounds"]))
         self.save(record)
-        return preview
+        return entry["last_result"]
 
     def retire_round(self, record: dict, entry: dict, result: dict, verify) -> None:
         if result["action"] in {"eligible", "kept"}:
@@ -677,11 +688,11 @@ def main(argv: list[str] | None = None) -> int:
                 result = record
                 if args.action == "allocate":
                     result = registry.allocate(record, args.root, args.head, args.keep_previous)
-                elif args.action == "seal" and args.round:
+                elif args.action == "seal" and args.round is not None:
                     result = registry.seal_round(record, args.round, read_json(args.manifest))
-                elif args.action == "preview" and args.round:
+                elif args.action == "preview" and args.round is not None:
                     result = registry.preview_round(record, args.round)
-                elif args.action == "apply" and args.round:
+                elif args.action == "apply" and args.round is not None:
                     result = registry.apply_round(record, args.round, args.approve, args.processes_finished)
                 elif args.action == "track-worktree":
                     registry.track_worktree(record, args.path, args.runtime)

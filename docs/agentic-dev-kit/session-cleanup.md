@@ -187,14 +187,17 @@ uv run <engine-dir>/session_cleanup.py preview <session> --round <receipt-id>
 uv run <engine-dir>/session_cleanup.py apply <session> --round <receipt-id> --approve <approval-token> --processes-finished
 ```
 
-The manifest has the shape described in the next section, scoped to that round, and
-each round is sealed once. The preview's token binds that round's receipt and seal and
-the inventory's registered writers. The authorization rules and every guard of
-*Preview, approve the concrete scope, apply* below apply unchanged. A retired
-round records `removed`; an interrupted one stays `removing` under its own persisted
-approval and resumes with the same `apply --round`. The inventory reports
-`complete` while every round is removed and it tracks no worktree, so an inventory
-used only for rounds needs no final seal. Tracked worktrees and kept rounds still
+The manifest has the shape described in *Retain required evidence, then seal*
+above, scoped to that round, and each round is sealed once. The preview's token binds
+that round's receipt and seal and the inventory's registered writers. The
+authorization rules and every guard of *Preview, approve the concrete scope, apply*
+below apply unchanged. A retired round records `removed`; an interrupted one stays
+`removing` under its own persisted approval and resumes with the same `apply --round`.
+While a round holds an approval it has not finished, `track-process` refuses, because
+that token binds the registered writers. Each round apply records its own
+`last_result` on the round. The inventory reports `complete` while every round is
+removed and it tracks no worktree, so an inventory used only for rounds needs no final
+seal. Tracked worktrees and kept rounds still
 retire through the inventory's seal, preview and apply.
 
 ## Preview, approve the concrete scope, apply

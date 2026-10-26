@@ -13,3 +13,8 @@ allocation.
 A retired round's recorded status is now `removed` rather than `removing`. A
 consumer that reads `session.json` and treats `removing` as finished must also
 accept `removed`.
+
+While a round holds an approval it has not finished (its `apply --round` stopped on an
+active user, or was interrupted), `track-process` refuses with exit `2`. Finish that
+round's `apply --round` first. Each round's last apply result is recorded as
+`last_result` on that round's entry.
