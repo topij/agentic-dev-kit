@@ -65,7 +65,11 @@ Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12
   but does not exclude an order- or time-dependent test. `~/Library/LaunchAgents` holds
   no job for this repository, and no other local session for it was listed. Writer not
   identified. A `make test` stamp run in a standalone clone outside the worktree set
-  avoided it.
+  avoided it. Recurred 2026-10-26: `make test` at `36b4db6d` in
+  `.claude/worktrees/delta-draw-verdicts` failed only the guard, on
+  `state/pr-watch/1248.json` (written 08:02:51, 08:03:48, 09:09:54, 09:12:55 UTC). Lens
+  transcripts show no `pr_watch` call; per-file reruns, and a file planted in place of the
+  `state` directory, caught no write. A standalone-clone stamp again avoided it.
 - **A failed `dev_session.sh new` leaves a session neither `rm` nor `new` clears.**
   Severity L, kept for accumulation. On 2026-10-25, in a single-branch clone whose
   fetch refspec lacked `main`, `new live3 --headless` failed at `git worktree add`
