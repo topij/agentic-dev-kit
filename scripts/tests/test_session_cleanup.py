@@ -569,6 +569,19 @@ def test_cli_exit_status(session, state, expected):
         assert json.loads(result.stdout)["complete"] == (state == "complete")
 
 
+@pytest.mark.parametrize("options,expected", [({}, 30), ({"timeout": 300}, 300)])
+def test_git_forwards_timeout_to_subprocess(tmp_path, monkeypatch, options, expected):
+    observed = []
+
+    def run(argv, **kwargs):
+        observed.append((argv, kwargs["timeout"]))
+        return subprocess.CompletedProcess(argv, 0, stdout="observed\n", stderr="")
+
+    monkeypatch.setattr(cleanup.subprocess, "run", run)
+    assert cleanup.git(tmp_path, "status", **options) == "observed"
+    assert observed == [(["git", "-C", str(tmp_path), "status"], expected)]
+
+
 @pytest.mark.parametrize("phase", ["preview", "recheck", "remove"])
 def test_git_timeout_is_per_item_and_retryable(session, monkeypatch, phase):
     registry, record, root = session
