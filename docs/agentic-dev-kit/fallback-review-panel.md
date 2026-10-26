@@ -798,10 +798,12 @@ author re-reading their own diff. **Cite them by name, never by number.**
    mutation diffs, restoration evidence and relevant logs outside `<round>`;
    do not retain entire dependency trees as evidence. Remove only this round's
    registered lens worktrees with `git worktree remove` after checking their
-   status. With `scratch.session_registry`, use the sealed-inventory retirement
-   in `session-cleanup.md`, retaining operator authorization for the concrete
-   paths (a standing grant under its *Clean up what this session created* covers
-   this session's own round). Otherwise preview and apply targeted retirement
+   status. With `scratch.session_registry`, retire the round with `--round` as
+   *Retire each round before the next* in `session-cleanup.md` describes, retaining
+   operator authorization for the concrete paths (a standing grant under its
+   *Clean up what this session created* covers this session's own round). The
+   engine refuses the next `allocate` until the round is retired or kept with a
+   recorded reason. Otherwise preview and apply targeted retirement
    using the allocation receipt:
 
    ```sh
