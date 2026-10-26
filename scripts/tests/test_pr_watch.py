@@ -5840,6 +5840,23 @@ def _record(monkeypatch, pr_watch, **kwargs) -> tuple[dict, dict]:
     return recorded[0]["review_receipt"], report
 
 
+def _delta_verdicts(lenses: str = "correctness") -> str:
+    """A disposition carrying both draw verdicts for each lens, as #921 requires."""
+    return "\n".join(
+        f"{lens}:\nprose-class: confirmed — record prose.\n"
+        "safety-critical: confirmed — no listed path."
+        for lens in lenses.split(",")
+    )
+
+
+def _stub_delta_post(monkeypatch: pytest.MonkeyPatch, pr_watch) -> None:
+    monkeypatch.setattr(
+        pr_watch,
+        "_post_disposition_comment",
+        lambda pr, body: ("https://example.test/pr/9#issuecomment-1", None),
+    )
+
+
 def _record_composed(
     monkeypatch: pytest.MonkeyPatch,
     pr_watch,
@@ -5869,6 +5886,9 @@ def _record_composed(
         "_delta_paths",
         lambda base, delta_head: list(paths or ["docs/review-record.md"]),
     )
+    if disposition is None:
+        disposition = _delta_verdicts(lenses)
+        _stub_delta_post(monkeypatch, pr_watch)
     report = pr_watch.record_review(
         9,
         "fallback:delta",
@@ -6020,6 +6040,7 @@ def test_composition_refuses_an_unestablished_boundary(
             "final-head",
             lenses="correctness",
             compose_parent="parent-head",
+            disposition=_delta_verdicts(),
             now=NOW,
         )
 
@@ -6274,12 +6295,14 @@ def test_composed_coverage_can_extend_across_reviewed_delta_heads(
     recorded: list[dict] = []
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: recorded.append(state))
     monkeypatch.setattr(pr_watch, "_delta_paths", paths)
+    _stub_delta_post(monkeypatch, pr_watch)
     pr_watch.record_review(
         9,
         "fallback:delta",
         "final-head",
         lenses="adversarial,correctness",
         compose_parent="middle-head",
+        disposition=_delta_verdicts("adversarial,correctness"),
         now=NOW,
     )
     receipt = recorded[0]["review_receipt"]
@@ -6724,6 +6747,259 @@ def test_the_cli_threads_the_composed_parent_only_to_delta_receipts(
         "--compose-parent requires --record-review fallback:delta"
         in capsys.readouterr().err
     )
+
+
+# The verdict lines PR #1244's delta disposition posted, trimmed: the shape the
+# check must accept, with prose around and between the lens blocks.
+POSTED_DELTA_VERDICTS = """LOW delta pass. Verdict lines, verbatim:
+
+adversarial:
+prose-class: confirmed — the fragment is adopter-facing executed prose.
+safety-critical: confirmed — the delta touches only a changelog fragment.
+repair: contained — one file.
+
+correctness:
+prose-class: confirmed — the changed file is a changelog fragment.
+safety-critical: confirmed — not on the safety-critical list.
+repair: R2 F1 is contained and now correct.
+
+correctness delta F1 LOW regression: accept — ticket: recorded on #1243.
+adversarial delta: no findings.
+"""
+
+
+def test_the_draw_names_match_the_ones_the_lens_prompt_asks_for() -> None:
+    """The prompt tells the lens which names to begin its lines with, and the
+    receipt checks for them; renaming one side would refuse every honest receipt
+    or wave through the other name."""
+    pr_watch = _load_pr_watch()
+    spec = importlib.util.spec_from_file_location(
+        "panel_prompt_under_test", ENGINE_DIR / "panel_prompt.py"
+    )
+    assert spec is not None and spec.loader is not None
+    panel_prompt = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(panel_prompt)
+    prompted = tuple(name for _, name in panel_prompt.DELTA_DRAWS)
+    assert prompted == pr_watch.DELTA_DRAW_NAMES
+
+
+def test_a_delta_disposition_in_the_posted_shape_is_accepted() -> None:
+    pr_watch = _load_pr_watch()
+    pr_watch.check_delta_verdicts(["adversarial", "correctness"], POSTED_DELTA_VERDICTS)
+
+
+def test_a_lens_that_answered_only_the_repairs_is_refused() -> None:
+    """#920's case: the correctness lens gave repair lines and no draw verdict."""
+    pr_watch = _load_pr_watch()
+    disposition = POSTED_DELTA_VERDICTS.replace(
+        "correctness:\nprose-class: confirmed — the changed file is a changelog fragment.\n"
+        "safety-critical: confirmed — not on the safety-critical list.\n",
+        "correctness:\n",
+    )
+    assert disposition != POSTED_DELTA_VERDICTS
+    with pytest.raises(ValueError) as exc:
+        pr_watch.check_delta_verdicts(["adversarial", "correctness"], disposition)
+    assert "correctness has 0 'prose-class:' lines" in str(exc.value)
+    assert "correctness has 0 'safety-critical:' lines" in str(exc.value)
+    assert "adversarial has" not in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    ("disposition", "lenses", "message"),
+    [
+        (None, "correctness", "needs --disposition"),
+        ("  \n", "correctness", "needs --disposition"),
+        (
+            "prose-class: confirmed\nsafety-critical: confirmed",
+            "correctness",
+            "no block opened by a line 'correctness:'",
+        ),
+        (
+            "correctness:\nprose-class: confirmed\nsafety-critical: confirmed",
+            "adversarial,correctness",
+            "no block opened by a line 'adversarial:'",
+        ),
+        (
+            "correctness:\nprose-class: confirmed\nprose-class: disputed\n"
+            "safety-critical: confirmed",
+            "correctness",
+            "2 'prose-class:' lines",
+        ),
+        (
+            "correctness:\nprose-class: probably fine\nsafety-critical: confirmed",
+            "correctness",
+            "'prose-class:' line is not confirmed or disputed",
+        ),
+        (
+            # The prompt's own unfilled template is not a verdict.
+            "correctness:\nprose-class: confirmed|disputed — <your reason>\n"
+            "safety-critical: confirmed|disputed — <your reason>",
+            "correctness",
+            "'prose-class:' line is not confirmed or disputed",
+        ),
+        (
+            "correctness:\nprose-class: confirmed-ish\nsafety-critical: confirmed",
+            "correctness",
+            "'prose-class:' line is not confirmed or disputed",
+        ),
+        (
+            # Adorned lines are not verdict lines: posted verbatim, a lens's line
+            # is unadorned, as the prompt renders it.
+            "correctness:\n- prose-class: confirmed\nsafety-critical: confirmed",
+            "correctness",
+            "correctness has 0 'prose-class:' lines",
+        ),
+        (
+            # An unnamed lens's header ends the named lens's block, so its line
+            # is not credited to the lens that skipped the draw.
+            "correctness:\nprose-class: confirmed\nadversarial:\n"
+            "safety-critical: disputed — x",
+            "correctness",
+            "correctness has 0 'safety-critical:' lines",
+        ),
+        (
+            # A blank line after the block's lines ends it, so a summary below
+            # is not credited to the last lens.
+            "correctness:\nprose-class: confirmed\n\nSummary\n"
+            "safety-critical: confirmed — everything fine",
+            "correctness",
+            "correctness has 0 'safety-critical:' lines",
+        ),
+        (
+            # A bare draw name is not a header, so it does not end the block: it is
+            # a second, empty, prose-class line.
+            "correctness:\nprose-class: confirmed\nsafety-critical: confirmed\n"
+            "prose-class:",
+            "correctness",
+            "correctness has 2 'prose-class:' lines",
+        ),
+        (
+            # `ſ` folds to `s` under a Unicode case fold; names match ASCII only.
+            "correctness:\nprose-clasſ: confirmed\nsafety-critical: confirmed",
+            "correctness",
+            "correctness has 0 'prose-class:' lines",
+        ),
+        (
+            "correctness:\nprose-class: confirmed\nsafety-critical: diſputed",
+            "correctness",
+            "'safety-critical:' line is not confirmed or disputed",
+        ),
+        (
+            "correctness :\nprose-class: confirmed\nsafety-critical: confirmed",
+            "correctness",
+            "no block opened by a line 'correctness:'",
+        ),
+        (
+            "correctness:\nprose-class: confirmed\nsafety-critical: confirmed",
+            "a sentence, not a lens",
+            "must name the lens that ran",
+        ),
+    ],
+)
+def test_a_delta_disposition_without_each_draw_verdict_is_refused(
+    disposition: str | None, lenses: str, message: str
+) -> None:
+    pr_watch = _load_pr_watch()
+    names = [part.strip() for part in lenses.split(",")]
+    with pytest.raises(ValueError, match=re.escape(message)):
+        pr_watch.check_delta_verdicts(names, disposition)
+
+
+@pytest.mark.parametrize(
+    "disposition",
+    [
+        # PR #1237's shape: a blank line between the header and its lines.
+        "adversarial:\n\nprose-class: confirmed — x\nsafety-critical: confirmed — x\n"
+        "\ncorrectness:\n\nprose-class: confirmed — x\nsafety-critical: confirmed — x",
+        # Verdicts first, then a findings section under the same headers.
+        "adversarial:\nprose-class: confirmed\nsafety-critical: confirmed\n"
+        "correctness:\nprose-class: confirmed\nsafety-critical: disputed.\n\n"
+        "adversarial:\nF1 LOW: x\ncorrectness:\nno findings",
+        # Another lens's block, not named, beside the named ones.
+        "adversarial:\nprose-class: confirmed\nsafety-critical: confirmed\n"
+        "verifier:\nprose-class: disputed\n"
+        "correctness:\nprose-class: confirmed\nsafety-critical: confirmed",
+    ],
+)
+def test_honest_delta_disposition_shapes_are_accepted(disposition: str) -> None:
+    pr_watch = _load_pr_watch()
+    pr_watch.check_delta_verdicts(["adversarial", "correctness"], disposition)
+
+
+def test_a_case_folding_draw_name_does_not_misread_the_verdict() -> None:
+    """`ß` folds to `ss`, so matching on a folded line and slicing the original
+    misread the value. A draw name only matches as written, case aside."""
+    pr_watch = _load_pr_watch()
+    with pytest.raises(ValueError, match="0 'prose-class:' lines"):
+        pr_watch.check_delta_verdicts(
+            ["correctness"],
+            "correctness:\nprose-claß:confirmed\nsafety-critical: confirmed",
+        )
+
+
+@pytest.mark.parametrize(
+    ("disposition", "line"),
+    [
+        ("correctness:\nprose-class: confirmed — a\n\nsafety-critical: confirmed — b", 4),
+        ("correctness:\nprose-class: confirmed\n- safety-critical: confirmed", 3),
+        ("correctness:\nprose-class: confirmed\n**safety-critical:** confirmed", 3),
+        ("correctness:\nprose-class: confirmed\nnote:\nsafety-critical: confirmed", 4),
+    ],
+)
+def test_a_refusal_points_at_the_draw_line_it_did_not_count(
+    disposition: str, line: int
+) -> None:
+    """A lens's line that is there but not counted must not read as missing: the
+    refusal names the line, so the cockpit can see which rule set it aside."""
+    pr_watch = _load_pr_watch()
+    with pytest.raises(ValueError) as exc:
+        pr_watch.check_delta_verdicts(["correctness"], disposition)
+    message = str(exc.value)
+    assert "correctness has 0 'safety-critical:' lines" in message
+    assert f"'safety-critical:' line at line {line} was not counted" in message
+
+
+def test_a_disputed_draw_counts_as_a_verdict() -> None:
+    """The check is that each draw was answered. What a dispute owes is the
+    doctrine's call, not this gate's."""
+    pr_watch = _load_pr_watch()
+    pr_watch.check_delta_verdicts(
+        ["Correctness"],
+        "CORRECTNESS:\nProse-Class: Disputed — it is executed.\n"
+        "safety-critical: confirmed.",
+    )
+
+
+def test_a_delta_receipt_missing_a_verdict_is_refused_before_any_read(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Refused at the CLI with exit 2, before the forge is read, any comment
+    posted or any state written."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
+
+    def touched(*args, **kwargs):
+        raise AssertionError("the refusal must come before this")
+
+    for name in ("fetch_review_snapshot", "_post_disposition_comment", "save_state"):
+        monkeypatch.setattr(pr_watch, name, touched)
+    assert pr_watch.main(
+        [
+            "9",
+            "--record-review",
+            "fallback:delta",
+            "--lenses",
+            "correctness",
+            "--compose-parent",
+            "parent-head",
+            "--head",
+            "final-head",
+            "--disposition",
+            "correctness:\nrepair: contained.",
+        ]
+    ) == 2
+    assert "missing draw verdicts" in capsys.readouterr().err
 
 
 def test_a_hand_edited_receipt_cannot_break_or_inflate_either_render() -> None:
@@ -11114,7 +11390,7 @@ def test_a_composed_delta_receipt_stays_valid_with_a_disposition(
     }
 
     receipt, _report = _record_composed(
-        monkeypatch, pr_watch, previous, disposition="the delta lens found nothing."
+        monkeypatch, pr_watch, previous, disposition=_delta_verdicts()
     )
 
     assert receipt["disposition_comment"] == "https://example.test/c/2"
@@ -11988,12 +12264,14 @@ def _compose_on_class(
     saved: list[dict] = []
     monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
     monkeypatch.setattr(pr_watch, "_delta_paths", lambda base, head: ["docs/a.md"])
+    _stub_delta_post(monkeypatch, pr_watch)
     pr_watch.record_review(
         9,
         "fallback:delta",
         CLASS_HEAD,
         lenses="correctness",
         compose_parent=CLASS_PARENT,
+        disposition=_delta_verdicts("correctness"),
         now=NOW,
     )
     return saved[0]["review_receipt"]

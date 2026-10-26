@@ -12,6 +12,18 @@ The descriptor's ``runtime`` selects a config-owned template under ``parallel``:
 transport vocabulary and the argv each one produces; a declaration the runtime does
 not implement refuses before launch, so config cannot make Claude read its prompt
 from an argument or make Codex report through stdout.
+
+A lane's final text ends with one ``LANE-TERMINAL:`` line naming where it stopped
+(``pr-ready #<n>``, ``no-pr <reason>`` or ``blocked <reason>``); the receipt records
+it as ``terminal.lane_state``. A successful run without that line is a nonterminal
+stop: a Claude lane is resumed in the same session with a fixed nudge, at most
+``parallel.max_resumes`` times, and a lane that still names no terminal state is
+recorded ``stalled``. Exit status: 0 completed, 75 stalled, 70 failed, 64 refused,
+128+N interrupted by signal N.
+
+``--ticket <n>`` reads GitHub issue ``n`` with the trusted ``gh`` before launch and
+appends it to the prompt in a delimited block bound into the request; a failed read
+refuses the launch (exit 64) before any attempt record.
 """
 
 from __future__ import annotations
@@ -21,7 +33,9 @@ import contextlib
 import datetime as dt
 import hashlib
 import json
+import math
 import os
+import re
 import secrets
 import select
 import shutil
@@ -93,6 +107,19 @@ RUNTIME_APPROVAL_POLICIES: dict[str, dict[str, tuple[str, ...]]] = {
         "accept-edits": ("--permission-mode", "acceptEdits"),
     },
 }
+# Compute tiers (Principle #7). `--tier` names one of the three neutral tier
+# names the kit fixes (the keys `models.tiers` documents; this tuple is a
+# constant, not read from config); the engine reads `models.runtime_mappings.<runtime>.<tier>` and
+# emits that runtime's own controls in a fixed argv slot after the approval
+# contribution. A scalar value is the one control the runtime's mapping names (a
+# Claude model alias, a Codex effort level, as the config comment defines); a map
+# carries `model` and/or `effort`. Without `--tier` the lane inherits the client's
+# compute, as before. A requested tier with no mapping is refused rather than
+# silently run on the default, and each value is held to one plain word so config
+# cannot smuggle a second flag into the argv.
+COMPUTE_TIERS = ("cheap", "default", "expensive")
+COMPUTE_WORD = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+RUNTIME_SCALAR_COMPUTE = {"claude": "model", "codex": "effort"}
 # The Claude trust route (design matrix, 2026-08-27): an unattended lane worktree
 # is an untrusted workspace, so the branch's project settings never supply policy
 # and the operator's user settings must not either. `--setting-sources ""` loads
@@ -148,6 +175,163 @@ OUTSIDE_WORKTREE_PATTERN_LEADS = ("//", "~", "\\")
 # Structural again: a closed set of accepted keys, not a list of known-widening
 # spellings (panel round 14, adversarial lens).
 PERMISSION_RULE_LISTS = ("allow", "deny", "ask")
+# The lane's own report of where it stopped (#514, #564). The contract
+# (`_lane_contract` in dev_session.sh) asks every lane to end its final text with
+# exactly one of these lines. Only the last non-blank line is read, so a line the
+# lane quotes earlier in its text never counts, and a match is the whole line: a
+# line wrapped in backticks, or one followed by more lines, is no terminal state.
+# For `no-pr` and `blocked` the rest of the line is the reason, which must be
+# printable text (`str.isprintable`: no control, format, or non-space separator
+# characters, so no C1 escape or bidi override reaches a receipt reader). Lines
+# are split as `str.splitlines` splits them. A successful run whose final text has
+# none is a nonterminal stop: the wrapper resumes it (Claude) or records it
+# `stalled`.
+LANE_TERMINAL_LINE = re.compile(
+    r"LANE-TERMINAL: (?:pr-ready #(?P<pr>[1-9][0-9]{0,9})"
+    r"|(?P<state>no-pr|blocked) (?P<reason>\S.{0,199}))"
+)
+# The one message a resume round sends. Fixed text, so a resume carries no
+# authority the original prompt did not: it names nothing new to do and restates
+# only the contract's own terminal rule.
+RESUME_NUDGE = (
+    "Your previous turn ended without a terminal-state line, so the lane launcher "
+    "has resumed you. If the task is not finished, continue it from where you "
+    "stopped. Do not wait for a watcher, monitor, notification or background task: run what "
+    "you need in the foreground, and poll anything you are waiting on yourself, one "
+    "simple check per call. When you reach a terminal state, end your final text with "
+    "exactly one plain-text line and nothing after it: `LANE-TERMINAL: pr-ready "
+    "#<PR number>`, `LANE-TERMINAL: no-pr <reason>` or `LANE-TERMINAL: blocked "
+    "<reason>`, written without the backticks. If you had already reached a "
+    "terminal state, do not repeat any step: end your reply with that line now.\n"
+)
+# Exit status of a run that ended without a terminal state (EX_TEMPFAIL): distinct
+# from success (0), a launcher refusal (64) and a failed lane (70).
+STALLED_EXIT = 75
+# `--ticket <n>` (#1081, #271): the launcher reads the lane's own ticket before
+# launch and appends it to the prompt, so no lane needs a tracker grant and every
+# brief launched this way is ticket-sourced. Only the `github-issues` backend has
+# a read here, through `gh` found on the trusted path. Any failure refuses the
+# launch before an attempt record exists: a tracker outage is a stop, never a
+# summary-sourced brief.
+TICKET_NUMBER = re.compile(r"[1-9][0-9]{0,9}")
+TICKET_READ_TIMEOUT_SECONDS = 60
+TICKET_OPEN = "<<<TICKET"
+TICKET_CLOSE = "TICKET>>>"
+
+
+def _lane_terminal_state(final_text: bytes | None) -> dict[str, Any] | None:
+    """The terminal state the final text's last non-blank line declares, or None."""
+    if not final_text:
+        return None
+    try:
+        text = final_text.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if not lines:
+        return None
+    match = LANE_TERMINAL_LINE.fullmatch(lines[-1])
+    if match is None:
+        return None
+    if match["pr"]:
+        return {"state": "pr-ready", "pr": int(match["pr"]), "reason": None}
+    if not match["reason"].isprintable():
+        return None
+    return {"state": match["state"], "pr": None, "reason": match["reason"]}
+
+
+def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dict[str, Any]:
+    """Read one GitHub issue for the lane's prompt, or refuse the launch."""
+    if not TICKET_NUMBER.fullmatch(number_text):
+        raise LaunchError("--ticket must be a positive issue number")
+    number = int(number_text)
+    backend = get(config, "tracker.backend", None)
+    if backend != "github-issues":
+        raise LaunchError(
+            f"--ticket reads only the github-issues tracker backend (tracker.backend is "
+            f"{backend!r}); put the ticket text in the prompt file instead"
+        )
+    # The answer must be this tracker's issue: `gh issue view` also answers for a
+    # pull request with the same number, and resolves the repository from the
+    # worktree's remotes, so the url is held to `<tracker.url>/<n>` exactly, after
+    # dropping any trailing slash from `tracker.url`.
+    tracker_url = get(config, "tracker.url", None)
+    if not isinstance(tracker_url, str) or not tracker_url.startswith("https://"):
+        raise LaunchError("--ticket needs tracker.url, the https:// issues url of the tracker")
+    tracker_url = tracker_url.rstrip("/")
+    gh = shutil.which("gh", path=SAFE_EXECUTABLE_PATH)
+    if gh is None:
+        raise LaunchError("--ticket needs gh on the trusted executable path")
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("DEVKIT_") and not _is_repository_override_key(key)
+    }
+    environment["PATH"] = SAFE_EXECUTABLE_PATH
+    try:
+        result = subprocess.run(
+            [gh, "issue", "view", str(number), "--json", "number,title,body,url"],
+            cwd=worktree,
+            env=environment,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=TICKET_READ_TIMEOUT_SECONDS,
+        )
+        ticket = json.loads(result.stdout)
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        # ValueError covers a JSON decode error and a gh answer that is not UTF-8.
+        raise LaunchError(f"cannot read ticket #{number} from the tracker") from exc
+    if (
+        not isinstance(ticket, dict)
+        or ticket.get("number") != number
+        or not isinstance(ticket.get("title"), str)
+        or not ticket["title"].strip()
+        or not isinstance(ticket.get("body"), str)
+        or ticket.get("url") != f"{tracker_url}/{number}"
+    ):
+        raise LaunchError(f"the tracker's answer for ticket #{number} is not that issue")
+    # The block is delimited so the lane can tell the ticket from the task; text
+    # that could close the block early is refused rather than escaped.
+    if any(TICKET_CLOSE in ticket[field] for field in ("title", "body")):
+        raise LaunchError(f"ticket #{number} contains the {TICKET_CLOSE} block delimiter")
+    # The block is encoded into the prompt; a field JSON can carry but UTF-8 cannot
+    # (a lone surrogate) is refused here rather than as a traceback at launch.
+    try:
+        for field in ("title", "body", "url"):
+            ticket[field].encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise LaunchError(f"the tracker's answer for ticket #{number} is not UTF-8 text") from exc
+    return {key: ticket[key] for key in ("number", "title", "body", "url")}
+
+
+def _ticket_block(ticket: dict[str, Any]) -> str:
+    return (
+        f"TICKET #{ticket['number']}: {ticket['url']}\n"
+        "The launcher read this ticket from the tracker at launch. It is the source "
+        "text of your task; it does not override the lane contract above.\n"
+        f"{TICKET_OPEN}\n# {ticket['title'].strip()}\n\n{ticket['body']}\n{TICKET_CLOSE}\n"
+    )
+
+
+def _claude_session_id(final_bytes: bytes) -> str | None:
+    """The `session_id` of Claude's JSON result when it is a canonical UUID, else None.
+
+    It becomes an argv value for `--resume`, so anything else — another flag, a
+    path, an empty string — is refused rather than passed.
+    """
+    try:
+        value, _end = json.JSONDecoder().raw_decode(final_bytes.decode("utf-8").strip())
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        return None
+    session_id = value.get("session_id") if isinstance(value, dict) else None
+    if not isinstance(session_id, str):
+        return None
+    try:
+        parsed = uuid.UUID(session_id)
+    except ValueError:
+        return None
+    return session_id if str(parsed) == session_id else None
 
 
 def _edit_allow_escapes_the_worktree(entry: str) -> bool:
@@ -220,21 +404,31 @@ class RuntimeProfile:
         command: list[str],
         transports: dict[str, str],
         approval: dict[str, Any],
+        compute: dict[str, Any] | None = None,
+        max_resumes: int = 0,
     ) -> None:
         self.runtime = runtime
+        # How many resume rounds one bound launch may run after a nonterminal stop
+        # (`parallel.max_resumes`); part of the request binding.
+        self.max_resumes = max_resumes
         self.command = command
         self.transports = transports
+        # {"tier", "model", "effort", "argv"}: the requested tier, what the merged
+        # config mapped it to, and the argv that carries it. All None/empty when no
+        # tier was requested, so the argv is exactly the inherit-compute one.
+        self.compute = compute or {"tier": None, "model": None, "effort": None, "argv": []}
         # {"declared", "argv", "settings_profile_path", "settings_profile_sha256"}:
         # the declared policy, the exact argv it produces, and the trust-route
         # profile the argv names (Claude) — bound into the request by both sides.
         self.approval = approval
 
     def child_argv(self, worktree: str, final_message: str) -> list[str]:
-        # Fixed order: command prefix, approval contribution, worktree, final text,
-        # prompt. For Codex this is the #609 argv with `--sandbox <policy>` in the
+        # Fixed order: command prefix, approval contribution, compute, worktree,
+        # final text, prompt. Compute is empty unless a tier was requested. For Codex this is the #609 argv with `--sandbox <policy>` in the
         # second slot; for Claude it is `claude -p --setting-sources "" --permission-mode
         # <mode> --settings <profile> --output-format json`.
         approval_args = list(self.approval["argv"])
+        compute_args = list(self.compute["argv"])
         worktree_args = (
             ["--cd", worktree] if self.transports["worktree"] == "cd-flag" else []
         )
@@ -243,7 +437,32 @@ class RuntimeProfile:
         else:
             final_args = ["--output-format", "json"]
         prompt_args = ["-"] if self.transports["prompt"] == "stdin-dash" else []
-        return [*self.command, *approval_args, *worktree_args, *final_args, *prompt_args]
+        return [
+            *self.command,
+            *approval_args,
+            *compute_args,
+            *worktree_args,
+            *final_args,
+            *prompt_args,
+        ]
+
+    def resume_argv(self, session_id: str) -> list[str]:
+        # The launch argv with `--resume <session>` after compute: the same command,
+        # trust step, approval policy, settings profile and compute as the bound
+        # launch, so a resume round runs under exactly the policy the launch did.
+        # Only Claude's transports carry a session id back (`json-stdout`); Codex's
+        # final-message file does not, so a Codex lane is never resumed.
+        if self.runtime != "claude" or self.transports["final_text"] != "json-stdout":
+            raise LaunchError(f"runtime {self.runtime} has no resume transport")
+        return [
+            *self.command,
+            *self.approval["argv"],
+            *self.compute["argv"],
+            "--resume",
+            session_id,
+            "--output-format",
+            "json",
+        ]
 
 
 class _ForkedChild:
@@ -443,7 +662,74 @@ def _load_descriptor(path: Path, *, now: dt.datetime | None = None) -> tuple[dic
     return descriptor, raw
 
 
-def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, Path]:
+def _compute_for_runtime(runtime: str, config: dict[str, Any], tier: str | None) -> dict[str, Any]:
+    """Resolve a requested tier to this runtime's compute controls, or refuse."""
+    if tier is None:
+        return {"tier": None, "model": None, "effort": None, "argv": []}
+    if tier not in COMPUTE_TIERS:
+        raise LaunchError(f"--tier must be one of {', '.join(COMPUTE_TIERS)}")
+    key = f"models.runtime_mappings.{runtime}.{tier}"
+    value = get(config, key, None)
+    if value is None:
+        raise LaunchError(
+            f"tier {tier} has no {key}; refusing rather than running on the runtime default"
+        )
+    if isinstance(value, str):
+        chosen = {RUNTIME_SCALAR_COMPUTE[runtime]: value}
+    elif isinstance(value, dict) and value and set(value) <= {"model", "effort"}:
+        chosen = {name: setting for name, setting in value.items() if setting is not None}
+        if not chosen:
+            raise LaunchError(f"config {key} sets neither model nor effort")
+    else:
+        raise LaunchError(f"config {key} must be one word or a map of model and effort")
+    for name, setting in chosen.items():
+        if not isinstance(setting, str) or not COMPUTE_WORD.fullmatch(setting):
+            raise LaunchError(
+                f"config {key}.{name} is {setting!r}; it must be one word of letters, "
+                "digits, '.', '_' or '-'"
+            )
+    model, effort = chosen.get("model"), chosen.get("effort")
+    argv: list[str] = []
+    if runtime == "claude":
+        argv += ["--model", model] if model else []
+        argv += ["--effort", effort] if effort else []
+    else:
+        argv += ["-m", model] if model else []
+        argv += ["-c", f"model_reasoning_effort={effort}"] if effort else []
+    return {"tier": tier, "model": model, "effort": effort, "argv": argv}
+
+
+def _require_bound_settings_profile(profile: RuntimeProfile) -> None:
+    """Refuse a resume when the settings profile is not the one the launch bound.
+
+    The launch round is a process that can write files, the profile among them,
+    and a resume passes the same `--settings <path>`. Re-reading it here keeps a
+    resume round under the policy the request's digest names. The executable
+    path and the worktree are the other launch-time values a resume reuses; they
+    are not re-checked (the launch round execs by path too), which
+    parallel-headless.md records as a limit.
+    """
+    path = profile.approval["settings_profile_path"]
+    if path is None:
+        return
+    raw = _read_stable_regular_file(Path(path))
+    if _sha256(raw) != profile.approval["settings_profile_sha256"]:
+        raise LaunchError(
+            "lane settings profile changed after launch; refusing to resume under a "
+            "policy the launch did not bind"
+        )
+
+
+def _max_resumes(config: dict[str, Any]) -> int:
+    value = get(config, "parallel.max_resumes", None)
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise LaunchError("config parallel.max_resumes must be a non-negative integer")
+    return value
+
+
+def _config_for_launcher(
+    runtime: str, tier: str | None = None
+) -> tuple[RuntimeProfile, int, int, int, Path]:
     if runtime not in SUPPORTED_RUNTIMES:
         raise LaunchError("descriptor runtime is not a supported headless runtime")
     root = repo_root(SCRIPT_DIR)
@@ -469,6 +755,8 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
             )
         transports[kind] = declared
     approval = _approval_for_runtime(runtime, config, root)
+    compute = _compute_for_runtime(runtime, config, tier)
+    max_resumes = _max_resumes(config)
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
         raise LaunchError("config parallel.observation_timeout_seconds must be positive")
     if not isinstance(lifetime, int) or isinstance(lifetime, bool) or lifetime <= 0:
@@ -480,17 +768,51 @@ def _config_for_launcher(runtime: str) -> tuple[RuntimeProfile, int, int, int, P
     ):
         raise LaunchError("config parallel.termination_grace_seconds must be positive")
     executable = command[0]
+    # Three shapes of command[0], decided by Path.is_absolute() and dirname():
+    # - absolute: used as written, never looked up;
+    # - bare name (empty dirname): looked up on SAFE_EXECUTABLE_PATH only;
+    # - relative with a directory part (`./claude`, `bin/claude`, `../claude`):
+    #   refused. shutil.which ignores its path for this shape and checks the
+    #   launcher's cwd, while the child execs argv[0] after chdir into the lane
+    #   worktree, so the file checked and the file run could differ, and the
+    #   lane can write the second one.
+    if not Path(executable).is_absolute() and os.path.dirname(executable):
+        raise LaunchError(
+            f"configured {runtime} launcher {executable!r} is a relative path; name "
+            "a bare command on the trusted path or an absolute path"
+        )
     resolved_executable = (
         str(Path(executable).resolve())
         if Path(executable).is_absolute()
         else shutil.which(executable, path=SAFE_EXECUTABLE_PATH)
     )
     if not resolved_executable or not os.access(resolved_executable, os.X_OK):
+        # The refusal names its remedy (#629): a user-local install is linked onto
+        # the trusted path by the host, never admitted by widening the path or the
+        # gitignored overlay, which would let an unreviewed file pick the binary.
+        # An absolute command is never looked up, so that branch names the file
+        # instead of the trusted directories.
+        if Path(executable).is_absolute():
+            raise LaunchError(
+                f"configured {runtime} launcher is unavailable: {executable!r} does "
+                "not exist or is not executable (an absolute command is used as "
+                "written, not looked up on the trusted path)"
+            )
         raise LaunchError(
-            f"configured {runtime} launcher is unavailable on the trusted path"
+            f"configured {runtime} launcher is unavailable on the trusted path: "
+            f"{executable!r} is not an executable in {SAFE_EXECUTABLE_PATH}; for a "
+            "user-local install, link the binary into one of those directories "
+            "(see parallel-headless.md)"
         )
     return (
-        RuntimeProfile(runtime, [resolved_executable, *command[1:]], transports, approval),
+        RuntimeProfile(
+            runtime,
+            [resolved_executable, *command[1:]],
+            transports,
+            approval,
+            compute,
+            max_resumes,
+        ),
         timeout,
         lifetime,
         termination_grace,
@@ -730,14 +1052,17 @@ def _close_nonstandard_descriptors() -> None:
     raise LaunchError("cannot enumerate inherited file descriptors before runtime exec")
 
 
-def _observed_identity(process_nonce: str) -> dict[str, Any]:
-    cwd = Path.cwd().resolve()
-    git_top = Path(_git(cwd, "rev-parse", "--show-toplevel")).resolve()
+def _git_common_dir(cwd: Path) -> Path:
     common_raw = Path(_git(cwd, "rev-parse", "--git-common-dir"))
     common_dir = (cwd / common_raw).resolve() if not common_raw.is_absolute() else common_raw.resolve()
     if common_dir.name != ".git":
         raise LaunchError("Git common directory does not identify a repository root")
-    repository = common_dir.parent.resolve()
+    return common_dir
+
+
+def _observed_identity(process_nonce: str) -> dict[str, Any]:
+    cwd = Path.cwd().resolve()
+    git_top = Path(_git(cwd, "rev-parse", "--show-toplevel")).resolve()
     session_dir = cwd.parent.resolve()
     state_root = (session_dir / "state").resolve()
     marker = _read_stable_regular_file(cwd / ".devkit_state_root").decode().strip()
@@ -763,7 +1088,7 @@ def _observed_identity(process_nonce: str) -> dict[str, Any]:
         "session_dir": str(session_dir),
         "state_root": str(state_root),
         "marker_state_root": str(marker_root),
-        "repo_root": str(repository),
+        "git_common_dir": str(_git_common_dir(cwd)),
         "origin_url": _git(cwd, "remote", "get-url", "origin"),
         "origin_push_url": _git(cwd, "remote", "get-url", "--push", "origin"),
         "branch": branch,
@@ -784,7 +1109,15 @@ def _observed_identity(process_nonce: str) -> dict[str, Any]:
 
 
 def _expected_identity(descriptor: dict[str, Any]) -> dict[str, Any]:
-    return {
+    # Repository identity is the Git common directory, not a checkout path
+    # (#1109). `repo_root` names the checkout whose config and engine authorize
+    # the launch, and the caller has already held it to the launcher's own
+    # config root; from a linked cockpit worktree that is the linked checkout,
+    # while every lane worktree's common directory is the primary's `.git`.
+    # Both checkouts of one repository share that directory, and a checkout of
+    # any other repository does not, so the comparison refuses the same foreign
+    # lanes the path comparison did and stops refusing a linked issuer.
+    expected = {
         key: descriptor[key]
         for key in (
             "scope",
@@ -801,6 +1134,8 @@ def _expected_identity(descriptor: dict[str, Any]) -> dict[str, Any]:
             "merge_class",
         )
     } | {"environment": dict(descriptor["env"])}
+    expected["git_common_dir"] = str(_git_common_dir(Path(descriptor["repo_root"])))
+    return expected
 
 
 def _validate_observation(expected: dict[str, Any], observed: dict[str, Any]) -> None:
@@ -809,7 +1144,7 @@ def _validate_observation(expected: dict[str, Any], observed: dict[str, Any]) ->
         "worktree",
         "session_dir",
         "state_root",
-        "repo_root",
+        "git_common_dir",
         "origin_url",
         "origin_push_url",
         "branch",
@@ -858,6 +1193,7 @@ def _request_binding(
     combined_prompt_sha256: str,
     profile: RuntimeProfile,
     process_nonce: str,
+    ticket: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     # Computed identically by parent and child; the child refuses when its own
     # config resolves to a different runtime, command, transport set, or approval
@@ -876,6 +1212,15 @@ def _request_binding(
             "settings_profile_path": profile.approval["settings_profile_path"],
             "settings_profile_sha256": profile.approval["settings_profile_sha256"],
         },
+        "compute": {
+            "tier": profile.compute["tier"],
+            "model": profile.compute["model"],
+            "effort": profile.compute["effort"],
+            "argv": list(profile.compute["argv"]),
+        },
+        "max_resumes": profile.max_resumes,
+        # {"number", "url", "block_sha256"} for a `--ticket` launch, else None.
+        "ticket": dict(ticket) if ticket is not None else None,
         "process_nonce_sha256": _sha256(process_nonce.encode()),
     }
 
@@ -927,6 +1272,69 @@ def _extract_final_result(
     if not isinstance(denials, list):
         raise LaunchError("runtime result carries no permission_denials list")
     return result.encode("utf-8"), denials
+
+
+def _numeric_fields(value: object) -> dict[str, int | float] | None:
+    if not isinstance(value, dict):
+        return None
+    kept = {
+        str(key): number
+        for key, number in value.items()
+        if isinstance(number, (int, float))
+        and not isinstance(number, bool)
+        # A float may be NaN or infinite; an int is exact however long it is,
+        # and converting one past float range would raise.
+        and (not isinstance(number, float) or math.isfinite(number))
+    }
+    return kept or None
+
+
+def _reported_usage(transport: str, final_bytes: bytes) -> dict[str, Any] | None:
+    """The token and cost figures the runtime reported about itself, or None.
+
+    Evidence for the operator, never for a gate: it is read best-effort from the
+    same final-message bytes the receipt already hashes, and any shape it does not
+    recognise reads as None rather than failing the lane. Only Claude's
+    `json-stdout` result carries figures; `last-message-file` holds the final text
+    alone. The values are the runtime's own and cover what its result object
+    covers; whether that includes subagents is the runtime's definition, which
+    this does not check. Only finite numeric fields are kept, and a model with none
+    is left out.
+    """
+    if transport != "json-stdout" or not final_bytes:
+        return None
+    try:
+        value, _end = json.JSONDecoder().raw_decode(final_bytes.decode("utf-8").strip())
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        # ValueError covers JSONDecodeError and the integer-length limit.
+        return None
+    if not isinstance(value, dict) or value.get("type") != "result":
+        return None
+    models = value.get("modelUsage")
+    reported = {
+        "source": "claude json result",
+        "usage": _numeric_fields(value.get("usage")),
+        "total_cost_usd": (_numeric_fields({"cost": value.get("total_cost_usd")}) or {}).get(
+            "cost"
+        ),
+        "models": {
+            str(name): kept
+            for name, figures in models.items()
+            if (kept := _numeric_fields(figures)) is not None
+        }
+        or None
+        if isinstance(models, dict)
+        else None,
+        "num_turns": value.get("num_turns")
+        if type(value.get("num_turns")) is int
+        else None,
+        "duration_ms": value.get("duration_ms")
+        if type(value.get("duration_ms")) is int
+        else None,
+    }
+    if all(reported[key] is None for key in reported if key != "source"):
+        return None
+    return reported
 
 
 def _redirect_stdout_to_reserved_final(final_message: Path) -> None:
@@ -983,6 +1391,7 @@ def _validate_child_authority(
         combined_prompt_sha256=arguments.combined_prompt_sha256,
         profile=profile,
         process_nonce=process_nonce,
+        ticket=arguments.ticket,
     )
     if (
         attempt.get("status") != "starting"
@@ -1008,7 +1417,7 @@ def _child_main(arguments: argparse.Namespace) -> int:
             f"launch-receipt-{descriptor['descriptor_id']}.json"
         )
         profile, _timeout, _lifetime, _termination_grace, config_root = (
-            _config_for_launcher(descriptor["runtime"])
+            _config_for_launcher(descriptor["runtime"], arguments.tier)
         )
         if Path(descriptor["repo_root"]).resolve() != config_root:
             raise LaunchError("descriptor repository is foreign to the launcher configuration")
@@ -1034,6 +1443,7 @@ def _child_main(arguments: argparse.Namespace) -> int:
                 combined_prompt_sha256=arguments.combined_prompt_sha256,
                 profile=profile,
                 process_nonce=process_nonce,
+                ticket=arguments.ticket,
             ),
             "expected": dict(expected),
             "observed": dict(observed),
@@ -1121,6 +1531,55 @@ def _fork_observer_child(
     return _ForkedChild(pid, os.fdopen(prompt_write, "wb", buffering=0))
 
 
+def _fork_resume_child(
+    argv: list[str],
+    *,
+    worktree: str,
+    environment: dict[str, str],
+    final_message: Path,
+) -> _ForkedChild:
+    """Start one resume round: the runtime itself, in its own process group.
+
+    A resume continues the launch the parent already bound, so it has no observer
+    handshake of its own: the descriptor authorised one bounded run, and its expiry
+    and `lane_oid` describe the start (a lane that has committed no longer matches
+    `lane_oid`). What the round inherits is fixed by the parent, not chosen here:
+    the scrubbed environment with the launch's lineage nonce, the worktree, the
+    argv `RuntimeProfile.resume_argv` built from the bound profile, and a freshly
+    reserved, empty final-message file.
+    """
+    prompt_read, prompt_write = os.pipe()
+    try:
+        pid = os.fork()
+    except OSError:
+        os.close(prompt_read)
+        os.close(prompt_write)
+        raise
+    if pid == 0:
+        try:
+            os.setsid()
+            for signum in (signal.SIGINT, signal.SIGTERM):
+                signal.signal(signum, signal.SIG_DFL)
+            os.chdir(worktree)
+            os.environ.clear()
+            os.environ.update(environment)
+            os.close(prompt_write)
+            os.dup2(prompt_read, 0)
+            os.close(prompt_read)
+            _redirect_stdout_to_reserved_final(final_message)
+            _close_nonstandard_descriptors()
+            os.execvpe(argv[0], argv, os.environ)
+        except BaseException as exc:  # child must terminalize without re-entering parent
+            print(f"[lane-launcher] resume child failed: {exc}", file=sys.stderr)
+        finally:
+            with contextlib.suppress(Exception):
+                sys.stdout.flush()
+                sys.stderr.flush()
+        os._exit(70)
+    os.close(prompt_read)
+    return _ForkedChild(pid, os.fdopen(prompt_write, "wb", buffering=0))
+
+
 def _read_receipt(path: Path) -> dict[str, Any]:
     raw = _read_stable_regular_file(path)
     try:
@@ -1171,6 +1630,8 @@ def _terminal_receipt(
     final_text: bytes | None,
     permission_denials: list[Any] | None,
     required_observed_sha256: str | None = None,
+    lane_state: dict[str, Any] | None = None,
+    resumes: list[dict[str, Any]] | None = None,
 ) -> None:
     try:
         receipt = _read_receipt(receipt_path)
@@ -1216,6 +1677,14 @@ def _terminal_receipt(
         # cannot expose it (`last-message-file`), or the result could not be
         # extracted at all. Never spelled `[]` in either case.
         "permission_denials": permission_denials,
+        # The runtime's own token/cost report, or None; never part of the verdict.
+        "usage": _reported_usage(final_text_transport, final_bytes),
+        # The terminal state the LAST round's final text declared, or None. The
+        # fields above (returncode through usage) describe the launch round; each
+        # resume round's own evidence is its entry in `resumes`, so a lane's total
+        # usage is `usage` plus every round's.
+        "lane_state": lane_state,
+        "resumes": list(resumes or []),
         "finished_at": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
     }
     _write_atomic(receipt_path, receipt)
@@ -1248,26 +1717,64 @@ def _wait_for_process_group_exit(
     return None
 
 
+def _signal_process_group(
+    process: _ForkedChild, signum: int, error: str, grace_seconds: int
+) -> None:
+    # macOS answers EPERM, not ESRCH, when a group's only member is the leader this
+    # wrapper has not reaped yet (#1238): an exited zombie, or a leader still
+    # exiting, which waitpid cannot reap for a moment longer. Wait up to the grace
+    # for the leader to become reapable, reap it, and ask once more. Every input
+    # that reaches the EPERM branch:
+    # - leader exited or exiting, no other member: the reap empties the group, the
+    #   retry answers ESRCH, and the group is gone;
+    # - leader reaped, a member that still answers EPERM (another owner, or a
+    #   zombie its new parent has not reaped yet): refused;
+    # - leader still running when the grace ends: refused without a retry.
+    try:
+        os.killpg(process.pid, signum)
+        return
+    except ProcessLookupError:
+        return
+    except PermissionError as exc:
+        deadline = time.monotonic() + grace_seconds
+        while process.poll() is None:
+            if time.monotonic() >= deadline:
+                raise LaunchError(error) from exc
+            time.sleep(0.02)
+    try:
+        os.killpg(process.pid, signum)
+    except ProcessLookupError:
+        return
+    except PermissionError as exc:
+        raise LaunchError(error) from exc
+
+
+def _relay_signal(process_group: int, signum: int) -> None:
+    # Called from the launcher's signal handler, so nothing may escape it: an
+    # exception raised there surfaces at whatever line the main flow was on. ESRCH
+    # is a group already gone. EPERM is either a group holding only the unreaped
+    # leader (macOS, #1238), which needs no relay, or a member that cannot be
+    # signalled. A signal caught while a round runs routes the launch to
+    # _terminate_process_group, which refuses that member; one caught after the
+    # round's group check found the group empty.
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(process_group, signum)
+
+
 def _terminate_process_group(
     process: _ForkedChild, grace_seconds: int
 ) -> int:
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    except PermissionError as exc:
-        raise LaunchError("cannot signal the child process group") from exc
+    _signal_process_group(
+        process, signal.SIGTERM, "cannot signal the child process group", grace_seconds
+    )
     returncode = _wait_for_process_group_exit(
         process, time.monotonic() + grace_seconds
     )
     if returncode is not None:
         return returncode
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    except PermissionError as exc:
-        raise LaunchError("cannot force-stop the child process group") from exc
+    _signal_process_group(
+        process, signal.SIGKILL, "cannot force-stop the child process group", grace_seconds
+    )
     returncode = _wait_for_process_group_exit(
         process, time.monotonic() + grace_seconds
     )
@@ -1325,7 +1832,12 @@ def _wait_for_process_or_signal(
     return None
 
 
-def launch(descriptor_path: Path, prompt_path: Path) -> int:
+def launch(
+    descriptor_path: Path,
+    prompt_path: Path,
+    tier: str | None = None,
+    ticket_number: str | None = None,
+) -> int:
     descriptor, descriptor_raw = _load_descriptor(descriptor_path)
     (
         profile,
@@ -1333,7 +1845,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         configured_lifetime,
         termination_grace,
         config_root,
-    ) = _config_for_launcher(descriptor["runtime"])
+    ) = _config_for_launcher(descriptor["runtime"], tier)
     final_text_transport = profile.transports["final_text"]
     if Path(descriptor["repo_root"]).resolve() != config_root:
         raise LaunchError("descriptor repository is foreign to the launcher configuration")
@@ -1347,7 +1859,21 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         task_text = task.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise LaunchError("task prompt must be UTF-8 text") from exc
-    combined = (descriptor["prompt_preamble"] + "\n\n" + task_text).encode()
+    ticket_binding: dict[str, Any] | None = None
+    ticket_text = ""
+    if ticket_number is not None:
+        ticket = _read_ticket(
+            ticket_number,
+            load_config(config_root / "config" / "dev-model.yaml"),
+            descriptor["worktree"],
+        )
+        ticket_text = "\n\n" + _ticket_block(ticket)
+        ticket_binding = {
+            "number": ticket["number"],
+            "url": ticket["url"],
+            "block_sha256": _sha256(_ticket_block(ticket).encode()),
+        }
+    combined = (descriptor["prompt_preamble"] + "\n\n" + task_text + ticket_text).encode()
     descriptor_id = descriptor["descriptor_id"]
     launch_capability = secrets.token_bytes(32)
     process_nonce = launch_capability.hex()
@@ -1361,6 +1887,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         combined_prompt_sha256=_sha256(combined),
         profile=profile,
         process_nonce=process_nonce,
+        ticket=ticket_binding,
     )
     attempt = {
         "schema_version": SCHEMA_VERSION,
@@ -1408,6 +1935,8 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
         authority_fd=authority_read,
         ready_fd=ready_write,
         ack_fd=ack_read,
+        tier=tier,
+        ticket=ticket_binding,
     )
     process: _ForkedChild | None = None
     caught: list[int] = []
@@ -1415,14 +1944,14 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
     def relay(signum: int, _frame: object) -> None:
         caught.append(signum)
         if process is not None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signum)
+            _relay_signal(process.pid, signum)
 
     previous_handlers = {
         signum: signal.signal(signum, relay) for signum in (signal.SIGINT, signal.SIGTERM)
     }
     error: str | None = None
     bound_receipt_sha256: str | None = None
+    resumes: list[dict[str, Any]] = []
     try:
         process = _fork_observer_child(
             child_arguments,
@@ -1549,20 +2078,178 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             return 70
         if bound_receipt_sha256 is None:
             raise LaunchError("successful child has no bound observed receipt")
+        launch_text = final_text
+        lane_state = _lane_terminal_state(final_text)
+        last_final_bytes = final_bytes
+        stall_reason: str | None = None
+        lineage_environment = {
+            **_scrubbed_environment(descriptor),
+            PROCESS_LINEAGE_ENV: process_nonce,
+        }
+        # Bounded resume (#514, #564): a successful round whose final text names no
+        # terminal state is resumed in the same runtime session, at most
+        # `max_resumes` times, each round under the bound launch's own policy. A
+        # failed, denied or interrupted round is never resumed — a stall is a stop
+        # before the end, not a failure.
+        while lane_state is None:
+            if len(resumes) >= profile.max_resumes:
+                stall_reason = (
+                    f"final text named no terminal state after {len(resumes)} "
+                    f"resume round(s) (parallel.max_resumes is {profile.max_resumes})"
+                )
+                break
+            if profile.runtime != "claude":
+                stall_reason = (
+                    f"final text named no terminal state, and runtime {profile.runtime} "
+                    "has no resume transport"
+                )
+                break
+            session_id = _claude_session_id(last_final_bytes)
+            if session_id is None:
+                stall_reason = (
+                    "final text named no terminal state, and the runtime result "
+                    "carries no resumable session id"
+                )
+                break
+            _require_bound_settings_profile(profile)
+            round_number = len(resumes) + 1
+            round_final = session_dir / f"launch-final-{descriptor_id}-resume-{round_number}.txt"
+            _reserve_empty_regular_file(round_final)
+            round_argv = profile.resume_argv(session_id)
+            # Checked immediately before the fork: a signal that lands while the
+            # round is being prepared must not start one more model round.
+            if caught:
+                break
+            # Recorded as soon as the round starts and completed below, so a
+            # LaunchError on the way (a termination or evidence read that
+            # refuses) still reaches the receipt with this round in it.
+            round_entry: dict[str, Any] = {
+                "round": round_number,
+                "session_id": session_id,
+                "argv": round_argv,
+                "prompt_sha256": _sha256(RESUME_NUDGE.encode()),
+                "final_message_path": str(round_final),
+                "final_message_sha256": None,
+                "final_text_sha256": None,
+                "returncode": None,
+                "permission_denials": None,
+                "usage": None,
+                "lane_state": None,
+                "error": "round did not finish",
+                "finished_at": None,
+            }
+            resumes.append(round_entry)
+            process = _fork_resume_child(
+                round_argv,
+                worktree=descriptor["worktree"],
+                environment=lineage_environment,
+                final_message=round_final,
+            )
+            with contextlib.suppress(BrokenPipeError):
+                process.stdin.write(RESUME_NUDGE.encode())
+            with contextlib.suppress(OSError):
+                process.stdin.close()
+            round_returncode = _wait_for_process_or_signal(process, caught)
+            round_error: str | None = None
+            if round_returncode is not None and _process_group_exists(process.pid):
+                round_error = "child exited while its process group remained active"
+            if (
+                round_returncode is not None
+                and round_error is None
+                and _processes_with_launch_nonce(process_nonce)
+            ):
+                round_error = "child exited while detached launch-lineage processes remained active"
+            if caught or round_error:
+                round_returncode = _terminate_process_group(process, termination_grace)
+                _terminate_launch_lineage(process_nonce, termination_grace)
+            round_bytes = b""
+            if round_final.is_file() and not round_final.is_symlink():
+                round_bytes = _read_stable_regular_file(round_final)
+            round_text: bytes | None = None
+            round_denials: list[Any] | None = None
+            try:
+                round_text, round_denials = _extract_final_result(
+                    final_text_transport, round_bytes
+                )
+            except LaunchError as exc:
+                if round_error is None and round_returncode == 0 and not caught:
+                    round_error = str(exc)
+            if round_error is None and round_returncode != 0 and not caught:
+                round_error = f"child exited with status {round_returncode}"
+            if round_error is None and not caught and round_denials:
+                round_error = (
+                    "runtime reported permission denials under declared policy "
+                    f"{profile.approval['declared']}"
+                )
+            lane_state = None if (caught or round_error) else _lane_terminal_state(round_text)
+            round_entry.update(
+                {
+                    "final_message_sha256": _sha256(round_bytes) if round_bytes else None,
+                    "final_text_sha256": _sha256(round_text) if round_text else None,
+                    "returncode": round_returncode,
+                    "permission_denials": round_denials,
+                    "usage": _reported_usage(final_text_transport, round_bytes),
+                    "lane_state": lane_state,
+                    "error": "launcher interrupted" if caught else round_error,
+                    "finished_at": dt.datetime.now(dt.timezone.utc)
+                    .isoformat()
+                    .replace("+00:00", "Z"),
+                }
+            )
+            if caught or round_error:
+                _terminal_receipt(
+                    receipt_path,
+                    attempt,
+                    status="interrupted" if caught else "failed",
+                    returncode=returncode,
+                    caught_signal=caught[0] if caught else None,
+                    final_message=final_message,
+                    error="launcher interrupted"
+                    if caught
+                    else f"resume round {round_number}: {round_error}",
+                    final_text_transport=final_text_transport,
+                    final_text=launch_text,
+                    permission_denials=permission_denials,
+                    resumes=resumes,
+                )
+                return 128 + caught[0] if caught else 70
+            last_final_bytes = round_bytes
+        # A signal recorded once the lane has declared its terminal state does not
+        # undo that declaration: the work is done and the receipt says so.
+        if caught and lane_state is None:
+            _terminal_receipt(
+                receipt_path,
+                attempt,
+                status="interrupted",
+                returncode=returncode,
+                caught_signal=caught[0],
+                final_message=final_message,
+                error="launcher interrupted",
+                final_text_transport=final_text_transport,
+                final_text=launch_text,
+                permission_denials=permission_denials,
+                resumes=resumes,
+            )
+            return 128 + caught[0]
         _terminal_receipt(
             receipt_path,
             attempt,
-            status="completed",
+            status="completed" if lane_state is not None else "stalled",
             returncode=returncode,
             caught_signal=None,
             final_message=final_message,
-            error=None,
+            error=stall_reason,
             final_text_transport=final_text_transport,
-            final_text=final_text,
+            final_text=launch_text,
             permission_denials=permission_denials,
             required_observed_sha256=bound_receipt_sha256,
+            lane_state=lane_state,
+            resumes=resumes,
         )
         print(f"[lane-launcher] receipt: {receipt_path}", file=sys.stderr)
+        if lane_state is None:
+            print(f"[lane-launcher] lane stalled: {stall_reason}", file=sys.stderr)
+            return STALLED_EXIT
         return 0
     except (LaunchError, OSError) as exc:
         returncode: int | None = process.poll() if process is not None else None
@@ -1586,6 +2273,7 @@ def launch(descriptor_path: Path, prompt_path: Path) -> int:
             final_text_transport=final_text_transport,
             final_text=None,
             permission_denials=None,
+            resumes=resumes,
         )
         return 128 + caught[0] if caught else 70
     finally:
@@ -1611,6 +2299,17 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--descriptor")
     parser.add_argument("--prompt-file")
+    parser.add_argument(
+        "--tier",
+        help="neutral compute tier (cheap, default, expensive) applied through "
+        "models.runtime_mappings.<runtime>; omit to inherit the client's compute",
+    )
+    parser.add_argument(
+        "--ticket",
+        help="GitHub issue number to read with gh before launch and append to the "
+        "lane's prompt; any read failure refuses the launch (tracker.backend must be "
+        "github-issues)",
+    )
     return parser
 
 
@@ -1619,7 +2318,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if not arguments.descriptor or not arguments.prompt_file:
             raise LaunchError("--descriptor and --prompt-file are required")
-        return launch(Path(arguments.descriptor), Path(arguments.prompt_file))
+        return launch(
+            Path(arguments.descriptor),
+            Path(arguments.prompt_file),
+            arguments.tier,
+            arguments.ticket,
+        )
     except LaunchError as exc:
         print(f"[lane-launcher] error: {exc}", file=sys.stderr)
         return 64

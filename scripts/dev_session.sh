@@ -21,11 +21,17 @@
 #   scripts/dev_session.sh rm <scope> [--force] [--keep-branch]
 #   scripts/dev_session.sh print-contract
 #
+# `<subcommand> --help` (or `-h`) as the first argument prints that subcommand's
+# usage line and exits without touching the repository or the sessions directory.
+# Only the first argument asks for it: `merge <scope> --help` is a merge. Like every
+# subcommand it first needs this script's preamble to pass (a .git above it and
+# vcs.protected_branch in config).
+#
 # `list --watch [interval]` is a live board: it re-renders every <interval>
 # seconds (default 30) and marks rows whose state changed since the last render
-# (a CI ✓/✗/… flip, a new commit, a DIRTY-count change, or a PR-state change)
-# with a `*` until Ctrl-C. Bare `list` is a one-shot snapshot, byte-identical to
-# before.
+# (a CI ✓/✗/… flip, a new commit, a DIRTY-count change, a RUN or OVERLAP
+# change, or a PR-state change) with a `*` until Ctrl-C. Bare `list` is a
+# one-shot snapshot with the same columns and the full sandbox path.
 #
 # `new` prints a copy-paste line that cd's into the worktree, exports the
 # sandbox, and prints a runtime-configured launch command — or `source
@@ -52,8 +58,8 @@
 # across many lanes (e.g. a parallel-workflow fan-out path), or for
 # eyeballing the current contract.
 #
-# Sessions live outside the repo (a sibling `dev-model-sessions/` dir by
-# default; override with $DEVKIT_SESSIONS_DIR), so the repo tree stays clean
+# Sessions live outside the repo (a `dev-model-sessions/` dir beside the primary
+# worktree by default; override with $DEVKIT_SESSIONS_DIR), so the repo tree stays clean
 # and cron — which sets neither env var — is completely unaffected.
 
 set -euo pipefail
@@ -85,9 +91,9 @@ DEFAULT_BASE="${DEV_SESSION_BASE:-$PROTECTED_BRANCH}"
 CONFIGURED_PREFIX="$(devkit_config_scalar "$CONFIG_FILE" vcs "" dev_branch_prefix || true)"
 DEFAULT_PREFIX="${DEV_SESSION_PREFIX:-${CONFIGURED_PREFIX:-dev}}"
 
-# Sessions container (sibling of the repo by default). Each session is one
+# Sessions container (beside the primary worktree by default). Each session is one
 # subdir holding wt/ (worktree) + state/ (sandbox) + activate (env snippet).
-SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(dirname "$REPO_ROOT")/dev-model-sessions}"
+SESSIONS_DIR="${DEVKIT_SESSIONS_DIR:-$(devkit_default_sessions_dir "$REPO_ROOT")}"
 case "$SESSIONS_DIR" in
     /*) ;;
     *) SESSIONS_DIR="$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$SESSIONS_DIR")" ;;
@@ -118,23 +124,31 @@ HEADLESS=0
 # bind a freshly spawned lane. Keep this the SINGLE source of the contract
 # text — any doc that quotes it should quote it, not restate it independently.
 _lane_contract() {
-    local handoff friction protected
-    local escaped_engine_dir escaped_handoff escaped_friction escaped_protected
+    local handoff friction protected state_dir
+    local escaped_engine_dir escaped_handoff escaped_friction escaped_protected escaped_state_dir
     handoff="$(_config_scalar paths "" handoff)"
     friction="$(_config_scalar paths "" friction_log)"
     protected="$(_config_scalar vcs "" protected_branch)"
+    # The lane writes its message files under the worktree's own state directory,
+    # which the lane's engine state never uses (that goes to the sandbox). init.sh
+    # adds it to .gitignore only when it can, so the contract tells the lane not
+    # to stage it rather than claiming git ignores it.
+    state_dir="$(_config_scalar state "" dirname)"
     escaped_engine_dir="$(_sed_replacement "$ENGINE_DIR_REL")"
     escaped_handoff="$(_sed_replacement "${handoff:-<configured handoff>}")"
     escaped_friction="$(_sed_replacement "${friction:-<configured friction log>}")"
     escaped_protected="$(_sed_replacement "${protected:-the protected branch}")"
+    escaped_state_dir="$(_sed_replacement "${state_dir:-state}")"
     sed \
         -e "s|@ENGINE_DIR@|$escaped_engine_dir|g" \
         -e "s|@HANDOFF@|$escaped_handoff|g" \
         -e "s|@FRICTION_LOG@|$escaped_friction|g" \
-        -e "s|@PROTECTED_BRANCH@|$escaped_protected|g" <<'CONTRACT'
+        -e "s|@PROTECTED_BRANCH@|$escaped_protected|g" \
+        -e "s|@STATE_DIR@|$escaped_state_dir|g" <<'CONTRACT'
 LANE CONTRACT (binding):
 - Actively poll your PR's CI at a bounded cadence (e.g. `gh pr checks <PR#>` every few minutes, capped around 30 min) until it is fully green. Never stop to idly wait on a "monitor", a timer, or someone else's watcher — you are the one polling.
-- Your run ends ONLY at the terminal state. Never stop early to wait for a watcher, monitor, or timer of any kind — if you need to wait on anything, poll it yourself with a bounded until-loop.
+- Your run ends ONLY at the terminal state. Never stop early to wait for a watcher, monitor, or timer of any kind — if you need to wait on anything, poll it yourself: one simple check per call, repeated at a bounded cadence.
+- End your FINAL TEXT with exactly one plain-text line naming that terminal state, with nothing after it: `LANE-TERMINAL: pr-ready #<PR number>` (your PR is open, ready, and its CI is green), `LANE-TERMINAL: no-pr <reason>` (the task is finished and needed no pull request), or `LANE-TERMINAL: blocked <reason>` (you cannot go on without the cockpit). Write it without backticks. A final text without that line is read as a stop before the end: the lane launcher may resume you, or record the lane stalled.
 - Open completed work ready for review by default. Draft is ONLY for a material unfinished-work window that must already exist on the remote pull request because required forge-hosted validation cannot run before the pull request exists. If the branch can be completed and validated locally first, finish it and open ready.
 - Immediately after a ready creation, run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-ready` before the watch-and-fix loop so a silently drifted draft bit cannot starve review.
 - If that exception applies, after `gh pr create --draft` run `uv run @ENGINE_DIR@/pr_watch.py <pr> --assert-draft`, finish the required remote work and body, then run `gh pr ready <pr>` and `--assert-ready` before the watch-and-fix loop. A finished PR left in draft is a PR that never gets reviewed.
@@ -144,6 +158,9 @@ LANE CONTRACT (binding):
 - If you spawn sub-agents of your own, hold them to the same rule: they return findings in their final text rather than relying exclusively on peer messages.
 - Never edit @HANDOFF@ or @FRICTION_LOG@ — those are cockpit-owned shared narrative files. Put your handoff (what shipped, lessons, deferrals) in the PR body instead.
 - Run `git branch --show-current` before every commit to confirm you are on your own lane branch, never @PROTECTED_BRANCH@.
+- Every part of a shell command must be a command your lane is allowed to run: a loop, chain or pipe runs only when each part is allowed, and one refused part refuses the whole call and ends your run. When unsure, run one simple command per call.
+- Write commit messages and pull-request text to files under `@STATE_DIR@/lane/` in your worktree, never stage that directory, and pass the files by name: `git commit -F @STATE_DIR@/lane/<name>.txt`, `gh pr create --body-file @STATE_DIR@/lane/<name>.md`. In a headless lane, whose permission profile grants neither `gh pr edit` nor `gh pr comment`, put your verification result in the body before you open the PR, report anything after opening in your FINAL TEXT, and under the draft exception put the remote result there too: a headless lane cannot finish the body, so this replaces the draft bullet's `and body` step.
+- To undo a change in your worktree (restoring a mutation test, say), use `git restore <path>`.
 CONTRACT
 }
 
@@ -339,8 +356,9 @@ cmd_new() {
     fi
 
     # Activation snippet: the sandbox is this session's state/ (writes isolate
-    # here); DEVKIT_ROOT points the read-cascade's prod twin at the MAIN
-    # checkout so the session can still reuse its fresh caches read-only.
+    # here); DEVKIT_ROOT points the read-cascade's prod twin at the checkout that
+    # issued the session (the primary, or a linked cockpit worktree it was run
+    # from) so the session can still reuse that checkout's fresh caches read-only.
     cat > "$session_dir/activate" <<ACTIVATE
 # source this to enter the '$scope' dev session
 cd "$activate_worktree" || return 1
@@ -506,9 +524,147 @@ PY
     echo "  When done:         \"${BASH_SOURCE[0]}\" rm $scope"
 }
 
+# Per-lane RUN and OVERLAP cells, one `scope <TAB> run <TAB> overlap` line per
+# session that has a worktree. Read-only: it reads session files and runs
+# `git diff`/`git status`, and writes nothing. Each git call has its own 15s
+# timeout and lanes are read one after another, so a hung worktree filesystem
+# slows a frame by up to a minute per lane; a timed-out lane shows `?`.
+#
+# RUN comes from the supported headless wrapper's own evidence in the session dir
+# (scripts/launch_lane.py): no `launch-attempt.json` is `—` (an interactive lane,
+# or a headless one not yet launched); an attempt whose receipt is absent is
+# `starting` and one whose receipt has status `observed` is `running`, each
+# while the recorded parent pid is alive; either is `lost` once that pid is
+# gone (the wrapper died before writing a terminal receipt); any other receipt status
+# (`completed`, `stalled`, `failed`, `interrupted`, `rejected`) is shown as written. An
+# unreadable or malformed file, or a recorded pid that names no single
+# process, is `?`, never a guess. `running` is a display
+# hint, not authority: a recycled pid can keep it on after the wrapper died.
+#
+# OVERLAP names the other lanes that change at least one of the same files. A
+# lane's footprint is `git diff --name-only <base>...HEAD` (against
+# origin/<base> when that ref exists) plus its uncommitted and untracked paths.
+# `plan` checks footprints before launch; this is the same check while the batch
+# runs, when sequencing two PRs still helps. A lane whose footprint cannot be
+# read shows `?` and is left out of everyone else's comparison, so a peer's `—`
+# says nothing about that lane; parallel.md tells the cockpit so.
+_lane_extras() {
+    [[ -d "$SESSIONS_DIR" ]] || return 0
+    python3 - "$SESSIONS_DIR" "$DEFAULT_BASE" <<'PY' 2>/dev/null || true
+import json, os, re, subprocess, sys
+from pathlib import Path
+
+sessions, default_base = Path(sys.argv[1]), sys.argv[2]
+
+
+def git(worktree, *args):
+    out = subprocess.run(
+        ["git", "-C", str(worktree), *args],
+        capture_output=True, timeout=15, check=True,
+    ).stdout
+    return [p.decode("utf-8", "surrogateescape") for p in out.split(b"\0") if p]
+
+
+def wrapper_alive(attempt):
+    parent = attempt.get("parent_process")
+    pid = parent.get("pid") if isinstance(parent, dict) else None
+    # A pid os.kill cannot take, or one that names a process group (0, -n),
+    # is not evidence about the wrapper.
+    if type(pid) is not int or not 0 < pid < 2**31:
+        return None
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        pass
+    return True
+
+
+# run_state and wrapper_alive must not raise on any file content: an exception
+# here empties the whole board's RUN and OVERLAP, so each guard is explicit
+# rather than caught wholesale, and the board tests feed each one bad input.
+def read_json(path):
+    # A FIFO or device in the session dir must not hang or flood the board.
+    if not path.is_file():
+        raise ValueError("not a regular file")
+    with path.open("rb") as handle:
+        data = handle.read((1 << 20) + 1)
+    if len(data) > 1 << 20:
+        raise ValueError("too large")
+    return json.loads(data.decode("utf-8"))
+
+
+def run_state(session):
+    attempt_path = session / "launch-attempt.json"
+    try:
+        if not os.path.lexists(attempt_path):
+            return "—"
+        attempt = read_json(attempt_path)
+        receipt_path = session / f"launch-receipt-{attempt['descriptor_id']}.json"
+        has_receipt = os.path.lexists(receipt_path)
+        status = read_json(receipt_path)["status"] if has_receipt else None
+    except Exception:
+        return "?"
+    if has_receipt and not (isinstance(status, str) and re.fullmatch(r"[a-z]{1,16}", status)):
+        # A receipt that exists but carries no short lower-case ASCII word as
+        # its status, null included: the launcher writes only such words, and a
+        # cell must not carry arbitrary file text onto the board.
+        return "?"
+    if status not in (None, "observed"):
+        return status
+    # No receipt yet, or only the child's observation: the wrapper's own pid
+    # decides between still going and died before writing a terminal receipt.
+    alive = wrapper_alive(attempt)
+    if alive is None:
+        return "?"
+    if not alive:
+        return "lost"
+    return "starting" if status is None else "running"
+
+
+def footprint(session):
+    worktree = session / "wt"
+    base_file = session / "base"
+    base = base_file.read_text(encoding="utf-8").strip() if base_file.is_file() else ""
+    base = base or default_base
+    # `base` is operator input written by `new --base`; one that git could read
+    # as an option is not a footprint we can compute.
+    if base.startswith("-"):
+        raise ValueError("base looks like an option")
+    remote = f"refs/remotes/origin/{base}"
+    try:
+        git(worktree, "rev-parse", "--verify", "-q", remote)
+        ref = remote
+    except subprocess.CalledProcessError:
+        ref = base
+    files = set(git(worktree, "diff", "--name-only", "-z", f"{ref}...HEAD"))
+    files.update(git(worktree, "diff", "--name-only", "-z", "HEAD"))
+    files.update(git(worktree, "ls-files", "--others", "--exclude-standard", "-z"))
+    return files
+
+
+rows = []
+for session in sorted(p for p in sessions.iterdir() if (p / "wt").is_dir()):
+    try:
+        files = footprint(session)
+    except Exception:
+        files = None
+    rows.append((session.name, run_state(session), files))
+
+for scope, run, files in rows:
+    if files is None:
+        overlap = "?"
+    else:
+        others = [o for o, _r, of in rows if o != scope and of and files & of]
+        overlap = ",".join(others) if others else "—"
+    print(f"{scope}\t{run}\t{overlap}")
+PY
+}
+
 # Gather one TAB-separated record per active session, the shared data behind both
 # bare `list` and `list --watch`:
-#   scope <TAB> branch <TAB> pr <TAB> ci <TAB> dirty <TAB> sandbox <TAB> sig
+#   scope <TAB> branch <TAB> pr <TAB> ci <TAB> dirty <TAB> run <TAB> overlap <TAB> sandbox <TAB> sig <TAB> pr_ok
 # `sig` is the change-tracking signature watch mode diffs on. It folds in the
 # short HEAD sha and the PR state/draft/review on top of the displayed columns, so
 # a new commit or a PR-state flip (draft→open, review approved) is detected even
@@ -518,6 +674,8 @@ PY
 # can't hang a watch loop.
 _collect_board() {
     local d scope worktree branch head dirty pr ci pr_json parsed num state draft review sig pr_ok
+    local extras run overlap
+    extras="$(_lane_extras)"
     for d in "$SESSIONS_DIR"/*/; do
         worktree="${d}wt"
         [[ -d "$worktree" ]] || continue
@@ -555,10 +713,14 @@ print("\t".join([num, ci, str(d.get("state") or ""), str(d.get("isDraft")), str(
             fi
             pr="#$num"
         fi
-        sig="${branch}|${head}|${pr}|${ci}|${dirty}|${state}|${draft}|${review}"
+        run="$(printf '%s\n' "$extras" | awk -F'\t' -v s="$scope" '$1==s{print $2; exit}')"
+        overlap="$(printf '%s\n' "$extras" | awk -F'\t' -v s="$scope" '$1==s{print $3; exit}')"
+        [[ -n "$run" ]] || run="?"
+        [[ -n "$overlap" ]] || overlap="?"
+        sig="${branch}|${head}|${pr}|${ci}|${dirty}|${state}|${draft}|${review}|${run}|${overlap}"
         # Trailing pr_ok lets _list_render distinguish "gh failed/timed out this
         # frame" (carry forward last-known PR data) from a real PR change.
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scope" "$branch" "$pr" "$ci" "$dirty" "${d}state" "$sig" "$pr_ok"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "${d}state" "$sig" "$pr_ok"
     done
 }
 
@@ -589,14 +751,15 @@ cmd_list() {
         return
     fi
 
-    # Bare one-shot board — byte-identical to the pre-watch output.
-    printf "%-16s %-26s %-7s %-4s %-7s %s\n" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "SANDBOX"
-    printf "%-16s %-26s %-7s %-4s %-7s %s\n" "----" "------" "--" "--" "-----" "-------"
+    # Bare one-shot board — the same columns as the watch board, with the full
+    # absolute sandbox path.
+    printf "%-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "RUN" "OVERLAP" "SANDBOX"
+    printf "%-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "----" "------" "--" "--" "-----" "---" "-------" "-------"
     [[ -d "$SESSIONS_DIR" ]] || { echo "(no sessions — $SESSIONS_DIR does not exist yet)"; return 0; }
-    local found=0 scope branch pr ci dirty sandbox sig pr_ok
-    while IFS=$'\t' read -r scope branch pr ci dirty sandbox sig pr_ok; do
+    local found=0 scope branch pr ci dirty run overlap sandbox sig pr_ok
+    while IFS=$'\t' read -r scope branch pr ci dirty run overlap sandbox sig pr_ok; do
         found=1
-        printf "%-16s %-26s %-7s %-4s %-7s %s\n" "$scope" "$branch" "$pr" "$ci" "$dirty" "$sandbox"
+        printf "%-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "$sandbox"
     done < <(_collect_board)
     [[ "$found" -eq 1 ]] || echo "(no active sessions)"
 }
@@ -626,8 +789,8 @@ _list_render() {
     local had_baseline=0
     [[ -s "$sigfile" ]] && had_baseline=1
 
-    printf "%-2s %-16s %-26s %-7s %-4s %-7s %s\n" "" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "SANDBOX"
-    printf "%-2s %-16s %-26s %-7s %-4s %-7s %s\n" "" "----" "------" "--" "--" "-----" "-------"
+    printf "%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "" "SCOPE" "BRANCH" "PR" "CI" "DIRTY" "RUN" "OVERLAP" "SANDBOX"
+    printf "%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n" "" "----" "------" "--" "--" "-----" "---" "-------" "-------"
 
     # The snapshot always opens with a sentinel line so even an empty-board frame
     # leaves a non-empty file — otherwise the next frame reads "no baseline" and
@@ -636,10 +799,10 @@ _list_render() {
     local tmp; tmp="$(mktemp "${TMPDIR:-/tmp}/dev_session_sig.XXXXXX")"
     printf '#baseline\n' > "$tmp"
 
-    local found=0 scope branch pr ci dirty sandbox sig pr_ok prev marker
-    local c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review
+    local found=0 scope branch pr ci dirty run overlap sandbox sig pr_ok prev marker
+    local c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review c_run c_overlap
     local p_pr p_ci p_state p_draft p_review p_skip
-    while IFS=$'\t' read -r scope branch pr ci dirty sandbox sig pr_ok; do
+    while IFS=$'\t' read -r scope branch pr ci dirty run overlap sandbox sig pr_ok; do
         found=1
         prev="$(awk -F'\t' -v s="$scope" '$1==s{print $2; exit}' "$sigfile")"
         # Carry forward the PR-derived columns when gh failed/timed out this frame
@@ -648,10 +811,10 @@ _list_render() {
         # (branch/head/dirty) stay live, so a real commit or dirty-count change in
         # the same frame still marks.
         if [[ "$pr_ok" -eq 0 && -n "$prev" ]]; then
-            IFS='|' read -r c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review <<< "$sig"
-            IFS='|' read -r p_skip p_skip p_pr p_ci p_skip p_state p_draft p_review <<< "$prev"
+            IFS='|' read -r c_branch c_head c_pr c_ci c_dirty c_state c_draft c_review c_run c_overlap <<< "$sig"
+            IFS='|' read -r p_skip p_skip p_pr p_ci p_skip p_state p_draft p_review p_skip <<< "$prev"
             pr="$p_pr"; ci="$p_ci"
-            sig="${c_branch}|${c_head}|${p_pr}|${p_ci}|${c_dirty}|${p_state}|${p_draft}|${p_review}"
+            sig="${c_branch}|${c_head}|${p_pr}|${p_ci}|${c_dirty}|${p_state}|${p_draft}|${p_review}|${c_run}|${c_overlap}"
         fi
         printf '%s\t%s\n' "$scope" "$sig" >> "$tmp"
         # Compact the sandbox for the live board: every sandbox lives under the
@@ -659,7 +822,7 @@ _list_render() {
         # prefix → the cell is just "<scope>/state" and the row no longer wraps
         # past the terminal width (the long-absolute-path mess on small terminals).
         # A path outside SESSIONS_DIR (unusual) falls back to ~-abbreviation. Bare
-        # `list` is untouched — it keeps the full absolute path (byte-identical AC).
+        # `list` keeps the full absolute path.
         local sandbox_disp="$sandbox"
         if [[ "$sandbox_disp" == "$SESSIONS_DIR/"* ]]; then
             sandbox_disp="${sandbox_disp#"$SESSIONS_DIR"/}"
@@ -669,9 +832,9 @@ _list_render() {
         marker=""
         [[ "$had_baseline" -eq 1 && "$prev" != "$sig" ]] && marker="*"
         if [[ -n "$marker" && -t 1 ]]; then
-            printf '\033[1m%-2s %-16s %-26s %-7s %-4s %-7s %s\033[0m\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$sandbox_disp"
+            printf '\033[1m%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\033[0m\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "$sandbox_disp"
         else
-            printf '%-2s %-16s %-26s %-7s %-4s %-7s %s\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$sandbox_disp"
+            printf '%-2s %-16s %-26s %-7s %-4s %-7s %-11s %-16s %s\n' "$marker" "$scope" "$branch" "$pr" "$ci" "$dirty" "$run" "$overlap" "$sandbox_disp"
         fi
     done < <(_collect_board)
     mv -f "$tmp" "$sigfile"
@@ -1048,9 +1211,39 @@ cmd_rm() {
     echo "✓ session '$scope' removed."
 }
 
+# The header comment above, without its `#` markers: every comment line after the
+# shebang up to the first line that is not a comment, so the help text follows the
+# header as it is edited rather than a line range that has to be moved with it.
+_header_help() {
+    awk 'NR == 1 { next } /^#/ { sub(/^# ?/, ""); print; next } { exit }' "${BASH_SOURCE[0]}"
+}
+
+# Print one subcommand's usage line from the header above. `<sub> --help` stops
+# here, before the subcommand parses anything, so a runtime can read a retained
+# engine's interface without creating a lane (#454). Only a first argument of
+# -h/--help asks for it: later in the line it keeps its old meaning, which for
+# `pr-watch <scope> --help` is pr_watch.py's own help.
+_subcommand_usage() {
+    local sub="$1"
+    case "$sub" in
+        ls) sub=list ;;
+        remove) sub=rm ;;
+    esac
+    _header_help \
+        | awk -v sub_name="$sub" '$1 == "scripts/dev_session.sh" && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
+}
+
 main() {
     local sub="${1:-}"
     [[ $# -gt 0 ]] && shift || true
+    if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+        case "$sub" in
+            new|list|ls|path|pr-watch|merge|rm|remove|print-contract)
+                _subcommand_usage "$sub"
+                return 0
+                ;;
+        esac
+    fi
     case "$sub" in
         new) cmd_new "$@" ;;
         list|ls) cmd_list "$@" ;;
@@ -1059,9 +1252,7 @@ main() {
         merge) cmd_merge "$@" ;;
         rm|remove) cmd_rm "$@" ;;
         print-contract) cmd_print_contract "$@" ;;
-        ""|-h|--help|help)
-            sed -n '2,52p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
-            ;;
+        ""|-h|--help|help) _header_help ;;
         *) _die "unknown subcommand '$sub' (try: new | list | path | pr-watch | merge | rm | print-contract)" ;;
     esac
 }

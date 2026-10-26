@@ -1035,8 +1035,9 @@ migrate_runtime_schema() {
     cheap: mechanical
     default: standard
     expensive: judgment
-  # STATUS, per runtime: ADVISORY on both. The kit carries this map through no
-  # engine, so a workflow tier reaches a session only when the cockpit or the
+  # STATUS, per runtime: ADVISORY on both, with one mechanical route: the
+  # headless lane wrapper launch_lane.py applies it when started with --tier.
+  # Otherwise a workflow tier reaches a session only when the cockpit or the
   # operator applies it by hand: the delegation tool `model` parameter,
   # `claude -p --model/--effort`, `codex -m`, `-c model_reasoning_effort=`.
   # The values name controls each client accepted when the tiers were
@@ -1073,6 +1074,7 @@ migrate_parallel_schema() {
   descriptor_ttl_seconds: 900
   observation_timeout_seconds: 30
   termination_grace_seconds: 5
+  max_resumes: 1
 '
     echo "added parallel launcher config to config/dev-model.yaml"
   fi
@@ -1090,6 +1092,7 @@ migrate_parallel_schema() {
   ensure_parallel_key descriptor_ttl_seconds '  descriptor_ttl_seconds: 900'
   ensure_parallel_key observation_timeout_seconds '  observation_timeout_seconds: 30'
   ensure_parallel_key termination_grace_seconds '  termination_grace_seconds: 5'
+  ensure_parallel_key max_resumes '  max_resumes: 1'
 }
 
 # The Claude lane settings profile — the ONE settings source an unattended Claude
@@ -1170,6 +1173,7 @@ seed_claude_lane_profile() {
       "Bash(git fetch:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
+      "Bash(git restore:*)",
       "Bash(git push -u origin:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr view:*)",
@@ -1372,6 +1376,8 @@ migrate_kit_schema() {
   digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
   report_root: reports
   report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  # Each standing rule beside what enforces it; the shared-rule route edits it.
+  enforcement_table: docs/enforcement.md
   # Optional deterministic integration, resolved beneath paths.engines.
   fetch_engine: fetch_merged_prs.py
   digest_engine: digest_merged_prs.py

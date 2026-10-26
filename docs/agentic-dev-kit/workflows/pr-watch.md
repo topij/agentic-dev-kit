@@ -234,7 +234,10 @@ Repeat until the report says **converged**:
      doc's stopping section): an isolated lens over a fix round's delta,
      recorded as the literal `fallback:delta` with its one lens named — never
      `fallback:<runtime>`, which is reserved for the author-context degraded
-     run — plus `--compose-parent <last-reviewed-sha>`. That flag preserves the
+     run — plus `--compose-parent <last-reviewed-sha>` and a `--disposition`
+     carrying each lens's `prose-class:` and `safety-critical:` verdict lines
+     under a `<lens>:` line, without which the engine refuses the receipt
+     (`#921`). `--compose-parent` preserves the
      standing full-pass receipt, records the reviewed delta boundary and exact
      changed paths, and makes ancestry/path drift invalidate merge evidence. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.

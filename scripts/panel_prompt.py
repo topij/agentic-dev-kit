@@ -97,9 +97,12 @@ from pathlib import Path
 
 from kit_doctor import (  # noqa: E402
     AGENT_DEFINITION_RUNTIME,
+    ComputeConfigError,
     LensDefinitionError,
+    compute_config,
     render_agent_definition,
 )
+from kit_doctor import verifier_compute as _verifier_compute  # noqa: E402
 
 # Import the sibling doctor before prepending ``lib``. The advertised
 # regeneration command must reach the exact engine that owns the renderer, not
@@ -168,8 +171,9 @@ VERIFIER_CARRIER: dict[str, str] = {
 
 # The two draws the doctrine makes mandatory on every delta pass, as `(flag, name)`.
 # The name is what the lens's verdict line must begin with, so whoever posts the lines
-# can see a missing one by its absent name instead of judging what a lens meant. No
-# engine reads lens reports for these names yet; #921 carries that check.
+# can see a missing one by its absent name instead of judging what a lens meant.
+# `pr_watch.py --record-review fallback:delta` refuses a disposition missing either
+# name for a named lens (#921), and a test holds its `DELTA_DRAW_NAMES` to these.
 DELTA_DRAWS: tuple[tuple[str, str], ...] = (
     ("--draw-prose-class", "prose-class"),
     ("--draw-safety-critical", "safety-critical"),
@@ -177,8 +181,6 @@ DELTA_DRAWS: tuple[tuple[str, str], ...] = (
 REPAIR_VERDICT = "repair"
 # What a verifier's --scratch path may contain; see build.
 _SAFE_PATH = re.compile(r"[A-Za-z0-9._/-]+")
-# What a verifier_compute value may contain; see verifier_compute.
-_COMPUTE_VALUE = re.compile(r"[A-Za-z0-9._-]+")
 
 
 class PromptError(Exception):
@@ -979,44 +981,24 @@ say so rather than confirming or refuting a finding.
 
 
 def verifier_compute(config: dict, runtime: str) -> list[str]:
-    """``verifier_compute.<runtime>`` as ``["effort <e>", "model <m>"]``, refusing what
-    would not render as one plain word.
+    """``verifier_compute.<runtime>`` as ``["effort <e>", "model <m>"]``.
 
-    The verifier's prompt renders no free text (see ``build``), and this value comes
-    from config rather than a flag, so it is held to the charset a model name or an
-    effort level uses instead of being echoed. An absent or null key reads as unset;
-    a section or value of another shape, an empty string or list included, is
-    refused rather than taken for the cockpit's choice. ``claude.effort`` is refused too, since no
-    carrier applies it: the delegation tool takes no effort.
+    The rules are ``kit_doctor.verifier_compute``'s, so the doctor reports what this
+    refuses: a value of another shape, an unknown runtime or key, a value that is not
+    one plain word, and a ``claude.effort``.
     """
-    panel = get(config, "review.fallback_panel", {})
-    section = panel.get("verifier_compute") if isinstance(panel, dict) else None
-    if section is None:
-        return []
-    if not isinstance(section, dict):
-        raise PromptError(f"review.fallback_panel.verifier_compute is {section!r}, not a map")
-    compute = section.get(runtime)
-    if compute is None:
-        return []
-    if not isinstance(compute, dict):
-        raise PromptError(f"review.fallback_panel.verifier_compute.{runtime} is {compute!r}, not a map")
-    if runtime == "claude" and "effort" in compute:
-        raise PromptError(
-            "review.fallback_panel.verifier_compute.claude.effort is set, and nothing applies it: "
-            "the delegation tool takes a model and no effort, so the verifier runs at the cockpit's"
-        )
-    parts = []
-    for key in ("effort", "model"):
-        value = compute.get(key)
-        if value is None:
-            continue
-        if not isinstance(value, str) or not _COMPUTE_VALUE.fullmatch(value):
-            raise PromptError(
-                f"review.fallback_panel.verifier_compute.{runtime}.{key} is {value!r}; it must be "
-                "one word of letters, digits, '.', '_' or '-'"
-            )
-        parts.append(f"{key} {value}")
-    return parts
+    try:
+        return _verifier_compute(config, runtime)
+    except ComputeConfigError as exc:
+        raise PromptError(str(exc)) from exc
+
+
+def lens_compute(config: dict, runtime: str) -> dict:
+    """``lens_compute.<runtime>`` by ``kit_doctor.compute_config``'s shape rules (#1184)."""
+    try:
+        return compute_config(config, "lens_compute", runtime)
+    except ComputeConfigError as exc:
+        raise PromptError(str(exc)) from exc
 
 
 def _roster(config: dict) -> dict[str, str]:
@@ -1435,7 +1417,7 @@ def build(args: argparse.Namespace) -> str:
         item_names=names,
         repo_slug=slug,
         branch=branch,
-        compute=get(config, f"review.fallback_panel.lens_compute.{o_runtime}", {}) or {},
+        compute=lens_compute(config, o_runtime),
         runtime=o_runtime,
         scratch=o_scratch,
         pr=args.pr,

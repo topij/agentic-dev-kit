@@ -15432,6 +15432,7 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         "subprocess_timeout_seconds",
         "refuted_flag_min_findings",
         "refuted_flag_percent",
+        "enforcement_table",
     }
     assert systemize["analysis_tier"] in config["models"]["tiers"]
     assert isinstance(systemize["operator_logins"], list)
@@ -21734,3 +21735,52 @@ def test_pr_watch_runs_the_handoff_test_before_the_opening_review() -> None:
     assert mutated != text
     with pytest.raises(AssertionError):
         _assert_pr_watch_handoff_test_ordering(mutated)
+
+
+def test_rule_proposals_report_their_net_line_change() -> None:
+    """#1176: a systemize shared-rule proposal states its net line change and the
+    text it considered folding into, and the run report carries both; a triage
+    ticket that changes a standing instruction asks its implementing PR for the
+    same figure. Pinned so the instruction set's growth stays visible per proposal."""
+    require_kit_source()
+    workflows = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+    systemize = " ".join((workflows / "post-merge-systemize.md").read_text(encoding="utf-8").split())
+    assert "State each proposal's net line change on the files it edits" in systemize
+    assert "names the existing text it considered folding the rule into" in systemize
+    assert (
+        "each shared-rule proposal's net line change and the text it considered folding into" in systemize
+    ), "the report's Include list must carry the field"
+    triage = " ".join((workflows / "triage-friction-log.md").read_text(encoding="utf-8").split())
+    assert "report its net line change on those files" in triage
+    assert "names the existing text the change would extend or fold into" in triage
+    assert "says in its payload why it cannot fold into it" in triage
+    assert "and why that did not fit" in systemize
+    assert "git diff --cached --numstat" in systemize
+    session_start = " ".join((workflows / "session-start.md").read_text(encoding="utf-8").split())
+    assert "with the entry's remedy as the action; don't consolidate inline" in session_start
+
+
+def test_shared_rule_proposals_climb_the_enforcement_ladder() -> None:
+    """#1222: before writing a rule, systemize's shared-rule route tries a structural
+    change, then a check proven to fail on a past pull request, and records the level;
+    the report carries the level and the proof, and triage applies the same order."""
+    require_kit_source()
+    workflows = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
+    systemize = " ".join((workflows / "post-merge-systemize.md").read_text(encoding="utf-8").split())
+    assert "Choose its level in this order and take the first that works" in systemize
+    for level in ("**Structural change**", "**Check**: a lint rule, test or hook whose failure message names the fix", "**Prose rule**"):
+        assert level in systemize, level
+    assert "names the level it chose and why each higher level does not work" in systemize
+    assert "run against the code of at least one pull request in the cluster it fails" in systemize
+    assert "When `systemize.enforcement_table` is configured, read that table" in systemize
+    assert "its enforcement level and, for a check, its proof" in systemize, "the report's Include list must carry the fields"
+    assert "Run it at the revision that carried the mistake" in systemize
+    assert "in a detached worktree of its own and never in the caller's checkout" in systemize
+    assert "creating the file with the header row `| Rule | Where it is written | Enforced by |`" in systemize
+    assert "cell is exactly `judgement, unenforced` when nothing stops a violating change" in systemize
+    assert "When the key is absent, report the table as unconfigured" in systemize
+    assert "repository-relative `.md` file path without `..`, outside `report_root`, `state.dirname` and `.git`" in systemize
+    assert "is none of the run's control inputs" in systemize
+    triage = " ".join((workflows / "triage-friction-log.md").read_text(encoding="utf-8").split())
+    assert "chooses its fix level as `post-merge-systemize`'s shared-rule route does" in triage
+    assert "the past occurrence and the revision that carried it" in triage

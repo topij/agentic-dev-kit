@@ -69,15 +69,14 @@ deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was 
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
 archive sweep rewrites (friction archive; #1139). #1096 (`8beee9a1`) pins its candidate bound
 with a positional test.
-#921 owns the cockpit check of verdict-line names.
+`pr_watch.py --record-review fallback:delta` refuses a disposition missing a named
+lens's `prose-class:` or `safety-critical:` verdict line (#921, in PR #1248).
 #1167 (`4248942`) refuses a `--last-reviewed` sha outside the branch (#1166).
-**Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
-[#921](https://github.com/topij/agentic-dev-kit/issues/921); related #403,
+**Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585); related #403,
 #666, #305, and the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: #921 — make the cockpit check that a delta lens returned both the
-`prose-class:` and `safety-critical:` verdict lines before a `fallback:delta` receipt
-is recorded.
+▶ Next: choose the next step with the operator from #585 and the documented limits
+#928, #929, #930 and #931.
 
 ### Scratch retention
 
@@ -99,9 +98,7 @@ retired. On 2026-10-23, `sweep_scratch.py --json` at `d07cf199` in report mode
 kept `cb1751f8…`, `review-72a279dd…` and `review-a2d753b4…` for an unparseable `.git`
 file each; removing them is the operator's call (friction log, 2026-10-23).
 `state/review-evidence/` retention remains scoped to #861.
-**Owner:** [#900](https://github.com/topij/agentic-dev-kit/issues/900),
-[#997](https://github.com/topij/agentic-dev-kit/issues/997),
-[#1185](https://github.com/topij/agentic-dev-kit/issues/1185),
+**Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895).
@@ -191,8 +188,7 @@ The preserved `fabed73e` implementation is design evidence; the
 round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
 was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
 timeout and report-containment findings.
-**Owner:** [#1103](https://github.com/topij/agentic-dev-kit/issues/1103);
-[#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
+**Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify cs-toolkit's real scheduled-run receipts and the documented trusted
 launcher boundary; installed wrapper code alone does not establish live invocation
@@ -216,13 +212,51 @@ dispositions. #1169 (`e68871b`), #1179 (`a00eeed`) and #1181 (`a72034b`) ship
 clean cases. #1183 (`901daad`) declares the optional verifier compute key. The
 comparison runs are recorded on #1156; making the lens panel the primary reviewer
 is #1159. **Owner:** [#1156](https://github.com/topij/agentic-dev-kit/issues/1156),
-[#1159](https://github.com/topij/agentic-dev-kit/issues/1159); follow-ups
-[#1180](https://github.com/topij/agentic-dev-kit/issues/1180) and
-[#1184](https://github.com/topij/agentic-dev-kit/issues/1184). #1191 (`433de2ab`)
+[#1159](https://github.com/topij/agentic-dev-kit/issues/1159). #1191 (`433de2ab`)
 delivered #1182.
 
 ▶ Next: #1156 — judge the clean-case findings every verifier confirmed (real defect
 or false alarm) and grow the case set before ranking verifier tiers.
+
+### Parallel lanes
+
+**Status:** the 2026-10-24 review of the parallel-lane capabilities
+(https://claude.ai/artifact/XqWRnuWfgwxTry4k8ZoXoL) ranked the proposals. #1235
+(`c37e47b7`) made lane state visible and applied compute tiers; #1236 (`1213e980`) added
+the `LANE-TERMINAL:` line and bounded resume; #1237 (`035c07c8`) prescribed file-based
+lane messages, granted `git restore` and added `launch_lane.py --ticket`. Operator
+decisions on 2026-10-25 that no single PR holds: a resume continues the bound launch
+with no new descriptor; `parallel.max_resumes` ships as 1; the lane profile grants
+neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. Whether #514, #564, #1011,
+#628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 with the
+shipped profile under `dontAsk` (stamped in `parallel-headless.md`), compounds of profile-allowed
+`git` commands ran and a chain with a refused part was denied whole; the runtime's
+read-only class that #628's 2.1.250 denials concern was not re-probed. #1241 took
+the first-launch blockers on routes the operator chose on 2026-10-25: a
+lane is held to its repository by Git common directory, so a linked worktree can issue
+one (#1109); a user-local runtime install is placed on the trusted path by the host,
+and the overlay still refuses `parallel.<runtime>_headless_command` (#629);
+`dev_session.sh <subcommand> --help` is side-effect free, which is only part of #454.
+Proposals not yet taken: a
+documented cloud-session lane route, and standing mandates (#472, which the review
+sequences after a terminal state and a cost record). Still open from #1235: #1173's
+default tier and a tier carried in the descriptor, and #1174's ranking report and
+per-lane budget.
+**Owner:** [#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
+[#1174](https://github.com/topij/agentic-dev-kit/issues/1174),
+[#1173](https://github.com/topij/agentic-dev-kit/issues/1173),
+[#1242](https://github.com/topij/agentic-dev-kit/issues/1242),
+[#1243](https://github.com/topij/agentic-dev-kit/issues/1243),
+[#454](https://github.com/topij/agentic-dev-kit/issues/454),
+[#472](https://github.com/topij/agentic-dev-kit/issues/472); the review document above
+(a claude.ai link, not in the repository).
+
+▶ Next: choose the next proposal with the operator: the documented cloud-session lane
+route, #472's standing mandates, or #454's remainder (capability negotiation in the
+shared workflow for an adopter-retained engine, an extension contract for adopter
+state environment and destructive-path guards, the partial-adopter fixture, and a
+Codex launch through such an engine). Smaller follow-ups: #1239, and #1242 together
+with #1243's items in one PR, so the safety-critical panel runs once.
 
 ### Consumer upgrades
 
@@ -238,7 +272,7 @@ was a read-only guard. No real scheduled job or live state retirement was run he
 The adopter handoff separates notification-provider integration from the installed
 receipt contract. The earlier local assessment,
 `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates these upgrades.
-**Owner:** #1116, #990, #1011, #1109, #979.
+**Owner:** #1116, #990, #1011, #979.
 
 ▶ Next: verify cs-toolkit's scheduled-run receipts and completed-state retirement
 before removing the #979 shim; resolve unattended notification delivery as its own

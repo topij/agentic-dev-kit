@@ -307,6 +307,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # in this repository's history, so neither it nor its case set means anything
     # in an adopter's tree.
     ("scripts/review_eval.py", REPO_ONLY_ROLE),
+    # The skill-routing check (#1221) scores the kit's own adapter descriptions
+    # against a case set of kit-skill prompts, so it means nothing in an adopter's tree.
+    ("scripts/skill_routing_eval.py", REPO_ONLY_ROLE),
     # Assembles panel launch prompts by QUOTING the contract out of
     # docs/agentic-dev-kit/fallback-review-panel.md at run time (#214). That
     # coupling is why it is tracked beside the doctrine rather than left
@@ -375,6 +378,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_check_memory_budget.py", "test"),
     ("scripts/tests/test_ci_workflow.py", "test"),
     ("scripts/tests/test_lane_launcher.py", "test"),
+    ("scripts/tests/test_dev_session_board.py", "test"),
     ("scripts/tests/test_init_sh.py", "test"),
     ("scripts/tests/test_kit_doctor.py", "test"),
     ("scripts/tests/test_kit_repo_only.py", "test"),
@@ -396,6 +400,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_runtime_parity_matrix.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_smoke.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_review_eval.py", REPO_ONLY_ROLE),
+    ("scripts/tests/test_skill_routing_eval.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
     ("scripts/tests/test_adoption_fixtures.py", REPO_ONLY_ROLE),
@@ -483,10 +488,15 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # adopter cannot refresh the adapters or shared workflows while keeping an
     # older account of which ones are supposed to exist.
     ("docs/agentic-dev-kit/ticket-execution-environment.md", "doctrine"),
+    # Linked from the parallel and systemize/triage workflows, which /upgrade
+    # refreshes; an untracked target would leave those links dangling.
+    ("docs/agentic-dev-kit/parallel-verification.md", "doctrine"),
+    ("docs/agentic-dev-kit/writing-for-agents.md", "doctrine"),
     ("docs/agentic-dev-kit/runtime-parity.md", "doctrine"),
     ("docs/agentic-dev-kit/live-validation-evidence.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/review-eval/reviewer-eval.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/review-eval/cases.yaml", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/skill-routing/cases.json", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an
@@ -1088,6 +1098,8 @@ class Report:
     lens_definitions: list[LensDefinitionStatus] = field(default_factory=list)
     files: list[FileStatus] = field(default_factory=list)
     codex_models: dict = field(default_factory=dict)
+    # Each compute map the panel's engines would refuse (#1184); advisory.
+    compute_problems: list[str] = field(default_factory=list)
 
     @property
     def drifted(self) -> list[FileStatus]:
@@ -2671,6 +2683,111 @@ class LensDefinitionError(ValueError):
     """Configuration that cannot produce a faithful agent definition."""
 
 
+# The runtimes `verifier_compute` may name, and the keys a runtime's value in
+# either compute map may hold (#1184). `lens_compute` takes any runtime: the lens
+# prompt says when one has no kit-known carrier.
+COMPUTE_RUNTIMES: tuple[str, ...] = ("claude", "codex")
+COMPUTE_KEYS: tuple[str, ...] = ("model", "effort")
+# What a verifier_compute value may contain: the prompt renders no free text.
+_VERIFIER_COMPUTE_VALUE = re.compile(r"[A-Za-z0-9._-]+")
+
+
+class ComputeConfigError(ValueError):
+    """A `lens_compute` or `verifier_compute` value that cannot be read as compute."""
+
+
+def compute_config(config: dict, section: str, runtime: str) -> dict:
+    """``review.fallback_panel.<section>.<runtime>``, or ``{}`` when unset.
+
+    An absent or null section or runtime value reads as unset. Anything else of
+    another shape is refused rather than taken for the cockpit's choice (#1184):
+    a ``review`` or ``fallback_panel`` that is not a map, a section or runtime
+    value that is not a map (an empty string or list and ``false`` included), a
+    ``verifier_compute`` runtime outside ``COMPUTE_RUNTIMES``, and a key outside
+    ``COMPUTE_KEYS``. Keys
+    match case-sensitively, so a typo such as ``modle`` or ``Effort`` is refused
+    rather than ignored. The values themselves are left to the caller, which
+    knows what its carrier accepts.
+    """
+    node, where = config, "config"
+    for name in ("review", "fallback_panel", section):
+        node = node.get(name)
+        where = name if where == "config" else f"{where}.{name}"
+        if node is None:
+            return {}
+        if not isinstance(node, dict):
+            raise ComputeConfigError(f"{where} is {node!r}, not a map")
+    unknown = sorted(str(key) for key in node if key not in COMPUTE_RUNTIMES)
+    if unknown and section == "verifier_compute":
+        raise ComputeConfigError(
+            f"{where} names {', '.join(unknown)}, which is not a runtime "
+            f"({', '.join(COMPUTE_RUNTIMES)})"
+        )
+    value = node.get(runtime)
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ComputeConfigError(f"{where}.{runtime} is {value!r}, not a map")
+    unknown = sorted(str(key) for key in value if key not in COMPUTE_KEYS)
+    if unknown:
+        raise ComputeConfigError(
+            f"{where}.{runtime} holds {', '.join(unknown)}; only "
+            f"{' and '.join(COMPUTE_KEYS)} are read"
+        )
+    return value
+
+
+def verifier_compute(config: dict, runtime: str) -> list[str]:
+    """``verifier_compute.<runtime>`` as ``["effort <e>", "model <m>"]``.
+
+    On top of ``compute_config``'s shape checks, a null key reads as unset and a
+    value must be one plain word, since the verifier's prompt renders no free
+    text. A ``claude.effort`` value is refused, since no carrier applies it: the
+    delegation tool takes no effort.
+    """
+    compute = compute_config(config, "verifier_compute", runtime)
+    where = f"review.fallback_panel.verifier_compute.{runtime}"
+    if runtime == "claude" and compute.get("effort") is not None:
+        raise ComputeConfigError(
+            f"{where}.effort is set, and nothing applies it: the delegation tool takes "
+            "a model and no effort, so the verifier runs at the cockpit's"
+        )
+    parts = []
+    for key in ("effort", "model"):
+        value = compute.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not _VERIFIER_COMPUTE_VALUE.fullmatch(value):
+            raise ComputeConfigError(
+                f"{where}.{key} is {value!r}; it must be one word of letters, digits, "
+                "'.', '_' or '-'"
+            )
+        parts.append(f"{key} {value}")
+    return parts
+
+
+def inspect_compute(config: dict) -> list[str]:
+    """Each compute map the panel would refuse, as the refusal it would print.
+
+    The doctor reads both sections for every runtime with the engines' own
+    rules, so a malformed value shows here rather than only when a prompt is
+    rendered (#1184). It is advisory, as the lens definitions are. A lens
+    value's own rules are checked where it is rendered, in the lens definitions.
+    """
+    problems = []
+    for runtime in COMPUTE_RUNTIMES:
+        for section in ("lens_compute", "verifier_compute"):
+            try:
+                if section == "verifier_compute":
+                    verifier_compute(config, runtime)
+                else:
+                    compute_config(config, section, runtime)
+            except ComputeConfigError as exc:
+                if str(exc) not in problems:
+                    problems.append(str(exc))
+    return problems
+
+
 def _lens_compute_value(compute: dict, key: str, runtime: str) -> str | None:
     if key not in compute:
         return None
@@ -2719,11 +2836,10 @@ def render_agent_definition(config: dict, lens: str, runtime: str) -> str:
         )
 
     engines = get(config, "paths.engines", "scripts") or "scripts"
-    compute = get(config, f"review.fallback_panel.lens_compute.{runtime}", {}) or {}
-    if not isinstance(compute, dict):
-        raise LensDefinitionError(
-            f"review.fallback_panel.lens_compute.{runtime} is {compute!r}, not a map"
-        )
+    try:
+        compute = compute_config(config, "lens_compute", runtime)
+    except ComputeConfigError as exc:
+        raise LensDefinitionError(str(exc)) from exc
     model = _lens_compute_value(compute, "model", runtime)
     effort = _lens_compute_value(compute, "effort", runtime)
     if effort is not None and effort not in CLAUDE_EFFORT_LEVELS:
@@ -3222,6 +3338,7 @@ def inspect(
         registrations=inspect_registrations(root, engines_dir),
         lens_definitions=inspect_lens_definitions(root, config, engines_dir),
         codex_models=inspect_codex_models(config),
+        compute_problems=inspect_compute(config),
         narrative_rendered=narrative,
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,
@@ -3515,6 +3632,8 @@ def render(report: Report) -> str:
         lines.append(
             f"  {mark} {definition.surface} [{definition.runtime}{lens}]: {text}"
         )
+    for problem in report.compute_problems:
+        lines.append(f"  ⚠ compute config: {problem} — the panel refuses it when it renders a prompt")
     if any(
         definition.state in ("missing", "stale", "unreadable")
         for definition in report.lens_definitions
@@ -4327,6 +4446,9 @@ def main(argv: list[str] | None = None) -> int:
                         for d in report.lens_definitions
                     ],
                     "codex_models": report.codex_models,
+                    # #1184. Advisory, as `lens_definitions` is: the refusal each
+                    # malformed compute map would meet when a prompt is rendered.
+                    "compute_problems": report.compute_problems,
                     "narrative_rendered": report.narrative_rendered,
                     # Both emitted, because a consumer cannot derive either from
                     # `files` alone: an all-`unchanged` report looks identical

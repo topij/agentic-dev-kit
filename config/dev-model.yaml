@@ -69,7 +69,8 @@ parallel:
   # Keep each command an argv sequence: the wrapper never invokes a shell, so a
   # launcher value cannot smuggle shell syntax into the child. A user-local
   # install (~/.local/bin, for example) is outside the wrapper's trusted lookup
-  # path by design; name the absolute binary here instead.
+  # path by design; link it into a trusted directory on the host rather than
+  # naming a host-specific absolute path here (parallel-headless.md).
   #
   # The three *_transport keys per runtime are DECLARATIONS the wrapper checks,
   # not free choices: it owns the vocabulary and refuses a transport the named
@@ -123,9 +124,17 @@ parallel:
   # An interrupted or rejected launch gets this bounded graceful-stop window
   # before the wrapper escalates to forced process-group termination.
   termination_grace_seconds: 5
+  # A successful lane run whose final text names no terminal state (no closing
+  # `LANE-TERMINAL:` line) is resumed in the same Claude session at most this many
+  # times before the wrapper records it `stalled` (exit 75). 0 records the stall
+  # without resuming. Codex lanes are never resumed: their final-message file
+  # carries no session id. The shipped value of 1 is the operator's choice on
+  # 2026-10-25 for #514/#564, whose stalls each needed a cockpit re-drive.
+  max_resumes: 1
 
 doc_budgets:
-  # Line-count tripwires (the archival mechanism of Principle #1). A file over budget
+  # Line-count tripwires (the archival mechanism of Principle #1 for the handoff docs,
+  # a consolidation nudge for an instruction file). A file over budget
   # is a housekeeping nudge: check_doc_budget.py exits 0 by default even when one is
   # over, and returns 1 only under --strict. It exits 2 on a usage or CONFIG error
   # regardless of flags — including a `path:` here that no longer exists — so a renamed
@@ -145,6 +154,16 @@ doc_budgets:
     budget: 150
     archive: docs/kit-friction-log-archive.md
     remedy: "run the triage-friction-log workflow to graduate the inbox to the tracker"
+  # An instruction file has no history file to sweep into, so its entry omits
+  # `archive:` and the remedy names consolidation (#1176). Every runtime reads
+  # AGENTS.md (Claude Code through CLAUDE.md's import), and init.sh renders it, so
+  # it is the instruction file an installed kit has. Add more entries the same way,
+  # for instance a CLAUDE.md that carries runtime-only text. A configured path that
+  # does not exist stops check_doc_budget.py with exit 2 before any other warning
+  # prints, so a repository that drops AGENTS.md drops this entry with it.
+  - path: AGENTS.md
+    budget: 240
+    remedy: "fold new rules into the text they extend, move reference material behind a pointer, or turn a mechanical rule into a check; do not raise the budget to fit"
 
 vcs:
   forge: github                  # github | gitlab | other — some skills branch on this
@@ -219,6 +238,11 @@ systemize:
   # points at source or config while keeping the filename configurable.
   report_root: reports
   report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  # The enforcement table (#1222): each standing rule beside what enforces it, so a
+  # repeat of an unenforced rule shows up as a candidate for a check. Tracked source
+  # the shared-rule route edits in its own patch. Omit the key to run without one.
+  # This repository's narrative files are kit-*.md; init.sh writes docs/enforcement.md.
+  enforcement_table: docs/kit-enforcement.md
   # Optional deterministic integration, resolved beneath paths.engines: all
   # absent selects the documented LLM-only path, all present selects
   # engine-backed mode, and a partial set stops rather than mixing
@@ -659,16 +683,19 @@ models:
     cheap: mechanical
     default: standard
     expensive: judgment
-  # STATUS, per runtime: ADVISORY on both. No shipped engine reads this map:
-  # besides init.sh's migration write, its only reader is the kit repository's
+  # STATUS, per runtime: ADVISORY on both, with one mechanical route. The one
+  # shipped engine that reads this map is scripts/launch_lane.py, and only when
+  # it is started with `--tier <cheap|default|expensive>`: it then passes the
+  # mapped value on the headless lane's argv and refuses a tier with no mapping.
+  # Besides init.sh's migration write, the other reader is the kit repository's
   # own smoke runner, which is not shipped and applies the `cheap` values to its
   # probes. `test_no_shipped_engine_reads_runtime_mappings` in
-  # scripts/tests/test_init_sh.py holds that set. So a workflow's tier
-  # reaches a session only when the
-  # cockpit or the operator applies the value by hand — the delegation tool's
-  # `model` parameter, `claude -p --model/--effort`, `codex -m` and
-  # `-c model_reasoning_effort=`. The VALUES below name controls each client was
-  # observed to accept (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27;
+  # scripts/tests/test_init_sh.py holds that set. Everywhere else a workflow's
+  # tier reaches a session only when the cockpit or the operator applies the
+  # value by hand — the delegation tool's `model` parameter,
+  # `claude -p --model/--effort`, `codex -m` and `-c model_reasoning_effort=`.
+  # The VALUES below name controls each client was observed to accept
+  # (Claude Code 2.1.247, codex-cli 0.149.1, 2026-08-27;
   # saved_plans/capability-tier-calibration-live-validation_2026-08-27.md):
   #
   #   claude — model aliases the client resolved and reported back in the

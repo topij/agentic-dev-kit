@@ -54,8 +54,8 @@ Keep that three-way split in mind and every verb below makes sense.
 | *(you use the printed guidance)* | Launches or activates the lane in a **new terminal** | No | — |
 
 Even `new` doesn't touch *your* working tree: the worktree it creates is a separate
-directory under a sibling `dev-model-sessions/` folder (override with
-`DEVKIT_SESSIONS_DIR`).
+directory under a `dev-model-sessions/` folder beside your primary checkout (override
+with `DEVKIT_SESSIONS_DIR`).
 
 ---
 
@@ -69,8 +69,9 @@ scripts/dev_session.sh list          # or just run parallel with no argument
 ```
 
 You get one row per lane: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted
-count) · SANDBOX path`. Nothing is created or changed. If there are no lanes, the table
-is empty.
+count) · RUN · OVERLAP · SANDBOX path`. RUN says whether a headless lane is running,
+finished or lost; OVERLAP names other lanes changing the same files. Nothing is
+created or changed. If there are no lanes, the table is empty.
 
 **Follow it live** while a batch is in flight:
 
@@ -102,7 +103,7 @@ not a lowercase slug.
 
 What this does:
 
-1. Creates a git **worktree** in the sibling `dev-model-sessions/` directory (a linked
+1. Creates a git **worktree** in the `dev-model-sessions/` directory beside your primary checkout (a linked
    worktree sharing this repo's objects — not a full clone).
 2. Creates a fresh branch using `vcs.dev_branch_prefix`, branched off the configured
    `origin/<vcs.protected_branch>` by default — **not** off your current branch. That's
@@ -189,12 +190,16 @@ observed/terminal receipt:
 ```bash
 python3 scripts/launch_lane.py \
   --descriptor <session>/launch-descriptor.json \
-  --prompt-file <task-prompt>
+  --prompt-file <task-prompt> \
+  [--tier <cheap|default|expensive>] \
+  [--ticket <issue-number>]
 ```
 
 The contract covers ready-by-default PRs, the bounded draft exception, ready-state
-assertions, active CI polling, narrative ownership, and branch checks. See the exact
-contract text with:
+assertions, active CI polling, narrative ownership, branch checks, the closing
+`LANE-TERMINAL:` line, which parts of a shell command must be allowed, message files
+under `<state.dirname>/lane/`, and restoring with `git restore`. See the exact contract
+text with:
 
 ```bash
 scripts/dev_session.sh print-contract

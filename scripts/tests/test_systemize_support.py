@@ -66,6 +66,7 @@ systemize:
   digest_cache_pattern: "state/cache/merged-prs-digest_{window}_{mode}_{date}.json"
   report_root: reports
   report_pattern: "reports/post-merge-systemize_{window}_{mode}_{date}.md"
+  enforcement_table: docs/enforcement.md
   fetch_engine: fetch_merged_prs.py
   digest_engine: digest_merged_prs.py
   heartbeat_engine: heartbeat_cli.py

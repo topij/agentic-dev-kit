@@ -28,11 +28,15 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "422f5f27d6acee7c228e85e4ce11e835e630fb985725d7798bcf8c7cb115cd9a"
+      "sha256": "98bcd6e796b35286e850cf8d37cc21deec87f92ccc54b99c8edd329c9f520aa1"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
       "sha256": "c05b938911ef1f28374027a1668e63ed122a7e9d21887d14a95bb15fa044d0f6"
+    },
+    "docs/agentic-dev-kit/parallel-verification.md": {
+      "role": "doctrine",
+      "sha256": "5d2ce21be93f74cc0726bc106a2d28df0a486f0f1ba6b3011390131c0a521847"
     },
     "docs/agentic-dev-kit/review-eval/cases.yaml": {
       "role": "repo-only",
@@ -40,11 +44,11 @@
     },
     "docs/agentic-dev-kit/review-eval/reviewer-eval.md": {
       "role": "repo-only",
-      "sha256": "d8b1157c118a0e3c06916ad2c0a410cb3a5457974f5eed04c07abe818a6e0236"
+      "sha256": "88918d826abdbabe40c80e0a4e415ec4fa39c157947b023dd51727f950661633"
     },
     "docs/agentic-dev-kit/runtime-parity.md": {
       "role": "doctrine",
-      "sha256": "7309a95933f419206ed2841d6e6c078a6e7fbb1e4fe3ff7d1ab8469c465ffabc"
+      "sha256": "b762807340245f475ecc18eb58b840144db345bede7d7da790d6ae5af242f137"
     },
     "docs/agentic-dev-kit/safety-critical-changes.md": {
       "role": "doctrine",
@@ -53,6 +57,10 @@
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
       "sha256": "77ee1c12b257409f2ea194a6bcdfbc8787ca37c0634d49af043e8021b2d6f951"
+    },
+    "docs/agentic-dev-kit/skill-routing/cases.json": {
+      "role": "repo-only",
+      "sha256": "a65a02cf359a12f6e4d70d2910c27fadbfb487c431b44014f645708f3650c6fe"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -64,19 +72,19 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "67a3c2efd16dc111b5c421ad19e30116b321591798525d1152c431aecbb88aee"
+      "sha256": "b81962d4a13c3ec4ed960ad35afc36e7400e97d3807513672608e0850b9ccab7"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "bd021183eea14393237deea5aeebcb6bb17c76d2a807069fb4f44b069aa99c16"
+      "sha256": "5dc49dd1876504abfd7ec579d1c9a4d002bac87061a3bbc7fd858a5bee268184"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
-      "sha256": "0e47b8a7f1ed1379b9689bf36fdbd311038991a1e66bf9cc51a910eba945336c"
+      "sha256": "534fda4393164afc4ea6c181672cef7a1ea2f8a5b870cb0423d55b92f2206a28"
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "d3dc85b60e14513178490fb31170948d621aa9a54175725ba02459e9c74430a8"
+      "sha256": "3553109f6b6e4d195e864520b8930c71b1bd8a63655e65ba7be228eee35119bb"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -87,11 +95,11 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "d9d6da93ea5a501b07c780a7a89964bc5e612c987793dd33214033c1f40dda4d"
+      "sha256": "97949f40b5a386919b38454febe9ecffb7fb8e9e8e90b701105fdc3cdc05cd40"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
-      "sha256": "bfd94447800771ec9552b8cc7f5d654f452dbad212474ff5f59e31dc57931822"
+      "sha256": "910b9bca8c66e4e1dec7dac81ca350170f8744ba1bccafc1f134c13592b060e7"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md": {
       "required_by": [
@@ -123,11 +131,15 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "253efef1d0802b6366df8236bd39ac5f766cb59331b79c2b2ab952b1fdcbb119"
+      "sha256": "fe2f833bf9b50ac9916c24e666ef0158de7490264b614e852d1350d00d3f0da5"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
       "sha256": "9817b01742cfa89d5b3adc6652f2a659dd9db6b095790d62bb1c45e4a76d0272"
+    },
+    "docs/agentic-dev-kit/writing-for-agents.md": {
+      "role": "doctrine",
+      "sha256": "b180bb32d3d7e50a74a2fd7ad62ae9a1b7f423c7efc814c000086265b92b54ae"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
@@ -155,7 +167,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "6760e816e8173e1120ac93e26d6a77bea97c082b3b111c57eb156eaddfd2f05c"
+      "sha256": "b487995ece704ebba9d1499eb24fa07a9f00fa416d6241768c1aca4ca6221286"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -163,11 +175,11 @@
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
-      "sha256": "013c1fa1e20763c9d99c8c2153b07723b1cda9a7b8c2dd9c2e78a6ed6a9d007c"
+      "sha256": "62abed189c463de71cb09aa8c395241d33f97ce88cf39e5c267d36734e71565e"
     },
     "scripts/check_memory_budget.py": {
       "role": "engine",
-      "sha256": "c5a96aef2415def00e15f3e1524307d35af424517445a929f8b05925f6ea5776"
+      "sha256": "307ee622b68d264474d774ba94d24d821a6e02ae28da97a975c63d5849319dc2"
     },
     "scripts/check_record_prose.py": {
       "role": "engine",
@@ -179,7 +191,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "f696372d912ba5f9ab9bbbbd3ea2a14689ea8c9fdda57e1c00aa5962d376012f"
+      "sha256": "df18b3cc9626c6b5441683b138bd9c429dbe9f2707a1ce3c40c5c024bac32116"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -210,11 +222,11 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "718516cb66bc022aaf041389efc77af20df4a073b3913454d646c02cf441751c"
+      "sha256": "bb40b1bda89d94533314495e8910fc3f641e30213bee0611ce98d0828c32b6b7"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "c020496e984bfb48e715478e3945a8535f25eb5ddd1efd49a9a752d15e8b29c7"
+      "sha256": "00ded503681c11276b82f875ef3676e08c5df6ce102d80c4f4080302bb0b145c"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -313,7 +325,7 @@
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
-      "sha256": "980cbf5596cea67033a5dd02d53630f2a92c24afd693ba7727d5fc50303ff555"
+      "sha256": "b4f24dc6cc939cda1622de42e445b7d8b8c52df3526e8715b02d77441a289e2f"
     },
     "scripts/lib/runtime_adapters.py": {
       "required_by": [
@@ -396,7 +408,7 @@
         "scripts/lib/systemize/normalize.py"
       ],
       "role": "engine",
-      "sha256": "1c32b41027b33a09698c48620261393445b54ae9fe771952989486ecac017a55"
+      "sha256": "f26de0771f2a1b8b2244c0431a99428d32182c2335bd67e32466351ce37c4793"
     },
     "scripts/lib/systemize/digest.py": {
       "required_by": [
@@ -591,19 +603,19 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "935a90dfa3ff01c5f554c3b0de86363de3449b7887e4d573a2e43c4311ce22eb"
+      "sha256": "f34f230cb97cdc458e9da936356e0c3dca2af38c0c44f23b942ca7ac25db1558"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "f73c437888753b6b699009aeb5dc12b23318a382dad255987064fe5bd30ab786"
+      "sha256": "0325d88927db7128090e01fe62dd7a3ce4b29b3639f8d0aed1369e6d041ef9c0"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "9955e1bfd51dcbb9ef9309fefaa39852792ffa24eb1f0dcf3a813b8dba623b45"
+      "sha256": "4b390fa2cfb9ed72f2bd3fa95f8f5d5a936feae89e49f4d9ea7c2ab22aff6f53"
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "daad7884d2deffd507efd81571d8599d6cb65b1f68e112d0f659ec5d76e80e3e"
+      "sha256": "a7e715a56f70cc5cc6c900aef3e0f349ee5cd79db61274c24dd2650367232934"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -611,11 +623,15 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "8706d6522167ffa54d3a7f783c99c46fa3af22ee2dd4a03ccd9a64fc5fe171a6"
+      "sha256": "788867c4ef97c0e47a2ae853fdf53b8b86d20950d68f0d5f35aa84d0febc8083"
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "cab754c7e18d917e561cede5d141d5c6bf76653373f5fa19026a66df69830022"
+      "sha256": "60b1b7a379c27aa32d61d273176907858e74c5fd36f21eef0268cecf57155c79"
+    },
+    "scripts/skill_routing_eval.py": {
+      "role": "repo-only",
+      "sha256": "3eef4a95cbaf8bd1ed8b28eb279882a2bb327c331c248f1b80901116603c5691"
     },
     "scripts/sweep_scratch.py": {
       "required_by": [
@@ -643,7 +659,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "3fef6bc36f39776aab08c768c2063a5d4f10041ebceb7a46633f8c02f0f5386f"
+      "sha256": "a42157826eca42a19796f24c7839d02fe9f346e1b8be91a031c9a74ab40c163b"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -681,17 +697,21 @@
       "role": "test",
       "sha256": "4a26b00a2ddae874a76cdb0d85b3c9e14a77d727d959e45543647e928368b5f3"
     },
+    "scripts/tests/test_dev_session_board.py": {
+      "role": "test",
+      "sha256": "2551c6e3057648b58973fcd41da274be4d1765dee4a6c341ddcdebe340cc0dc7"
+    },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
       "sha256": "fcf4e4aac1c48b3064551b7d7217d610193353a60971a50f19a5292582d20279"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "60eb6e4dbb2ff193173c6e49a3e72f00c83ae62bcd5544cdcd2d8ad064f3dc44"
+      "sha256": "06dce5b23b0bf036e43c3cda90d9e655a539eaf94532d9598044152be9a589fb"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "7a6d68be7295f0cca7544f50023611d0efdf90c68bb118973d21275852cc5c5c"
+      "sha256": "3716322b3aa72639d3d3723b5043ab09fa0759c25e18dade4b301a1c93aa49c3"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -699,11 +719,11 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "3d894134c2fec431530e1d90a45830b90309ccaa49f9c0860cec0196b45cea8c"
+      "sha256": "7885c717f24906af6ee45b8138ad7e44432749487e0c7f1b4ce054f4840c2458"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "f0ccc24f0836c8b85813450bd9626080ed9b41fc7d1309c4297f7fe387509961"
+      "sha256": "1f8fddfe6a1cf59d5405c28d97fc7c986b76e56ee5fa6950f037a14a9f50f8a6"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
@@ -719,11 +739,11 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "560f7d2d2bd339593238d7d743241a99667638f7a081800e242d13408db52b20"
+      "sha256": "9149ce6f14bd0094afcb51bcb77824b5c06d4178ec3bb1a6b9b87378ad827f15"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "dcfe17bcf597123475150568d69504c170571d0b9e653f64d7fdc9b643031f5c"
+      "sha256": "c41365523c4ea0d3a2249689107ac4a2f348243971c0b041f62f1fb47a2018da"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -731,7 +751,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "066d2da6036e03259e84f4434d599b086c6c9514e64926300a8abd767037350a"
+      "sha256": "2588a00212bb06c811afcfeb7b5423c17738e1c04775bcc76a91a156c2923263"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
@@ -751,7 +771,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "2318fe2726253101bac36ba210bad16b26b7455482e34f9077d6ae97c0733196"
+      "sha256": "0c98cb89e328fdd6795a3e0ff19e2c78c9d3c3a36e8fedba68d29d9b44dc3c48"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",
@@ -759,11 +779,15 @@
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "f031085e5bb481fc71d63c286d03cb61931df6d03838a20a330d549e40c37919"
+      "sha256": "2de26bbcfe18b54e5e32402ac978bad0291fecc2421bde434729a55f0b9a0251"
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "347b840ae8cfcdf15ad677519ebff65c1675b2e06c3c915c4a2e24bcc06bbc22"
+      "sha256": "849c9ae2e9ac9cfe11c0303b320f80fb87e7acbeada516f7fa9950ac463f218b"
+    },
+    "scripts/tests/test_skill_routing_eval.py": {
+      "role": "repo-only",
+      "sha256": "50816844599ec7fd3608e0d0e9a4d6543d417603ba3555f79f7c77afc79bd11c"
     },
     "scripts/tests/test_state_guard.py": {
       "role": "test",
@@ -779,7 +803,7 @@
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",
-      "sha256": "a3a2cbd02bbb291e1d81864b6927befbd3c899631d87926a41ae50dfeafd4dcc"
+      "sha256": "953db5492635a24e1167801e209f92c449a53e120667c232e2db5b98f289e046"
     },
     "scripts/tests/test_systemize_digest.py": {
       "role": "test",
@@ -795,7 +819,7 @@
     },
     "scripts/tests/test_systemize_support.py": {
       "role": "test",
-      "sha256": "73f906c5e5c2dd1ea6da15b8d711846c7b24aeca558fc1cf90d7253ff4a1467f"
+      "sha256": "c7fe1b1e0fccc737707ac466e7658744273e437d0c130cd04f35027c77e9e8a8"
     },
     "scripts/tests/test_triage_approval.py": {
       "role": "test",

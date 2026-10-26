@@ -1,0 +1,78 @@
+{
+  "settings": {
+    "top_k": 1,
+    "unrelated_max_score": 0.2,
+    "collision_threshold": 0.35
+  },
+  "skills": {
+    "pr-watch": {
+      "positive": [
+        {"prompt": "Watch the PR until CI is green and the review comments are handled"},
+        {"prompt": "I just pushed to my pull request, keep an eye on the checks"},
+        {"prompt": "Can you babysit PR 1224 and fix whatever the reviewers flag?"},
+        {"prompt": "CI is red on my pull request, get it green"},
+        {"prompt": "Address the review findings on this PR and re-poll until it's clean"}
+      ],
+      "negative": [
+        {"prompt": "Start the session and tell me what to work on next", "owner": "session-start"},
+        {"prompt": "We're done for today, write the handoff", "owner": "wrap-up"},
+        {"prompt": "Refactor the date parsing helper to use the standard library"}
+      ]
+    },
+    "session-start": {
+      "positive": [
+        {"prompt": "Good morning, what should we work on today?"},
+        {"prompt": "Give me a start-of-session briefing"},
+        {"prompt": "I'm back after a week away, where did we leave things?"},
+        {"prompt": "Resuming work on this repo: read the handoff and tell me what's next"},
+        {"prompt": "What's the state of open pull requests, CI and the tracker before I start?"}
+      ],
+      "negative": [
+        {"prompt": "Wrap up the session and hand off to the next agent", "owner": "wrap-up"},
+        {"prompt": "Keep watching this PR until the checks pass", "owner": "pr-watch"},
+        {"prompt": "Write a unit test for the CSV exporter"}
+      ]
+    },
+    "wrap-up": {
+      "positive": [
+        {"prompt": "Let's wrap up for today"},
+        {"prompt": "End the session and hand off to the next agent"},
+        {"prompt": "Record what shipped so the next session can pick it up"},
+        {"prompt": "We're finishing here, update the living handoff with anything left over"},
+        {"prompt": "Before I close this, log the friction we hit and update the next steps"}
+      ],
+      "negative": [
+        {"prompt": "What should I do first this session?", "owner": "session-start"},
+        {"prompt": "Look for recurring root causes across merged pull request reviews", "owner": "post-merge-systemize"},
+        {"prompt": "Rename the config loader module"}
+      ]
+    },
+    "parallel": {
+      "positive": [
+        {"prompt": "Split this work into parallel lanes in separate worktrees"},
+        {"prompt": "Launch two isolated development lanes for the API and the docs"},
+        {"prompt": "List the agent lanes that are running and their state"},
+        {"prompt": "Plan parallel development: these three tickets touch disjoint files"},
+        {"prompt": "Remove the finished lane and reconcile its worktree"}
+      ],
+      "negative": [
+        {"prompt": "Drive this pull request to green", "owner": "pr-watch"},
+        {"prompt": "Brief me on the repository before I start", "owner": "session-start"},
+        {"prompt": "Speed up the slow database query in the report page"}
+      ]
+    },
+    "post-merge-systemize": {
+      "positive": [
+        {"prompt": "Run the post-merge retro over last week's merged PRs"},
+        {"prompt": "Find recurring root causes in review findings across merged pull requests"},
+        {"prompt": "Which review findings keep coming back across merged PRs? Turn them into shared rules"},
+        {"prompt": "Systemize the review findings from this month's merges"}
+      ],
+      "negative": [
+        {"prompt": "Review this single pull request for bugs", "owner": "pr-watch"},
+        {"prompt": "Hand off this session's work", "owner": "wrap-up"},
+        {"prompt": "Add a dark mode toggle to the settings page"}
+      ]
+    }
+  }
+}

@@ -226,6 +226,31 @@ def test_an_absolute_citation_is_recorded_by_its_path_in_the_lens_tree() -> None
     assert found == [{"path": "scripts/x.py", "lines": [3, 3], "number": None}]
 
 
+@pytest.mark.parametrize("cited, path", [
+    # A `.` segment is dropped and a `..` inside the tree resolved (#1180).
+    ("/r/lens-x-abc1234/./bug.py:2", "bug.py"),
+    ("/r/lens-x-abc1234/sub/../bug.py:2", "bug.py"),
+    ("./scripts/x.py:2", "scripts/x.py"),
+    # The last lens-tree segment is the tree, so a nested tree's name is not a path.
+    ("/r/lens-a-abc1234/x/lens-b-def5678/bug.py:2", "bug.py"),
+    # A path that climbs out of the tree is not a citation of it, relative or absolute.
+    ("../kit/bug.py:2", None),
+    ("x/../../bug.py:2", None),
+    ("/r/lens-x-abc1234/../../bug.py:2", None),
+])
+def test_a_cited_path_is_normalised_before_it_is_matched(cited, path) -> None:
+    found = review_eval.citations(f"see {cited} here")
+    assert [c["path"] for c in found] == ([path] if path else [])
+
+
+def test_the_lens_tree_pattern_takes_the_short_sha_the_runner_names_trees_with() -> None:
+    sha = "0123456789abcdef0123456789abcdef01234567"
+    named = f"/r/lens-adversarial-{sha[:review_eval.SHORT_SHA]}/bug.py:2"
+    assert [c["path"] for c in review_eval.citations(named)] == ["bug.py"]
+    for length in (review_eval.SHORT_SHA - 1, review_eval.SHORT_SHA + 1):
+        assert review_eval.citations(f"/r/lens-adversarial-{sha[:length]}/bug.py:2") == []
+
+
 def test_section_matching_stays_linear_on_long_whitespace() -> None:
     import time
     start = time.monotonic()
@@ -408,6 +433,7 @@ def test_clean_case_findings_are_counted_even_unnumbered(report, count) -> None:
     # An absolute path outside the lens's tree may be the kit checkout's fixed copy.
     ("see /home/user/agentic-dev-kit/bug.py:2", False),
     ("see /r/lens-adversarial-abc1234/../../bug.py:2", False),
+    ("see ../kit/bug.py:2", False),
     # A line the lens checked and cleared is not a finding.
     ("## Verified clean\n- bug.py:2 reviewed, no issue\n\nNo findings.", False),
     ("**What I reviewed**\nbug.py:2\n**F1 (HIGH): divides by zero**\nbug.py:2", True),

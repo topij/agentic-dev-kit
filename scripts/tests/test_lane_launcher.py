@@ -42,9 +42,24 @@ def _git(cwd: Path, *args: str) -> str:
     ).stdout.strip()
 
 
+# What a fake lane ends its final text with unless told otherwise: a terminal state
+# the contract allows, so a run that the fixture does not make stall completes.
+FAKE_TERMINAL_LINE = "LANE-TERMINAL: no-pr fake lane"
+FAKE_SESSION_ID = "1b4e28ba-2fa1-41d2-883f-0016d3cca427"
+
+
+def _lane_json(text: str | bytes) -> dict[str, object]:
+    """The fake lane's JSON report, read past the terminal line that follows it."""
+    if isinstance(text, bytes):
+        text = text.decode("utf-8")
+    value, _end = json.JSONDecoder().raw_decode(text)
+    return value
+
+
 def _fake_codex(
     path: Path,
     *,
+    terminal: str = "line",
     sleep: bool = False,
     write_final: bool = True,
     corrupt_receipt: bool = False,
@@ -59,8 +74,9 @@ def _fake_codex(
         if corrupt_receipt
         else ""
     )
+    suffix = {"line": f"'\\n{FAKE_TERMINAL_LINE}\\n'", "none": "''"}[terminal]
     final_line = (
-        "Path(output).write_text(json.dumps(result, sort_keys=True), encoding='utf-8')"
+        f"Path(output).write_text(json.dumps(result, sort_keys=True) + {suffix}, encoding='utf-8')"
         if write_final
         else "pass"
     )
@@ -129,6 +145,8 @@ CLAUDE_OUTPUT_MODES = (
     "none",
     "denied",
     "no-denial-list",
+    "with-usage",
+    "odd-usage",
 )
 
 
@@ -139,9 +157,22 @@ def _fake_claude(
     sleep: bool = False,
     corrupt_receipt: bool = False,
     ignore_stdin: bool = False,
+    terminal: str = "line",
+    session_id: str = FAKE_SESSION_ID,
+    resume: str = "ok",
+    rewrite_profile: bool = False,
 ) -> None:
     """A stand-in for `claude -p --output-format json`: prompt on stdin, one JSON
-    result object on stdout. `output` selects a hostile stdout shape."""
+    result object on stdout. `output` selects a hostile stdout shape.
+
+    `terminal` is when the result text ends with a terminal-state line: always
+    (`line`), never (`none`), or only in a `--resume` round (`after-resume`).
+    `resume` is what a `--resume` round does instead of answering normally: exit 3
+    (`exit`), report a permission denial (`denied`), record its pid and hang
+    (`sleep`), leave a SIGTERM-ignoring child in its process group
+    (`descendant`) or in a new session (`detached`), print a non-JSON line
+    (`garbage`), or answer under a fresh session id (`fresh-session`).
+    `rewrite_profile` makes the launch round overwrite the `--settings` file."""
     sleep_line = "time.sleep(60)" if sleep else ""
     corrupt_line = (
         "[p.write_text('{}\\n', encoding='utf-8') for p in Path.cwd().parent.glob('launch-receipt-*.json')]"
@@ -163,12 +194,54 @@ def _fake_claude(
         # `success` envelope whose only trace of the refusal is this list.
         "denied": "sys.stdout.write(json.dumps({**good, 'permission_denials': [{'tool_name': 'Write', 'tool_use_id': 'toolu_x', 'tool_input': {'file_path': 'x.txt'}}]}) + '\\n')",
         "no-denial-list": "sys.stdout.write(json.dumps({k: v for k, v in good.items() if k != 'permission_denials'}) + '\\n')",
+        # The token and cost fields a real result object carries beside the text.
+        "with-usage": "sys.stdout.write(json.dumps({**good, 'usage': {'input_tokens': 12, 'output_tokens': 34, 'cache_read_input_tokens': 5, 'service_tier': 'standard'}, 'total_cost_usd': 0.0123, 'num_turns': 3, 'duration_ms': 4567, 'modelUsage': {'claude-haiku-x': {'inputTokens': 12, 'outputTokens': 34, 'costUSD': 0.0123}}}) + '\\n')",
+        "odd-usage": "sys.stdout.write(json.dumps({**good, 'usage': {'input_tokens': True, 'output_tokens': False}, 'total_cost_usd': True, 'modelUsage': ['x'], 'num_turns': '3'}) + '\\n')",
     }[output]
+    suffix = {
+        "line": f"'\\n{FAKE_TERMINAL_LINE}'",
+        "none": "''",
+        "after-resume": f"('\\n{FAKE_TERMINAL_LINE}' if resuming else '')",
+    }[terminal]
+    resume_line = {
+        "ok": "",
+        "exit": "if resuming: sys.exit(3)",
+        "denied": "if resuming: good['permission_denials'] = [{'tool_name': 'Write'}]",
+        "sleep": (
+            "if resuming:\n"
+            "  Path.cwd().parent.joinpath('resume.pid').write_text(str(os.getpid()), encoding='utf-8')\n"
+            "  time.sleep(60)"
+        ),
+        "detached": (
+            "if resuming:\n"
+            "  child = subprocess.Popen([sys.executable, '-c', "
+            "'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'], "
+            "start_new_session=True)\n"
+            "  Path.cwd().parent.joinpath('resume-detached.pid').write_text(str(child.pid), encoding='utf-8')"
+        ),
+        "garbage": "if resuming: sys.stdout.write('not json\\n'); sys.stdout.flush(); sys.exit(0)",
+        "fresh-session": "if resuming: good['session_id'] = str(uuid.uuid4())",
+        "descendant": (
+            "if resuming:\n"
+            "  child = subprocess.Popen([sys.executable, '-c', "
+            "'import signal,time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)'])\n"
+            "  Path.cwd().parent.joinpath('resume-descendant.pid').write_text(str(child.pid), encoding='utf-8')"
+        ),
+    }[resume]
     path.write_text(
         "#!/usr/bin/env python3\n"
-        "import json, os, signal, subprocess, sys, time\n"
+        "import hashlib, json, os, signal, subprocess, sys, time, uuid\n"
         "from pathlib import Path\n"
         "args = sys.argv[1:]\n"
+        "resuming = '--resume' in args\n"
+        + (
+            "if not resuming:\n"
+            "  Path(args[args.index('--settings') + 1]).write_text("
+            "'{\"permissions\": {\"allow\": [\"Bash(git status:*)\"]}}\\n', encoding='utf-8')\n"
+            if rewrite_profile
+            else ""
+        )
+        + 
         f"{prompt_line}\n"
         "result = {\n"
         "  'cwd': str(Path.cwd().resolve()),\n"
@@ -178,11 +251,16 @@ def _fake_claude(
         "  'gh_repo_present': 'GH_REPO' in os.environ,\n"
         "  'git_environment_present': sorted(k for k in os.environ if k.startswith('GIT_')),\n"
         "  'contract_first': prompt.startswith('LANE CONTRACT (binding):'),\n"
+        "  'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest(),\n"
+        "  'lineage_nonce_present': 'ADK_LAUNCH_PROCESS_NONCE' in os.environ,\n"
+        "  'lineage_nonce': os.environ.get('ADK_LAUNCH_PROCESS_NONCE'),\n"
         "  'pid': os.getpid(),\n"
         "  'argv': args,\n"
         "}\n"
         "good = {'type': 'result', 'subtype': 'success', 'is_error': False, "
-        "'result': json.dumps(result, sort_keys=True), 'session_id': 'fake', 'permission_denials': []}\n"
+        f"'result': json.dumps(result, sort_keys=True) + {suffix}, 'session_id': {session_id!r}, "
+        "'permission_denials': []}\n"
+        f"{resume_line}\n"
         f"{corrupt_line}\n"
         f"{emit}\n"
         "sys.stdout.flush()\n"
@@ -217,6 +295,14 @@ def _install_repo(
     claude_policy: str | None = "accept-edits",
     profile: dict[str, object] | bytes | None = None,
     profile_key: str | None = "config/claude-lane-settings.json",
+    runtime_mappings: str = "",
+    terminal: str = "line",
+    session_id: str = FAKE_SESSION_ID,
+    resume: str = "ok",
+    max_resumes: str | None = "1",
+    rewrite_profile: bool = False,
+    extra_config: str = "",
+    linked_issuer: bool = False,
 ):
     remote = tmp_path / "origin.git"
     subprocess.run(
@@ -238,11 +324,18 @@ def _install_repo(
     _git(repo, "commit", "-m", "seed")
     _git(repo, "remote", "add", "origin", str(remote))
     _git(repo, "push", "-u", "origin", "trunk")
-    engine_dir = repo / "scripts" / "devkit"
+    # The issuer is the checkout the engine and config live in: the primary, or
+    # a linked cockpit worktree of the same repository (#1109).
+    issuer = repo
+    if linked_issuer:
+        issuer = tmp_path / "cockpit"
+        _git(repo, "worktree", "add", "-b", "feat/cockpit", str(issuer), "trunk")
+    engine_dir = issuer / "scripts" / "devkit"
     shutil.copytree(ENGINE_DIR, engine_dir)
     fake_codex = tmp_path / "fake-codex"
     _fake_codex(
         fake_codex,
+        terminal="none" if terminal == "none" else "line",
         sleep=sleep,
         write_final=write_final,
         corrupt_receipt=corrupt_receipt,
@@ -257,9 +350,13 @@ def _install_repo(
         sleep=sleep,
         corrupt_receipt=corrupt_receipt,
         ignore_stdin=claude_ignore_stdin,
+        terminal=terminal,
+        session_id=session_id,
+        resume=resume,
+        rewrite_profile=rewrite_profile,
     )
-    (repo / "config").mkdir()
-    (repo / "config" / "dev-model.yaml").write_text(
+    (issuer / "config").mkdir()
+    (issuer / "config" / "dev-model.yaml").write_text(
         "paths:\n"
         "  handoff: handoff.md\n"
         "  friction_log: friction-log.md\n"
@@ -283,12 +380,15 @@ def _install_repo(
         + "  descriptor_ttl_seconds: 900\n"
         "  observation_timeout_seconds: 5\n"
         "  termination_grace_seconds: 1\n"
-        "vcs:\n"
+        + (f"  max_resumes: {max_resumes}\n" if max_resumes is not None else "")
+        + "vcs:\n"
         "  protected_branch: trunk\n"
-        "  dev_branch_prefix: lane\n",
+        "  dev_branch_prefix: lane\n"
+        + runtime_mappings
+        + extra_config,
         encoding="utf-8",
     )
-    profile_path = repo / "config" / "claude-lane-settings.json"
+    profile_path = issuer / "config" / "claude-lane-settings.json"
     if profile is None:
         profile = LANE_PROFILE
     if isinstance(profile, bytes):
@@ -307,7 +407,7 @@ def _install_repo(
             "--runtime",
             runtime,
         ],
-        cwd=repo,
+        cwd=issuer,
         env=env,
         check=True,
         capture_output=True,
@@ -324,6 +424,7 @@ def _run_launcher(
     descriptor: dict[str, object],
     prompt: Path,
     env: dict[str, str],
+    *extra: str,
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [
@@ -333,6 +434,7 @@ def _run_launcher(
             str(descriptor["descriptor_path"]),
             "--prompt-file",
             str(prompt),
+            *extra,
         ],
         env=env,
         check=False,
@@ -382,13 +484,13 @@ def test_supported_launcher_replaces_inherited_identity_and_binds_observation(
     receipt_path = sessions / "probe" / f"launch-receipt-{descriptor['descriptor_id']}.json"
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     final_path = Path(receipt["terminal"]["final_message_path"])
-    final = json.loads(final_path.read_text(encoding="utf-8"))
+    final = _lane_json(final_path.read_text(encoding="utf-8"))
     assert receipt["status"] == "completed"
     assert receipt["expected"] is not receipt["observed"]
     assert receipt["expected"]["environment"] == descriptor["env"]
     assert receipt["observed"]["environment"] == descriptor["env"]
     assert receipt["observed"]["worktree"] == descriptor["worktree"]
-    assert receipt["observed"]["repo_root"] == str(repo)
+    assert receipt["observed"]["git_common_dir"] == str((repo / ".git").resolve())
     assert final["cwd"] == descriptor["worktree"]
     assert final["branch"] == descriptor["branch"]
     assert final["env"] == descriptor["env"]
@@ -448,7 +550,7 @@ def test_caller_inheritable_file_descriptor_is_closed_before_runtime_exec(
             / f"launch-receipt-{descriptor['descriptor_id']}.json"
         ).read_text(encoding="utf-8")
     )
-    final = json.loads(Path(receipt["terminal"]["final_message_path"]).read_text())
+    final = _lane_json(Path(receipt["terminal"]["final_message_path"]).read_text())
     assert final["inherited_fd_open"] is False
 
 
@@ -504,6 +606,139 @@ def test_relative_runtime_command_uses_only_the_trusted_executable_path(
     assert receipt["request"]["configured_command"] == [str(trusted_runtime)]
     assert receipt["status"] == "completed"
     assert not hostile_marker.exists()
+
+
+def _set_codex_command(descriptor: dict[str, object], tmp_path: Path, command: str) -> None:
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    config = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config.replace(
+            f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
+            f"codex_headless_command: [{json.dumps(command)}]",
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.evidence
+def test_missing_absolute_runtime_command_is_refused_without_the_trusted_path_remedy(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    absent = str(tmp_path / "absent-dir" / "lane-runtime")
+    _set_codex_command(descriptor, tmp_path, absent)
+    launcher = _load_launcher(engine_dir)
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    message = str(refused.value)
+    assert repr(absent) in message
+    assert "does not exist or is not executable" in message
+    assert "not looked up on the trusted path" in message
+    assert launcher.SAFE_EXECUTABLE_PATH not in message
+    assert "link the binary" not in message
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("command", ["./lane-runtime", "bin/lane-runtime", "../cwd/lane-runtime"])
+def test_relative_runtime_command_with_a_directory_part_is_refused_even_when_it_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: str
+) -> None:
+    # The file exists relative to the launcher's cwd, so shutil.which would accept
+    # it there; the child would exec the same relative path from the lane worktree.
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    cwd = tmp_path / "cwd"
+    present = (cwd / command).resolve()
+    present.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(tmp_path / "fake-codex", present)
+    monkeypatch.chdir(cwd)
+    _set_codex_command(descriptor, tmp_path, command)
+    launcher = _load_launcher(engine_dir)
+    assert shutil.which(command, path=launcher.SAFE_EXECUTABLE_PATH) == command
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    assert str(refused.value) == (
+        f"configured codex launcher {command!r} is a relative path; name a bare "
+        "command on the trusted path or an absolute path"
+    )
+
+
+@pytest.mark.evidence
+def test_unresolvable_runtime_command_refusal_names_the_host_placement_remedy(
+    tmp_path: Path,
+) -> None:
+    _repo, engine_dir, _sessions, descriptor, _prompt, _env = _install_repo(tmp_path)
+    config_path = Path(descriptor["repo_root"]) / "config" / "dev-model.yaml"
+    config = config_path.read_text(encoding="utf-8")
+    config_path.write_text(
+        config.replace(
+            f"codex_headless_command: [{json.dumps(str(tmp_path / 'fake-codex'))}]",
+            'codex_headless_command: ["devkit-absent-lane-runtime"]',
+        ),
+        encoding="utf-8",
+    )
+    launcher = _load_launcher(engine_dir)
+
+    with pytest.raises(launcher.LaunchError) as refused:
+        launcher._config_for_launcher("codex")
+
+    message = str(refused.value)
+    assert "unavailable on the trusted path" in message
+    assert "'devkit-absent-lane-runtime'" in message
+    assert launcher.SAFE_EXECUTABLE_PATH in message
+    assert "link the binary into one of those directories" in message
+
+
+@pytest.mark.evidence
+def test_descriptor_issued_from_a_linked_worktree_launches(tmp_path: Path) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, linked_issuer=True
+    )
+    cockpit = (tmp_path / "cockpit").resolve()
+    assert descriptor["repo_root"] == str(cockpit)
+
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    final = _lane_json(
+        Path(receipt["terminal"]["final_message_path"]).read_text(encoding="utf-8")
+    )
+    common_dir = str((repo / ".git").resolve())
+    assert receipt["status"] == "completed"
+    assert receipt["expected"]["git_common_dir"] == common_dir
+    assert receipt["observed"]["git_common_dir"] == common_dir
+    assert final["cwd"] == descriptor["worktree"]
+    assert final["env"]["DEVKIT_ROOT"] == str(cockpit)
+
+
+@pytest.mark.evidence
+def test_lane_worktree_from_a_foreign_repository_is_refused(tmp_path: Path) -> None:
+    # Hostile mutation for #1109: replace the lane worktree with a separate clone
+    # that agrees with the descriptor on its worktree path, branch, head, base and
+    # both origin URLs, but is another repository, so its Git common directory is
+    # its own. The old path comparison refused this clone too (its common-dir
+    # parent is the clone itself); the common-directory comparison is what must
+    # keep refusing it now that a linked issuer is accepted.
+    _repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    worktree = Path(descriptor["worktree"])
+    marker = (worktree / ".devkit_state_root").read_bytes()
+    shutil.rmtree(worktree)
+    _git(Path(descriptor["repo_root"]), "worktree", "prune")
+    _git(tmp_path, "clone", "-q", "-b", "trunk", descriptor["origin_url"], str(worktree))
+    _git(worktree, "checkout", "-q", "-b", descriptor["branch"], descriptor["lane_oid"])
+    (worktree / ".devkit_state_root").write_bytes(marker)
+    assert _git(worktree, "remote", "get-url", "--push", "origin") == descriptor["origin_push_url"]
+
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+
+    assert result.returncode != 0
+    assert "child observation disagrees on git_common_dir" in result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
 
 
 @pytest.mark.evidence
@@ -568,7 +803,7 @@ def test_correct_descriptor_cannot_launch_in_a_wrong_worktree() -> None:
         "worktree": "/sessions/lane/wt",
         "session_dir": "/sessions/lane",
         "state_root": "/sessions/lane/state",
-        "repo_root": "/repo",
+        "git_common_dir": "/repo/.git",
         "origin_url": "origin",
         "origin_push_url": "origin",
         "branch": "dev/lane",
@@ -607,7 +842,7 @@ def test_caller_supplied_identity_without_independent_observation_is_rejected() 
 @pytest.mark.parametrize(
     ("field", "foreign"),
     (
-        ("repo_root", "/foreign"),
+        ("git_common_dir", "/foreign/.git"),
         ("branch", "dev/foreign"),
         ("base", "foreign-base"),
         ("state_root", "/foreign-state"),
@@ -624,7 +859,7 @@ def test_foreign_identity_mutations_are_rejected(field: str, foreign: str) -> No
         "worktree": "/sessions/lane/wt",
         "session_dir": "/sessions/lane",
         "state_root": "/sessions/lane/state",
-        "repo_root": "/repo",
+        "git_common_dir": "/repo/.git",
         "origin_url": "origin",
         "origin_push_url": "origin",
         "branch": "dev/lane",
@@ -1271,7 +1506,7 @@ def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
     raw = Path(receipt["terminal"]["final_message_path"]).read_bytes()
     envelope = json.loads(raw)
     assert envelope["type"] == "result" and envelope["is_error"] is False
-    final = json.loads(envelope["result"])
+    final = _lane_json(envelope["result"])
     # Claude's argv carries no worktree flag and no prompt argument: cwd comes
     # from the process and the prompt from stdin. The approval contribution sits
     # between the command prefix and the final-text arguments.
@@ -1314,7 +1549,7 @@ def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
         == hashlib.sha256(envelope["result"].encode()).hexdigest()
     )
     assert receipt["terminal"]["final_text_sha256"] != receipt["terminal"]["final_message_sha256"]
-    assert receipt["observed"]["repo_root"] == str(repo)
+    assert receipt["observed"]["git_common_dir"] == str((repo / ".git").resolve())
 
 
 @pytest.mark.evidence
@@ -1328,7 +1563,7 @@ def test_codex_child_argv_is_pinned_with_the_policy_slot_and_evidence_route_unch
     assert result.returncode == 0, result.stderr
     receipt = _receipt(sessions, descriptor)
     final_path = Path(receipt["terminal"]["final_message_path"])
-    final = json.loads(final_path.read_text(encoding="utf-8"))
+    final = _lane_json(final_path.read_text(encoding="utf-8"))
     # Pinned: the #609 argv, byte for byte and in the same order, with exactly one
     # addition — the declared sandbox policy in the slot after the command prefix.
     # Dropping or reordering `--cd`, the evidence file, or the stdin dash while the
@@ -1412,14 +1647,14 @@ def test_claude_prompt_not_delivered_on_stdin_is_visible_in_the_final_text(
     assert result.returncode == 0, result.stderr
     receipt = _receipt(sessions, descriptor)
     envelope = json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())
-    assert json.loads(envelope["result"])["contract_first"] is False
+    assert _lane_json(envelope["result"])["contract_first"] is False
     honest = _install_repo(tmp_path / "honest", runtime="claude")
     result = _run_launcher(honest[1], honest[3], honest[4], honest[5])
     assert result.returncode == 0, result.stderr
     envelope = json.loads(
         Path(_receipt(honest[2], honest[3])["terminal"]["final_message_path"]).read_bytes()
     )
-    assert json.loads(envelope["result"])["contract_first"] is True
+    assert _lane_json(envelope["result"])["contract_first"] is True
 
 
 @pytest.mark.evidence
@@ -1741,12 +1976,12 @@ def test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot(
     final_path = Path(receipt["terminal"]["final_message_path"])
     if runtime == "claude":
         envelope = json.loads(final_path.read_bytes())
-        argv = json.loads(envelope["result"])["argv"]
+        argv = _lane_json(envelope["result"])["argv"]
         profile_path = str((repo / "config" / "claude-lane-settings.json").resolve())
         assert argv[:6] == ["--setting-sources", "", *mode_argv, "--settings", profile_path]
         assert argv[6:] == ["--output-format", "json"]
     else:
-        argv = json.loads(final_path.read_text(encoding="utf-8"))["argv"]
+        argv = _lane_json(final_path.read_text(encoding="utf-8"))["argv"]
         assert argv[:2] == mode_argv
         assert argv[2:] == ["--cd", descriptor["worktree"], "--output-last-message", str(final_path), "-"]
     assert receipt["request"]["approval_policy"]["argv"] == argv[: len(receipt["request"]["approval_policy"]["argv"])]
@@ -2177,6 +2412,7 @@ def test_profile_rewritten_after_the_parent_read_is_refused_by_the_child(
                 "task_sha256": "t",
                 "combined_prompt_sha256": "c",
                 "authority_fd": read_end,
+                "ticket": None,
             },
         )()
 
@@ -2479,3 +2715,1237 @@ else:
         pytest.fail("the stable-file reader blocked on the substituted file")
     assert result.returncode == 0, result.stdout + result.stderr
     assert ("regular contents accepted" if mode == "regular" else "refused:") in result.stdout
+
+
+_TIER_MAPPINGS = (
+    "models:\n"
+    "  runtime_mappings:\n"
+    "    claude:\n"
+    "      cheap: haiku\n"
+    "      expensive:\n"
+    "        model: opus\n"
+    "        effort: high\n"
+    "    codex:\n"
+    "      cheap: low\n"
+    "      expensive:\n"
+    "        model: gpt-x\n"
+    "        effort: xhigh\n"
+)
+
+
+def _child_argv(sessions: Path, descriptor: dict[str, object], runtime: str) -> list[str]:
+    final_path = Path(_receipt(sessions, descriptor)["terminal"]["final_message_path"])
+    if runtime == "claude":
+        return _lane_json(json.loads(final_path.read_bytes())["result"])["argv"]
+    return _lane_json(final_path.read_text(encoding="utf-8"))["argv"]
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize(
+    ("runtime", "tier", "compute_argv", "model", "effort"),
+    [
+        ("claude", "cheap", ["--model", "haiku"], "haiku", None),
+        ("claude", "expensive", ["--model", "opus", "--effort", "high"], "opus", "high"),
+        ("codex", "cheap", ["-c", "model_reasoning_effort=low"], None, "low"),
+        ("codex", "expensive", ["-m", "gpt-x", "-c", "model_reasoning_effort=xhigh"], "gpt-x", "xhigh"),
+    ],
+)
+def test_a_requested_tier_reaches_the_child_argv_after_the_policy_slot(
+    tmp_path: Path,
+    runtime: str,
+    tier: str,
+    compute_argv: list[str],
+    model: str | None,
+    effort: str | None,
+) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime, runtime_mappings=_TIER_MAPPINGS
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env, "--tier", tier)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["request"]["compute"] == {
+        "tier": tier, "model": model, "effort": effort, "argv": compute_argv
+    }
+    argv = _child_argv(sessions, descriptor, runtime)
+    policy = receipt["request"]["approval_policy"]["argv"]
+    assert argv[: len(policy)] == policy
+    assert argv[len(policy) : len(policy) + len(compute_argv)] == compute_argv
+    assert receipt["observed"]["argv"] == [*receipt["request"]["configured_command"], *argv]
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+def test_no_tier_inherits_the_clients_compute(tmp_path: Path, runtime: str) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime, runtime_mappings=_TIER_MAPPINGS
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["request"]["compute"] == {
+        "tier": None, "model": None, "effort": None, "argv": []
+    }
+    argv = _child_argv(sessions, descriptor, runtime)
+    for flag in ("--model", "--effort", "-m"):
+        assert flag not in argv
+    assert not any(part.startswith("model_reasoning_effort=") for part in argv)
+
+
+@pytest.mark.parametrize(
+    ("tier", "mappings", "message"),
+    [
+        ("default", _TIER_MAPPINGS, "has no models.runtime_mappings.claude.default"),
+        ("cheap", "", "has no models.runtime_mappings.claude.cheap"),
+        ("huge", _TIER_MAPPINGS, "--tier must be one of"),
+        (
+            "cheap",
+            "models:\n  runtime_mappings:\n    claude:\n      cheap: 'haiku --dangerously-skip-permissions'\n",
+            "must be one word",
+        ),
+        (
+            "cheap",
+            "models:\n  runtime_mappings:\n    claude:\n      cheap:\n        model: haiku\n        sandbox: 'off'\n",
+            "must be one word or a map of model and effort",
+        ),
+        (
+            "cheap",
+            "models:\n  runtime_mappings:\n    claude:\n      cheap: -p\n",
+            "must be one word",
+        ),
+    ],
+)
+def test_a_tier_the_config_cannot_map_is_refused_before_any_attempt(
+    tmp_path: Path, tier: str, mappings: str, message: str
+) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", runtime_mappings=mappings
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env, "--tier", tier)
+    assert result.returncode == 64, result.stderr
+    assert message in result.stderr
+    assert not (sessions / "probe" / "launch-attempt.json").exists()
+
+
+@pytest.mark.evidence
+def test_a_claude_lane_records_the_usage_its_result_reports(tmp_path: Path) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output="with-usage"
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    terminal = _receipt(sessions, descriptor)["terminal"]
+    assert terminal["usage"] == {
+        "source": "claude json result",
+        "usage": {"input_tokens": 12, "output_tokens": 34, "cache_read_input_tokens": 5},
+        "total_cost_usd": 0.0123,
+        "models": {"claude-haiku-x": {"inputTokens": 12, "outputTokens": 34, "costUSD": 0.0123}},
+        "num_turns": 3,
+        "duration_ms": 4567,
+    }
+
+
+@pytest.mark.evidence
+def test_usage_the_launcher_cannot_read_is_none_and_never_fails_the_lane(
+    tmp_path: Path,
+) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output="odd-usage"
+    )
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["terminal"]["usage"] is None
+
+
+@pytest.mark.parametrize(
+    "final_bytes",
+    [
+        b'{"type": "result", "usage": ' + b"[" * 100_000 + b"]" * 100_000 + b"}",
+        b'{"type": "result", "num_turns": ' + b"9" * 5_000 + b"}",
+        b'{"type": "result", "usage": {"input_tokens": NaN}, "total_cost_usd": Infinity,'
+        b' "modelUsage": {"m": {"costUSD": -Infinity, "flag": true}}}',
+    ],
+    ids=["deep-nesting", "long-integer", "non-finite"],
+)
+def test_usage_figures_json_cannot_carry_read_as_none(final_bytes: bytes) -> None:
+    # A receipt is canonical JSON: a value a strict reader refuses, or one the
+    # parser itself refuses, must never reach it.
+    assert _load_launcher()._reported_usage("json-stdout", final_bytes) is None
+
+
+HUGE = int("1" + "0" * 400)
+
+
+@pytest.mark.parametrize(
+    ("result", "field", "kept"),
+    [
+        ({"usage": {"input_tokens": HUGE}}, "usage", {"input_tokens": HUGE}),
+        ({"total_cost_usd": HUGE}, "total_cost_usd", HUGE),
+        ({"modelUsage": {"m": {"inputTokens": HUGE}}}, "models", {"m": {"inputTokens": HUGE}}),
+    ],
+    ids=["usage", "total-cost", "model"],
+)
+def test_an_integer_past_float_range_is_kept_and_never_raises(
+    result: dict, field: str, kept: object
+) -> None:
+    # Parsed by json, but float() of it overflows: the reader must not convert.
+    final_bytes = json.dumps({"type": "result", **result}).encode()
+    usage = _load_launcher()._reported_usage("json-stdout", final_bytes)
+    assert usage is not None and usage[field] == kept
+
+
+def test_a_codex_lane_records_no_usage(tmp_path: Path) -> None:
+    repo, engine_dir, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    result = _run_launcher(engine_dir, descriptor, prompt, env)
+    assert result.returncode == 0, result.stderr
+    assert _receipt(sessions, descriptor)["terminal"]["usage"] is None
+
+
+# ---- terminal state and bounded resume (#514, #564) ----
+
+
+@pytest.mark.parametrize(
+    ("text", "state"),
+    [
+        ("done\nLANE-TERMINAL: pr-ready #42", {"state": "pr-ready", "pr": 42, "reason": None}),
+        ("LANE-TERMINAL: no-pr read-only task\n\n  ", {"state": "no-pr", "pr": None, "reason": "read-only task"}),
+        ("x\n  LANE-TERMINAL: blocked needs a token  \n", {"state": "blocked", "pr": None, "reason": "needs a token"}),
+    ],
+)
+def test_terminal_line_is_read_from_the_last_non_blank_line(
+    text: str, state: dict[str, object]
+) -> None:
+    assert _load_launcher()._lane_terminal_state(text.encode()) == state
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "LANE-TERMINAL: pr-ready #42\nand then more prose",
+        "`LANE-TERMINAL: pr-ready #42`",
+        "LANE-TERMINAL: pr-ready 42",
+        "LANE-TERMINAL: pr-ready #0",
+        "LANE-TERMINAL: pr-ready #042",
+        "LANE-TERMINAL: pr-ready #42 extra",
+        "LANE-TERMINAL: merged #42",
+        "LANE-TERMINAL: blocked",
+        "LANE-TERMINAL: blocked ",
+        "LANE-TERMINAL:  no-pr two spaces",
+        "lane-terminal: no-pr lower case",
+        "LANE-TERMINAL: no-pr " + "x" * 201,
+        "LANE-TERMINAL: no-pr bell\x07in reason",
+        "LANE-TERMINAL: blocked \x1b[31mred",
+        "LANE-TERMINAL: no-pr done \x9b31m",
+        "LANE-TERMINAL: no-pr done \u202e evil",
+        "LANE-TERMINAL: no-pr \u200bhidden",
+        "LANE-TERMINAL: no-pr a\u00a0b",
+    ],
+)
+def test_anything_else_is_no_terminal_state(text: str) -> None:
+    assert _load_launcher()._lane_terminal_state(text.encode()) is None
+
+
+def test_every_terminal_form_the_contract_prescribes_parses() -> None:
+    # The contract is the lane's only instruction; a form it prescribes that the
+    # launcher cannot read would stall every compliant lane.
+    contract = subprocess.run(
+        ["bash", str(ENGINE_DIR / "dev_session.sh"), "print-contract"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    import re as _re
+
+    forms = _re.findall(r"`(LANE-TERMINAL: [^`]+)`", contract)
+    assert len(forms) == 3, forms
+    filled = [
+        form.replace("<PR number>", "7").replace("<reason>", "a reason") for form in forms
+    ]
+    launcher = _load_launcher()
+    assert [launcher._lane_terminal_state(form.encode())["state"] for form in filled] == [
+        "pr-ready",
+        "no-pr",
+        "blocked",
+    ]
+
+
+@pytest.mark.parametrize("session_id", ["", "--dangerous", "not-a-uuid", FAKE_SESSION_ID.upper()])
+def test_only_a_canonical_uuid_session_id_is_resumable(session_id: str) -> None:
+    launcher = _load_launcher()
+    raw = json.dumps({"type": "result", "session_id": session_id}).encode()
+    assert launcher._claude_session_id(raw) is None
+    assert launcher._claude_session_id(
+        json.dumps({"type": "result", "session_id": FAKE_SESSION_ID}).encode()
+    ) == FAKE_SESSION_ID
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("runtime", ["codex", "claude"])
+def test_a_lane_that_names_its_terminal_state_completes_without_resume(
+    tmp_path: Path, runtime: str
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path, runtime=runtime)
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["terminal"]["lane_state"] == {
+        "state": "no-pr",
+        "pr": None,
+        "reason": "fake lane",
+    }
+    assert receipt["terminal"]["resumes"] == []
+    assert receipt["request"]["max_resumes"] == 1
+
+
+@pytest.mark.evidence
+def test_a_nonterminal_claude_stop_is_resumed_once_under_the_bound_policy(
+    tmp_path: Path,
+) -> None:
+    repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path,
+        runtime="claude",
+        terminal="after-resume",
+        runtime_mappings="models:\n  runtime_mappings:\n    claude:\n      cheap: haiku\n",
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env, "--tier", "cheap")
+
+    assert result.returncode == 0, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["terminal"]["lane_state"]["state"] == "no-pr"
+    launch_argv = receipt["observed"]["argv"]
+    [round_one] = receipt["terminal"]["resumes"]
+    # The resume reuses the launch's command, trust step, approval policy,
+    # settings profile and compute, and adds only the session to resume.
+    assert round_one["argv"] == [
+        *launch_argv[: launch_argv.index("--output-format")],
+        "--resume",
+        FAKE_SESSION_ID,
+        "--output-format",
+        "json",
+    ]
+    assert "--model" in round_one["argv"] and "haiku" in round_one["argv"]
+    assert round_one["session_id"] == FAKE_SESSION_ID
+    assert round_one["returncode"] == 0
+    assert round_one["error"] is None
+    assert round_one["lane_state"]["state"] == "no-pr"
+    launcher = _load_launcher()
+    assert round_one["prompt_sha256"] == hashlib.sha256(launcher.RESUME_NUDGE.encode()).hexdigest()
+    envelope = json.loads(Path(round_one["final_message_path"]).read_bytes())
+    assert hashlib.sha256(envelope["result"].encode()).hexdigest() == round_one["final_text_sha256"]
+    seen = _lane_json(envelope["result"])
+    # The round ran in the lane worktree with the lane identity, its lineage
+    # tracked, and read the fixed nudge rather than the original prompt.
+    assert seen["cwd"] == str(Path(descriptor["worktree"]).resolve())
+    assert seen["env"] == descriptor["env"]
+    assert seen["lineage_nonce_present"] is True
+    launch_seen = _lane_json(
+        json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())["result"]
+    )
+    # The same lineage nonce as the launch round, so the launch's lineage
+    # cleanup reaches the resume round's descendants.
+    assert seen["lineage_nonce"] == launch_seen["lineage_nonce"]
+    assert hashlib.sha256(seen["lineage_nonce"].encode()).hexdigest() == (
+        receipt["request"]["process_nonce_sha256"]
+    )
+    assert seen["gh_repo_present"] is False
+    assert seen["prompt_sha256"] == round_one["prompt_sha256"]
+    assert seen["contract_first"] is False
+    # The launch round's own evidence is unchanged by the resume.
+    assert receipt["terminal"]["final_message_path"].endswith(
+        f"launch-final-{descriptor['descriptor_id']}.txt"
+    )
+
+
+@pytest.mark.evidence
+def test_a_lane_still_without_a_terminal_state_after_its_resumes_is_stalled(
+    tmp_path: Path,
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", max_resumes="2"
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 75, result.stderr
+    assert "lane stalled" in result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "stalled"
+    assert receipt["terminal"]["lane_state"] is None
+    assert [entry["round"] for entry in receipt["terminal"]["resumes"]] == [1, 2]
+    assert "after 2 resume round(s)" in receipt["terminal"]["error"]
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize(
+    ("runtime", "overrides", "reason"),
+    [
+        ("claude", {"max_resumes": "0"}, "after 0 resume round(s)"),
+        ("codex", {}, "runtime codex has no resume transport"),
+        ("claude", {"session_id": "--not-a-session"}, "no resumable session id"),
+    ],
+)
+def test_a_stall_that_cannot_be_resumed_is_recorded_without_a_round(
+    tmp_path: Path, runtime: str, overrides: dict[str, str], reason: str
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime=runtime, terminal="none", **overrides
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 75, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "stalled"
+    assert receipt["terminal"]["resumes"] == []
+    assert reason in receipt["terminal"]["error"]
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize(
+    ("resume", "error"),
+    [
+        ("exit", "child exited with status 3"),
+        ("denied", "permission denials"),
+    ],
+)
+def test_a_failed_resume_round_fails_the_lane(tmp_path: Path, resume: str, error: str) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume=resume
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert receipt["terminal"]["error"].startswith("resume round 1: ")
+    assert error in receipt["terminal"]["error"]
+    [round_one] = receipt["terminal"]["resumes"]
+    assert error in round_one["error"]
+    assert round_one["lane_state"] is None
+
+
+@pytest.mark.evidence
+def test_a_denied_launch_round_fails_and_is_never_resumed(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", claude_output="denied", terminal="none"
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 70
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert receipt["terminal"]["resumes"] == []
+
+
+@pytest.mark.evidence
+def test_interrupting_a_resume_round_stops_it_and_records_the_round(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="sleep"
+    )
+    process = subprocess.Popen(
+        [
+            sys.executable,
+            str(engine / "launch_lane.py"),
+            "--descriptor",
+            str(descriptor["descriptor_path"]),
+            "--prompt-file",
+            str(prompt),
+        ],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    pid_path = sessions / "probe" / "resume.pid"
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline and not pid_path.is_file():
+        time.sleep(0.05)
+    if not pid_path.is_file():
+        process.kill()
+        pytest.fail("the resume round never started")
+    resume_pid = int(pid_path.read_text(encoding="utf-8"))
+    try:
+        # While the round runs the receipt is still the bound observation, so
+        # the board keeps showing the lane as running.
+        assert _receipt(sessions, descriptor)["status"] == "observed"
+        process.send_signal(signal.SIGTERM)
+        stdout, stderr = process.communicate(timeout=15)
+        assert process.returncode == 128 + signal.SIGTERM, (stdout, stderr)
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "interrupted"
+        assert len(receipt["terminal"]["resumes"]) == 1, receipt["terminal"]
+        [round_one] = receipt["terminal"]["resumes"]
+        assert round_one["round"] == 1
+        assert round_one["error"] == "launcher interrupted", (round_one, stderr)
+        with pytest.raises(ProcessLookupError):
+            os.kill(resume_pid, 0)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(resume_pid, signal.SIGKILL)
+
+
+def _fork_group_leader(*, live_member: bool) -> tuple[int, int | None]:
+    """Fork a session leader that exits at once, optionally leaving one member of
+    its process group alive (ignoring SIGTERM). Returns (leader, member)."""
+    read_fd, write_fd = os.pipe()
+    leader = os.fork()
+    if leader == 0:
+        os.close(read_fd)
+        os.setsid()
+        if live_member:
+            member = os.fork()
+            if member == 0:
+                # Close the pipe here, or the parent's read waits for this member.
+                os.close(write_fd)
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                time.sleep(60)
+                os._exit(0)
+            os.write(write_fd, str(member).encode())
+        os.close(write_fd)
+        os._exit(0)
+    os.close(write_fd)
+    with os.fdopen(read_fd, "rb") as handle:
+        raw = handle.read()
+    # The leader has exited once the pipe closes; wait until it is a zombie.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        state = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(leader)], capture_output=True, text=True
+        ).stdout.strip()
+        if state.startswith("Z"):
+            break
+        time.sleep(0.02)
+    return leader, int(raw) if raw else None
+
+
+def test_terminating_a_group_that_holds_only_the_unreaped_leader_succeeds() -> None:
+    launcher = _load_launcher()
+    leader, _member = _fork_group_leader(live_member=False)
+    if sys.platform == "darwin":
+        # The case #1238 is about: macOS answers EPERM, not ESRCH, here.
+        with pytest.raises(PermissionError):
+            os.killpg(leader, 0)
+    with open(os.devnull, "wb") as stdin:
+        returncode = launcher._terminate_process_group(
+            launcher._ForkedChild(leader, stdin), 1
+        )
+    assert returncode == 0
+    with pytest.raises(ProcessLookupError):
+        os.killpg(leader, 0)
+
+
+def test_a_live_member_left_by_an_exited_leader_is_still_stopped() -> None:
+    launcher = _load_launcher()
+    leader, member = _fork_group_leader(live_member=True)
+    assert member is not None
+    try:
+        with open(os.devnull, "wb") as stdin:
+            returncode = launcher._terminate_process_group(
+                launcher._ForkedChild(leader, stdin), 1
+            )
+        assert returncode == 0
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                os.kill(member, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.02)
+        with pytest.raises(ProcessLookupError):
+            os.kill(member, 0)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(member, signal.SIGKILL)
+
+
+class _FakeLeader:
+    """A leader whose poll() answers None for `running_polls` calls, then
+    `returncode` (None forever when returncode is None)."""
+
+    def __init__(self, pid: int, returncode: int | None, running_polls: int = 0) -> None:
+        self.pid = pid
+        self.returncode: int | None = None
+        self._returncode = returncode
+        self._running_polls = running_polls
+
+    def poll(self) -> int | None:
+        if self._running_polls:
+            self._running_polls -= 1
+            return None
+        self.returncode = self._returncode
+        return self.returncode
+
+
+def test_an_exiting_leader_that_becomes_reapable_is_not_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # macOS answers EPERM while the leader is still exiting and waitpid cannot reap
+    # it yet; once it can, the group is gone and the retry answers ESRCH.
+    launcher = _load_launcher()
+    answers = [PermissionError(1, "Operation not permitted"), ProcessLookupError(3, "No such process")]
+    sent: list[int] = []
+
+    def killpg(_process_group: int, signum: int) -> None:
+        sent.append(signum)
+        raise answers.pop(0)
+
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    leader = _FakeLeader(4242, 0, running_polls=3)
+
+    launcher._signal_process_group(leader, signal.SIGTERM, "refused", 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGTERM]
+
+
+@pytest.mark.parametrize(
+    ("leader_returncode", "expected_signals"),
+    [(None, 1), (0, 2)],
+    ids=["leader-running", "leader-exited-member-still-refuses"],
+)
+def test_a_group_that_keeps_answering_eperm_is_still_refused(
+    monkeypatch: pytest.MonkeyPatch, leader_returncode: int | None, expected_signals: int
+) -> None:
+    # A member this wrapper cannot signal, while the leader runs or after it is
+    # reaped, stays a refusal; only an EPERM that a reap turns into ESRCH is gone.
+    launcher = _load_launcher()
+    sent: list[tuple[int, int]] = []
+
+    def refuse(process_group: int, signum: int) -> None:
+        sent.append((process_group, signum))
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(launcher.os, "killpg", refuse)
+    leader = _FakeLeader(4242, leader_returncode)
+
+    with pytest.raises(launcher.LaunchError, match="cannot signal the child process group"):
+        launcher._terminate_process_group(leader, 1)
+
+    assert sent == [(4242, signal.SIGTERM)] * expected_signals
+
+
+def _scripted_killpg(script: dict[int, list[BaseException | None]]):
+    """A killpg that answers each signal from its own queue (None delivers) and
+    answers ESRCH once a queue is empty; returns (killpg, sent)."""
+    sent: list[int] = []
+
+    def killpg(_process_group: int, signum: int) -> None:
+        sent.append(signum)
+        queue = script.setdefault(signum, [])
+        answer = queue.pop(0) if queue else ProcessLookupError(3, "No such process")
+        if answer is not None:
+            raise answer
+
+    return killpg, sent
+
+
+def _eperm() -> PermissionError:
+    return PermissionError(1, "Operation not permitted")
+
+
+def test_termination_waits_for_an_exiting_leader_on_the_sigterm_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The leader is still exiting when SIGTERM is sent; the leg's grace must reach
+    # the wait, or the first poll refuses.
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [_eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+
+    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+
+    assert returncode == 0
+    assert sent[:2] == [signal.SIGTERM, signal.SIGTERM]
+    assert signal.SIGKILL not in sent
+
+
+def test_termination_waits_for_an_exiting_leader_on_the_sigkill_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # SIGTERM is delivered but the group outlives the grace; on the force-stop leg
+    # the leader is exiting, so the retry must send SIGKILL again after the wait.
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    waits = iter([None, 0])
+    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: next(waits))
+
+    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+
+    assert returncode == 0
+    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+
+
+def test_a_force_stop_that_keeps_answering_eperm_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm(), _eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: None)
+
+    with pytest.raises(launcher.LaunchError, match="cannot force-stop the child process group"):
+        launcher._terminate_process_group(_FakeLeader(4242, 0), 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [PermissionError(1, "Operation not permitted"), ProcessLookupError(3, "No such process")],
+    ids=["eperm", "esrch"],
+)
+def test_the_signal_relay_never_raises_from_the_handler(
+    monkeypatch: pytest.MonkeyPatch, answer: BaseException
+) -> None:
+    launcher = _load_launcher()
+    sent: list[tuple[int, int]] = []
+
+    def killpg(process_group: int, signum: int) -> None:
+        sent.append((process_group, signum))
+        raise answer
+
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+
+    launcher._relay_signal(4242, signal.SIGTERM)
+
+    assert sent == [(4242, signal.SIGTERM)]
+
+
+@pytest.mark.evidence
+def test_a_resume_round_cannot_leave_a_descendant_behind(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="descendant"
+    )
+    pid_path = sessions / "probe" / "resume-descendant.pid"
+    descendant_pid: int | None = None
+    try:
+        result = _run_launcher(engine, descriptor, prompt, env)
+        assert result.returncode == 70, result.stderr
+        descendant_pid = int(pid_path.read_text(encoding="utf-8"))
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "process group remained active" in receipt["terminal"]["error"]
+        with pytest.raises(ProcessLookupError):
+            os.kill(descendant_pid, 0)
+    finally:
+        if descendant_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(descendant_pid, signal.SIGKILL)
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("value", [None, "-1", "true", "'1'", "1.5"])
+def test_max_resumes_must_be_a_non_negative_integer(tmp_path: Path, value: str | None) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", max_resumes=value
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 64
+    assert "parallel.max_resumes must be a non-negative integer" in result.stderr
+    assert not (sessions / "probe" / "launch-attempt.json").exists()
+
+
+@pytest.mark.evidence
+def test_a_profile_rewritten_during_the_launch_round_refuses_the_resume(
+    tmp_path: Path,
+) -> None:
+    repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", rewrite_profile=True
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "settings profile changed after launch" in receipt["terminal"]["error"]
+    assert receipt["terminal"]["resumes"] == []
+    profile = repo / "config" / "claude-lane-settings.json"
+    assert hashlib.sha256(profile.read_bytes()).hexdigest() != (
+        receipt["request"]["approval_policy"]["settings_profile_sha256"]
+    )
+
+
+@pytest.mark.evidence
+def test_a_resume_round_with_malformed_output_fails_the_lane(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="garbage"
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 70, result.stderr
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "not one complete JSON object" in receipt["terminal"]["error"]
+    [round_one] = receipt["terminal"]["resumes"]
+    assert round_one["returncode"] == 0
+
+
+@pytest.mark.evidence
+def test_each_resume_round_resumes_the_session_the_previous_round_reported(
+    tmp_path: Path,
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="fresh-session", max_resumes="2"
+    )
+
+    result = _run_launcher(engine, descriptor, prompt, env)
+
+    assert result.returncode == 75, result.stderr
+    first, second = _receipt(sessions, descriptor)["terminal"]["resumes"]
+    assert first["session_id"] == FAKE_SESSION_ID
+    reported = json.loads(Path(first["final_message_path"]).read_bytes())["session_id"]
+    assert reported != FAKE_SESSION_ID
+    assert second["session_id"] == reported
+    assert second["argv"][second["argv"].index("--resume") + 1] == reported
+
+
+@pytest.mark.evidence
+def test_a_resume_round_cannot_leave_a_detached_descendant_behind(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="detached"
+    )
+    pid_path = sessions / "probe" / "resume-detached.pid"
+    detached_pid: int | None = None
+    try:
+        # Output goes to files, not pipes: the detached child inherits stderr, and
+        # a pipe would hold the run open until the child exited on its own,
+        # hiding whether the launcher killed it.
+        with (tmp_path / "out").open("w") as out, (tmp_path / "err").open("w") as err:
+            started = time.monotonic()
+            returncode = subprocess.run(
+                [
+                    sys.executable,
+                    str(engine / "launch_lane.py"),
+                    "--descriptor",
+                    str(descriptor["descriptor_path"]),
+                    "--prompt-file",
+                    str(prompt),
+                ],
+                env=env,
+                stdout=out,
+                stderr=err,
+                check=False,
+            ).returncode
+        assert returncode == 70, (tmp_path / "err").read_text()
+        assert time.monotonic() - started < 30
+        detached_pid = int(pid_path.read_text(encoding="utf-8"))
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "detached launch-lineage" in receipt["terminal"]["error"]
+        with pytest.raises(ProcessLookupError):
+            os.kill(detached_pid, 0)
+    finally:
+        if detached_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(detached_pid, signal.SIGKILL)
+
+
+def test_a_refusal_during_a_resume_round_still_records_the_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(
+        tmp_path, runtime="claude", terminal="none"
+    )
+    launcher = _load_launcher(engine)
+    real = launcher._processes_with_launch_nonce
+    calls = {"n": 0}
+
+    def refuse_after_launch(nonce: str) -> dict[int, str]:
+        calls["n"] += 1
+        # The first probe follows the launch round; refuse from the resume round on.
+        if calls["n"] > 1:
+            raise launcher.LaunchError("cannot bind a launch-lineage process identity")
+        return real(nonce)
+
+    monkeypatch.setattr(launcher, "_processes_with_launch_nonce", refuse_after_launch)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt)]
+    )
+
+    assert result == 70
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert "launch-lineage process identity" in receipt["terminal"]["error"]
+    [round_one] = receipt["terminal"]["resumes"]
+    assert round_one["round"] == 1
+    assert round_one["session_id"] == FAKE_SESSION_ID
+    assert round_one["error"] == "round did not finish"
+
+
+def test_a_signal_while_a_resume_round_is_prepared_starts_no_round(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(
+        tmp_path, runtime="claude", terminal="none", resume="sleep"
+    )
+    launcher = _load_launcher(engine)
+    real = launcher._claude_session_id
+
+    def signal_then_answer(final_bytes: bytes) -> str | None:
+        # Lands while the round is being prepared, before the pre-fork check.
+        os.kill(os.getpid(), signal.SIGTERM)
+        return real(final_bytes)
+
+    monkeypatch.setattr(launcher, "_claude_session_id", signal_then_answer)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt)]
+    )
+
+    assert result == 128 + signal.SIGTERM
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "interrupted"
+    assert receipt["terminal"]["resumes"] == []
+    assert not (sessions / "probe" / "resume.pid").exists()
+
+
+SPLITLINES_SEPARATORS = ["\x0b", "\x0c", "\x1c", "\x1d", "\x1e", "\x85", "\u2028", "\u2029"]
+
+
+@pytest.mark.parametrize("separator", SPLITLINES_SEPARATORS)
+def test_every_splitlines_separator_ends_a_line(separator: str) -> None:
+    launcher = _load_launcher()
+    line = "LANE-TERMINAL: pr-ready #42"
+    assert launcher._lane_terminal_state(("text" + separator + line).encode())["pr"] == 42
+    assert launcher._lane_terminal_state((line + separator + "more").encode()) is None
+
+
+def test_a_signal_after_the_lane_declared_its_terminal_state_keeps_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path, runtime="claude")
+    launcher = _load_launcher(engine)
+    real = launcher._lane_terminal_state
+
+    def declare_then_signal(final_text: bytes | None) -> dict[str, object] | None:
+        state = real(final_text)
+        os.kill(os.getpid(), signal.SIGTERM)
+        return state
+
+    monkeypatch.setattr(launcher, "_lane_terminal_state", declare_then_signal)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt)]
+    )
+
+    assert result == 0
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "completed"
+    assert receipt["terminal"]["lane_state"]["state"] == "no-pr"
+
+
+# ---- routine lane steps and the launcher-read ticket (#1011, #1081, #628, #271) ----
+
+
+def _bash_allow_prefixes(entries: list[str]) -> list[str]:
+    return [
+        entry[len("Bash(") : -len(":*)")]
+        for entry in entries
+        if entry.startswith("Bash(") and entry.endswith(":*)")
+    ]
+
+
+@pytest.mark.kit_repo_only("config/claude-lane-settings.json")
+def test_every_command_the_contract_prescribes_is_allowed_by_the_shipped_profile() -> None:
+    # Under dont-ask a prescribed command the profile does not allow is a denial,
+    # and a denial ends the lane: the contract and the profile must agree.
+    import re as _re
+
+    contract = subprocess.run(
+        ["bash", str(ENGINE_DIR / "dev_session.sh"), "print-contract"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    # The contract names `gh pr edit` and `gh pr comment` only to say the profile
+    # grants neither; those bare names are not prescribed commands.
+    not_granted = {"gh pr edit", "gh pr comment"}
+    commands = [
+        span
+        for span in _re.findall(r"`([^`]+)`", contract)
+        if span.split(" ", 1)[0] in {"git", "gh", "uv"} and " " in span and span not in not_granted
+    ]
+    assert not_granted <= set(_re.findall(r"`([^`]+)`", contract))
+    shipped = json.loads((REPO_ROOT / "config" / "claude-lane-settings.json").read_text())
+    allowed = _bash_allow_prefixes(shipped["permissions"]["allow"])
+    denied = _bash_allow_prefixes(shipped["permissions"]["deny"])
+    for expected in (
+        "git commit -F",
+        "gh pr create --body-file",
+        "git restore",
+    ):
+        assert any(command.startswith(expected) for command in commands), expected
+    for command in commands:
+        assert any(command.startswith(prefix) for prefix in allowed), command
+        assert not any(command.startswith(prefix) for prefix in denied), command
+    # Neither PR-mutating command is granted: `gh pr edit` can retarget a base, and
+    # `gh pr comment` carries --delete-last, --edit-last and --repo.
+    assert not any(prefix.startswith(("gh pr edit", "gh pr comment")) for prefix in allowed)
+    assert not any(command.startswith(("gh pr edit", "gh pr comment")) for command in commands)
+
+
+@pytest.mark.kit_repo_only("config/claude-lane-settings.json")
+def test_init_seeds_the_shipped_lane_profile() -> None:
+    init = (REPO_ROOT / "init.sh").read_text(encoding="utf-8")
+    seeded = init.split("cat > \"$_profile\" <<'PROFILE'\n", 1)[1].split("\nPROFILE\n", 1)[0]
+    assert json.loads(seeded) == json.loads(
+        (REPO_ROOT / "config" / "claude-lane-settings.json").read_text(encoding="utf-8")
+    )
+
+
+def _ticket_repo(
+    tmp_path: Path,
+    gh_script: str,
+    *,
+    backend: str = "github-issues",
+    url: str | None = "https://github.com/o/r/issues",
+):
+    tracker = f"tracker:\n  backend: {backend}\n" + (f"  url: {url}\n" if url is not None else "")
+    repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", extra_config=tracker
+    )
+    trusted_bin = tmp_path / "trusted-bin"
+    trusted_bin.mkdir()
+    gh = trusted_bin / "gh"
+    gh.write_text("#!/usr/bin/env python3\nimport json, os, sys\n" + gh_script, encoding="utf-8")
+    gh.chmod(0o755)
+    launcher = _load_launcher(engine)
+    launcher.SAFE_EXECUTABLE_PATH = os.pathsep.join((str(trusted_bin), launcher.SAFE_EXECUTABLE_PATH))
+    return repo, launcher, sessions, descriptor, prompt
+
+
+GOOD_TICKET = (
+    "args = sys.argv[1:]\n"
+    "open(os.path.join(os.getcwd(), '..', 'gh-call.json'), 'w').write(json.dumps({'args': args, 'cwd': os.getcwd(), 'gh_repo': 'GH_REPO' in os.environ, 'path': os.environ.get('PATH'), 'devkit': sorted(k for k in os.environ if k.startswith('DEVKIT_'))}))\n"
+    "print(json.dumps({'number': int(args[2]), 'title': 'Ship the thing', 'body': 'Do A.\\nThen do B.', 'url': 'https://github.com/o/r/issues/' + args[2]}))\n"
+)
+
+
+def test_a_ticket_launch_appends_the_issue_and_binds_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _repo, launcher, sessions, descriptor, prompt, = _ticket_repo(tmp_path, GOOD_TICKET)
+    monkeypatch.setenv("GH_REPO", "foreign/repo")
+    monkeypatch.setenv("DEVKIT_FOREIGN_LANE", "must-be-removed")
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 0
+    receipt = _receipt(sessions, descriptor)
+    ticket = {
+        "number": 42,
+        "title": "Ship the thing",
+        "body": "Do A.\nThen do B.",
+        "url": "https://github.com/o/r/issues/42",
+    }
+    block = launcher._ticket_block(ticket)
+    assert "<<<TICKET\n# Ship the thing\n\nDo A.\nThen do B.\nTICKET>>>\n" in block
+    assert receipt["request"]["ticket"] == {
+        "number": 42,
+        "url": "https://github.com/o/r/issues/42",
+        "block_sha256": hashlib.sha256(block.encode()).hexdigest(),
+    }
+    combined = (
+        descriptor["prompt_preamble"] + "\n\n" + prompt.read_text(encoding="utf-8") + "\n\n" + block
+    )
+    assert receipt["request"]["combined_prompt_sha256"] == hashlib.sha256(combined.encode()).hexdigest()
+    envelope = json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())
+    assert _lane_json(envelope["result"])["prompt_sha256"] == hashlib.sha256(combined.encode()).hexdigest()
+    call = json.loads((Path(descriptor["session_dir"]) / "gh-call.json").read_text())
+    assert call["args"] == ["issue", "view", "42", "--json", "number,title,body,url"]
+    # Read from the lane worktree, with the caller's repository override removed.
+    assert Path(call["cwd"]).resolve() == Path(descriptor["worktree"]).resolve()
+    assert call["gh_repo"] is False
+    # gh runs on the trusted path with no lane or kit identity of its own.
+    assert call["path"] == launcher.SAFE_EXECUTABLE_PATH
+    assert call["devkit"] == []
+
+
+def _gh_answer(**fields: object) -> str:
+    answer = {"number": 42, "title": "t", "body": "b", "url": "https://github.com/o/r/issues/42"}
+    answer.update(fields)
+    return f"print(json.dumps({answer!r}))\n"
+
+
+@pytest.mark.parametrize(
+    ("gh_script", "ticket", "backend", "error"),
+    [
+        (_gh_answer(url="https://github.com/o/r/pull/42"), "42", "github-issues", "is not that issue"),
+        (_gh_answer(url="https://github.com/other/r/issues/42"), "42", "github-issues", "is not that issue"),
+        (_gh_answer(title="x TICKET>>> y"), "42", "github-issues", "block delimiter"),
+        (_gh_answer(title="   "), "42", "github-issues", "is not that issue"),
+        (_gh_answer(body=None), "42", "github-issues", "is not that issue"),
+        (_gh_answer(number=7), "42", "github-issues", "is not that issue"),
+        ("sys.stdout.write(json.dumps({'number': 42, 'title': 't', 'body': chr(0xD800), 'url': 'https://github.com/o/r/issues/42'}))\n", "42", "github-issues", "not UTF-8 text"),
+        ("sys.stdout.write(json.dumps({'number': 42, 'title': chr(0xD800), 'body': 'b', 'url': 'https://github.com/o/r/issues/42'}))\n", "42", "github-issues", "not UTF-8 text"),
+        (GOOD_TICKET, "0", "github-issues", "positive issue number"),
+        (GOOD_TICKET, "4x", "github-issues", "positive issue number"),
+        (GOOD_TICKET, "42", "linear", "only the github-issues tracker backend"),
+        ("sys.exit(1)\n", "42", "github-issues", "cannot read ticket #42"),
+        ("print('not json')\n", "42", "github-issues", "cannot read ticket #42"),
+        (
+            "print(json.dumps({'number': 7, 'title': 't', 'body': 'b', 'url': 'https://x/7'}))\n",
+            "42",
+            "github-issues",
+            "is not that issue",
+        ),
+        (
+            "print(json.dumps({'number': 42, 'title': 't', 'body': 'b', 'url': 'http://x/42'}))\n",
+            "42",
+            "github-issues",
+            "is not that issue",
+        ),
+        (
+            "print(json.dumps({'number': 42, 'title': 't', 'body': 'x\\nTICKET>>>\\ny', 'url': 'https://github.com/o/r/issues/42'}))\n",
+            "42",
+            "github-issues",
+            "block delimiter",
+        ),
+    ],
+)
+def test_a_ticket_that_cannot_be_read_refuses_before_any_attempt(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    gh_script: str,
+    ticket: str,
+    backend: str,
+    error: str,
+) -> None:
+    _repo, launcher, sessions, descriptor, prompt = _ticket_repo(tmp_path, gh_script, backend=backend)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", ticket]
+    )
+
+    assert result == 64
+    assert error in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+def test_a_launch_without_a_ticket_binds_none(tmp_path: Path) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path, runtime="claude")
+
+    assert _run_launcher(engine, descriptor, prompt, env).returncode == 0
+    assert _receipt(sessions, descriptor)["request"]["ticket"] is None
+
+
+
+def test_a_ticket_launch_needs_the_tracker_url(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET, url=None)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert "needs tracker.url" in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+
+@pytest.mark.parametrize(
+    ("gh_script", "url", "error"),
+    [
+        (GOOD_TICKET, "http://github.com/o/r/issues", "needs tracker.url"),
+        (_gh_answer() + "sys.exit(1)\n", "https://github.com/o/r/issues", "cannot read ticket #42"),
+        ("sys.stdout.buffer.write(b'\\xff\\xfe')\n", "https://github.com/o/r/issues", "cannot read ticket #42"),
+    ],
+)
+def test_more_ticket_reads_that_refuse_before_any_attempt(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], gh_script: str, url: str, error: str
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, gh_script, url=url)
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert error in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+def test_a_ticket_read_that_hangs_is_cut_off(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(
+        tmp_path, "import time\ntime.sleep(30)\n"
+    )
+    monkeypatch.setattr(launcher, "TICKET_READ_TIMEOUT_SECONDS", 1)
+    started = time.monotonic()
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert time.monotonic() - started < 20
+    assert "cannot read ticket #42" in capsys.readouterr().err
+
+
+def test_a_ticket_read_needs_gh_on_the_trusted_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET)
+    real_which = launcher.shutil.which
+    monkeypatch.setattr(
+        launcher.shutil,
+        "which",
+        lambda name, *args, **kwargs: None if name == "gh" else real_which(name, *args, **kwargs),
+    )
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 64
+    assert "needs gh on the trusted executable path" in capsys.readouterr().err
+
+
+
+def test_a_trailing_slash_on_tracker_url_is_normalised(tmp_path: Path) -> None:
+    _repo, launcher, sessions, descriptor, prompt = _ticket_repo(
+        tmp_path, GOOD_TICKET, url="https://github.com/o/r/issues/"
+    )
+
+    result = launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+    )
+
+    assert result == 0
+    assert _receipt(sessions, descriptor)["request"]["ticket"]["url"] == "https://github.com/o/r/issues/42"
+
+
+def test_the_printed_contract_has_no_unrendered_placeholder() -> None:
+    import re as _re
+
+    contract = subprocess.run(
+        ["bash", str(ENGINE_DIR / "dev_session.sh"), "print-contract"],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert not _re.findall(r"@[A-Z_]+@", contract)
+    assert "state/lane/" in contract

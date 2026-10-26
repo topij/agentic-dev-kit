@@ -12,9 +12,10 @@ Treat `cheap`, `default`, and `expensive` as neutral capability tiers and transl
 them through `models.runtime_mappings` only when the current runtime supports that
 control. A workflow invocation means `/name` in Claude or `$name` in Codex.
 
-Engine: `<engine-dir>/dev_session.sh`. Sessions live in a
-sibling `dev-model-sessions/` dir by default (override with `DEVKIT_SESSIONS_DIR`);
-your CI/cron runner sets neither env var, so it's unaffected.
+Engine: `<engine-dir>/dev_session.sh`. Sessions live in a `dev-model-sessions/` dir
+beside the repository's primary checkout by default, the same one from any linked
+worktree or lane (override with `DEVKIT_SESSIONS_DIR`); your CI/cron runner sets
+neither env var, so it's unaffected.
 
 **A lane inherits the cockpit's MCP access.** `dev_session.sh new` copies a repo-root
 `.mcp.json` into each lane worktree, so every lane can reach the same MCP servers the
@@ -37,29 +38,11 @@ command is invoked; they do not replace, relax, or reconstruct this chain.
 | reconciliation | exact checkout repository; authoritative PR list; persisted base/class when a session survives; stable snapshots of every surviving local ref, remote-tracking ref, and live origin branch | `merged`, `held`, `open`, or `parked` row plus the batch exit contract | repository/read/shape failure emits no board and stops; an observed newer or moving branch tip keeps the lane resumable |
 | `rm` | persisted branch and base, never the worktree's current branch | merged PR head or ancestor relation before branch deletion | dirty or undeterminable worktree refuses without `--force`; the removal command repeats that guard at act time; unlanded or identity-mismatched branch is kept for recovery |
 
-### Semantic mutation matrix
-
-These are the hostile changes the kit verification surfaces must reject. Engine
-branches need behavioral mutations; executed launcher instructions without a shipped
-launcher need semantic assertions until an integration surface exists. Add that live
-launcher mutation with the environment-capable launcher rather than simulating one here.
-
-| Mutation | Required observable result |
-| --- | --- |
-| inherit cockpit lane/state variables instead of applying descriptor `env` | the supported wrapper removes inherited `DEVKIT_*`, assigns every descriptor key unconditionally, and the live child/receipt must observe only the descriptor environment |
-| launch a correct descriptor in another worktree, or let a child echo descriptor identity without observing Git/filesystem/process state | the child-side observer refuses before `exec`; caller-supplied expected fields cannot substitute for Git, marker, persisted metadata, path relationships, and the launch capability |
-| reuse an expired, foreign, interrupted, or completed descriptor/process, or return before observations/final text are durable | exclusive attempt creation, descriptor expiry, process-capability handshake, observed receipt, and terminal final-message digest refuse the launch or its success outcome |
-| declare a transport the named runtime does not implement (Claude prompt as an argument, Codex final text on stdout, a worktree flag for Claude), or issue a descriptor for a runtime without a configured command | the wrapper refuses before any attempt record exists; the receipt's request binds the runtime and its transports so parent and child cannot resolve different templates |
-| return Claude final text that is empty, malformed, partial, duplicated, an array, a non-`result` object, an error result, or an empty `result`; or accept it before the child observation is durably bound | the terminal receipt is `failed` with the reason named, `final_text_sha256` is absent, and the exclusive attempt remains; success requires the bound observation, a clean exit, and exactly one successful result object |
-| change the Codex argv order, drop `--cd`, `--output-last-message`, or the `-` argument, or route Codex evidence through stdout while adding Claude | the pinned Codex argv and `last-message-file` route fail their behavioral test; Claude support cannot regress Codex silently |
-| drop or alter persisted branch, base, or merge class | merge refuses; reconciliation cannot widen the lane to `held` |
-| inherit ambient `GH_REPO`, fail a forge read, or return malformed JSON | the engine stops before rendering or authorizing an empty/clean result |
-| return a fork, foreign owner, wrong base, or wrong head branch under the requested head name | row is not eligible to identify or terminalize the lane |
-| move the PR head between identity read and act-time review | merge refuses before the forge write and asks for a retry |
-| return a held probe for another PR, base, or head, or with blockers / non-convergence | lane remains `open` |
-| keep a local, cached remote-tracking, or live origin branch tip newer than the selected merged PR, or move a ref in either direction during its snapshot reads | lane remains `open`; the older PR cannot claim the observed work shipped |
-| tear down the session before an operator-held decision | the open PR remains `open`; absent class/state evidence is never reconstructed |
-| create worktree content after `rm`'s status probe, or remove a dirty/unlanded lane | the non-force Git removal refuses at act time, the session survives, and unlanded branch work remains recoverable |
+Changing `dev_session.sh` (including its merge, `rm` or reconcile paths), the lane
+launcher or this workflow's identity chain? The
+hostile changes the kit's verification must reject are listed in
+[`parallel-verification.md`](../parallel-verification.md); running a lane does not
+need them.
 
 ## Default action — show the board
 
@@ -69,9 +52,26 @@ With no argument (or `parallel list`), run and render the table of active sessio
 <engine-dir>/dev_session.sh list
 ```
 
-Columns: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted count) · SANDBOX
-path`. This is the orientation surface when you're juggling several sessions — report
-it as-is, then stop. Read-only.
+Columns: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted count) · RUN ·
+OVERLAP · SANDBOX path`. This is the orientation surface when you're juggling several
+sessions — report it as-is, then stop. Read-only.
+
+- **RUN** is the headless wrapper's own evidence in the session directory: `—` for a
+  lane with no launch attempt (interactive, or not launched yet), `starting`,
+  `running` while the wrapper's process is alive, `lost` when the wrapper died before
+  writing a terminal receipt, or the terminal receipt's status (`completed`, `stalled`,
+  `failed`, `interrupted`, `rejected`). `stalled` is a lane that ended without naming
+  its terminal state after its resumes ([`parallel-headless.md`](parallel-headless.md),
+  *Terminal state and bounded resume*). `completed` covers every terminal state a lane
+  declares, `blocked` included, so the board does not tell a blocked lane from a
+  finished one: `terminal.lane_state` in the receipt says which. `?` means a file
+  could not be read or held a value the board cannot trust, such as a pid that names
+  no single process. `running` comes from a process check and is a hint, not proof.
+- **OVERLAP** names the other active lanes that change at least one of the same files
+  (committed against the lane's base, uncommitted, or untracked). Two names in each
+  other's OVERLAP cell are the pair to sequence: merge one, then rebase the other.
+  A lane whose footprint cannot be read shows `?` and is left out of the others'
+  comparison, so their `—` does not clear them against it while any lane shows `?`.
 
 ### Live board — `parallel list --watch [interval]`
 
@@ -86,8 +86,8 @@ lane that never moves — run the polling board instead:
 
 It re-renders on the interval and **marks with a leading `*`** (bold on a TTY) every
 row whose state changed since the previous render — the change set is CI ✓/✗/…, a new
-commit (HEAD moved), a DIRTY-count change, or a PR-state change (draft↔ready, review
-decision). The first frame is the baseline (nothing marked); Ctrl-C stops it. On an
+commit (HEAD moved), a DIRTY-count change, a RUN or OVERLAP change, or a PR-state change
+(draft↔ready, review decision). The first frame is the baseline (nothing marked); Ctrl-C stops it. On an
 interactive terminal an unbounded watch repaints **in place** on the alternate screen
 buffer (like `top`) — each frame replaces the last rather than scrolling a fresh copy
 into your terminal history, and your pre-watch screen is restored when you Ctrl-C out
@@ -188,6 +188,20 @@ deliberately:
    tracker is reachable; if your forge and tracker post a linkback on the lane's PR, that
    comment is an earlier and cheaper place to catch the difference.
 
+   **A headless lane launched with `launch_lane.py --ticket <n>` gets the ticket from the
+   launcher.** The launcher reads the GitHub issue itself before launch, appends it to
+   the prompt in a delimited block, records its number, URL and the block's digest (not
+   its text) in the receipt's request, and refuses the launch when the read fails. So
+   the lane always receives the full ticket text, and a tracker outage stops the launch
+   instead of producing a summary-sourced block (`#271`). The task prompt above that
+   block is still yours: write it from the ticket as this section says. It reads only
+   the `github-issues` backend; on another tracker, put the ticket text in the prompt
+   file. For such a lane, drop the kickoff's "Read tracker ticket `<ID>`" sentence below:
+   the ticket is already in the prompt, and the lane profile grants no tracker read. At
+   Claude Code 2.1.310 on 2026-10-25, under the lane's own flags (`--setting-sources ""`,
+   `dontAsk`, the shipped profile), `gh issue view` was denied, so a lane that tries one
+   is refused and ends.
+
    > Obtain the lane contract with `<engine-dir>/dev_session.sh print-contract` and
    > follow it for this session — don't infer it from this kickoff, which is
    > task-specific, not the contract itself. Read tracker ticket `<ID>` (+ any recipe
@@ -201,7 +215,7 @@ deliberately:
    Interactive `new` prints launch or activation guidance for the **operator's own
    shell**, so it can only *suggest* the tier — the operator applies it (model and
    reasoning effort, if exposed) when starting the session. The supported
-   **unattended/headless** wrapper does not apply the suggested tier; see
+   **unattended/headless** wrapper applies it when you pass `--tier <tier>`; see
    [Unattended / headless launch](parallel-headless.md#unattended--headless-launch--new---headless).
 
 After launch, **this** session is the cockpit: `list` (or `list --watch` for an
@@ -260,10 +274,19 @@ suggestion and the operator applies it through the runtime's own controls — on
 `--model <alias>` and `--effort <level>` at launch, on Codex `-m <model>` and
 `-c model_reasoning_effort=<level>`; the aliases and levels `models.runtime_mappings`
 names are the ones each client accepted when calibrated (the `models` comment in
-`config/dev-model.yaml` carries the stamp). `models.runtime_mappings` itself is
-advisory on both runtimes: no shipped engine reads it. The supported headless wrapper
-deliberately inherits the client's compute on both runtimes and carries neither control:
-the launcher establishes worktree, environment, identity, and receipt authority only.
+`config/dev-model.yaml` carries the stamp). `models.runtime_mappings` is advisory on
+both runtimes except on one route: `launch_lane.py --tier <cheap|default|expensive>`
+reads `models.runtime_mappings.<runtime>.<tier>` and puts that runtime's own controls on
+the lane's argv, right after the approval policy (Claude `--model`/`--effort`, Codex
+`-m`/`-c model_reasoning_effort=`). It refuses a tier the config does not map, and a
+value that is not one plain word (letters, digits, `.`, `_`, `-`; so a bracketed or
+`provider:`-style model id is refused, not passed), before any launch attempt exists.
+It does not check
+that the client knows the value: a Claude `--effort` it does not recognise warns and
+runs at the default, so the receipt's `request.compute` records what was requested,
+not what the client applied. The resolved compute is bound into the launch request and
+the receipt, so the parent and child must agree on it. Without `--tier` the wrapper
+inherits the client's compute.
 What "inherit" resolves to differs by trust route — a Claude lane under the wrapper's
 `--setting-sources ""` runs the product default model and effort, not the operator's
 user settings, while a Codex lane runs the user's `config.toml` model and effort
@@ -273,8 +296,21 @@ controls; without the complete descriptor environment and observer/receipt chain
 remains unsupported for state-writing lanes on either runtime.
 
 **Unspecified tier.** Without an explicit model or effort selection, an interactive
-lane uses the agent client's defaults when started. A supported headless lane uses
-the trust-route resolution above. A suggested tier alone changes neither.
+lane uses the agent client's defaults when started. A supported headless lane started
+without `--tier` uses the trust-route resolution above. A suggested tier alone changes
+neither.
+
+**What a lane cost.** A Claude lane's terminal receipt carries `terminal.usage`: the
+token counts, `total_cost_usd`, per-model figures (`modelUsage`), turn count and
+duration from the runtime's own JSON result. They are the runtime's figures, numeric
+fields only, and do not change the verdict. `terminal.usage.models` is keyed by the
+runtime's full model ids and can list an auxiliary model beside the main one, so read
+it beside `request.compute.model` (often an alias such as `opus`) rather than
+expecting the two to match exactly. A
+Codex lane records `usage: null`, because its final-text transport carries no figures.
+`terminal.usage` covers the launch round only: a resumed lane's total adds each
+`terminal.resumes[].usage` ([`parallel-headless.md`](parallel-headless.md),
+*Terminal state and bounded resume*).
 
 ### Joint wrap-up — the cockpit owns the handoff
 
@@ -421,7 +457,17 @@ seen-set and receipt land in the same sandbox the merge gate reads:
 ```
 
 The receipt command uses the `head` from the exact poll whose diff was independently
-reviewed and refuses if a push landed before recording. For a `self` lane, once this
+reviewed and refuses if a push landed before recording.
+
+The wrapper resolves the sessions directory from the repository's primary worktree, so
+when that primary is an ordinary checkout it works the same from the primary checkout,
+a linked cockpit worktree, or inside the lane's own worktree. A repository whose git
+directory lives elsewhere (`--separate-git-dir`, a submodule) resolves it beside the
+invoking checkout instead; set `DEVKIT_SESSIONS_DIR` there. **Poll a lane's PR through this wrapper, not with bare
+`pr_watch.py`.** A bare poll from the cockpit reads the cockpit's `state/`, where the
+lane's receipt and settle baseline are not, so a finished lane's PR reports as
+unreviewed and unsettled. `pr_watch.py` prints a warning naming the lane when it sees
+that case. For a `self` lane, once this
 scope-aware `pr-watch` has converged, merge through the deterministic class gate:
 
 ```bash
