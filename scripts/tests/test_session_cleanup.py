@@ -794,7 +794,7 @@ def test_round_scope_guards(session):
     token = registry.preview_round(record, receipt["id"])["approval_token"]
     with pytest.raises(cleanup.sweep.ConfigError, match="writers"):
         registry.apply_round(record, receipt["id"], token, False)
-    record["rounds"][0]["approval"] = "previous round"
+    record["rounds"][0].update(status="removing", approval="previous round")
     with pytest.raises(cleanup.sweep.ConfigError, match="different persisted approval"):
         registry.apply_round(record, receipt["id"], token, True)
     assert Path(receipt["path"]).is_dir()
@@ -892,8 +892,32 @@ def test_interrupted_kept_round_still_refuses_allocation(session):
     assert Path(first["path"]).is_dir()
 
 
-@pytest.mark.parametrize("stop", ["active", "interrupted"])
-def test_writers_freeze_while_a_round_approval_is_unfinished(session, monkeypatch, stop):
+def test_writers_freeze_only_while_a_round_is_removing(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    token = registry.preview_round(record, receipt["id"])["approval_token"]
+
+    def interrupted(path, root, identity):
+        os.unlink(os.path.join(path, cleanup.sweep.ROUND_MARKER))
+        raise OSError("killed mid removal")
+
+    monkeypatch.setattr(cleanup.sweep, "remove_entry", interrupted)
+    assert not registry.apply_round(record, receipt["id"], token, True)["complete"]
+    monkeypatch.undo()
+    monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: [])
+    record = registry.load(record["id"])
+    assert record["rounds"][0]["approval"] == token
+    with pytest.raises(cleanup.sweep.ConfigError, match="interrupted retirement"):
+        registry.track_process(record, os.getpid())
+    # The journalled approval still completes the round, after which writers register.
+    assert registry.apply_round(record, receipt["id"], token, True)["complete"]
+    registry.track_process(record, os.getpid())
+    assert registry.load(record["id"])["pids"] == [os.getpid()]
+
+
+@pytest.mark.parametrize("stop", ["active", "refused"])
+def test_a_stopped_round_apply_persists_no_approval_and_freezes_nothing(session, monkeypatch, stop):
     registry, record, _ = session
     receipt = allocate(registry, record)
     seal(registry, record, receipt, scope=receipt["id"])
@@ -901,20 +925,25 @@ def test_writers_freeze_while_a_round_approval_is_unfinished(session, monkeypatc
     if stop == "active":
         monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: ["writer"])
     else:
-        def interrupted(path, root, identity):
-            os.unlink(os.path.join(path, cleanup.sweep.ROUND_MARKER))
-            raise OSError("killed mid removal")
-        monkeypatch.setattr(cleanup.sweep, "remove_entry", interrupted)
+        def refused(*args, **kwargs):
+            if kwargs.get("apply"):
+                raise cleanup.sweep.Refused("guard says no")
+            return original(*args, **kwargs)
+        original = cleanup.sweep.finish_review_round
+        monkeypatch.setattr(cleanup.sweep, "finish_review_round", refused)
     assert not registry.apply_round(record, receipt["id"], token, True)["complete"]
     monkeypatch.undo()
     monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: [])
     record = registry.load(record["id"])
-    with pytest.raises(cleanup.sweep.ConfigError, match="approved retirement in progress"):
-        registry.track_process(record, os.getpid())
-    # The original approval still completes the round, after which writers register.
-    assert registry.apply_round(record, receipt["id"], token, True)["complete"]
+    assert record["rounds"][0]["status"] == "allocated" and "approval" not in record["rounds"][0]
+    # A kept round blocks neither writer registration nor a kept allocation.
     registry.track_process(record, os.getpid())
-    assert registry.load(record["id"])["pids"] == [os.getpid()]
+    later = allocate(registry, record, keep_previous="earlier round refused")
+    assert Path(later["path"]).is_dir()
+    # The stale token no longer matches; a fresh preview retires the round.
+    with pytest.raises(cleanup.sweep.ConfigError, match="approval does not match"):
+        registry.apply_round(record, receipt["id"], token, True)
+    assert apply_round(registry, record, receipt)["complete"]
 
 
 def test_round_result_is_persisted_on_the_round(session, monkeypatch):
@@ -991,3 +1020,21 @@ def test_a_tracked_worktree_keeps_a_round_only_retirement_incomplete(session):
     seal(registry, record, receipt, scope=receipt["id"])
     assert apply_round(registry, record, receipt)["complete"]
     assert not registry.load(record["id"])["complete"]
+
+
+def test_preview_round_requires_the_rounds_own_seal(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    with pytest.raises(cleanup.sweep.ConfigError, match="seal required evidence"):
+        registry.preview_round(record, receipt["id"])
+
+
+def test_inventory_apply_records_a_vanished_round_removed(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    shutil.rmtree(receipt["path"])
+    result = apply(registry, record)
+    assert result["complete"] and result["paths"][0]["action"] == "absent"
+    assert registry.load(record["id"])["rounds"][0]["status"] == "removed"

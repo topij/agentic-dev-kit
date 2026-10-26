@@ -250,14 +250,16 @@ class Registry:
 
     def track_process(self, record: dict, pid: int) -> None:
         self.require_open(record)
-        # A round's approval token binds the registered writers, as the
-        # inventory's does, so the writer list freezes while any round holds
-        # an approval it has not finished: "allocated" with an approval (apply
-        # stopped on an active user) and "removing" refuse; "removed" is done.
+        # A round persists its approval only when its removal is journalled,
+        # and a resume must present that same token, which binds the registered
+        # writers. So the writer list freezes only while a round is "removing".
+        # "allocated" persists no approval, even after an apply stopped on an
+        # active user or a refusal: its next preview simply issues a new token.
+        # "removed" is done.
         for entry in record["rounds"]:
-            if entry.get("approval") and entry["status"] != "removed":
-                raise sweep.ConfigError(f"round {entry['receipt']['id']} has an approved retirement in "
-                                        "progress; finish it with apply --round before registering writers")
+            if entry["status"] == "removing":
+                raise sweep.ConfigError(f"round {entry['receipt']['id']} has an interrupted retirement; "
+                                        "resume it with apply --round before registering writers")
         if pid <= 1:
             raise sweep.ConfigError("invalid process id")
         os.kill(pid, 0)
@@ -451,26 +453,22 @@ class Registry:
         preview = self.preview_round(record, round_id)
         if approval != preview["approval_token"]:
             raise sweep.ConfigError("approval does not match this exact round and evidence seal")
-        if entry.get("approval") not in (None, approval):
+        if entry["status"] == "removing" and entry.get("approval") != approval:
             raise sweep.ConfigError("round has a different persisted approval")
-        entry["approval"] = approval
-        self.save(record)
         preview["processes_finished_attestation"] = True
         result = preview["paths"][0]
         if preview["active_users"]:
             entry["last_result"] = {**preview, "complete": False}
             self.save(record)
             return entry["last_result"]
-        self.retire_round(record, entry, result, lambda: self.verify_seal(record, entry["seal"]))
-        if result["action"] == "absent":
-            entry["status"] = "removed"
+        self.retire_round(record, entry, result, lambda: self.verify_seal(record, entry["seal"]), approval)
         entry["last_result"] = {**preview, "complete": result["action"] in {"removed", "absent"}}
         record["complete"] = (not record["worktrees"]
                               and all(r["status"] == "removed" for r in record["rounds"]))
         self.save(record)
         return entry["last_result"]
 
-    def retire_round(self, record: dict, entry: dict, result: dict, verify) -> None:
+    def retire_round(self, record: dict, entry: dict, result: dict, verify, approval: str | None = None) -> None:
         if result["action"] in {"eligible", "kept"}:
             try:
                 verify()
@@ -481,6 +479,8 @@ class Registry:
                 # durable approval, root and directory identities remain bound.
                 def journal_removal(current=entry):
                     current["status"] = "removing"
+                    if approval is not None:
+                        current["approval"] = approval  # the round's resume authority
                     self.save(record)
 
                 outcome = sweep.finish_review_round(entry["receipt"], self.settings,
@@ -492,7 +492,7 @@ class Registry:
         verify()
         if result["action"] in {"removed", "absent"} and os.path.lexists(result["path"]):
             result.update(action="kept", reason="path exists after retirement; inspect before retrying")
-        if result["action"] == "removed":
+        if result["action"] in {"removed", "absent"}:
             entry["status"] = "removed"
         self.save(record)
 

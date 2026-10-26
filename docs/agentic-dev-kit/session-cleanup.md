@@ -187,18 +187,20 @@ uv run <engine-dir>/session_cleanup.py preview <session> --round <receipt-id>
 uv run <engine-dir>/session_cleanup.py apply <session> --round <receipt-id> --approve <approval-token> --processes-finished
 ```
 
-The manifest has the shape described in *Retain required evidence, then seal*
-above, scoped to that round, and each round is sealed once. The preview's token binds
-that round's receipt and seal and the inventory's registered writers. The
-authorization rules and every guard of *Preview, approve the concrete scope, apply*
-below apply unchanged. A retired round records `removed`; an interrupted one stays
-`removing` under its own persisted approval and resumes with the same `apply --round`.
-While a round holds an approval it has not finished, `track-process` refuses, because
-that token binds the registered writers. Each round apply records its own
-`last_result` on the round. The inventory reports `complete` while every round is
+The manifest has the shape described in *Retain required evidence, then seal* above,
+scoped to that round, and each round is sealed once. The preview's token binds that
+round's receipt and seal and the inventory's registered writers. The authorization
+rules and every guard of *Preview, approve the concrete scope, apply* below apply
+unchanged. A retired round records `removed`. The round's approval is persisted only
+when its removal is journalled: an interrupted round stays `removing` under that
+approval and resumes with the same `apply --round`, and while any round is `removing`,
+`track-process` refuses, because that token binds the registered writers. An apply
+that stops before removal, on an active user or a refusal, persists nothing: resolve
+the cause, preview again and apply with the new token. Each round apply records its
+own `last_result` on the round. The inventory reports `complete` while every round is
 removed and it tracks no worktree, so an inventory used only for rounds needs no final
-seal. Tracked worktrees and kept rounds still
-retire through the inventory's seal, preview and apply.
+seal. Tracked worktrees and kept rounds still retire through the inventory's seal,
+preview and apply.
 
 ## Preview, approve the concrete scope, apply
 
@@ -261,7 +263,8 @@ refuse. Standalone `--finish-review-round` still requires its marker.
 
 Exit status is `0` for completed cleanup, `1` for kept/active/native-archive work,
 and `2` for refusal or unavailable prerequisites. Keep reasons mean incomplete
-cleanup, not success. Inspect the final `last_result` in the durable index, recheck
+cleanup, not success. Inspect the final `last_result` in the durable index (on the
+round's entry for a round retired with `--round`), recheck
 retained hashes, and report residual paths and the next supported action. Applying
 an already completed inventory is a no-op while its paths remain absent. Never
 broaden roots, weaken dependencies or use a general age sweep to clear a refusal.
