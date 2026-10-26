@@ -103,8 +103,15 @@ park route.
 
 ### Durable artifacts, resumability, and completion
 
-Before the final handoff, run the read-only scratch report and include available
-disk space, stale entries and protected leftovers with their paths and reasons.
+Before the final handoff, finish deleting what this session created and no longer
+needs, under *Clean up what this session created* in
+[`session-cleanup.md`](../session-cleanup.md): ownership is the exact paths the
+session recorded, never a guess from name or age. Without a standing grant in the
+repository's `AGENTS.md`, present those paths for operator approval. List what was
+removed and every created path that was kept, with its reason.
+
+Then run the read-only scratch report and include available disk space, stale
+entries and protected leftovers with their paths and reasons.
 Stamp measured output with the command, revision and date. Report an unavailable
 scan as a gap. If an age sweep is useful, present its concrete entries and age
 for operator approval before `--apply --older-than`; a report is not approval.
@@ -116,7 +123,8 @@ guards to make a wrap-up look complete.
 For sessions using `scratch.session_registry`, follow
 [`session-cleanup.md`](../session-cleanup.md) to discover the persisted inventory,
 seal required evidence and preview exact paths. Reuse operator authorization that
-already covers those paths; wrap-up itself still does not authorize deletion.
+already covers those paths, including a standing grant for this session's own paths;
+wrap-up itself still does not authorize deletion.
 Report kept paths as incomplete cleanup and archive Codex-managed worktrees through
 the native runtime before retrying from the primary checkout. A runtime end hook
 is advisory and does not replace this explicit lifecycle.

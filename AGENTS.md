@@ -115,6 +115,18 @@ settled by the rules above.
   unrelated local work untouched. Read-only inspection, including `session-start`,
   may run in the current checkout. An explicit operator instruction to use a
   particular checkout takes precedence.
+- **Delete what the session created once nothing needs it, while working and before
+  ending.** Review rounds, lens and task worktrees, throwaway clones, extracted
+  archives and killed test runs are what fill a local disk. Follow *Clean up what
+  this session created* in
+  [`session-cleanup.md`](docs/agentic-dev-kit/session-cleanup.md): ownership is the
+  exact paths the session recorded when it made them, and nothing it did not create
+  or that holds retained state is ever deleted. **Standing cleanup authorization:**
+  the operator authorizes every session in this repository to delete, without asking
+  first, the paths that session created and recorded, of the kinds that section
+  lists. Every engine preview, attestation and guard still applies, an engine `kept`
+  result stays kept, and an age sweep (`sweep_scratch.py --apply --older-than`) still
+  needs the operator's approval.
 - `main` is protected: never commit to it directly. Branch and open a PR — and opening
   the PR is not done; watch it to green and review-clean (`pr-watch`).
   **Cockpit work branches `chore/<slug>` or `feat/<slug>`, never `dev/<scope>`.**

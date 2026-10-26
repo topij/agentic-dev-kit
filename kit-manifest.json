@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "7bb07f2f6c002cceeb858eebf50e7bdcbe01ddb5ec33090073231008843dcaf6"
+      "sha256": "422f5f27d6acee7c228e85e4ce11e835e630fb985725d7798bcf8c7cb115cd9a"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -52,7 +52,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "00f69821dfab13dca3d96973085a578366d21da7ac0d3d1254868a3c80f51960"
+      "sha256": "77ee1c12b257409f2ea194a6bcdfbc8787ca37c0634d49af043e8021b2d6f951"
     },
     "docs/agentic-dev-kit/ticket-execution-environment.md": {
       "role": "doctrine",
@@ -127,11 +127,11 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "2039c068d69cd387da8c7e06b825619af87c17a3474f33e515650fcdda5295d7"
+      "sha256": "9817b01742cfa89d5b3adc6652f2a659dd9db6b095790d62bb1c45e4a76d0272"
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "35cdc438f517828c9e02f00b9dd987e360f674b185205d7df7350e7b721954b0"
+      "sha256": "383d93ab498eda23a7e368ec15ce55e646504dbcc7f1db79173408988b92801f"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",

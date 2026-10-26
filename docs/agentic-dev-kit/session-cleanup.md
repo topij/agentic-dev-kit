@@ -6,6 +6,60 @@ checks or authorize a general sweep. Configure `scratch.session_registry` as a
 simple directory name, for example `cleanup-sessions`. Existing adopters add that
 key explicitly. `<engine-dir>` is `paths.engines` from merged configuration.
 
+## Clean up what this session created
+
+A session deletes the files and directories **it created** once nothing needs them,
+while it works and again before it ends. Leftover review rounds, lens worktrees,
+throwaway clones and killed test runs are what fill a local disk; a later session
+cannot tell them from live work, so the session that made them is the only one that
+can remove them safely.
+
+**Ownership is recorded, never inferred.** A path is this session's only when the
+session created it and recorded its exact absolute path at creation: an allocation
+receipt, a registry inventory, a worktree it added, or a path it noted when it ran
+`mktemp`, `git clone` or an extract. A name, an age, a location or a similar-looking
+sibling is not ownership. Create ad-hoc scratch inside the session scratchpad under
+an expanded `scratch.roots` entry, never directly under the system temp directory or
+inside the repository, so `sweep_scratch.py` can still see whatever is missed.
+
+**Clean up at each point where a thing stops being needed**, not only at the end:
+
+| What the session created | When it is no longer needed | How to remove it |
+|---|---|---|
+| A review round | its receipt or findings are recorded and evidence is retained outside it | the round retirement in `fallback-review-panel.md`, or the registry lifecycle below |
+| A lens or verifier worktree | its report is retained | `git worktree remove <path>` without `--force`, after checking its status |
+| A throwaway clone, extracted archive, eval output or build tree | its result has been read and anything worth keeping copied out | delete that exact recorded path |
+| A killed or abandoned test run's basetemp | the run it belonged to is over | delete that exact recorded path |
+| A parallel lane | its PR merged | `<engine-dir>/dev_session.sh rm <scope>` |
+| The session's own linked task worktree | its PR merged or closed, from the primary checkout | `git worktree remove <path>` without `--force`; a Codex app-managed worktree goes through the native archive |
+
+Delete a recorded path by its exact absolute path, never through a glob, a parent
+directory or a pattern. Before deleting, confirm the path is still the one recorded
+and that it is not a registered worktree (remove that with `git worktree remove`)
+and holds no commit that exists nowhere else.
+
+**Never delete**, whatever a rule above seems to allow: anything this session did not
+create; the primary checkout; the kit's `state/` sandboxes and anything the
+configuration names as state; the registry under `<git-common-dir>/devkit/`; retained
+evidence and an allocation receipt whose retirement has not completed; the handoff and
+friction-log files; shared caches such as the package manager's; or a tree with
+uncommitted or unpushed work. An engine refusal or `kept` result stays kept: report
+it, and never weaken a guard, reset timestamps or broaden a root to clear it.
+
+**Authorization.** Without a standing grant, deletion follows the rest of this
+document and `fallback-review-panel.md`: an engine preview, then operator
+authorization covering the concrete paths. An operator may instead grant standing
+authorization by writing it into the repository's `AGENTS.md`; the ready-made section
+is *Session cleanup* in `docs/AGENTS-sections.md`. A standing grant covers only paths
+this session created and recorded, of the kinds in the table above. It replaces
+asking, not checking: every preview, `approval_token`, `--processes-finished` or
+`--reviewers-finished` attestation and engine guard still applies. It never covers an
+age sweep (`sweep_scratch.py --apply --older-than`), which reaches entries other
+sessions created; present those for operator approval as before.
+
+**Report what is left.** The wrap-up names the paths this session removed and every
+path it created but kept, with the reason.
+
 ## Record ownership before work starts
 
 Run from the exact repository root. Start an inventory and retain the returned
@@ -117,7 +171,8 @@ uv run <engine-dir>/session_cleanup.py preview <session>
 Inspect the exact paths, owner, observed bytes (`null` means unavailable), retained
 evidence, active users and keep reasons. Ordinary wrap-up and session-start do not
 authorize deletion. Obtain operator authorization covering these concrete paths,
-or reuse explicit authorization already covering them. The preview's
+or reuse explicit authorization already covering them, including a standing grant
+under *Clean up what this session created* above for paths this session created. The preview's
 `approval_token` binds the inventory and seal; it is not itself operator consent.
 Do not generate an apply invocation from a vague or unattended request.
 
