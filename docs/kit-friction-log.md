@@ -44,6 +44,22 @@ Archived without filing: TRI-13, the `2026-10-11` entry `Each #1063 lens pass fo
 
 Approval commands: `approve TRI-03 TRI-08`, `archive TRI-01 TRI-02 TRI-05 TRI-12 TRI-13`, `park TRI-04 TRI-06 TRI-07 TRI-09 TRI-10 TRI-11 TRI-14`. Approver: `topij`.
 
+## 2026-10-26
+
+- **Something writes `pr_watch` state into linked worktrees' `state/` (second
+  recurrence).** Severity M, recurrence of the 2026-10-25 entry below. On 2026-10-26,
+  `make test` at `36b4db6d` in `.claude/worktrees/delta-draw-verdicts` ran every test
+  green and still exited 2 on the real-state guard (#428), naming
+  `state/pr-watch/1248.json` with settle-baseline keys. Writes to that file were seen
+  at 08:02:51, 08:03:48, 09:09:54 and 09:12:55 UTC. The cockpit ran `pr_watch` only
+  from the main checkout's engine. The review lenses' transcripts show no `pr_watch`
+  invocation, and the PostToolUse hook spawns no subprocess. Running the suspect test
+  files one at a time, and the one test whose run coincided with a write, wrote nothing.
+  A trap that replaced `state` with a file caught no write while it was in place. The
+  writes looked linked to unusually slow pytest runs, but one slow run wrote nothing.
+  Writer not identified. A `make test` stamp in a standalone clone inside the review
+  round avoided it again.
+
 ## 2026-10-25
 
 - **Something writes `pr_watch` state into linked worktrees' `state/` (recurrence).**
