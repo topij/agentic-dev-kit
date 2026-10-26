@@ -801,8 +801,8 @@ author re-reading their own diff. **Cite them by name, never by number.**
    status. With `scratch.session_registry`, use the sealed-inventory retirement
    in `session-cleanup.md`, retaining operator authorization for the concrete
    paths (a standing grant under its *Clean up what this session created* covers
-   this session's own round). Otherwise preview and apply targeted retirement using the allocation
-   receipt:
+   this session's own round). Otherwise preview and apply targeted retirement
+   using the allocation receipt:
 
    ```sh
    uv run <engine-dir>/sweep_scratch.py --finish-review-round <receipt-outside-round>

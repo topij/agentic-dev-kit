@@ -123,8 +123,8 @@ guards to make a wrap-up look complete.
 For sessions using `scratch.session_registry`, follow
 [`session-cleanup.md`](../session-cleanup.md) to discover the persisted inventory,
 seal required evidence and preview exact paths. Reuse operator authorization that
-already covers those paths, including a standing grant for this session's own paths;
-wrap-up itself still does not authorize deletion.
+already covers those paths, including a standing grant for this session's own paths:
+authority comes from the operator's grant or approval, never from reaching wrap-up.
 Report kept paths as incomplete cleanup and archive Codex-managed worktrees through
 the native runtime before retrying from the primary checkout. A runtime end hook
 is advisory and does not replace this explicit lifecycle.

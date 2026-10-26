@@ -18,20 +18,25 @@ can remove them safely.
 session created it and recorded its exact absolute path at creation: an allocation
 receipt, a registry inventory, a worktree it added, or a path it noted when it ran
 `mktemp`, `git clone` or an extract. A name, an age, a location or a similar-looking
-sibling is not ownership. Create ad-hoc scratch inside the session scratchpad under
-an expanded `scratch.roots` entry, never directly under the system temp directory or
-inside the repository, so `sweep_scratch.py` can still see whatever is missed.
+sibling is not ownership. Create ad-hoc scratch under an expanded `scratch.roots`
+entry (the runtime's own scratchpad only when a root covers it), never directly under
+the system temp directory or inside the repository, so `sweep_scratch.py` can still
+see whatever is missed.
 
 **Clean up at each point where a thing stops being needed**, not only at the end:
 
 | What the session created | When it is no longer needed | How to remove it |
 |---|---|---|
 | A review round | its receipt or findings are recorded and evidence is retained outside it | the round retirement in `fallback-review-panel.md`, or the registry lifecycle below |
-| A lens or verifier worktree | its report is retained | `git worktree remove <path>` without `--force`, after checking its status |
+| A lens or verifier worktree | its report is retained | `git worktree remove <path>` without `--force`, after checking its status and that its `HEAD` is reachable from a pushed ref |
 | A throwaway clone, extracted archive, eval output or build tree | its result has been read and anything worth keeping copied out | delete that exact recorded path |
 | A killed or abandoned test run's basetemp | the run it belonged to is over | delete that exact recorded path |
-| A parallel lane | its PR merged | `<engine-dir>/dev_session.sh rm <scope>` |
-| The session's own linked task worktree | its PR merged or closed, from the primary checkout | `git worktree remove <path>` without `--force`; a Codex app-managed worktree goes through the native archive |
+| A parallel lane this session launched and recorded | its PR merged and its PR body carries the lane's handoff | `<engine-dir>/dev_session.sh rm <scope>`, which owns the lane's sandbox removal; never delete a lane's `state/` sandbox by hand |
+| The session's own linked task worktree | its PR merged, or closed with its head pushed | from the primary checkout, with the shell outside the worktree: `git worktree remove <path>` without `--force`, after checking its `HEAD` is reachable from a pushed ref; a Codex app-managed worktree goes through the native archive |
+
+With `scratch.session_registry` configured, a worktree the session registered with
+`track-worktree` retires through the sealed-inventory lifecycle below, not through a
+plain `git worktree remove`.
 
 Delete a recorded path by its exact absolute path, never through a glob, a parent
 directory or a pattern. Before deleting, confirm the path is still the one recorded
