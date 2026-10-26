@@ -229,7 +229,7 @@ lane messages, granted `git restore` and added `launch_lane.py --ticket`. Operat
 decisions on 2026-10-25 that no single PR holds: a resume continues the bound launch
 with no new descriptor; `parallel.max_resumes` ships as 1; the lane profile grants
 neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. Whether #514, #564, #1011,
-#1081, #628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 with the
+#628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 with the
 shipped profile under `dontAsk` (stamped in `parallel-headless.md`), compounds of profile-allowed
 `git` commands ran and a chain with a refused part was denied whole; the runtime's
 read-only class that #628's 2.1.250 denials concern was not re-probed. #1241 took
@@ -238,17 +238,16 @@ lane is held to its repository by Git common directory, so a linked worktree can
 one (#1109); a user-local runtime install is placed on the trusted path by the host,
 and the overlay still refuses `parallel.<runtime>_headless_command` (#629);
 `dev_session.sh <subcommand> --help` is side-effect free, which is only part of #454.
-Whether #1109 and #629 are done is the operator's call. Proposals not yet taken: a
+Proposals not yet taken: a
 documented cloud-session lane route, and standing mandates (#472, which the review
 sequences after a terminal state and a cost record). Still open from #1235: #1173's
 default tier and a tier carried in the descriptor, and #1174's ranking report and
 per-lane budget.
-**Owner:** [#1238](https://github.com/topij/agentic-dev-kit/issues/1238),
-[#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
+**Owner:** [#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
 [#1174](https://github.com/topij/agentic-dev-kit/issues/1174),
 [#1173](https://github.com/topij/agentic-dev-kit/issues/1173),
-[#1109](https://github.com/topij/agentic-dev-kit/issues/1109),
-[#629](https://github.com/topij/agentic-dev-kit/issues/629),
+[#1242](https://github.com/topij/agentic-dev-kit/issues/1242),
+[#1243](https://github.com/topij/agentic-dev-kit/issues/1243),
 [#454](https://github.com/topij/agentic-dev-kit/issues/454),
 [#472](https://github.com/topij/agentic-dev-kit/issues/472); the review document above
 (a claude.ai link, not in the repository).
@@ -257,7 +256,8 @@ per-lane budget.
 route, #472's standing mandates, or #454's remainder (capability negotiation in the
 shared workflow for an adopter-retained engine, an extension contract for adopter
 state environment and destructive-path guards, the partial-adopter fixture, and a
-Codex launch through such an engine). #1238 and #1239 are smaller follow-ups.
+Codex launch through such an engine). Smaller follow-ups: #1239, and #1242 together
+with #1243's items in one PR, so the safety-critical panel runs once.
 
 ### Consumer upgrades
 
@@ -273,7 +273,7 @@ was a read-only guard. No real scheduled job or live state retirement was run he
 The adopter handoff separates notification-provider integration from the installed
 receipt contract. The earlier local assessment,
 `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates these upgrades.
-**Owner:** #1116, #990, #1011, #1109, #979.
+**Owner:** #1116, #990, #1011, #979.
 
 ▶ Next: verify cs-toolkit's scheduled-run receipts and completed-state retirement
 before removing the #979 shim; resolve unattended notification delivery as its own
