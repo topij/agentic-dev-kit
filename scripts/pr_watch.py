@@ -105,7 +105,7 @@ Usage:
     uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:panel" --head <polled-sha> --disposition -  # findings on stdin
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:lens" --lenses adversarial --head <polled-sha>  # standard-class PR only
-    uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --compose-parent <reviewed-parent> --head <polled-sha>
+    uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --lenses correctness --compose-parent <reviewed-parent> --head <polled-sha> --disposition -  # each lens's verdict lines on stdin
     uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`
     uv run scripts/pr_watch.py 916 --assert-ready  # correct after ready creation/transition, and before merge
 
@@ -4251,6 +4251,139 @@ def disposition_body(receipt: dict, disposition: str) -> str:
     )
 
 
+DELTA_SOURCE = "fallback:delta"
+# The draws every delta pass hands its lens, by the name the lens's verdict line
+# must begin with. `panel_prompt.DELTA_DRAWS` renders the same names into the lens
+# prompt; a test holds the two equal.
+DELTA_DRAW_NAMES = ("prose-class", "safety-critical")
+_DELTA_VERDICTS = ("confirmed", "disputed")
+# A header is any lens-name-shaped word and a colon, alone on its line, whether or
+# not that lens was named: an unnamed lens's header ends the block before it, so
+# its lines are never credited to a named one.
+_DELTA_HEADER_RE = re.compile(r"([\w.+-]{1,40}):")
+# Draw names and verdict words are compared after `str.lower`, never a case fold:
+# `casefold` turns `ſ` into `s`, and no character outside ASCII lowers to a
+# letter of these four words.
+_DELTA_DRAW_RE = re.compile(r"([\w-]+):(.*)")
+# The verdict word must stand alone: not `confirmed-ish`, and not the prompt's own
+# unfilled `confirmed|disputed` template, whose first word would otherwise count.
+# Only the literal template is caught: `confirmed or disputed` counts as confirmed.
+_DELTA_VERDICT_RE = re.compile(r"\s*(\w+)(?![\w|-])")
+# Bullets, quotes and emphasis a line may carry, stripped only to find a draw
+# line the check did not count, so the refusal can point at it.
+_DELTA_ADORNMENT = "-*>_` \t"
+
+
+def _delta_verdict(value: str) -> bool:
+    match = _DELTA_VERDICT_RE.match(value)
+    return match is not None and match.group(1).lower() in _DELTA_VERDICTS
+
+
+def _delta_draw(line: str) -> tuple[str, str] | None:
+    match = _DELTA_DRAW_RE.fullmatch(line)
+    if match is None or match.group(1).lower() not in DELTA_DRAW_NAMES:
+        return None
+    return match.group(1).lower(), match.group(2)
+
+
+def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> None:
+    """Refuse a ``fallback:delta`` receipt whose disposition lacks a draw verdict.
+
+    The doctrine makes disputing both draws a delta lens's first duty, and has every
+    verdict line posted on the pull request before the receipt. On #920 one lens
+    answered the repairs only, and only the assembler's eye caught it (#921).
+
+    The rules, in full. Lines are compared with surrounding whitespace removed and
+    case ignored. A *header* is a line holding only a lens-name-shaped word and a
+    colon (``correctness:``). A header for a lens ``--lenses`` names opens a block
+    for it; any other header, or a blank line after the block's first non-blank
+    line, ends the block. A lens may have several blocks. Across its blocks each
+    named lens must have exactly one line beginning ``prose-class:`` and one
+    beginning ``safety-critical:``, unadorned (no bullet, quote or bold), each
+    followed by ``confirmed`` or ``disputed`` as a whole word; case is ignored
+    for draw names and verdict words by ``str.lower``, so ``ſ`` is no ``s``. Only the word is checked: the literal
+    ``confirmed|disputed`` template is refused, ``confirmed or disputed`` is not, and
+    the reason the prompt asks for is not checked. A refusal names each draw line it
+    saw but did not count, and why.
+
+    This checks that the lines are there, not who wrote them: the disposition is the
+    recording agent's text, as ``--lenses`` is (#32), and it holds only the lenses
+    that ``--lenses`` names. It reads the text, so a line the rendered comment hides
+    (inside an HTML comment, say) counts as much as a visible one. Nor does it act on a ``disputed`` verdict; what a
+    dispute owes is a judgment the doctrine leaves to the cockpit and the operator.
+    """
+    if disposition is None or not disposition.strip():
+        raise ValueError(
+            f"{DELTA_SOURCE} needs --disposition carrying each lens's verdict lines "
+            f"({', '.join(n + ':' for n in DELTA_DRAW_NAMES)}), posted verbatim"
+        )
+    lenses = sorted(_countable_lenses(named_lenses))
+    if not lenses:
+        raise ValueError(f"{DELTA_SOURCE} must name the lens that ran in --lenses")
+    values: dict[str, dict[str, list[str]]] = {
+        lens: {draw: [] for draw in DELTA_DRAW_NAMES} for lens in lenses
+    }
+    seen: set[str] = set()
+    current: str | None = None
+    started = False
+    counted: set[int] = set()
+    lines = [raw.strip() for raw in disposition.splitlines()]
+    for number, line in enumerate(lines, start=1):
+        header = _DELTA_HEADER_RE.fullmatch(line)
+        if header is not None and _delta_draw(line) is None:
+            name = header.group(1).casefold()
+            current = name if name in values else None
+            if current is not None:
+                seen.add(current)
+            started = False
+            continue
+        if current is None:
+            continue
+        if not line:
+            if started:
+                current = None
+            continue
+        started = True
+        draw = _delta_draw(line)
+        if draw is not None:
+            values[current][draw[0]].append(draw[1])
+            counted.add(number)
+    problems: list[str] = []
+    for lens in lenses:
+        if lens not in seen:
+            problems.append(f"no block opened by a line '{lens}:'")
+            continue
+        for draw in DELTA_DRAW_NAMES:
+            found = values[lens][draw]
+            if len(found) != 1:
+                problem = f"{lens} has {len(found)} '{draw}:' lines, not one"
+                uncounted = [
+                    str(number)
+                    for number, line in enumerate(lines, start=1)
+                    if number not in counted
+                    and (near := _delta_draw(line.strip(_DELTA_ADORNMENT).replace("*", "")))
+                    is not None
+                    and near[0] == draw
+                ]
+                if uncounted and not found:
+                    problem += (
+                        f" (a '{draw}:' line at line {', '.join(uncounted)} was not "
+                        f"counted: it is adorned, or a blank line or another header "
+                        f"ended the '{lens}:' block before it)"
+                    )
+                problems.append(problem)
+            elif not _delta_verdict(found[0]):
+                problems.append(
+                    f"{lens}'s '{draw}:' line is not {' or '.join(_DELTA_VERDICTS)}"
+                )
+    if problems:
+        raise ValueError(
+            f"{DELTA_SOURCE} disposition is missing draw verdicts: "
+            + "; ".join(problems)
+            + ". Post each lens's verdict lines verbatim under a '<lens>:' line"
+        )
+
+
 def _post_disposition_comment(pr: int, body: str) -> tuple[str, str | None]:
     """Post one disposition comment on ``pr``; return ``(url, ack_key)``.
 
@@ -4693,6 +4826,10 @@ def record_review(
     :func:`new_actionable` for why that acknowledgement is written at post time
     rather than matched back out of the comment's text.
 
+    A ``fallback:delta`` receipt is refused, before the pull request is read,
+    unless ``disposition`` carries each named lens's draw verdicts; see
+    :func:`check_delta_verdicts` (#921).
+
     **A post this call sees fail writes no receipt.** The sequence is: every
     refusal above, then the receipt dict, then the comment, then the save — so a
     `gh` failure this process observes leaves the state file exactly as it was,
@@ -4725,6 +4862,11 @@ def record_review(
         raise ValueError(
             f"{SINGLE_LENS_SOURCE} records one isolated lens: pass --lenses <that lens's name>"
         )
+    if source == DELTA_SOURCE:
+        # Before the pull request is read: the refusal is about the caller's own
+        # inputs, and the disposition it checks is the very text posted below.
+        # (Resolving an omitted PR number in `main` has already read the forge.)
+        check_delta_verdicts(named_lenses, disposition)
     snapshot = fetch_review_snapshot(pr)
     current_head = snapshot.get("headRefOid")
     if not current_head:
@@ -6904,7 +7046,9 @@ def main(argv: list[str] | None = None) -> int:
             "was disposed as a comment on the PR, under this engine's fixed heading "
             "and bound to the recorded head. The receipt is gitignored; this is the "
             "half that survives the merge. Pass `-` to read the text from stdin; "
-            "a value naming an existing path is refused"
+            "a value naming an existing path is refused. Required with "
+            "fallback:delta, where it must carry each named lens's prose-class: and "
+            "safety-critical: verdict lines under a '<lens>:' line"
         ),
     )
     mode_group = parser.add_mutually_exclusive_group()

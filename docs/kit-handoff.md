@@ -69,15 +69,14 @@ deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was 
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
 archive sweep rewrites (friction archive; #1139). #1096 (`8beee9a1`) pins its candidate bound
 with a positional test.
-#921 owns the cockpit check of verdict-line names.
+`pr_watch.py --record-review fallback:delta` refuses a disposition missing a named
+lens's `prose-class:` or `safety-critical:` verdict line (#921, in PR #1248).
 #1167 (`4248942`) refuses a `--last-reviewed` sha outside the branch (#1166).
-**Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585),
-[#921](https://github.com/topij/agentic-dev-kit/issues/921); related #403,
+**Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585); related #403,
 #666, #305, and the class's documented limits #928, #929, #930 and #931.
 
-▶ Next: #921 — make the cockpit check that a delta lens returned both the
-`prose-class:` and `safety-critical:` verdict lines before a `fallback:delta` receipt
-is recorded.
+▶ Next: choose the next step with the operator from #585 and the documented limits
+#928, #929, #930 and #931.
 
 ### Scratch retention
 
