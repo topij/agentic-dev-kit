@@ -1,6 +1,6 @@
 # AGENTS.md sections
 
-Copy and adapt this section into an adopting repository's `AGENTS.md`. Keep project
+Copy and adapt these sections into an adopting repository's `AGENTS.md`. Keep project
 status in the configured handoff, not in `AGENTS.md`.
 
 ## Agentic development workflow
@@ -29,6 +29,10 @@ status in the configured handoff, not in `AGENTS.md`.
   do not already record, commits only that to the configured handoff on that pull
   request, captures workflow friction, and keeps the next step of the workstream
   the session worked on. A session that left nothing commits nothing.
+- Delete the files and directories the session created once nothing needs them,
+  while working and before ending, following *Clean up what this session created*
+  in `docs/agentic-dev-kit/session-cleanup.md`. Never delete what the session did
+  not create or what holds retained state.
 - For customer-facing gates, destructive operations, recovery paths, security work,
   and behavioral changes to the configured `<engine-dir>/pr_watch.py`,
   `<engine-dir>/dev_session.sh`, `<engine-dir>/launch_lane.py`,
@@ -37,3 +41,17 @@ status in the configured handoff, not in `AGENTS.md`.
   hook registrations (`.claude/settings.json`, `.codex/hooks.json`), read and apply
   `docs/agentic-dev-kit/safety-critical-changes.md`. Green CI is necessary but not
   sufficient; require independent review and operator sign-off.
+
+## Session cleanup
+
+Optional. Add it only if you, the operator, want sessions to delete what they created
+without asking you for each path. It is the standing grant that
+`docs/agentic-dev-kit/session-cleanup.md` refers to; leave it out and sessions ask.
+
+- **Standing cleanup authorization.** The operator authorizes every session in this
+  repository to delete, without asking first, the paths that session created and
+  recorded, of the kinds listed in *Clean up what this session created* in
+  `docs/agentic-dev-kit/session-cleanup.md`. Every engine preview, attestation and
+  guard still applies, and an engine `kept` result stays kept. This does not cover
+  an age sweep (`sweep_scratch.py --apply --older-than`) or any path another session
+  or person created.

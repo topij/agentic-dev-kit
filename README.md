@@ -107,8 +107,10 @@ flowchart LR
 ```
 
 The [cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) owns retention,
-consent and kept-path recovery. Ending a session does not authorize deletion;
-[the detailed flow](docs/architecture.md#evidence-retention-and-cleanup) includes
+consent and kept-path recovery. A session deletes what it created once nothing
+needs it; ending a session does not authorize deletion, but a standing grant in
+`AGENTS.md` can cover the session's own recorded paths.
+[The detailed flow](docs/architecture.md#evidence-retention-and-cleanup) includes
 native archive and completion checks.
 
 For a blocked task, use the [symptom-to-recovery table](docs/troubleshooting.md).

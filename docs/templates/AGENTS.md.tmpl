@@ -70,6 +70,12 @@ doctrine into this runtime; it does not fork it.
 - **Prefer deterministic validation and receipts over prompt-only assurances.**
   When you claim something is verified, name the command that established it
   and its actual result.
+- **Delete what the session created once nothing needs it, while working and
+  before ending.** Follow *Clean up what this session created* in
+  [`docs/agentic-dev-kit/session-cleanup.md`](docs/agentic-dev-kit/session-cleanup.md);
+  never delete what the session did not create or what holds retained state. To
+  let sessions do it without asking for each path, add the *Session cleanup*
+  section from [`docs/AGENTS-sections.md`](docs/AGENTS-sections.md).
 
 ## Devkit boundary
 

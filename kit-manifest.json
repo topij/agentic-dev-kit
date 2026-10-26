@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "f7effbfbadaf240227eb10f0336c25d4cc9097d307c9e23ac13124982c3a68ea"
+      "sha256": "ed1716da9a05408548a9f5cc210e986ad06497eab93f28d21b3f205b0e77609a"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "00f69821dfab13dca3d96973085a578366d21da7ac0d3d1254868a3c80f51960"
+      "sha256": "f263876dd6aefb5c9ef16bd04f2858428928a34ecb97b65521de15bb67350198"
     },
     "docs/agentic-dev-kit/skill-routing/cases.json": {
       "role": "repo-only",
@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "2039c068d69cd387da8c7e06b825619af87c17a3474f33e515650fcdda5295d7"
+      "sha256": "8c8273044ce409a68e97b5d59e961c50bcb4e845966f6d7b6249c1a23f3dd509"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -143,7 +143,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "35cdc438f517828c9e02f00b9dd987e360f674b185205d7df7350e7b721954b0"
+      "sha256": "383d93ab498eda23a7e368ec15ce55e646504dbcc7f1db79173408988b92801f"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
