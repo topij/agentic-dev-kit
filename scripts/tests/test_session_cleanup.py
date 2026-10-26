@@ -36,13 +36,14 @@ def session(tmp_path, monkeypatch):
     shutil.rmtree(root)
 
 
-def allocate(registry, record):
+def allocate(registry, record, keep_previous=None):
     root = cleanup.sweep.expand_root(registry.settings.roots[0], root=registry.repo)
     Path(root).mkdir(parents=True, exist_ok=True)
-    return registry.allocate(record, root, cleanup.git(registry.repo, "rev-parse", "HEAD"))
+    return registry.allocate(record, root, cleanup.git(registry.repo, "rev-parse", "HEAD"),
+                             keep_previous)
 
 
-def seal(registry, record, receipt):
+def seal(registry, record, receipt, scope=None):
     path = Path(receipt["path"])
     evidence = path / "result.md"
     evidence.write_text("terminal report\n")
@@ -50,7 +51,8 @@ def seal(registry, record, receipt):
     screenshot.write_bytes(b"authoritative bytes\x00\xff")
     logs = path / "verbose.log"
     logs.write_text("redundant diagnostics\n")
-    return registry.seal(record, {"evidence_complete": True, "retain": [
+    sealing = registry.seal if scope is None else (lambda r, m: registry.seal_round(r, scope, m))
+    return sealing(record, {"evidence_complete": True, "retain": [
         {"source": str(evidence), "kind": "report", "requires": [str(screenshot)]},
         {"source": str(screenshot), "kind": "asset", "requires": []},
     ], "retire": [{"source": str(logs), "reason": "terminal report replaces diagnostics",
@@ -68,7 +70,7 @@ def test_removed_task_namespace_discovery_and_idempotent_retirement(session):
     task_registry = cleanup.Registry(task, primary.repo / "cleanup.yaml")
     record = task_registry.start()
     earlier = allocate(task_registry, record)
-    later = allocate(task_registry, record)
+    later = allocate(task_registry, record, keep_previous="retired with the inventory")
     seal(task_registry, record, later)
     cleanup.git(primary.repo, "worktree", "remove", str(task))
     resumed = primary.load(record["id"])
@@ -699,3 +701,162 @@ def test_absent_registered_worktree_requires_reconciliation(session):
     assert result["paths"][0]["action"] == "kept"
     assert "still registered" in result["paths"][0]["reason"]
     assert (root / "moved-task").is_dir()
+
+
+def apply_round(registry, record, receipt):
+    token = registry.preview_round(record, receipt["id"])["approval_token"]
+    return registry.apply_round(record, receipt["id"], token, True)
+
+
+def test_allocate_refuses_while_an_earlier_round_is_unretired(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    original = (registry.location(record["id"]) / "session.json").read_bytes()
+    before = sorted(Path(receipt["root"]).iterdir())
+    for reason in (None, "", "   "):
+        with pytest.raises(cleanup.sweep.ConfigError, match=f"{receipt['id']} is not retired"):
+            allocate(registry, record, keep_previous=reason)
+    # Refused before allocation: no new round directory and no record change.
+    assert sorted(Path(receipt["root"]).iterdir()) == before
+    assert (registry.location(record["id"]) / "session.json").read_bytes() == original
+
+
+def test_round_retirement_keeps_the_inventory_open(session):
+    registry, record, _ = session
+    first = allocate(registry, record)
+    sealed = seal(registry, record, first, scope=first["id"])
+    result = apply_round(registry, record, first)
+    assert result["complete"] and result["paths"][0]["action"] == "removed"
+    assert not Path(first["path"]).exists()
+    record = registry.load(record["id"])
+    assert record["seal"] is None and record["approval"] is None
+    assert record["rounds"][0]["status"] == "removed" and record["complete"]
+    for item in sealed["retained"]:
+        assert cleanup.hash_file(Path(item["retained"])) == (item["sha256"], item["size"])
+    second = allocate(registry, record)
+    assert Path(second["path"]).is_dir()
+    assert not registry.load(record["id"])["complete"]
+    # Retiring again is idempotent; the inventory still retires as a whole.
+    assert apply_round(registry, record, first)["complete"]
+    seal(registry, record, second)
+    assert apply(registry, record)["complete"]
+    assert not Path(second["path"]).exists()
+
+
+def test_kept_round_is_recorded_and_retires_with_the_inventory(session):
+    registry, record, _ = session
+    first = allocate(registry, record)
+    second = allocate(registry, record, keep_previous="lens worktree reused next round")
+    assert registry.load(record["id"])["rounds"][0]["kept"] == "lens worktree reused next round"
+    # A kept round no longer blocks; the round allocated after it still does.
+    with pytest.raises(cleanup.sweep.ConfigError, match=f"{second['id']} is not retired"):
+        allocate(registry, record)
+    seal(registry, record, second)
+    assert apply(registry, record)["complete"]
+    assert not Path(first["path"]).exists()
+
+
+def test_interrupted_round_retirement_refuses_allocation_until_resumed(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    token = registry.preview_round(record, receipt["id"])["approval_token"]
+
+    def interrupted(path, root, identity):
+        os.unlink(os.path.join(path, cleanup.sweep.ROUND_MARKER))
+        raise OSError("killed mid removal")
+
+    monkeypatch.setattr(cleanup.sweep, "remove_entry", interrupted)
+    assert not registry.apply_round(record, receipt["id"], token, True)["complete"]
+    monkeypatch.undo()
+    monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: [])
+    # The round's own approval is the durable authority for its journal.
+    resumed = registry.load(record["id"])
+    assert resumed["rounds"][0]["status"] == "removing" and resumed["approval"] is None
+    with pytest.raises(cleanup.sweep.ConfigError, match="interrupted"):
+        allocate(registry, resumed, keep_previous="any reason")
+    assert registry.apply_round(resumed, receipt["id"], token, True)["complete"]
+    assert Path(allocate(registry, registry.load(record["id"]))["path"]).is_dir()
+
+
+def test_round_scope_guards(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    with pytest.raises(cleanup.sweep.ConfigError, match="receipt id"):
+        registry.preview_round(record, "0" * 32)
+    with pytest.raises(cleanup.sweep.ConfigError, match="seal"):
+        registry.preview_round(record, receipt["id"])
+    seal(registry, record, receipt, scope=receipt["id"])
+    with pytest.raises(cleanup.sweep.ConfigError, match="already sealed"):
+        seal(registry, record, receipt, scope=receipt["id"])
+    with pytest.raises(cleanup.sweep.ConfigError, match="approval"):
+        registry.apply_round(record, receipt["id"], "wrong", True)
+    token = registry.preview_round(record, receipt["id"])["approval_token"]
+    with pytest.raises(cleanup.sweep.ConfigError, match="writers"):
+        registry.apply_round(record, receipt["id"], token, False)
+    record["rounds"][0]["approval"] = "previous round"
+    with pytest.raises(cleanup.sweep.ConfigError, match="different persisted approval"):
+        registry.apply_round(record, receipt["id"], token, True)
+    assert Path(receipt["path"]).is_dir()
+
+
+def test_round_retirement_respects_active_users(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: ["writer"])
+    result = apply_round(registry, record, receipt)
+    assert not result["complete"] and result["active_users"] == ["writer"]
+    assert registry.load(record["id"])["rounds"][0]["status"] == "allocated"
+    assert Path(receipt["path"]).is_dir()
+
+
+def test_cli_round_lifecycle(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    report = Path(receipt["path"]) / "report.md"
+    report.write_text("terminal report\n")
+    manifest = root / "round-manifest.json"
+    manifest.write_text(json.dumps({"evidence_complete": True, "retain": [
+        {"source": str(report), "kind": "report", "requires": []}]}))
+
+    def cli(*args):
+        return subprocess.run([sys.executable, cleanup.__file__, "--config",
+            str(registry.repo / "cleanup.yaml"), *args], cwd=registry.repo,
+            capture_output=True, text=True, timeout=30)
+
+    refused = cli("allocate", record["id"], "--root", receipt["root"], "--head", receipt["head"])
+    assert refused.returncode == 2 and "--keep-previous" in refused.stderr
+    assert cli("seal", record["id"], str(manifest), "--round", receipt["id"]).returncode == 0
+    preview = cli("preview", record["id"], "--round", receipt["id"])
+    token = json.loads(preview.stdout)["approval_token"]
+    # The real lsof probe runs in this subprocess; tolerate only its blocker.
+    applied = cli("apply", record["id"], "--round", receipt["id"], "--approve", token,
+                  "--processes-finished")
+    if applied.returncode == 1 and json.loads(applied.stdout)["active_users"]:
+        pytest.skip("open-file probe unavailable in this environment")
+    assert applied.returncode == 0, applied.stderr
+    assert not Path(receipt["path"]).exists()
+    assert cli("allocate", record["id"], "--root", receipt["root"], "--head", receipt["head"]).returncode == 0
+
+
+def test_kept_round_does_not_block_once_later_rounds_retire(session):
+    registry, record, _ = session
+    first = allocate(registry, record)
+    second = allocate(registry, record, keep_previous="kept for comparison")
+    seal(registry, record, second, scope=second["id"])
+    assert apply_round(registry, record, second)["complete"]
+    third = allocate(registry, record)
+    assert Path(first["path"]).is_dir() and Path(third["path"]).is_dir()
+    assert not registry.load(record["id"])["complete"]
+
+
+def test_round_token_binds_its_evidence_seal(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    token = registry.preview_round(record, receipt["id"])["approval_token"]
+    record["rounds"][0]["seal"]["retired"] = []
+    with pytest.raises(cleanup.sweep.ConfigError, match="approval"):
+        registry.apply_round(record, receipt["id"], token, True)
+    assert Path(receipt["path"]).is_dir()

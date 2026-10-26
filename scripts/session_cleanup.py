@@ -155,7 +155,8 @@ class Registry:
                 or record.get("common_identity") != list(sweep._identity(str(self.common)))
                 or self.retirement_policy(record.get("policy", {})) != self.retirement_policy(self.policy)):
             raise sweep.ConfigError("session repository identity or cleanup policy changed")
-        if any(r["status"] == "removing" for r in record["rounds"]) and not record["approval"]:
+        if any(r["status"] == "removing" and not (r.get("approval") or record["approval"])
+               for r in record["rounds"]):
             raise sweep.ConfigError("interrupted removal lacks its durable approval")
         return record
 
@@ -197,13 +198,37 @@ class Registry:
         if record["seal"] is not None or record["approval"] is not None:
             raise sweep.ConfigError("session inventory is sealed; start a new session for new work")
 
-    def allocate(self, record: dict, root: str, head: str) -> dict:
+    def allocate(self, record: dict, root: str, head: str, keep_previous: str | None = None) -> dict:
         self.require_open(record)
         canonical(Path(root))
+        # A new round waits for every earlier one to be retired (`--round`), so
+        # a long review loop does not hold each round's trees until the end.
+        # Round statuses: "removed" is retired; "allocated" refuses unless the
+        # caller records a keep reason, and a kept round still retires with the
+        # inventory; "removing" is an interrupted retirement and always refuses,
+        # because only resuming it is safe. An allocated round whose path is
+        # already gone still refuses: its retirement records it removed cheaply.
+        pending = [r for r in record["rounds"] if r["status"] != "removed" and not r.get("kept")]
+        if any(r["status"] == "removing" for r in pending):
+            raise sweep.ConfigError("an earlier round's retirement was interrupted; resume it with "
+                                    "preview/apply --round before allocating another")
+        if pending and not (keep_previous and keep_previous.strip()):
+            ids = ", ".join(r["receipt"]["id"] for r in pending)
+            raise sweep.ConfigError(f"earlier round {ids} is not retired; retire it with seal, preview "
+                                    "and apply --round, or pass --keep-previous <reason>")
+        for entry in pending:
+            entry["kept"] = keep_previous.strip()
         receipt = sweep.create_review_round(root, head, self.settings, self.repo)
         record["rounds"].append({"receipt": receipt, "namespace": str(self.repo), "status": "allocated"})
+        record["complete"] = False
         self.save(record)  # No reviewer starts until this durable publication returns.
         return receipt
+
+    def round_entry(self, record: dict, round_id: str) -> dict:
+        matches = [r for r in record["rounds"] if r["receipt"]["id"] == round_id]
+        if len(matches) != 1:
+            raise sweep.ConfigError("round must be a receipt id allocated in this inventory")
+        return matches[0]
 
     def track_worktree(self, record: dict, path: Path, runtime: str) -> None:
         self.require_open(record)
@@ -232,6 +257,22 @@ class Registry:
 
     def seal(self, record: dict, manifest: dict) -> dict:
         self.require_open(record)
+        record["seal"] = self.retain(record, manifest, record["rounds"])
+        self.save(record)
+        return record["seal"]
+
+    def seal_round(self, record: dict, round_id: str, manifest: dict) -> dict:
+        # Retains one round's evidence without sealing the inventory, so later
+        # rounds can still be allocated into it. One seal per round.
+        self.require_open(record)
+        entry = self.round_entry(record, round_id)
+        if entry["status"] != "allocated" or entry.get("seal") is not None:
+            raise sweep.ConfigError("round is already sealed or retiring")
+        entry["seal"] = self.retain(record, manifest, [entry])
+        self.save(record)
+        return entry["seal"]
+
+    def retain(self, record: dict, manifest: dict, rounds: list[dict]) -> dict:
         if manifest.get("evidence_complete") is not True:
             raise sweep.ConfigError("manifest must attest the complete required evidence closure")
         items = manifest.get("retain")
@@ -265,17 +306,17 @@ class Registry:
                     or any(p not in sources for p in item["replaced_by"])):
                 raise sweep.ConfigError("retired diagnostics need a reason and retained replacements")
             path = canonical(Path(item["source"]))
-            if str(path) in sources or not any(path.is_relative_to(r["receipt"]["path"]) for r in record["rounds"]):
+            if str(path) in sources or not any(path.is_relative_to(r["receipt"]["path"]) for r in rounds):
                 raise sweep.ConfigError("retired diagnostics must be unretained files in an owned round")
-        record["seal"] = {"retained": retained, "retired": retired,
-                          "evidence_complete": True}
-        self.save(record)
-        return record["seal"]
+        return {"retained": retained, "retired": retired, "evidence_complete": True}
 
     def verify_evidence(self, record: dict) -> None:
-        if record["seal"] is None:
+        self.verify_seal(record, record["seal"])
+
+    def verify_seal(self, record: dict, seal: dict | None) -> None:
+        if seal is None:
             raise sweep.ConfigError("seal required evidence before cleanup")
-        for item in record["seal"]["retained"]:
+        for item in seal["retained"]:
             path = canonical(Path(item["retained"]))
             if path != self.location(record["id"]) / "evidence" / item["sha256"]:
                 raise sweep.ConfigError("retained evidence path escaped its session")
@@ -350,41 +391,99 @@ class Registry:
                 if reason:
                     action = "kept"
             outcomes.append({"path": str(path), "action": action, "reason": reason})
-        for entry in record["rounds"]:
-            receipt = entry["receipt"]
-            sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
-            if list(sweep._identity(receipt["root"])) != receipt["root_identity"]:
-                raise sweep.ConfigError("allocation root identity changed")
-            if not os.path.lexists(receipt["path"]):
-                # Absence is an idempotent result, not permission to delete a
-                # replacement. If a path reappears its allocation identity must
-                # still match before the existing sweeper may touch it.
-                outcomes.append({"path": receipt["path"], "action": "absent", "reason": None})
-                continue
-            try:
-                result = sweep.finish_review_round(receipt, self.settings, Path(entry["namespace"]),
-                                                   resuming=entry["status"] == "removing")
-            except FileNotFoundError as exc:
-                # Let the sweeper validate directory identity first. Only its
-                # missing-marker diagnostic is translated; no guard is bypassed.
-                if exc.filename != str(Path(receipt["path"]) / sweep.ROUND_MARKER):
-                    raise
-                raise sweep.ConfigError("round marker missing without an approved removal journal") from exc
-            outcomes.append({"path": result.path, "action": result.action, "reason": result.reason})
-        for item in outcomes:
-            item["owner"] = record["id"]
-            item["bytes"] = None
-            if item["action"] == "absent":
-                item["bytes"] = 0
-            elif item["action"] in {"eligible", "remove-worktree", "archive-with-runtime"}:
-                measurement = sweep.scan(item["path"], os.lstat(item["path"]))
-                if not measurement.problems:
-                    item["bytes"] = measurement.size
+        outcomes += [self.round_outcome(entry) for entry in record["rounds"]]
+        measure(outcomes, record["id"])
         return {"session": record["id"], "paths": outcomes, "active_users": active,
                 "evidence": record["seal"], "approval_token": digest({"policy": record["policy"],
                     "rounds": [{"receipt": r["receipt"], "namespace": r["namespace"]}
                                for r in record["rounds"]],
                     "worktrees": record["worktrees"], "pids": record["pids"], "seal": record["seal"]})}
+
+    def round_outcome(self, entry: dict) -> dict:
+        receipt = entry["receipt"]
+        sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
+        if list(sweep._identity(receipt["root"])) != receipt["root_identity"]:
+            raise sweep.ConfigError("allocation root identity changed")
+        if not os.path.lexists(receipt["path"]):
+            # Absence is an idempotent result, not permission to delete a
+            # replacement. If a path reappears its allocation identity must
+            # still match before the existing sweeper may touch it.
+            return {"path": receipt["path"], "action": "absent", "reason": None}
+        try:
+            result = sweep.finish_review_round(receipt, self.settings, Path(entry["namespace"]),
+                                               resuming=entry["status"] == "removing")
+        except FileNotFoundError as exc:
+            # Let the sweeper validate directory identity first. Only its
+            # missing-marker diagnostic is translated; no guard is bypassed.
+            if exc.filename != str(Path(receipt["path"]) / sweep.ROUND_MARKER):
+                raise
+            raise sweep.ConfigError("round marker missing without an approved removal journal") from exc
+        return {"path": result.path, "action": result.action, "reason": result.reason}
+
+    def preview_round(self, record: dict, round_id: str) -> dict:
+        entry = self.round_entry(record, round_id)
+        self.verify_seal(record, entry.get("seal"))
+        active = active_users([entry["receipt"]["path"]], record["pids"])
+        outcomes = [self.round_outcome(entry)]
+        measure(outcomes, record["id"])
+        # The token binds this round's receipt and seal plus the inventory's
+        # registered writers, never the other rounds, which stay unaffected.
+        return {"session": record["id"], "round": round_id, "paths": outcomes,
+                "active_users": active, "evidence": entry["seal"],
+                "approval_token": digest({"policy": record["policy"], "round": {
+                    "receipt": entry["receipt"], "namespace": entry["namespace"]},
+                    "pids": record["pids"], "seal": entry["seal"]})}
+
+    def apply_round(self, record: dict, round_id: str, approval: str, processes_finished: bool) -> dict:
+        if not processes_finished:
+            raise sweep.ConfigError("apply requires explicit completion of all writers and descendants")
+        entry = self.round_entry(record, round_id)
+        preview = self.preview_round(record, round_id)
+        if approval != preview["approval_token"]:
+            raise sweep.ConfigError("approval does not match this exact round and evidence seal")
+        if entry.get("approval") not in (None, approval):
+            raise sweep.ConfigError("round has a different persisted approval")
+        entry["approval"] = approval
+        self.save(record)
+        preview["processes_finished_attestation"] = True
+        result = preview["paths"][0]
+        if preview["active_users"]:
+            preview["complete"] = False
+            return preview
+        self.retire_round(record, entry, result, lambda: self.verify_seal(record, entry["seal"]))
+        if result["action"] == "absent":
+            entry["status"] = "removed"
+        preview["complete"] = result["action"] in {"removed", "absent"}
+        record["complete"] = (not record["worktrees"]
+                              and all(r["status"] == "removed" for r in record["rounds"]))
+        self.save(record)
+        return preview
+
+    def retire_round(self, record: dict, entry: dict, result: dict, verify) -> None:
+        if result["action"] in {"eligible", "kept"}:
+            try:
+                verify()
+                if active_users([entry["receipt"]["path"]], record["pids"]):
+                    raise sweep.ConfigError("round acquired an active user")
+                # Publish intent only after the sweeper's final guards. A
+                # retry may lack the marker if interruption struck rmtree;
+                # durable approval, root and directory identities remain bound.
+                def journal_removal(current=entry):
+                    current["status"] = "removing"
+                    self.save(record)
+
+                outcome = sweep.finish_review_round(entry["receipt"], self.settings,
+                    Path(entry["namespace"]), apply=True, reviewers_finished=True,
+                    resuming=entry["status"] == "removing", before_remove=journal_removal)
+                result.update(action=outcome.action, reason=outcome.reason)
+            except (OSError, sweep.ConfigError, sweep.Refused) as exc:
+                result.update(action="kept", reason=str(exc))
+        verify()
+        if result["action"] in {"removed", "absent"} and os.path.lexists(result["path"]):
+            result.update(action="kept", reason="path exists after retirement; inspect before retrying")
+        if result["action"] == "removed":
+            entry["status"] = "removed"
+        self.save(record)
 
     def apply(self, record: dict, approval: str, processes_finished: bool) -> dict:
         if not processes_finished:
@@ -421,26 +520,7 @@ class Registry:
                     result.update(action="removed", reason=None)
         offset = len(record["worktrees"])
         for entry, result in zip(record["rounds"], preview["paths"][offset:], strict=True):
-            if result["action"] not in {"eligible", "kept"}:
-                continue
-            try:
-                self.verify_evidence(record)
-                if active_users([entry["receipt"]["path"]], record["pids"]):
-                    raise sweep.ConfigError("round acquired an active user")
-                # Publish intent only after the sweeper's final guards. A
-                # retry may lack the marker if interruption struck rmtree;
-                # durable approval, root and directory identities remain bound.
-                def journal_removal(current=entry):
-                    current["status"] = "removing"
-                    self.save(record)
-
-                outcome = sweep.finish_review_round(entry["receipt"], self.settings,
-                    Path(entry["namespace"]), apply=True, reviewers_finished=True,
-                    resuming=entry["status"] == "removing", before_remove=journal_removal)
-                result.update(action=outcome.action, reason=outcome.reason)
-            except (OSError, sweep.ConfigError, sweep.Refused) as exc:
-                result.update(action="kept", reason=str(exc))
-            self.save(record)
+            self.retire_round(record, entry, result, lambda: self.verify_evidence(record))
         self.verify_evidence(record)
         for result in preview["paths"]:
             if result["action"] in {"removed", "absent"} and os.path.lexists(result["path"]):
@@ -449,6 +529,18 @@ class Registry:
         record["last_result"] = {**preview, "complete": record["complete"]}
         self.save(record)
         return record["last_result"]
+
+
+def measure(outcomes: list[dict], owner: str) -> None:
+    for item in outcomes:
+        item["owner"] = owner
+        item["bytes"] = None
+        if item["action"] == "absent":
+            item["bytes"] = 0
+        elif item["action"] in {"eligible", "remove-worktree", "archive-with-runtime"}:
+            measurement = sweep.scan(item["path"], os.lstat(item["path"]))
+            if not measurement.problems:
+                item["bytes"] = measurement.size
 
 
 def hash_file(path: Path) -> tuple[str, int]:
@@ -558,6 +650,8 @@ def main(argv: list[str] | None = None) -> int:
         if action == "allocate":
             command.add_argument("--root", required=True)
             command.add_argument("--head", required=True)
+            command.add_argument("--keep-previous", metavar="REASON",
+                                 help="allocate while earlier rounds stay unretired; they retire with the inventory")
         elif action == "track-worktree":
             command.add_argument("path", type=Path)
             command.add_argument("--runtime", choices=("git", "codex"), required=True)
@@ -568,6 +662,9 @@ def main(argv: list[str] | None = None) -> int:
         elif action == "apply":
             command.add_argument("--approve", required=True)
             command.add_argument("--processes-finished", action="store_true")
+        if action in ("seal", "preview", "apply"):
+            command.add_argument("--round", metavar="RECEIPT_ID",
+                                 help="act on one allocated round without sealing the inventory")
     args = parser.parse_args(argv)
     try:
         repo = repo_root(Path.cwd())
@@ -579,7 +676,13 @@ def main(argv: list[str] | None = None) -> int:
                 record = registry.start() if args.action == "start" else registry.load(args.session)
                 result = record
                 if args.action == "allocate":
-                    result = registry.allocate(record, args.root, args.head)
+                    result = registry.allocate(record, args.root, args.head, args.keep_previous)
+                elif args.action == "seal" and args.round:
+                    result = registry.seal_round(record, args.round, read_json(args.manifest))
+                elif args.action == "preview" and args.round:
+                    result = registry.preview_round(record, args.round)
+                elif args.action == "apply" and args.round:
+                    result = registry.apply_round(record, args.round, args.approve, args.processes_finished)
                 elif args.action == "track-worktree":
                     registry.track_worktree(record, args.path, args.runtime)
                 elif args.action == "track-process":

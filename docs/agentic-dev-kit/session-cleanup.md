@@ -79,9 +79,19 @@ Resolve `<expanded-root>` from `scratch.roots` using this checkout's path. Creat
 that exact directory if absent. Allocation returns the sweeper's receipt and
 persists it before a reviewer may start. Use its `path` for the round, and retain
 its JSON outside the round for `panel_prompt.py` and standalone diagnosis. Allocate
-earlier and later rounds into the same inventory while it remains unsealed. For
-review loops that retire each round before the next starts, start a fresh inventory
-per round; `list` discovers them together through the repository's shared metadata.
+later rounds into the same inventory while it remains unsealed, after retiring the
+earlier one (*Retire each round before the next* below). `allocate` refuses while an
+earlier round is unretired, naming it. Only an explicit reason lets a round outlive
+the next allocation; it is recorded on that round, which then retires with the
+inventory:
+
+```sh
+uv run <engine-dir>/session_cleanup.py allocate <session> --root <expanded-root> --head <sha> --keep-previous "<reason>"
+```
+
+An interrupted round retirement refuses the next allocation whatever the reason:
+resume it first. `list` discovers every inventory through the repository's shared
+metadata.
 
 The registry lives at `<git-common-dir>/devkit/<scratch.session_registry>/`.
 It binds the common directory identity, allocation identities, original root
@@ -163,6 +173,29 @@ retained replacement. Unlisted scratch is covered only by the caller's evidence
 closure assertion, never by filename or age heuristics. Sealing freezes the inventory;
 new work uses a new session. Back up this local evidence with the repository's Git
 metadata; a fresh clone does not contain it, and deleting the repository deletes it.
+
+## Retire each round before the next
+
+A long review loop must not hold every round's trees until the session ends. Once
+a round's receipt or findings are recorded and its reviewers and their descendants
+have ended, retire that round alone. `--round` takes the round's receipt `id` and
+scopes `seal`, `preview` and `apply` to it, without sealing the inventory:
+
+```sh
+uv run <engine-dir>/session_cleanup.py seal <session> <absolute-manifest> --round <receipt-id>
+uv run <engine-dir>/session_cleanup.py preview <session> --round <receipt-id>
+uv run <engine-dir>/session_cleanup.py apply <session> --round <receipt-id> --approve <approval-token> --processes-finished
+```
+
+The manifest has the shape described in the next section, scoped to that round, and
+each round is sealed once. The preview's token binds that round's receipt and seal and
+the inventory's registered writers. The authorization rules and every guard of
+*Preview, approve the concrete scope, apply* below apply unchanged. A retired
+round records `removed`; an interrupted one stays `removing` under its own persisted
+approval and resumes with the same `apply --round`. The inventory reports
+`complete` while every round is removed and it tracks no worktree, so an inventory
+used only for rounds needs no final seal. Tracked worktrees and kept rounds still
+retire through the inventory's seal, preview and apply.
 
 ## Preview, approve the concrete scope, apply
 

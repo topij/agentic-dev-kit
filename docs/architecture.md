@@ -198,6 +198,8 @@ artifact rather than constructing a `state/` path in a caller.
 ```mermaid
 flowchart TB
     Start["start session inventory"] --> Allocate["allocate owned review rounds"]
+    Allocate --> Round["retire each round before the next<br/>seal, preview, apply --round"]
+    Round --> Allocate
     Allocate --> Work["track writers<br/>register final worktree heads"]
     Work --> Stop["writers and descendants ended"]
     Stop --> Seal["seal complete evidence manifest"]
