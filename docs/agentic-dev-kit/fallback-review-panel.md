@@ -1496,18 +1496,21 @@ this happened by default, and closed nothing against doing it on purpose, which
 is `#32`'s self-reporting gap arriving in one more place.
 **Every verdict line is posted on
 the PR by the cockpit, verbatim — both lenses' pairs, in the dual form —
-before any `fallback:delta` receipt is recorded** — quoting them all is what
+through the `fallback:delta` receipt's own `--disposition`**, which posts them
+before it records the receipt — quoting them all is what
 closes selective quotation, and the posting is self-reported, like the
 receipt: the verdict lines appear nowhere in git history, and the posted
 lines are what make "no verdict yet" distinguishable from "confirmed" — so
 they get the same outside-the-tree artifact rule the logged disposition
-carries. Post them through the receipt's own `--disposition`: the engine
-refuses a `fallback:delta` receipt unless its disposition holds, for each lens
-`--lenses` names, a block opened by a line that is exactly `<lens>:` and
-carrying one `prose-class:` and one `safety-critical:` line, each answered
-`confirmed` or `disputed` (`#921`). That catches a lens that skipped a draw; it
-cannot tell a lens's line from one the cockpit typed, and it does not act on a
-dispute. A dispute from either lens moves the round toward more review,
+carries. The engine refuses a `fallback:delta` receipt unless that disposition
+holds, under a `<lens>:` header line for each lens `--lenses` names, one
+unadorned `prose-class:` and one `safety-critical:` line answered with the
+whole word `confirmed` or `disputed` (`#921`; `check_delta_verdicts` in
+`pr_watch.py` states the block rules in full). That catches a lens that
+skipped a draw. It checks only the lenses `--lenses` names, cannot tell a
+lens's line from one the cockpit typed, and does not act on a dispute, so a
+disputed safety-critical boundary still needs the operator's artifact below
+before the receipt is recorded. A dispute from either lens moves the round toward more review,
 never less. **Outside the LOW route, a disputed prose class is a behaviour-containing delta** — the
 full pass is owed. **A disputed safety-critical boundary is stronger**:
 treat the change as sitting under `safety-critical-changes.md` until the

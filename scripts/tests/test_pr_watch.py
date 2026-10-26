@@ -6831,9 +6831,44 @@ def test_a_lens_that_answered_only_the_repairs_is_refused() -> None:
             "'prose-class:' line is not confirmed or disputed",
         ),
         (
-            "correctness:\nprose-class: confirmed\ncorrectness:\nsafety-critical: confirmed",
+            # The prompt's own unfilled template is not a verdict.
+            "correctness:\nprose-class: confirmed|disputed — <your reason>\n"
+            "safety-critical: confirmed|disputed — <your reason>",
             "correctness",
-            "opens lens block correctness: twice",
+            "'prose-class:' line is not confirmed or disputed",
+        ),
+        (
+            "correctness:\nprose-class: confirmed-ish\nsafety-critical: confirmed",
+            "correctness",
+            "'prose-class:' line is not confirmed or disputed",
+        ),
+        (
+            # Adorned lines are not verdict lines: posted verbatim, a lens's line
+            # is unadorned, as the prompt renders it.
+            "correctness:\n- prose-class: confirmed\nsafety-critical: confirmed",
+            "correctness",
+            "correctness has 0 'prose-class:' lines",
+        ),
+        (
+            # An unnamed lens's header ends the named lens's block, so its line
+            # is not credited to the lens that skipped the draw.
+            "correctness:\nprose-class: confirmed\nadversarial:\n"
+            "safety-critical: disputed — x",
+            "correctness",
+            "correctness has 0 'safety-critical:' lines",
+        ),
+        (
+            # A blank line after the block's lines ends it, so a summary below
+            # is not credited to the last lens.
+            "correctness:\nprose-class: confirmed\n\nSummary\n"
+            "safety-critical: confirmed — everything fine",
+            "correctness",
+            "correctness has 0 'safety-critical:' lines",
+        ),
+        (
+            "correctness :\nprose-class: confirmed\nsafety-critical: confirmed",
+            "correctness",
+            "no block opened by a line 'correctness:'",
         ),
         (
             "correctness:\nprose-class: confirmed\nsafety-critical: confirmed",
@@ -6849,6 +6884,38 @@ def test_a_delta_disposition_without_each_draw_verdict_is_refused(
     names = [part.strip() for part in lenses.split(",")]
     with pytest.raises(ValueError, match=re.escape(message)):
         pr_watch.check_delta_verdicts(names, disposition)
+
+
+@pytest.mark.parametrize(
+    "disposition",
+    [
+        # PR #1237's shape: a blank line between the header and its lines.
+        "adversarial:\n\nprose-class: confirmed — x\nsafety-critical: confirmed — x\n"
+        "\ncorrectness:\n\nprose-class: confirmed — x\nsafety-critical: confirmed — x",
+        # Verdicts first, then a findings section under the same headers.
+        "adversarial:\nprose-class: confirmed\nsafety-critical: confirmed\n"
+        "correctness:\nprose-class: confirmed\nsafety-critical: disputed.\n\n"
+        "adversarial:\nF1 LOW: x\ncorrectness:\nno findings",
+        # Another lens's block, not named, beside the named ones.
+        "adversarial:\nprose-class: confirmed\nsafety-critical: confirmed\n"
+        "verifier:\nprose-class: disputed\n"
+        "correctness:\nprose-class: confirmed\nsafety-critical: confirmed",
+    ],
+)
+def test_honest_delta_disposition_shapes_are_accepted(disposition: str) -> None:
+    pr_watch = _load_pr_watch()
+    pr_watch.check_delta_verdicts(["adversarial", "correctness"], disposition)
+
+
+def test_a_case_folding_draw_name_does_not_misread_the_verdict() -> None:
+    """`ß` folds to `ss`, so matching on a folded line and slicing the original
+    misread the value. A draw name only matches as written, case aside."""
+    pr_watch = _load_pr_watch()
+    with pytest.raises(ValueError, match="0 'prose-class:' lines"):
+        pr_watch.check_delta_verdicts(
+            ["correctness"],
+            "correctness:\nprose-claß:confirmed\nsafety-critical: confirmed",
+        )
 
 
 def test_a_disputed_draw_counts_as_a_verdict() -> None:

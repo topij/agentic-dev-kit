@@ -4257,23 +4257,41 @@ DELTA_SOURCE = "fallback:delta"
 # prompt; a test holds the two equal.
 DELTA_DRAW_NAMES = ("prose-class", "safety-critical")
 _DELTA_VERDICTS = ("confirmed", "disputed")
+# A header is any lens-name-shaped word and a colon, alone on its line, whether or
+# not that lens was named: an unnamed lens's header ends the block before it, so
+# its lines are never credited to a named one.
+_DELTA_HEADER_RE = re.compile(r"([\w.+-]{1,40}):")
+_DELTA_DRAW_RE = re.compile(
+    r"(" + "|".join(re.escape(n) for n in DELTA_DRAW_NAMES) + r"):(.*)", re.IGNORECASE
+)
+# The verdict word must stand alone: not `confirmed-ish`, and not the prompt's own
+# unfilled `confirmed|disputed` template, whose first word would otherwise count.
+_DELTA_VERDICT_RE = re.compile(
+    r"\s*(" + "|".join(_DELTA_VERDICTS) + r")(?![\w|-])", re.IGNORECASE
+)
 
 
 def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> None:
     """Refuse a ``fallback:delta`` receipt whose disposition lacks a draw verdict.
 
-    The doctrine makes disputing both draws a delta lens's first duty, and has the
-    cockpit post every verdict line before the receipt. On #920 one lens answered
-    the repairs only, and only the assembler's eye caught it (#921). So the
-    disposition must hold, for each lens named in ``--lenses``, a block opened by a
-    line that is exactly ``<lens>:`` and holding exactly one line beginning
-    ``prose-class:`` and one beginning ``safety-critical:``, each followed by
-    ``confirmed`` or ``disputed``. A block runs to the next named lens's header.
+    The doctrine makes disputing both draws a delta lens's first duty, and has every
+    verdict line posted on the pull request before the receipt. On #920 one lens
+    answered the repairs only, and only the assembler's eye caught it (#921).
+
+    The rules, in full. Lines are compared with surrounding whitespace removed and
+    case ignored. A *header* is a line holding only a lens-name-shaped word and a
+    colon (``correctness:``). A header for a lens ``--lenses`` names opens a block
+    for it; any other header, or a blank line after the block's first non-blank
+    line, ends the block. A lens may have several blocks. Across its blocks each
+    named lens must have exactly one line beginning ``prose-class:`` and one
+    beginning ``safety-critical:``, unadorned (no bullet, quote or bold), each
+    followed by ``confirmed`` or ``disputed`` as a whole word. A reason after it is
+    asked for by the prompt and not checked here.
 
     This checks that the lines are there, not who wrote them: the disposition is the
-    recording agent's text, as ``--lenses`` is (#32). Nor does it act on a
-    ``disputed`` verdict; what a dispute owes is a judgment the doctrine leaves to
-    the cockpit and the operator.
+    recording agent's text, as ``--lenses`` is (#32), and it holds only the lenses
+    that ``--lenses`` names. Nor does it act on a ``disputed`` verdict; what a
+    dispute owes is a judgment the doctrine leaves to the cockpit and the operator.
     """
     if disposition is None or not disposition.strip():
         raise ValueError(
@@ -4283,33 +4301,44 @@ def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> No
     lenses = sorted(_countable_lenses(named_lenses))
     if not lenses:
         raise ValueError(f"{DELTA_SOURCE} must name the lens that ran in --lenses")
-    blocks: dict[str, list[str]] = {}
+    values: dict[str, dict[str, list[str]]] = {
+        lens: {draw: [] for draw in DELTA_DRAW_NAMES} for lens in lenses
+    }
+    seen: set[str] = set()
     current: str | None = None
+    started = False
     for raw in disposition.splitlines():
         line = raw.strip()
-        if line.endswith(":") and line[:-1].strip().casefold() in lenses:
-            current = line[:-1].strip().casefold()
-            if current in blocks:
-                raise ValueError(f"the disposition opens lens block {current}: twice")
-            blocks[current] = []
-        elif current is not None:
-            blocks[current].append(line)
+        header = _DELTA_HEADER_RE.fullmatch(line)
+        if header is not None and header.group(1).casefold() not in {
+            d.casefold() for d in DELTA_DRAW_NAMES
+        }:
+            name = header.group(1).casefold()
+            current = name if name in values else None
+            if current is not None:
+                seen.add(current)
+            started = False
+            continue
+        if current is None:
+            continue
+        if not line:
+            if started:
+                current = None
+            continue
+        started = True
+        draw = _DELTA_DRAW_RE.fullmatch(line)
+        if draw is not None:
+            values[current][draw.group(1).casefold()].append(draw.group(2))
     problems: list[str] = []
     for lens in lenses:
-        if lens not in blocks:
+        if lens not in seen:
             problems.append(f"no block opened by a line '{lens}:'")
             continue
         for draw in DELTA_DRAW_NAMES:
-            values = [
-                line[len(draw) + 1 :].strip()
-                for line in blocks[lens]
-                if line.casefold().startswith(draw + ":")
-            ]
-            if len(values) != 1:
-                problems.append(f"{lens} has {len(values)} '{draw}:' lines, not one")
-                continue
-            word = re.match(r"[A-Za-z]+", values[0])
-            if word is None or word.group(0).casefold() not in _DELTA_VERDICTS:
+            found = values[lens][draw]
+            if len(found) != 1:
+                problems.append(f"{lens} has {len(found)} '{draw}:' lines, not one")
+            elif _DELTA_VERDICT_RE.match(found[0]) is None:
                 problems.append(
                     f"{lens}'s '{draw}:' line is not {' or '.join(_DELTA_VERDICTS)}"
                 )
@@ -4763,6 +4792,10 @@ def record_review(
     :func:`new_actionable` for why that acknowledgement is written at post time
     rather than matched back out of the comment's text.
 
+    A ``fallback:delta`` receipt is refused, before the pull request is read,
+    unless ``disposition`` carries each named lens's draw verdicts; see
+    :func:`check_delta_verdicts` (#921).
+
     **A post this call sees fail writes no receipt.** The sequence is: every
     refusal above, then the receipt dict, then the comment, then the save — so a
     `gh` failure this process observes leaves the state file exactly as it was,
@@ -4796,8 +4829,9 @@ def record_review(
             f"{SINGLE_LENS_SOURCE} records one isolated lens: pass --lenses <that lens's name>"
         )
     if source == DELTA_SOURCE:
-        # Before any forge read: the refusal is about the caller's own inputs, and
-        # the disposition it checks is the very text posted below.
+        # Before the pull request is read: the refusal is about the caller's own
+        # inputs, and the disposition it checks is the very text posted below.
+        # (Resolving an omitted PR number in `main` has already read the forge.)
         check_delta_verdicts(named_lenses, disposition)
     snapshot = fetch_review_snapshot(pr)
     current_head = snapshot.get("headRefOid")
