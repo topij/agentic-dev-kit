@@ -3187,15 +3187,239 @@ def test_interrupting_a_resume_round_stops_it_and_records_the_round(tmp_path: Pa
         assert len(receipt["terminal"]["resumes"]) == 1, receipt["terminal"]
         [round_one] = receipt["terminal"]["resumes"]
         assert round_one["round"] == 1
-        # Either documented outcome: the round's termination can itself be refused
-        # (macOS can answer EPERM for a group that is exiting), which leaves the
-        # placeholder rather than the interrupted error.
-        assert round_one["error"] in {"launcher interrupted", "round did not finish"}
+        assert round_one["error"] == "launcher interrupted", (round_one, stderr)
         with pytest.raises(ProcessLookupError):
             os.kill(resume_pid, 0)
     finally:
         with contextlib.suppress(ProcessLookupError):
             os.kill(resume_pid, signal.SIGKILL)
+
+
+def _fork_group_leader(*, live_member: bool) -> tuple[int, int | None]:
+    """Fork a session leader that exits at once, optionally leaving one member of
+    its process group alive (ignoring SIGTERM). Returns (leader, member)."""
+    read_fd, write_fd = os.pipe()
+    leader = os.fork()
+    if leader == 0:
+        os.close(read_fd)
+        os.setsid()
+        if live_member:
+            member = os.fork()
+            if member == 0:
+                # Close the pipe here, or the parent's read waits for this member.
+                os.close(write_fd)
+                signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                time.sleep(60)
+                os._exit(0)
+            os.write(write_fd, str(member).encode())
+        os.close(write_fd)
+        os._exit(0)
+    os.close(write_fd)
+    with os.fdopen(read_fd, "rb") as handle:
+        raw = handle.read()
+    # The leader has exited once the pipe closes; wait until it is a zombie.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        state = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(leader)], capture_output=True, text=True
+        ).stdout.strip()
+        if state.startswith("Z"):
+            break
+        time.sleep(0.02)
+    return leader, int(raw) if raw else None
+
+
+def test_terminating_a_group_that_holds_only_the_unreaped_leader_succeeds() -> None:
+    launcher = _load_launcher()
+    leader, _member = _fork_group_leader(live_member=False)
+    if sys.platform == "darwin":
+        # The case #1238 is about: macOS answers EPERM, not ESRCH, here.
+        with pytest.raises(PermissionError):
+            os.killpg(leader, 0)
+    with open(os.devnull, "wb") as stdin:
+        returncode = launcher._terminate_process_group(
+            launcher._ForkedChild(leader, stdin), 1
+        )
+    assert returncode == 0
+    with pytest.raises(ProcessLookupError):
+        os.killpg(leader, 0)
+
+
+def test_a_live_member_left_by_an_exited_leader_is_still_stopped() -> None:
+    launcher = _load_launcher()
+    leader, member = _fork_group_leader(live_member=True)
+    assert member is not None
+    try:
+        with open(os.devnull, "wb") as stdin:
+            returncode = launcher._terminate_process_group(
+                launcher._ForkedChild(leader, stdin), 1
+            )
+        assert returncode == 0
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                os.kill(member, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.02)
+        with pytest.raises(ProcessLookupError):
+            os.kill(member, 0)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(member, signal.SIGKILL)
+
+
+class _FakeLeader:
+    """A leader whose poll() answers None for `running_polls` calls, then
+    `returncode` (None forever when returncode is None)."""
+
+    def __init__(self, pid: int, returncode: int | None, running_polls: int = 0) -> None:
+        self.pid = pid
+        self.returncode: int | None = None
+        self._returncode = returncode
+        self._running_polls = running_polls
+
+    def poll(self) -> int | None:
+        if self._running_polls:
+            self._running_polls -= 1
+            return None
+        self.returncode = self._returncode
+        return self.returncode
+
+
+def test_an_exiting_leader_that_becomes_reapable_is_not_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # macOS answers EPERM while the leader is still exiting and waitpid cannot reap
+    # it yet; once it can, the group is gone and the retry answers ESRCH.
+    launcher = _load_launcher()
+    answers = [PermissionError(1, "Operation not permitted"), ProcessLookupError(3, "No such process")]
+    sent: list[int] = []
+
+    def killpg(_process_group: int, signum: int) -> None:
+        sent.append(signum)
+        raise answers.pop(0)
+
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    leader = _FakeLeader(4242, 0, running_polls=3)
+
+    launcher._signal_process_group(leader, signal.SIGTERM, "refused", 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGTERM]
+
+
+@pytest.mark.parametrize(
+    ("leader_returncode", "expected_signals"),
+    [(None, 1), (0, 2)],
+    ids=["leader-running", "leader-exited-member-still-refuses"],
+)
+def test_a_group_that_keeps_answering_eperm_is_still_refused(
+    monkeypatch: pytest.MonkeyPatch, leader_returncode: int | None, expected_signals: int
+) -> None:
+    # A member this wrapper cannot signal, while the leader runs or after it is
+    # reaped, stays a refusal; only an EPERM that a reap turns into ESRCH is gone.
+    launcher = _load_launcher()
+    sent: list[tuple[int, int]] = []
+
+    def refuse(process_group: int, signum: int) -> None:
+        sent.append((process_group, signum))
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(launcher.os, "killpg", refuse)
+    leader = _FakeLeader(4242, leader_returncode)
+
+    with pytest.raises(launcher.LaunchError, match="cannot signal the child process group"):
+        launcher._terminate_process_group(leader, 1)
+
+    assert sent == [(4242, signal.SIGTERM)] * expected_signals
+
+
+def _scripted_killpg(script: dict[int, list[BaseException | None]]):
+    """A killpg that answers each signal from its own queue (None delivers) and
+    answers ESRCH once a queue is empty; returns (killpg, sent)."""
+    sent: list[int] = []
+
+    def killpg(_process_group: int, signum: int) -> None:
+        sent.append(signum)
+        queue = script.setdefault(signum, [])
+        answer = queue.pop(0) if queue else ProcessLookupError(3, "No such process")
+        if answer is not None:
+            raise answer
+
+    return killpg, sent
+
+
+def _eperm() -> PermissionError:
+    return PermissionError(1, "Operation not permitted")
+
+
+def test_termination_waits_for_an_exiting_leader_on_the_sigterm_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The leader is still exiting when SIGTERM is sent; the leg's grace must reach
+    # the wait, or the first poll refuses.
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [_eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+
+    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+
+    assert returncode == 0
+    assert sent[:2] == [signal.SIGTERM, signal.SIGTERM]
+    assert signal.SIGKILL not in sent
+
+
+def test_termination_waits_for_an_exiting_leader_on_the_sigkill_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # SIGTERM is delivered but the group outlives the grace; on the force-stop leg
+    # the leader is exiting, so the retry must send SIGKILL again after the wait.
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    waits = iter([None, 0])
+    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: next(waits))
+
+    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+
+    assert returncode == 0
+    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+
+
+def test_a_force_stop_that_keeps_answering_eperm_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    launcher = _load_launcher()
+    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm(), _eperm()]})
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: None)
+
+    with pytest.raises(launcher.LaunchError, match="cannot force-stop the child process group"):
+        launcher._terminate_process_group(_FakeLeader(4242, 0), 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [PermissionError(1, "Operation not permitted"), ProcessLookupError(3, "No such process")],
+    ids=["eperm", "esrch"],
+)
+def test_the_signal_relay_never_raises_from_the_handler(
+    monkeypatch: pytest.MonkeyPatch, answer: BaseException
+) -> None:
+    launcher = _load_launcher()
+    sent: list[tuple[int, int]] = []
+
+    def killpg(process_group: int, signum: int) -> None:
+        sent.append((process_group, signum))
+        raise answer
+
+    monkeypatch.setattr(launcher.os, "killpg", killpg)
+
+    launcher._relay_signal(4242, signal.SIGTERM)
+
+    assert sent == [(4242, signal.SIGTERM)]
 
 
 @pytest.mark.evidence

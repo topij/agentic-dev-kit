@@ -1717,26 +1717,64 @@ def _wait_for_process_group_exit(
     return None
 
 
+def _signal_process_group(
+    process: _ForkedChild, signum: int, error: str, grace_seconds: int
+) -> None:
+    # macOS answers EPERM, not ESRCH, when a group's only member is the leader this
+    # wrapper has not reaped yet (#1238): an exited zombie, or a leader still
+    # exiting, which waitpid cannot reap for a moment longer. Wait up to the grace
+    # for the leader to become reapable, reap it, and ask once more. Every input
+    # that reaches the EPERM branch:
+    # - leader exited or exiting, no other member: the reap empties the group, the
+    #   retry answers ESRCH, and the group is gone;
+    # - leader reaped, a member that still answers EPERM (another owner, or a
+    #   zombie its new parent has not reaped yet): refused;
+    # - leader still running when the grace ends: refused without a retry.
+    try:
+        os.killpg(process.pid, signum)
+        return
+    except ProcessLookupError:
+        return
+    except PermissionError as exc:
+        deadline = time.monotonic() + grace_seconds
+        while process.poll() is None:
+            if time.monotonic() >= deadline:
+                raise LaunchError(error) from exc
+            time.sleep(0.02)
+    try:
+        os.killpg(process.pid, signum)
+    except ProcessLookupError:
+        return
+    except PermissionError as exc:
+        raise LaunchError(error) from exc
+
+
+def _relay_signal(process_group: int, signum: int) -> None:
+    # Called from the launcher's signal handler, so nothing may escape it: an
+    # exception raised there surfaces at whatever line the main flow was on. ESRCH
+    # is a group already gone. EPERM is either a group holding only the unreaped
+    # leader (macOS, #1238), which needs no relay, or a member that cannot be
+    # signalled. A signal caught while a round runs routes the launch to
+    # _terminate_process_group, which refuses that member; one caught after the
+    # round's group check found the group empty.
+    with contextlib.suppress(ProcessLookupError, PermissionError):
+        os.killpg(process_group, signum)
+
+
 def _terminate_process_group(
     process: _ForkedChild, grace_seconds: int
 ) -> int:
-    try:
-        os.killpg(process.pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass
-    except PermissionError as exc:
-        raise LaunchError("cannot signal the child process group") from exc
+    _signal_process_group(
+        process, signal.SIGTERM, "cannot signal the child process group", grace_seconds
+    )
     returncode = _wait_for_process_group_exit(
         process, time.monotonic() + grace_seconds
     )
     if returncode is not None:
         return returncode
-    try:
-        os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
-    except PermissionError as exc:
-        raise LaunchError("cannot force-stop the child process group") from exc
+    _signal_process_group(
+        process, signal.SIGKILL, "cannot force-stop the child process group", grace_seconds
+    )
     returncode = _wait_for_process_group_exit(
         process, time.monotonic() + grace_seconds
     )
@@ -1906,8 +1944,7 @@ def launch(
     def relay(signum: int, _frame: object) -> None:
         caught.append(signum)
         if process is not None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signum)
+            _relay_signal(process.pid, signum)
 
     previous_handlers = {
         signum: signal.signal(signum, relay) for signum in (signal.SIGINT, signal.SIGTERM)

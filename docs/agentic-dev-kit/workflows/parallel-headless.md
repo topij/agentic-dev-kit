@@ -239,9 +239,12 @@ evidence read the wrapper refuses) is still recorded, with the fields it never r
 `null` and `error` set to `round did not finish`; an interrupted round's `error` is
 `launcher interrupted`, unless a refusal also cut it short, which leaves
 `round did not finish`. A signal that lands before a round starts stops the loop without
-starting one. A signal the wrapper records after it has read a declared terminal state
-leaves the receipt `completed`; one recorded before that read, at launch or while a
-resume round runs, records the lane `interrupted`. A failed, denied or interrupted
+starting one. Once a round's process exits, at launch or on resume, the wrapper checks
+whether it has caught a signal. A signal recorded before that check records the lane
+`interrupted`, even when the round's final text declares a terminal state. One recorded
+after it leaves the receipt `completed` when the round declared a terminal state; when
+the round did not, the loop stops before starting another round and records the lane
+`interrupted`. A failed, denied or interrupted
 round, at launch or on resume, is never resumed. While a round runs, the receipt stays
 `observed`, so the board shows `running`.
 
