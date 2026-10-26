@@ -6866,6 +6866,25 @@ def test_a_lens_that_answered_only_the_repairs_is_refused() -> None:
             "correctness has 0 'safety-critical:' lines",
         ),
         (
+            # A bare draw name is not a header, so it does not end the block: it is
+            # a second, empty, prose-class line.
+            "correctness:\nprose-class: confirmed\nsafety-critical: confirmed\n"
+            "prose-class:",
+            "correctness",
+            "correctness has 2 'prose-class:' lines",
+        ),
+        (
+            # `ſ` folds to `s` under a Unicode case fold; names match ASCII only.
+            "correctness:\nprose-clasſ: confirmed\nsafety-critical: confirmed",
+            "correctness",
+            "correctness has 0 'prose-class:' lines",
+        ),
+        (
+            "correctness:\nprose-class: confirmed\nsafety-critical: diſputed",
+            "correctness",
+            "'safety-critical:' line is not confirmed or disputed",
+        ),
+        (
             "correctness :\nprose-class: confirmed\nsafety-critical: confirmed",
             "correctness",
             "no block opened by a line 'correctness:'",
@@ -6916,6 +6935,28 @@ def test_a_case_folding_draw_name_does_not_misread_the_verdict() -> None:
             ["correctness"],
             "correctness:\nprose-claß:confirmed\nsafety-critical: confirmed",
         )
+
+
+@pytest.mark.parametrize(
+    ("disposition", "line"),
+    [
+        ("correctness:\nprose-class: confirmed — a\n\nsafety-critical: confirmed — b", 4),
+        ("correctness:\nprose-class: confirmed\n- safety-critical: confirmed", 3),
+        ("correctness:\nprose-class: confirmed\n**safety-critical:** confirmed", 3),
+        ("correctness:\nprose-class: confirmed\nnote:\nsafety-critical: confirmed", 4),
+    ],
+)
+def test_a_refusal_points_at_the_draw_line_it_did_not_count(
+    disposition: str, line: int
+) -> None:
+    """A lens's line that is there but not counted must not read as missing: the
+    refusal names the line, so the cockpit can see which rule set it aside."""
+    pr_watch = _load_pr_watch()
+    with pytest.raises(ValueError) as exc:
+        pr_watch.check_delta_verdicts(["correctness"], disposition)
+    message = str(exc.value)
+    assert "correctness has 0 'safety-critical:' lines" in message
+    assert f"'safety-critical:' line at line {line} was not counted" in message
 
 
 def test_a_disputed_draw_counts_as_a_verdict() -> None:

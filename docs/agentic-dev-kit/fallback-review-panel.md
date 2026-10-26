@@ -1507,8 +1507,9 @@ holds, under a `<lens>:` header line for each lens `--lenses` names, one
 unadorned `prose-class:` and one `safety-critical:` line answered with the
 whole word `confirmed` or `disputed` (`#921`; `check_delta_verdicts` in
 `pr_watch.py` states the block rules in full). That catches a lens that
-skipped a draw. It checks only the lenses `--lenses` names, cannot tell a
-lens's line from one the cockpit typed, and does not act on a dispute, so a
+skipped a draw. It checks only the lenses `--lenses` names and only the verdict
+word, reads text a rendered comment may hide, cannot tell a lens's line from
+one the cockpit typed, and does not act on a dispute, so a
 disputed safety-critical boundary still needs the operator's artifact below
 before the receipt is recorded. A dispute from either lens moves the round toward more review,
 never less. **Outside the LOW route, a disputed prose class is a behaviour-containing delta** — the

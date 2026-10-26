@@ -4261,14 +4261,29 @@ _DELTA_VERDICTS = ("confirmed", "disputed")
 # not that lens was named: an unnamed lens's header ends the block before it, so
 # its lines are never credited to a named one.
 _DELTA_HEADER_RE = re.compile(r"([\w.+-]{1,40}):")
-_DELTA_DRAW_RE = re.compile(
-    r"(" + "|".join(re.escape(n) for n in DELTA_DRAW_NAMES) + r"):(.*)", re.IGNORECASE
-)
+# Draw names and verdict words are compared after `str.lower`, never a case fold:
+# `casefold` turns `ſ` into `s`, and no character outside ASCII lowers to a
+# letter of these four words.
+_DELTA_DRAW_RE = re.compile(r"([\w-]+):(.*)")
 # The verdict word must stand alone: not `confirmed-ish`, and not the prompt's own
 # unfilled `confirmed|disputed` template, whose first word would otherwise count.
-_DELTA_VERDICT_RE = re.compile(
-    r"\s*(" + "|".join(_DELTA_VERDICTS) + r")(?![\w|-])", re.IGNORECASE
-)
+# Only the literal template is caught: `confirmed or disputed` counts as confirmed.
+_DELTA_VERDICT_RE = re.compile(r"\s*(\w+)(?![\w|-])")
+# Bullets, quotes and emphasis a line may carry, stripped only to find a draw
+# line the check did not count, so the refusal can point at it.
+_DELTA_ADORNMENT = "-*>_` \t"
+
+
+def _delta_verdict(value: str) -> bool:
+    match = _DELTA_VERDICT_RE.match(value)
+    return match is not None and match.group(1).lower() in _DELTA_VERDICTS
+
+
+def _delta_draw(line: str) -> tuple[str, str] | None:
+    match = _DELTA_DRAW_RE.fullmatch(line)
+    if match is None or match.group(1).lower() not in DELTA_DRAW_NAMES:
+        return None
+    return match.group(1).lower(), match.group(2)
 
 
 def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> None:
@@ -4285,12 +4300,16 @@ def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> No
     line, ends the block. A lens may have several blocks. Across its blocks each
     named lens must have exactly one line beginning ``prose-class:`` and one
     beginning ``safety-critical:``, unadorned (no bullet, quote or bold), each
-    followed by ``confirmed`` or ``disputed`` as a whole word. A reason after it is
-    asked for by the prompt and not checked here.
+    followed by ``confirmed`` or ``disputed`` as a whole word; case is ignored
+    for draw names and verdict words by ``str.lower``, so ``ſ`` is no ``s``. Only the word is checked: the literal
+    ``confirmed|disputed`` template is refused, ``confirmed or disputed`` is not, and
+    the reason the prompt asks for is not checked. A refusal names each draw line it
+    saw but did not count, and why.
 
     This checks that the lines are there, not who wrote them: the disposition is the
     recording agent's text, as ``--lenses`` is (#32), and it holds only the lenses
-    that ``--lenses`` names. Nor does it act on a ``disputed`` verdict; what a
+    that ``--lenses`` names. It reads the text, so a line the rendered comment hides
+    (inside an HTML comment, say) counts as much as a visible one. Nor does it act on a ``disputed`` verdict; what a
     dispute owes is a judgment the doctrine leaves to the cockpit and the operator.
     """
     if disposition is None or not disposition.strip():
@@ -4307,12 +4326,11 @@ def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> No
     seen: set[str] = set()
     current: str | None = None
     started = False
-    for raw in disposition.splitlines():
-        line = raw.strip()
+    counted: set[int] = set()
+    lines = [raw.strip() for raw in disposition.splitlines()]
+    for number, line in enumerate(lines, start=1):
         header = _DELTA_HEADER_RE.fullmatch(line)
-        if header is not None and header.group(1).casefold() not in {
-            d.casefold() for d in DELTA_DRAW_NAMES
-        }:
+        if header is not None and _delta_draw(line) is None:
             name = header.group(1).casefold()
             current = name if name in values else None
             if current is not None:
@@ -4326,9 +4344,10 @@ def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> No
                 current = None
             continue
         started = True
-        draw = _DELTA_DRAW_RE.fullmatch(line)
+        draw = _delta_draw(line)
         if draw is not None:
-            values[current][draw.group(1).casefold()].append(draw.group(2))
+            values[current][draw[0]].append(draw[1])
+            counted.add(number)
     problems: list[str] = []
     for lens in lenses:
         if lens not in seen:
@@ -4337,8 +4356,23 @@ def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> No
         for draw in DELTA_DRAW_NAMES:
             found = values[lens][draw]
             if len(found) != 1:
-                problems.append(f"{lens} has {len(found)} '{draw}:' lines, not one")
-            elif _DELTA_VERDICT_RE.match(found[0]) is None:
+                problem = f"{lens} has {len(found)} '{draw}:' lines, not one"
+                uncounted = [
+                    str(number)
+                    for number, line in enumerate(lines, start=1)
+                    if number not in counted
+                    and (near := _delta_draw(line.strip(_DELTA_ADORNMENT).replace("*", "")))
+                    is not None
+                    and near[0] == draw
+                ]
+                if uncounted and not found:
+                    problem += (
+                        f" (a '{draw}:' line at line {', '.join(uncounted)} was not "
+                        f"counted: it is adorned, or a blank line or another header "
+                        f"ended the '{lens}:' block before it)"
+                    )
+                problems.append(problem)
+            elif not _delta_verdict(found[0]):
                 problems.append(
                     f"{lens}'s '{draw}:' line is not {' or '.join(_DELTA_VERDICTS)}"
                 )

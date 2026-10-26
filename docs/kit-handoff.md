@@ -69,8 +69,8 @@ deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was 
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
 archive sweep rewrites (friction archive; #1139). #1096 (`8beee9a1`) pins its candidate bound
 with a positional test.
-PR #1248 has `pr_watch.py --record-review fallback:delta` refuse a disposition
-missing a named lens's `prose-class:` or `safety-critical:` verdict line (#921).
+`pr_watch.py --record-review fallback:delta` refuses a disposition missing a named
+lens's `prose-class:` or `safety-critical:` verdict line (#921, in PR #1248).
 #1167 (`4248942`) refuses a `--last-reviewed` sha outside the branch (#1166).
 **Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585); related #403,
 #666, #305, and the class's documented limits #928, #929, #930 and #931.
