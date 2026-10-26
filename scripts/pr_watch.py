@@ -105,7 +105,7 @@ Usage:
     uv run scripts/pr_watch.py 916 --record-review "fallback:codex" --head <polled-sha>
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:panel" --head <polled-sha> --disposition -  # findings on stdin
     uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:lens" --lenses adversarial --head <polled-sha>  # standard-class PR only
-    uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --compose-parent <reviewed-parent> --head <polled-sha>
+    uv run <engine-dir>/pr_watch.py 916 --record-review "fallback:delta" --lenses correctness --compose-parent <reviewed-parent> --head <polled-sha> --disposition -  # each lens's verdict lines on stdin
     uv run scripts/pr_watch.py 916 --assert-draft  # correct a drifted draft bit after `gh pr create --draft`
     uv run scripts/pr_watch.py 916 --assert-ready  # correct after ready creation/transition, and before merge
 
@@ -4251,6 +4251,76 @@ def disposition_body(receipt: dict, disposition: str) -> str:
     )
 
 
+DELTA_SOURCE = "fallback:delta"
+# The draws every delta pass hands its lens, by the name the lens's verdict line
+# must begin with. `panel_prompt.DELTA_DRAWS` renders the same names into the lens
+# prompt; a test holds the two equal.
+DELTA_DRAW_NAMES = ("prose-class", "safety-critical")
+_DELTA_VERDICTS = ("confirmed", "disputed")
+
+
+def check_delta_verdicts(named_lenses: list[str], disposition: str | None) -> None:
+    """Refuse a ``fallback:delta`` receipt whose disposition lacks a draw verdict.
+
+    The doctrine makes disputing both draws a delta lens's first duty, and has the
+    cockpit post every verdict line before the receipt. On #920 one lens answered
+    the repairs only, and only the assembler's eye caught it (#921). So the
+    disposition must hold, for each lens named in ``--lenses``, a block opened by a
+    line that is exactly ``<lens>:`` and holding exactly one line beginning
+    ``prose-class:`` and one beginning ``safety-critical:``, each followed by
+    ``confirmed`` or ``disputed``. A block runs to the next named lens's header.
+
+    This checks that the lines are there, not who wrote them: the disposition is the
+    recording agent's text, as ``--lenses`` is (#32). Nor does it act on a
+    ``disputed`` verdict; what a dispute owes is a judgment the doctrine leaves to
+    the cockpit and the operator.
+    """
+    if disposition is None or not disposition.strip():
+        raise ValueError(
+            f"{DELTA_SOURCE} needs --disposition carrying each lens's verdict lines "
+            f"({', '.join(n + ':' for n in DELTA_DRAW_NAMES)}), posted verbatim"
+        )
+    lenses = sorted(_countable_lenses(named_lenses))
+    if not lenses:
+        raise ValueError(f"{DELTA_SOURCE} must name the lens that ran in --lenses")
+    blocks: dict[str, list[str]] = {}
+    current: str | None = None
+    for raw in disposition.splitlines():
+        line = raw.strip()
+        if line.endswith(":") and line[:-1].strip().casefold() in lenses:
+            current = line[:-1].strip().casefold()
+            if current in blocks:
+                raise ValueError(f"the disposition opens lens block {current}: twice")
+            blocks[current] = []
+        elif current is not None:
+            blocks[current].append(line)
+    problems: list[str] = []
+    for lens in lenses:
+        if lens not in blocks:
+            problems.append(f"no block opened by a line '{lens}:'")
+            continue
+        for draw in DELTA_DRAW_NAMES:
+            values = [
+                line[len(draw) + 1 :].strip()
+                for line in blocks[lens]
+                if line.casefold().startswith(draw + ":")
+            ]
+            if len(values) != 1:
+                problems.append(f"{lens} has {len(values)} '{draw}:' lines, not one")
+                continue
+            word = re.match(r"[A-Za-z]+", values[0])
+            if word is None or word.group(0).casefold() not in _DELTA_VERDICTS:
+                problems.append(
+                    f"{lens}'s '{draw}:' line is not {' or '.join(_DELTA_VERDICTS)}"
+                )
+    if problems:
+        raise ValueError(
+            f"{DELTA_SOURCE} disposition is missing draw verdicts: "
+            + "; ".join(problems)
+            + ". Post each lens's verdict lines verbatim under a '<lens>:' line"
+        )
+
+
 def _post_disposition_comment(pr: int, body: str) -> tuple[str, str | None]:
     """Post one disposition comment on ``pr``; return ``(url, ack_key)``.
 
@@ -4725,6 +4795,10 @@ def record_review(
         raise ValueError(
             f"{SINGLE_LENS_SOURCE} records one isolated lens: pass --lenses <that lens's name>"
         )
+    if source == DELTA_SOURCE:
+        # Before any forge read: the refusal is about the caller's own inputs, and
+        # the disposition it checks is the very text posted below.
+        check_delta_verdicts(named_lenses, disposition)
     snapshot = fetch_review_snapshot(pr)
     current_head = snapshot.get("headRefOid")
     if not current_head:
@@ -6904,7 +6978,9 @@ def main(argv: list[str] | None = None) -> int:
             "was disposed as a comment on the PR, under this engine's fixed heading "
             "and bound to the recorded head. The receipt is gitignored; this is the "
             "half that survives the merge. Pass `-` to read the text from stdin; "
-            "a value naming an existing path is refused"
+            "a value naming an existing path is refused. Required with "
+            "fallback:delta, where it must carry each named lens's prose-class: and "
+            "safety-critical: verdict lines under a '<lens>:' line"
         ),
     )
     mode_group = parser.add_mutually_exclusive_group()

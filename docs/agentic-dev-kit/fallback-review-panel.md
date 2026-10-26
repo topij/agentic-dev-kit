@@ -1142,8 +1142,9 @@ Choose and record a disposition on the PR:
   stages or approval rounds solely because of a LOW finding or its repair.
   Required current-head CI still runs. Use an isolated configured lens, or the
   configured adversarial and correctness lenses for a safety-critical change.
-  Record what actually ran as `fallback:delta`, with `--compose-parent` and
-  `--head`, preserving the standing full-review evidence and its limitations.
+  Record what actually ran as `fallback:delta`, with `--compose-parent`,
+  `--head` and a `--disposition` carrying each lens's verdict lines, preserving
+  the standing full-review evidence and its limitations.
 - **Ticket.** Defer the finding in the configured tracker, with its location,
   reviewer severity, regression classification and acceptance criteria; link the
   ticket and explain the deferral on the PR. Reuse an existing matching ticket
@@ -1500,7 +1501,13 @@ closes selective quotation, and the posting is self-reported, like the
 receipt: the verdict lines appear nowhere in git history, and the posted
 lines are what make "no verdict yet" distinguishable from "confirmed" — so
 they get the same outside-the-tree artifact rule the logged disposition
-carries. A dispute from either lens moves the round toward more review,
+carries. Post them through the receipt's own `--disposition`: the engine
+refuses a `fallback:delta` receipt unless its disposition holds, for each lens
+`--lenses` names, a block opened by a line that is exactly `<lens>:` and
+carrying one `prose-class:` and one `safety-critical:` line, each answered
+`confirmed` or `disputed` (`#921`). That catches a lens that skipped a draw; it
+cannot tell a lens's line from one the cockpit typed, and it does not act on a
+dispute. A dispute from either lens moves the round toward more review,
 never less. **Outside the LOW route, a disputed prose class is a behaviour-containing delta** — the
 full pass is owed. **A disputed safety-critical boundary is stronger**:
 treat the change as sitting under `safety-critical-changes.md` until the

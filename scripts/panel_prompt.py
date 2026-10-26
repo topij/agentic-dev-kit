@@ -171,8 +171,9 @@ VERIFIER_CARRIER: dict[str, str] = {
 
 # The two draws the doctrine makes mandatory on every delta pass, as `(flag, name)`.
 # The name is what the lens's verdict line must begin with, so whoever posts the lines
-# can see a missing one by its absent name instead of judging what a lens meant. No
-# engine reads lens reports for these names yet; #921 carries that check.
+# can see a missing one by its absent name instead of judging what a lens meant.
+# `pr_watch.py --record-review fallback:delta` refuses a disposition missing either
+# name for a named lens (#921), and a test holds its `DELTA_DRAW_NAMES` to these.
 DELTA_DRAWS: tuple[tuple[str, str], ...] = (
     ("--draw-prose-class", "prose-class"),
     ("--draw-safety-critical", "safety-critical"),
