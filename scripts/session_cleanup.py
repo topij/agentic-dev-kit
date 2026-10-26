@@ -45,10 +45,10 @@ def canonical(path: Path) -> Path:
     return path
 
 
-def git(repo: Path, *args: str) -> str:
+def git(repo: Path, *args: str, timeout: int = 30) -> str:
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     result = subprocess.run(["git", "-C", str(repo), *args], env=env,
-                            capture_output=True, text=True, timeout=30)
+                            capture_output=True, text=True, timeout=timeout)
     if result.returncode:
         raise sweep.ConfigError(f"Git identity unavailable: {result.stderr.strip()}")
     return result.stdout.removesuffix("\n")
@@ -343,7 +343,10 @@ class Registry:
                 if str(path) in sweep.registered_worktrees(self.settings.repos):
                     action, reason = "kept", "absent path still registered with Git"
             else:
-                reason = self.worktree_reason(worktree)
+                try:
+                    reason = self.worktree_reason(worktree)
+                except subprocess.TimeoutExpired as exc:
+                    reason = f"worktree inspection timed out: {exc}"
                 if reason:
                     action = "kept"
             outcomes.append({"path": str(path), "action": action, "reason": reason})
@@ -411,8 +414,8 @@ class Registry:
                         raise sweep.ConfigError(reason)
                     if active_users([worktree["path"]], record["pids"]):
                         raise sweep.ConfigError("worktree acquired an active user")
-                    git(self.repo, "worktree", "remove", worktree["path"])
-                except (OSError, sweep.ConfigError) as exc:
+                    git(self.repo, "worktree", "remove", worktree["path"], timeout=300)
+                except (OSError, sweep.ConfigError, subprocess.TimeoutExpired) as exc:
                     result.update(action="kept", reason=str(exc))
                 else:
                     result.update(action="removed", reason=None)

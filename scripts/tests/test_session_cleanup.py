@@ -567,3 +567,122 @@ def test_cli_exit_status(session, state, expected):
     assert result.returncode == expected, result.stderr
     if state != "refused":
         assert json.loads(result.stdout)["complete"] == (state == "complete")
+
+
+@pytest.mark.parametrize("phase", ["preview", "recheck", "remove"])
+def test_git_timeout_is_per_item_and_retryable(session, monkeypatch, phase):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    original = cleanup.git
+    calls = 0
+
+    def timed(repo, *args, **kwargs):
+        nonlocal calls
+        if Path(repo) == task and args == ("rev-parse", "HEAD"):
+            calls += 1
+            if (phase == "preview" and calls == 1) or (phase == "recheck" and calls == 2):
+                raise subprocess.TimeoutExpired(["git", *args], 30)
+        if args[:2] == ("worktree", "remove"):
+            assert kwargs["timeout"] == 300
+            if phase == "remove":
+                raise subprocess.TimeoutExpired(["git", *args], kwargs["timeout"])
+        return original(repo, *args, **kwargs)
+
+    token = registry.preview(record)["approval_token"]
+    monkeypatch.setattr(cleanup, "git", timed)
+    result = registry.apply(record, token, True)
+    assert not result["complete"]
+    assert result["paths"][0]["action"] == "kept"
+    assert "timed out" in result["paths"][0]["reason"]
+    assert task.is_dir()
+    assert not Path(receipt["path"]).exists()
+    assert registry.load(record["id"])["last_result"] == result
+    registry.verify_evidence(record)
+    monkeypatch.setattr(cleanup, "git", original)
+    assert registry.apply(registry.load(record["id"]), token, True)["complete"]
+    assert not task.exists()
+
+
+def test_unapproved_interrupted_journal_is_not_authority(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    record["rounds"][0]["status"] = "removing"
+    registry.save(record)
+    with pytest.raises(cleanup.sweep.ConfigError, match="durable approval"):
+        registry.load(record["id"])
+    assert Path(receipt["path"]).is_dir()
+
+
+def test_reappeared_path_prevents_complete_result(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    original = cleanup.sweep.finish_review_round
+
+    def reappears(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if kwargs.get("apply"):
+            Path(receipt["path"]).mkdir()
+            (Path(receipt["path"]) / "new-data").write_text("must survive")
+        return result
+
+    monkeypatch.setattr(cleanup.sweep, "finish_review_round", reappears)
+    result = apply(registry, record)
+    assert not result["complete"]
+    assert result["paths"][0]["action"] == "kept"
+    assert "exists after retirement" in result["paths"][0]["reason"]
+    assert (Path(receipt["path"]) / "new-data").read_text() == "must survive"
+
+
+def test_round_act_time_active_user_refusal(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    original = registry.preview
+
+    def late_user(current):
+        result = original(current)
+        monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: ["late writer"])
+        return result
+
+    token = original(record)["approval_token"]
+    monkeypatch.setattr(registry, "preview", late_user)
+    result = registry.apply(record, token, True)
+    assert not result["complete"]
+    assert "active user" in result["paths"][0]["reason"]
+    assert registry.load(record["id"])["rounds"][0]["status"] == "allocated"
+    assert Path(receipt["path"]).is_dir()
+
+
+def test_configured_root_inside_retiring_worktree_is_preserved(session):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    # An absent configured root still protects its future owner. No ignored,
+    # dirty or nested worktree refusal can stand in for this boundary.
+    from dataclasses import replace
+    registry.settings = replace(registry.settings, roots=[*registry.settings.roots, str(task / "future-scratch")])
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == "kept"
+    assert "configured root" in result["paths"][0]["reason"]
+    assert task.exists()
+
+
+def test_absent_registered_worktree_requires_reconciliation(session):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    task.rename(root / "moved-task")
+    result = apply(registry, record)
+    assert not result["complete"]
+    assert result["paths"][0]["action"] == "kept"
+    assert "still registered" in result["paths"][0]["reason"]
+    assert (root / "moved-task").is_dir()
