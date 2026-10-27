@@ -95,13 +95,15 @@ not start with `gitdir:` still keeps an unowned entry. #1193 (`043f61f2`) delive
 and #1192 (`5b50b225`) has `test_sweep_scratch.py` remove each test's tree at
 teardown (#1188). Not established: that a round in which a lens probes `.git` files can be
 retired; triage archived that question without filing on 2026-10-24.
-`sweep_scratch.py --disk --json` at `ef8e4780` on 2026-10-27 listed none of the rounds kept
+`sweep_scratch.py --disk --json` in the primary checkout at `ef8e4780` on 2026-10-27 listed none of the rounds kept
 on 2026-10-22 and 2026-10-23 (`review-72a279dd…` among them).
 #1258 (`ef8e4780`) retires each review round of an open session-cleanup inventory
 (`--round`) and has `allocate` refuse while an earlier round is unretired (#1254); its
-round-3 LOWs are #1259. Registry inventories made before the volume's `st_dev` changed
-(cause not established) read as unavailable (#1253), which holds cs-toolkit's retained
-evidence in `.git/devkit`. Copies outside every managed root, such as Codex lens trees under
+round-3 LOWs are #1259. #1261 (`87a5f18b`) names the differing bound field in an
+unavailable inventory's refusal and adds an approved `reconcile` for a changed device
+number, under the preconditions in `session-cleanup.md`. It deletes nothing, so cs-toolkit's retained evidence in `.git/devkit` still
+waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has the
+`f_fsid` and volume-UUID probes); its review's LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
 #1256. `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -111,9 +113,12 @@ evidence in `.git/devkit`. Copies outside every managed root, such as Codex lens
 [#1253](https://github.com/topij/agentic-dev-kit/issues/1253),
 [#1255](https://github.com/topij/agentic-dev-kit/issues/1255),
 [#1256](https://github.com/topij/agentic-dev-kit/issues/1256),
-[#1259](https://github.com/topij/agentic-dev-kit/issues/1259).
+[#1259](https://github.com/topij/agentic-dev-kit/issues/1259),
+[#1263](https://github.com/topij/agentic-dev-kit/issues/1263).
 
-▶ Next: #1253, scoped by its body and its comment's revised proposal.
+▶ Next: from the primary checkout, preview `uv run scripts/session_cleanup.py reconcile <id>`
+for each inventory `list` reports unavailable. Apply `--approve <token>` only to those it
+accepts, on the operator's authorization, and report each refusal as it stands.
 
 ### Reviewer profiles
 
