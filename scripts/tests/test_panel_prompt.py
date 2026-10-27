@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import require_kit_paths, require_kit_source
+from conftest import SAFE_PATH_PATTERN, require_kit_paths, require_kit_source
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
@@ -132,7 +132,7 @@ def _loose_object(root: Path, oid: str) -> Path:
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(safe_tmp_path: Path) -> Path:
     """A fixture repo with two commits, the real doctrine, and a lens roster.
 
     Deliberately NOT this repo. An earlier version of these tests read
@@ -140,8 +140,11 @@ def repo(tmp_path: Path) -> Path:
     single commit under CI's shallow checkout — base == head, and the engine
     correctly refused the empty diff. The tests were the defect, not the engine,
     and depending on ambient history is the thing that made them one.
+
+    Under ``safe_tmp_path``, not ``tmp_path``: the verifier's ``--scratch`` lives in
+    ``scratch-root`` beside it and must pass the engine's character rule (#1257).
     """
-    root = tmp_path / "repo"
+    root = safe_tmp_path / "repo"
     (root / "config").mkdir(parents=True)
     (root / "docs" / "agentic-dev-kit").mkdir(parents=True)
     (root / "scripts").mkdir()
@@ -670,6 +673,35 @@ def test_the_verifier_prompt_carries_no_lens_framing_by_default(repo, tmp_path):
                    "Where earlier rounds' dispositions", "## Narrative preflight",
                    "sonnet"):
         assert absent not in out.stdout, absent
+
+
+def test_the_conftest_safe_path_pattern_is_the_engines() -> None:
+    """``safe_tmp_path`` copies the verifier's ``--scratch`` rule rather than importing
+    the engine, so the copy is pinned here: a widened or narrowed rule must move both."""
+    assert _load()._SAFE_PATH.pattern == SAFE_PATH_PATTERN
+
+
+def test_a_verifier_case_passes_when_the_user_name_holds_an_at_sign(tmp_path):
+    """#1257: with ``USER`` and ``LOGNAME`` set to an email address, pytest's basetemp
+    became ``pytest-of-<name>@<domain>`` and the verifier refused every fixture
+    ``--scratch`` under it. One verifier case runs in a child pytest under such a user,
+    with its temp root inside this test's dir, so its basetemp holds the ``@``
+    whatever this run's user is."""
+    user = "probe@example.com"
+    temproot = tmp_path / "temproot"
+    temproot.mkdir()
+    node = (f"{Path(__file__).resolve()}::"
+            "test_the_verifier_prompt_carries_no_lens_framing_by_default")
+    env = {**os.environ, "USER": user, "LOGNAME": user,
+           "PYTEST_DEBUG_TEMPROOT": str(temproot)}
+    child = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", node],
+        cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=300,
+    )
+    assert child.returncode == 0, child.stdout[-3000:] + child.stderr[-2000:]
+    assert "1 passed" in child.stdout, child.stdout[-2000:]
+    # The condition under test held: the child's basetemp carried the user name.
+    assert (temproot / f"pytest-of-{user}").is_dir(), sorted(p.name for p in temproot.iterdir())
 
 
 @pytest.mark.parametrize("runtime, carrier", [
