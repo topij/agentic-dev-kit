@@ -302,7 +302,7 @@ inventory is rebound once. The earlier local assessment,
 
 ▶ Next: the operator runs an interactive `/triage-friction-log recover` in cs-toolkit's primary checkout before its
 Friday `triage-friction-log-draft` firing (`fri 14:00` in its `config/automations.yaml`). That clears only the gate:
-the draft can still fail on its request bytes until CUS-1852 is fixed, so retirement needs both. After #1267
+the draft can still fail on its request bytes until CUS-1852 lands, so retirement needs both. After #1267
 merges, extend the prep notes and upgrade cs-toolkit following the kit's `upgrade.md`, then preview and apply
 `reconcile` with approval. Separately: resolve unattended notification delivery as its own adopter decision, and reassess
 OpenKitchen's installation and lane prerequisites before an upgrade there.
