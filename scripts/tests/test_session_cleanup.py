@@ -1358,7 +1358,9 @@ def test_removed_round_whose_path_reappeared_keeps_its_checks(session):
     Path(receipt["path"]).mkdir()
     sentinel = Path(receipt["path"]) / "must-remain"
     sentinel.write_text("replacement data")
-    with pytest.raises(cleanup.sweep.ConfigError, match="round was replaced"):
+    # Either refusal shows the checks ran: APFS gives the new directory a new
+    # inode ("replaced"), while ext4 may reuse it, and the missing marker refuses.
+    with pytest.raises(cleanup.sweep.ConfigError, match="round was replaced|round marker missing"):
         registry.round_outcome(registry.load(record["id"])["rounds"][0])
     assert sentinel.read_text() == "replacement data"
 
