@@ -689,9 +689,12 @@ def _verifier_case_as_at_sign_user(temproot: Path, tmpdir: Path):
 
     The child's basetemp is ``<temproot>/pytest-of-probe@example.com``, whatever this
     run's user is, so ``safe_tmp_path`` must fall back to a dir under ``tmpdir``.
-    ``PYTEST_ADDOPTS`` is dropped: an inherited ``-q`` hides the summary line and an
-    inherited ``--basetemp`` would make the child empty this run's basetemp.
+    ``PYTEST_ADDOPTS`` is dropped and the ini's ``addopts`` overridden: an inherited
+    ``-q`` hides the summary line and an inherited ``--basetemp`` would make the child
+    empty this run's basetemp. The child's case needs the doctrine, and a child that
+    skips would read here as a failure, so a tree without it skips first.
     """
+    require_kit_paths(DOCTRINE.as_posix())
     temproot.mkdir()
     tmpdir.mkdir()
     node = (f"{Path(__file__).resolve()}::"
@@ -700,7 +703,7 @@ def _verifier_case_as_at_sign_user(temproot: Path, tmpdir: Path):
            "PYTEST_DEBUG_TEMPROOT": str(temproot), "TMPDIR": str(tmpdir)}
     env.pop("PYTEST_ADDOPTS", None)
     child = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", node],
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-o", "addopts=", node],
         cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=300,
     )
     # The condition under test held: the child's basetemp carried the user name.
