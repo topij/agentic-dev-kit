@@ -134,8 +134,7 @@ not itself operator consent: apply only
 under authorization covering that inventory. Apply rebinds the identity, marks the
 listed rounds removed, records the change under `reconciled` and marks the
 inventory complete. It deletes nothing, retained evidence included; an open
-inventory continues as before, and its preview and apply report a removed round
-whose path is gone as `absent` without re-checking that round's root. An inventory with a round or worktree still present
+inventory continues as before. An inventory with a round or worktree still present
 stays unavailable: those paths carry the old device number in their own recorded
 identities, which reconcile cannot re-verify. The same holds for an allocation
 receipt: `--finish-review-round` refuses a round that survived a renumbering as
@@ -295,6 +294,12 @@ durably recorded following the sweeper's final guards. A missing round marker is
 tolerated in that state because recursive removal may have already unlinked it;
 replacement directories, changed roots and malformed surviving markers still
 refuse. Standalone `--finish-review-round` still requires its marker.
+
+A round already recorded `removed` whose path is gone previews and applies as
+`absent` without its root being re-checked: nothing is left to act on, and its root
+may be gone or recreated (a wiped temp directory, or a reconciled device number).
+Every other round keeps its root and identity checks, including a removed round
+whose path has reappeared.
 
 Exit status is `0` for completed cleanup, `1` for kept/active/native-archive work,
 and `2` for refusal or unavailable prerequisites. Keep reasons mean incomplete

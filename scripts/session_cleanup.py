@@ -209,12 +209,14 @@ class Registry:
         """
         record = read_json(self.location(token) / "session.json")
         changed = self.differences(record, token)
+        # The journal is checked first so its refusal is the one reported, not
+        # "nothing to reconcile" for an inventory that does not load either.
+        self.check_journal(record)
         if not changed:
             raise sweep.ConfigError("inventory loads unchanged; there is nothing to reconcile")
         if not all(item.startswith("device ") for item in changed):
             raise sweep.ConfigError("reconcile rebinds only a changed device number; other bound "
                                     "fields differ: " + "; ".join(changed))
-        self.check_journal(record)
         present = []
         for path in ([r["receipt"]["path"] for r in record["rounds"]]
                      + [w["path"] for w in record["worktrees"]]):

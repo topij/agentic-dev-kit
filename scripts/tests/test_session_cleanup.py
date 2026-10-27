@@ -1279,13 +1279,19 @@ def test_reconcile_token_binds_the_current_identity(session, monkeypatch):
 
 def test_reconcile_refuses_an_unapproved_interrupted_journal(session, monkeypatch):
     registry, record, _ = session
-    receipt = vanished_round(registry, record)
+    vanished_round(registry, record)
     record["rounds"][0]["status"] = "removing"
     registry.save(record)
+    before = stored(registry, record)
+    # Unchanged device: the journal refusal is reported, not "nothing to reconcile".
+    with pytest.raises(cleanup.sweep.ConfigError, match="lacks its durable approval"):
+        registry.reconcile_plan(record["id"])
     renumber(monkeypatch)
     with pytest.raises(cleanup.sweep.ConfigError, match="lacks its durable approval"):
         registry.reconcile_plan(record["id"])
-    assert receipt["id"] in json.dumps(stored(registry, record))
+    with pytest.raises(cleanup.sweep.ConfigError, match="lacks its durable approval"):
+        registry.reconcile(record["id"], "any")
+    assert stored(registry, record) == before
 
 
 @pytest.mark.parametrize("change", ["id", "one-sided-policy-key"])
@@ -1300,6 +1306,72 @@ def test_id_and_one_sided_policy_differences_are_named(session, change):
     else:
         registry.policy["extra"] = "x"
         expected = 'policy extra (stored absent, current "x")'
+    with pytest.raises(cleanup.sweep.ConfigError) as refused:
+        registry.load(record["id"])
+    assert expected in str(refused.value)
+
+
+def test_rounds_without_seal_needs_every_condition(session, monkeypatch):
+    registry, record, _ = session
+    removed = allocate(registry, record)
+    seal(registry, record, removed, scope=removed["id"])
+    apply_round(registry, record, removed)
+    sealed = vanished_round(registry, record)
+    unsealed = allocate(registry, record, keep_previous="probe")
+    shutil.rmtree(unsealed["path"])
+    edited = stored(registry, record)
+    edited["rounds"][0]["seal"] = None  # removed, and without its own seal
+    registry.save(edited)
+    renumber(monkeypatch)
+    plan = registry.reconcile_plan(record["id"])[1]
+    assert plan["rounds_marked_removed"] == [sealed["id"], unsealed["id"]]
+    assert plan["rounds_without_seal"] == [unsealed["id"]]
+
+
+def test_an_inventory_seal_covers_every_round(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    shutil.rmtree(receipt["path"])
+    renumber(monkeypatch)
+    plan = registry.reconcile_plan(record["id"])[1]
+    assert plan["rounds_marked_removed"] == [receipt["id"]]
+    assert plan["rounds_without_seal"] == []
+
+
+def test_removing_absent_round_still_checks_its_root(session):
+    registry, record, _ = session
+    vanished_round(registry, record)
+    edited = stored(registry, record)
+    edited["rounds"][0].update(status="removing", approval="persisted")
+    edited["rounds"][0]["receipt"]["root_identity"][0] -= 1
+    registry.save(edited)
+    with pytest.raises(cleanup.sweep.ConfigError, match="allocation root identity changed"):
+        registry.round_outcome(registry.load(record["id"])["rounds"][0])
+
+
+def test_removed_round_whose_path_reappeared_keeps_its_checks(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    apply_round(registry, record, receipt)
+    Path(receipt["path"]).mkdir()
+    sentinel = Path(receipt["path"]) / "must-remain"
+    sentinel.write_text("replacement data")
+    with pytest.raises(cleanup.sweep.ConfigError, match="round was replaced"):
+        registry.round_outcome(registry.load(record["id"])["rounds"][0])
+    assert sentinel.read_text() == "replacement data"
+
+
+@pytest.mark.parametrize(("field", "value", "expected"), [
+    ("common_identity", [True, 5], "common identity (stored [True, 5], current ["),
+    ("common_identity", "16777232", "common identity (stored '16777232', current ["),
+    ("policy", ["roots"], "policy (stored value is not a mapping)"),
+])
+def test_malformed_bindings_are_named(session, field, value, expected):
+    registry, record, _ = session
+    record[field] = value
+    registry.save(record)
     with pytest.raises(cleanup.sweep.ConfigError) as refused:
         registry.load(record["id"])
     assert expected in str(refused.value)
