@@ -133,6 +133,51 @@ def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "state"))
 
 
+# --------------------------------------------------------------------------- #
+# a temp dir whose path a character rule accepts (#1257)
+# --------------------------------------------------------------------------- #
+
+# The characters `panel_prompt.py --verifier` accepts in `--scratch`. A copy, not an
+# import: importing an engine here would abort collection in a tree that declined it.
+# `test_panel_prompt.py` pins this copy to the engine's `_SAFE_PATH`.
+SAFE_PATH_PATTERN = r"[A-Za-z0-9._/-]+"
+
+
+@pytest.fixture
+def safe_tmp_path(tmp_path: Path):
+    """``tmp_path``, or a fresh directory outside it when its path is not safe.
+
+    pytest names its basetemp ``pytest-of-<user>`` from ``getpass.getuser()``, which
+    reads ``LOGNAME`` and ``USER`` first. A shell whose ``USER`` is an email address
+    puts an ``@`` in every ``tmp_path``, and an engine that refuses such a path refuses
+    the fixture before it reaches what the test is about (#1257). A test that hands a
+    path to such a rule builds it here instead.
+
+    Every directory under the basetemp carries the user name, so ``tmp_path_factory``
+    cannot help. The fallback is a ``mkdtemp`` under the system temp dir, removed at
+    teardown. A killed run leaves it behind, as a killed run leaves its basetemp
+    (#895). A temp dir that is itself unsafe fails here and names ``TMPDIR``.
+    """
+    import re
+    import shutil
+    import tempfile
+
+    if re.fullmatch(SAFE_PATH_PATTERN, str(tmp_path)):
+        yield tmp_path
+        return
+    root = Path(tempfile.mkdtemp(prefix="devkit-test-")).resolve()
+    try:
+        if not re.fullmatch(SAFE_PATH_PATTERN, str(root)):
+            pytest.fail(
+                f"safe_tmp_path: neither {tmp_path} nor the system temp dir {root.parent} "
+                f"matches {SAFE_PATH_PATTERN}; point TMPDIR at a directory that does",
+                pytrace=False,
+            )
+        yield root
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
 def read_workflow(path: Path) -> str:
     """A shared workflow's complete text: the entry file, then its reference files.
 

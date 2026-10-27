@@ -37,8 +37,12 @@ def _commit(root: Path, name: str, text: str) -> str:
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> dict:
-    """A fixture repository: a bug commit, a clean commit, and the real doctrine."""
+def repo(tmp_path: Path, safe_tmp_path: Path) -> dict:
+    """A fixture repository: a bug commit, a clean commit, and the real doctrine.
+
+    The scratch root is under ``safe_tmp_path``: the runner hands each verifier a
+    ``--scratch`` inside it, which ``panel_prompt.py`` holds to a character rule (#1257).
+    """
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
     (root / "docs/agentic-dev-kit").mkdir(parents=True)
@@ -47,7 +51,7 @@ def repo(tmp_path: Path) -> dict:
         '# /// script\n# requires-python = ">=3.12"\n# dependencies = []\n# ///\n')
     (root / "scripts/lib/kitconfig.py").write_text("# fixture parser\n")
     (root / DOCTRINE).write_text((REPO_ROOT / DOCTRINE).read_text(encoding="utf-8"))
-    scratch = tmp_path / "scratch-root"
+    scratch = safe_tmp_path / "scratch-root"
     scratch.mkdir()
     (root / "config/dev-model.yaml").write_text(
         f"scratch:\n  roots: [{str(scratch)!r}]\n  grace_window: 24h\n  worktree_repos: [{str(root)!r}]\n"

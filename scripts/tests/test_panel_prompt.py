@@ -36,7 +36,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from conftest import require_kit_paths, require_kit_source
+from conftest import SAFE_PATH_PATTERN, require_kit_paths, require_kit_source
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir, find_repo_root  # noqa: E402
@@ -132,7 +132,7 @@ def _loose_object(root: Path, oid: str) -> Path:
 
 
 @pytest.fixture
-def repo(tmp_path: Path) -> Path:
+def repo(safe_tmp_path: Path) -> Path:
     """A fixture repo with two commits, the real doctrine, and a lens roster.
 
     Deliberately NOT this repo. An earlier version of these tests read
@@ -140,8 +140,11 @@ def repo(tmp_path: Path) -> Path:
     single commit under CI's shallow checkout — base == head, and the engine
     correctly refused the empty diff. The tests were the defect, not the engine,
     and depending on ambient history is the thing that made them one.
+
+    Under ``safe_tmp_path``, not ``tmp_path``: the verifier's ``--scratch`` lives in
+    ``scratch-root`` beside it and must pass the engine's character rule (#1257).
     """
-    root = tmp_path / "repo"
+    root = safe_tmp_path / "repo"
     (root / "config").mkdir(parents=True)
     (root / "docs" / "agentic-dev-kit").mkdir(parents=True)
     (root / "scripts").mkdir()
@@ -670,6 +673,63 @@ def test_the_verifier_prompt_carries_no_lens_framing_by_default(repo, tmp_path):
                    "Where earlier rounds' dispositions", "## Narrative preflight",
                    "sonnet"):
         assert absent not in out.stdout, absent
+
+
+def test_the_conftest_safe_path_pattern_is_the_engines() -> None:
+    """``safe_tmp_path`` copies the verifier's ``--scratch`` rule rather than importing
+    the engine, so the copy is pinned here: a widened or narrowed rule must move both."""
+    assert _load()._SAFE_PATH.pattern == SAFE_PATH_PATTERN
+
+
+_AT_SIGN_USER = "probe@example.com"
+
+
+def _verifier_case_as_at_sign_user(temproot: Path, tmpdir: Path):
+    """Run one verifier case in a child pytest whose user name holds an ``@``.
+
+    The child's basetemp is ``<temproot>/pytest-of-probe@example.com``, whatever this
+    run's user is, so ``safe_tmp_path`` must fall back to a dir under ``tmpdir``.
+    ``PYTEST_ADDOPTS`` is dropped and the ini's ``addopts`` overridden: an inherited
+    ``-q`` hides the summary line and an inherited ``--basetemp`` would make the child
+    empty this run's basetemp. The child's case needs the doctrine, and a child that
+    skips would read here as a failure, so a tree without it skips first.
+    """
+    require_kit_paths(DOCTRINE.as_posix())
+    temproot.mkdir()
+    tmpdir.mkdir()
+    node = (f"{Path(__file__).resolve()}::"
+            "test_the_verifier_prompt_carries_no_lens_framing_by_default")
+    env = {**os.environ, "USER": _AT_SIGN_USER, "LOGNAME": _AT_SIGN_USER,
+           "PYTEST_DEBUG_TEMPROOT": str(temproot), "TMPDIR": str(tmpdir)}
+    env.pop("PYTEST_ADDOPTS", None)
+    child = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-o", "addopts=", node],
+        cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=300,
+    )
+    # The condition under test held: the child's basetemp carried the user name.
+    assert (temproot / f"pytest-of-{_AT_SIGN_USER}").is_dir(), sorted(temproot.iterdir())
+    return child
+
+
+def test_a_verifier_case_passes_when_the_user_name_holds_an_at_sign(tmp_path, safe_tmp_path):
+    """#1257: with ``USER`` and ``LOGNAME`` set to an email address, pytest's basetemp
+    became ``pytest-of-<name>@<domain>`` and the verifier refused every fixture
+    ``--scratch`` under it. The child can only pass through ``safe_tmp_path``'s
+    fallback under its ``TMPDIR``, so an empty ``TMPDIR`` afterwards pins the
+    fallback's removal at teardown."""
+    tmpdir = safe_tmp_path / "child-tmp"
+    child = _verifier_case_as_at_sign_user(tmp_path / "temproot", tmpdir)
+    assert child.returncode == 0, child.stdout[-3000:] + child.stderr[-2000:]
+    assert "1 passed" in child.stdout, child.stdout[-2000:]
+    assert not [p.name for p in tmpdir.iterdir() if p.name.startswith("devkit-test-")]
+
+
+def test_an_unsafe_system_temp_dir_fails_the_safe_fixture_by_name(tmp_path):
+    """With nowhere safe to fall back to, ``safe_tmp_path`` fails and names ``TMPDIR``
+    rather than handing the verifier a path it will refuse."""
+    child = _verifier_case_as_at_sign_user(tmp_path / "temproot", tmp_path / "tmp sp@ce")
+    assert child.returncode != 0, child.stdout[-2000:]
+    assert "point TMPDIR at a directory that does" in child.stdout, child.stdout[-3000:]
 
 
 @pytest.mark.parametrize("runtime, carrier", [
@@ -1740,7 +1800,7 @@ def test_a_renumbering_slip_is_refused_even_though_the_count_is_unchanged(tmp_pa
 # --- round 2 findings: the branch fix did not close its class -------------------
 
 
-def test_a_worktree_on_its_own_lane_branch_is_refused(repo, tmp_path):
+def test_a_worktree_on_its_own_lane_branch_is_refused(repo):
     """`dev_session.sh` builds lanes with `git worktree add -b`, so a review tree
     can sit on a real branch that is NOT the branch under review.
 
@@ -1750,7 +1810,7 @@ def test_a_worktree_on_its_own_lane_branch_is_refused(repo, tmp_path):
     branch under review only if its tip IS the head under review.
     """
     base, head = _revs(repo)
-    lane = tmp_path / "lane"
+    lane = repo.parent / "lane"  # beside repo, where _run looks for scratch-root
     _git(repo, "worktree", "add", "-b", "lane/throwaway", str(lane), base)
     out = _run(lane, "--lens", "adversarial", "--head", head, "--base", base)
     assert out.returncode == 2, out.stdout
