@@ -17,6 +17,17 @@ import session_cleanup as cleanup  # noqa: E402
 
 @pytest.fixture
 def session(tmp_path, monkeypatch):
+    yield from make_session(tmp_path, monkeypatch)
+
+
+@pytest.fixture
+def device_session(tmp_path, monkeypatch):
+    """A session bound to the "device" identity kind, as on Linux or without a volume UUID."""
+    monkeypatch.setattr(cleanup.sweep, "_volume_uuid", lambda path: None)
+    yield from make_session(tmp_path, monkeypatch)
+
+
+def make_session(tmp_path, monkeypatch):
     root = tmp_path.resolve()
     repo = root / "repo"
     repo.mkdir()
@@ -1061,9 +1072,9 @@ def vanished_round(registry, record):
     return receipt
 
 
-def test_device_renumber_names_the_field_and_points_to_reconcile(session, monkeypatch):
-    registry, record, _ = session
-    device, _inode = record["common_identity"]
+def test_device_renumber_names_the_field_and_points_to_reconcile(device_session, monkeypatch):
+    registry, record, _ = device_session
+    _kind, device, _inode = record["common_identity"]
     renumber(monkeypatch)
     with pytest.raises(cleanup.sweep.ConfigError) as refused:
         registry.load(record["id"])
@@ -1077,8 +1088,8 @@ def test_device_renumber_names_the_field_and_points_to_reconcile(session, monkey
 
 
 @pytest.mark.parametrize("change", ["inode", "policy", "schema"])
-def test_other_bound_changes_are_named_without_a_reconcile_hint(session, monkeypatch, change):
-    registry, record, _ = session
+def test_other_bound_changes_are_named_without_a_reconcile_hint(device_session, monkeypatch, change):
+    registry, record, _ = device_session
     if change == "inode":
         renumber(monkeypatch, inode=1)
         expected = "inode (stored"
@@ -1097,8 +1108,8 @@ def test_other_bound_changes_are_named_without_a_reconcile_hint(session, monkeyp
         registry.reconcile_plan(record["id"])
 
 
-def test_reconcile_rebinds_an_absent_inventory_after_approval(session, monkeypatch):
-    registry, record, _ = session
+def test_reconcile_rebinds_an_absent_inventory_after_approval(device_session, monkeypatch):
+    registry, record, _ = device_session
     receipt = vanished_round(registry, record)
     retained = record["rounds"][0]["seal"]["retained"]
     before = stored(registry, record)
@@ -1122,8 +1133,8 @@ def test_reconcile_rebinds_an_absent_inventory_after_approval(session, monkeypat
     assert registry.load(record["id"])["pids"] == [os.getpid()]
 
 
-def test_reconcile_refuses_a_present_round_and_writes_nothing(session, monkeypatch):
-    registry, record, _ = session
+def test_reconcile_refuses_a_present_round_and_writes_nothing(device_session, monkeypatch):
+    registry, record, _ = device_session
     receipt = allocate(registry, record)
     before = stored(registry, record)
     renumber(monkeypatch)
@@ -1133,8 +1144,8 @@ def test_reconcile_refuses_a_present_round_and_writes_nothing(session, monkeypat
     assert Path(receipt["path"]).is_dir()
 
 
-def test_reconcile_refuses_an_absent_but_registered_worktree(session, monkeypatch):
-    registry, record, root = session
+def test_reconcile_refuses_an_absent_but_registered_worktree(device_session, monkeypatch):
+    registry, record, root = device_session
     task = task_tree(registry, root)
     registry.track_worktree(record, task, "git")
     task.rename(root / "moved-task")
@@ -1143,8 +1154,8 @@ def test_reconcile_refuses_an_absent_but_registered_worktree(session, monkeypatc
         registry.reconcile_plan(record["id"])
 
 
-def test_reconcile_refuses_an_uninspectable_path_and_writes_nothing(session, monkeypatch):
-    registry, record, _ = session
+def test_reconcile_refuses_an_uninspectable_path_and_writes_nothing(device_session, monkeypatch):
+    registry, record, _ = device_session
     receipt = vanished_round(registry, record)
     before = stored(registry, record)
     original = os.lstat
@@ -1162,14 +1173,14 @@ def test_reconcile_refuses_an_uninspectable_path_and_writes_nothing(session, mon
     assert stored(registry, record) == before
 
 
-def test_reconcile_refuses_an_unchanged_inventory(session):
-    registry, record, _ = session
+def test_reconcile_refuses_an_unchanged_inventory(device_session):
+    registry, record, _ = device_session
     with pytest.raises(cleanup.sweep.ConfigError, match="nothing to reconcile"):
         registry.reconcile_plan(record["id"])
 
 
-def test_reconcile_token_binds_the_stored_record(session, monkeypatch):
-    registry, record, _ = session
+def test_reconcile_token_binds_the_stored_record(device_session, monkeypatch):
+    registry, record, _ = device_session
     vanished_round(registry, record)
     renumber(monkeypatch)
     token = registry.reconcile_plan(record["id"])[1]["approval_token"]
@@ -1183,9 +1194,11 @@ def test_reconcile_token_binds_the_stored_record(session, monkeypatch):
 def test_cli_reconcile_previews_then_applies(session, monkeypatch):
     registry, record, _ = session
     vanished_round(registry, record)
-    # The CLI runs in a child process, so renumber by rewriting the stored device.
+    # The CLI runs in a child process, outside the identity seam, so store a
+    # schema 1 record whose device differs from the current one.
     changed = stored(registry, record)
-    changed["common_identity"][0] += 1
+    common = os.stat(registry.common)
+    changed.update(schema=cleanup.LEGACY_SCHEMA, common_identity=[common.st_dev + 1, common.st_ino])
     registry.save(changed)
     command = [sys.executable, cleanup.__file__, "--config", str(registry.repo / "cleanup.yaml"),
                "reconcile", record["id"]]
@@ -1205,15 +1218,15 @@ def test_cli_reconcile_previews_then_applies(session, monkeypatch):
 def age_stored_device(registry, record):
     """Rewrite the stored device numbers as a pre-reboot record would hold them."""
     old = stored(registry, record)
-    old["common_identity"][0] -= 1
+    old["common_identity"][1] -= 1
     for entry in old["rounds"]:
-        entry["receipt"]["root_identity"][0] -= 1
+        entry["receipt"]["root_identity"][1] -= 1
     registry.save(old)
     return old
 
 
-def test_reconciled_inventory_previews_and_applies_inventory_wide(session, tmp_path):
-    registry, record, root = session
+def test_reconciled_inventory_previews_and_applies_inventory_wide(device_session, tmp_path):
+    registry, record, root = device_session
     vanished_round(registry, record)
     age_stored_device(registry, record)
     registry.reconcile(record["id"], registry.reconcile_plan(record["id"])[1]["approval_token"])
@@ -1226,19 +1239,19 @@ def test_reconciled_inventory_previews_and_applies_inventory_wide(session, tmp_p
     assert apply(registry, current)["complete"]
 
 
-def test_unremoved_absent_round_still_checks_its_root(session):
-    registry, record, _ = session
+def test_unremoved_absent_round_still_checks_its_root(device_session):
+    registry, record, _ = device_session
     receipt = vanished_round(registry, record)
     old = stored(registry, record)
-    old["rounds"][0]["receipt"]["root_identity"][0] -= 1
+    old["rounds"][0]["receipt"]["root_identity"][1] -= 1
     registry.save(old)
     with pytest.raises(cleanup.sweep.ConfigError,
                        match=r"allocation root identity changed \(stored \[.*current \["):
         registry.preview_round(registry.load(record["id"]), receipt["id"])
 
 
-def test_plan_filters_removed_rounds_and_names_unsealed_ones(session, monkeypatch):
-    registry, record, _ = session
+def test_plan_filters_removed_rounds_and_names_unsealed_ones(device_session, monkeypatch):
+    registry, record, _ = device_session
     retired = allocate(registry, record)
     seal(registry, record, retired, scope=retired["id"])
     apply_round(registry, record, retired)
@@ -1254,8 +1267,8 @@ def test_plan_filters_removed_rounds_and_names_unsealed_ones(session, monkeypatc
     assert rounds[1]["reconciled"] == plan["approval_token"]
 
 
-def test_reconcile_history_appends(session, monkeypatch):
-    registry, record, _ = session
+def test_reconcile_history_appends(device_session, monkeypatch):
+    registry, record, _ = device_session
     vanished_round(registry, record)
     for _ in range(2):
         renumber(monkeypatch)
@@ -1265,8 +1278,8 @@ def test_reconcile_history_appends(session, monkeypatch):
     assert history[0]["common_identity"]["current"] == history[1]["common_identity"]["stored"]
 
 
-def test_reconcile_token_binds_the_current_identity(session, monkeypatch):
-    registry, record, _ = session
+def test_reconcile_token_binds_the_current_identity(device_session, monkeypatch):
+    registry, record, _ = device_session
     vanished_round(registry, record)
     renumber(monkeypatch)
     token = registry.reconcile_plan(record["id"])[1]["approval_token"]
@@ -1277,8 +1290,8 @@ def test_reconcile_token_binds_the_current_identity(session, monkeypatch):
     assert stored(registry, record) == before
 
 
-def test_reconcile_refuses_an_unapproved_interrupted_journal(session, monkeypatch):
-    registry, record, _ = session
+def test_reconcile_refuses_an_unapproved_interrupted_journal(device_session, monkeypatch):
+    registry, record, _ = device_session
     vanished_round(registry, record)
     record["rounds"][0]["status"] = "removing"
     registry.save(record)
@@ -1295,8 +1308,8 @@ def test_reconcile_refuses_an_unapproved_interrupted_journal(session, monkeypatc
 
 
 @pytest.mark.parametrize("change", ["id", "one-sided-policy-key"])
-def test_id_and_one_sided_policy_differences_are_named(session, change):
-    registry, record, _ = session
+def test_id_and_one_sided_policy_differences_are_named(device_session, change):
+    registry, record, _ = device_session
     if change == "id":
         path = registry.location(record["id"]) / "session.json"
         data = json.loads(path.read_text())
@@ -1311,8 +1324,8 @@ def test_id_and_one_sided_policy_differences_are_named(session, change):
     assert expected in str(refused.value)
 
 
-def test_rounds_without_seal_needs_every_condition(session, monkeypatch):
-    registry, record, _ = session
+def test_rounds_without_seal_needs_every_condition(device_session, monkeypatch):
+    registry, record, _ = device_session
     removed = allocate(registry, record)
     seal(registry, record, removed, scope=removed["id"])
     apply_round(registry, record, removed)
@@ -1328,8 +1341,8 @@ def test_rounds_without_seal_needs_every_condition(session, monkeypatch):
     assert plan["rounds_without_seal"] == [unsealed["id"]]
 
 
-def test_an_inventory_seal_covers_every_round(session, monkeypatch):
-    registry, record, _ = session
+def test_an_inventory_seal_covers_every_round(device_session, monkeypatch):
+    registry, record, _ = device_session
     receipt = allocate(registry, record)
     seal(registry, record, receipt)
     shutil.rmtree(receipt["path"])
@@ -1339,19 +1352,19 @@ def test_an_inventory_seal_covers_every_round(session, monkeypatch):
     assert plan["rounds_without_seal"] == []
 
 
-def test_removing_absent_round_still_checks_its_root(session):
-    registry, record, _ = session
+def test_removing_absent_round_still_checks_its_root(device_session):
+    registry, record, _ = device_session
     vanished_round(registry, record)
     edited = stored(registry, record)
     edited["rounds"][0].update(status="removing", approval="persisted")
-    edited["rounds"][0]["receipt"]["root_identity"][0] -= 1
+    edited["rounds"][0]["receipt"]["root_identity"][1] -= 1
     registry.save(edited)
     with pytest.raises(cleanup.sweep.ConfigError, match="allocation root identity changed"):
         registry.round_outcome(registry.load(record["id"])["rounds"][0])
 
 
-def test_removed_round_whose_path_reappeared_keeps_its_checks(session):
-    registry, record, _ = session
+def test_removed_round_whose_path_reappeared_keeps_its_checks(device_session):
+    registry, record, _ = device_session
     receipt = allocate(registry, record)
     seal(registry, record, receipt, scope=receipt["id"])
     apply_round(registry, record, receipt)
@@ -1377,3 +1390,165 @@ def test_malformed_bindings_are_named(session, field, value, expected):
     with pytest.raises(cleanup.sweep.ConfigError) as refused:
         registry.load(record["id"])
     assert expected in str(refused.value)
+
+
+# --------------------------------------------------------------------------- #
+# boot-stable identity and the schema 1 migration (#1253)
+# --------------------------------------------------------------------------- #
+
+UUID_A = "AC62930A-94C1-4C33-BEB6-1E9E9C72714E"
+UUID_B = "00000000-0000-0000-0000-000000000001"
+
+
+@pytest.fixture
+def volume_session(tmp_path, monkeypatch):
+    """A session bound to a fixed volume UUID, on any platform."""
+    monkeypatch.setattr(cleanup.sweep, "_volume_uuid", lambda path: UUID_A)
+    yield from make_session(tmp_path, monkeypatch)
+
+
+def test_new_records_bind_the_volume_and_survive_a_renumber(volume_session, monkeypatch):
+    registry, record, root = volume_session
+    assert record["schema"] == cleanup.SCHEMA == "devkit-cleanup-session/2"
+    assert record["common_identity"] == ["volume", UUID_A, os.stat(registry.common).st_ino]
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    renumber(monkeypatch)
+    current = registry.load(record["id"])
+    assert current["worktrees"][0]["identity"][:2] == ["volume", UUID_A]
+    assert registry.worktree_reason(current["worktrees"][0]) != "worktree identity changed"
+    with pytest.raises(cleanup.sweep.ConfigError, match="nothing to reconcile"):
+        registry.reconcile_plan(record["id"])
+
+
+@pytest.mark.parametrize(("later", "expected"), [
+    (UUID_B, f"volume (stored {UUID_A}, current {UUID_B})"),
+    (None, "identity kind (stored 'volume', current 'device')"),
+])
+def test_another_volume_or_kind_is_refused_and_not_reconcilable(volume_session, monkeypatch, later, expected):
+    registry, record, _ = volume_session
+    monkeypatch.setattr(cleanup.sweep, "_volume_uuid", lambda path: later)
+    with pytest.raises(cleanup.sweep.ConfigError) as refused:
+        registry.load(record["id"])
+    assert expected in str(refused.value) and "reconcile" not in str(refused.value)
+    with pytest.raises(cleanup.sweep.ConfigError, match="other bound fields differ"):
+        registry.reconcile_plan(record["id"])
+
+
+def as_schema_1(registry, record):
+    """Rewrite the stored record as one written before #1253: (st_dev, st_ino) bindings."""
+    old = stored(registry, record)
+    old["schema"] = cleanup.LEGACY_SCHEMA
+    common = os.stat(registry.common)
+    old["common_identity"] = [common.st_dev, common.st_ino]
+    for worktree in old["worktrees"]:
+        found = os.stat(worktree["path"])
+        worktree["identity"] = [found.st_dev, found.st_ino]
+    registry.save(old)
+    return old
+
+
+def test_schema_1_record_loads_only_after_an_approved_upgrade(session):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    before = as_schema_1(registry, record)
+    with pytest.raises(cleanup.sweep.ConfigError) as refused:
+        registry.load(record["id"])
+    assert f"schema (stored '{cleanup.LEGACY_SCHEMA}'" in str(refused.value)
+    assert f"preview `session_cleanup.py reconcile {record['id']}`" in str(refused.value)
+    assert "device (" not in str(refused.value)
+    plan = registry.reconcile_plan(record["id"])[1]
+    assert plan["mode"] == "schema-upgrade" and plan["differences"] == []
+    assert plan["rounds_marked_removed"] == [] and plan["absent_worktrees"] == []
+    assert [item["path"] for item in plan["worktrees_rebound"]] == [str(task)]
+    assert stored(registry, record) == before  # preview writes nothing
+    registry.reconcile(record["id"], plan["approval_token"])
+    current = registry.load(record["id"])
+    assert current["schema"] == cleanup.SCHEMA
+    assert current["common_identity"] == cleanup.sweep.stable_identity(str(registry.common))
+    assert current["worktrees"][0]["identity"] == cleanup.sweep.stable_identity(str(task))
+    assert current["rounds"][0]["receipt"] == receipt and current["rounds"][0]["status"] == "allocated"
+    assert current["complete"] is before["complete"]
+    assert current["reconciled"][0]["mode"] == "schema-upgrade"
+    assert current["reconciled"][0]["schema"] == {"stored": cleanup.LEGACY_SCHEMA, "current": cleanup.SCHEMA}
+
+
+def test_schema_1_upgrade_refuses_a_worktree_whose_pair_moved(session):
+    registry, record, root = session
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    old = as_schema_1(registry, record)
+    old["worktrees"][0]["identity"][1] += 1
+    registry.save(old)
+    with pytest.raises(cleanup.sweep.ConfigError, match="worktree identity changed; cannot rebind"):
+        registry.reconcile_plan(record["id"])
+    assert stored(registry, record) == old
+
+
+def test_schema_1_record_is_not_accepted_on_inode_and_path_alone(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    as_schema_1(registry, record)
+    renumber(monkeypatch)
+    with pytest.raises(cleanup.sweep.ConfigError, match="still present: " + receipt["path"]):
+        registry.reconcile_plan(record["id"])
+    renumber(monkeypatch, inode=1)
+    with pytest.raises(cleanup.sweep.ConfigError, match="other bound fields differ: .*inode"):
+        registry.reconcile_plan(record["id"])
+
+
+def test_renumbered_schema_1_record_reconciles_to_the_new_shape(session, monkeypatch):
+    registry, record, _ = session
+    receipt = vanished_round(registry, record)
+    as_schema_1(registry, record)
+    renumber(monkeypatch)
+    plan = registry.reconcile_plan(record["id"])[1]
+    assert plan["mode"] == "renumbered-device" and plan["rounds_marked_removed"] == [receipt["id"]]
+    registry.reconcile(record["id"], plan["approval_token"])
+    current = registry.load(record["id"])
+    assert current["schema"] == cleanup.SCHEMA and current["complete"]
+    assert current["common_identity"] == cleanup.sweep.stable_identity(str(registry.common))
+
+
+def test_reconcile_names_a_shape_broken_record_instead_of_crashing(session):
+    registry, record, _ = session
+    broken = stored(registry, record)
+    broken["schema"] = 0
+    del broken["rounds"]
+    registry.save(broken)
+    with pytest.raises(cleanup.sweep.ConfigError, match=r"other bound fields differ: schema \(stored 0"):
+        registry.reconcile_plan(record["id"])
+
+
+def test_reconciled_round_whose_path_reappears_is_kept_not_removed(device_session, monkeypatch):
+    """The repository's volume renumbered while a separate scratch volume was unmounted.
+
+    The scratch volume comes back intact on its own unchanged device, so the
+    round's receipt matches again; reconcile already marked it removed.
+    """
+    registry, record, root = device_session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    away = root / "unmounted-round"
+    Path(receipt["path"]).rename(away)
+    original = cleanup.sweep._identity
+
+    def common_renumbered(path):
+        device, number = original(path)
+        return (device + 1, number) if path == str(registry.common) else (device, number)
+    monkeypatch.setattr(cleanup.sweep, "_identity", common_renumbered)
+    registry.reconcile(record["id"], registry.reconcile_plan(record["id"])[1]["approval_token"])
+    away.rename(receipt["path"])  # same inode, marker intact: its receipt matches again
+    sentinel = Path(receipt["path"]) / "result.md"
+    current = registry.load(record["id"])
+    outcome = registry.preview_round(current, receipt["id"])["paths"][0]
+    assert outcome["action"] == "kept" and "marked removed by reconcile" in outcome["reason"]
+    report = root / "inventory-report.md"
+    report.write_text("final report\n")
+    registry.seal(current, {"evidence_complete": True, "retain": [
+        {"source": str(report), "kind": "report", "requires": []}]})
+    result = apply(registry, current)
+    assert not result["complete"] and result["paths"][0]["action"] == "kept"
+    assert sentinel.read_text() == "terminal report\n"

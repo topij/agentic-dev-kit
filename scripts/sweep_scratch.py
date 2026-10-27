@@ -176,6 +176,7 @@ STALE = "stale"
 UNCLASSIFIED = "unclassified"
 
 ROUND_MARKER = ".devkit-review-round.json"
+ROUND_VERSION = 2  # 2 binds stable_identity; 1 bound (st_dev, st_ino) (#1253)
 ROUND_KEYS = {"kind", "version", "id", "head", "root", "path", "root_identity", "identity"}
 
 _AGE_RE = re.compile(r"^(\d+)([smhd])$")
@@ -279,6 +280,91 @@ def guarded_paths(repos: list[Path]) -> list[str]:
 def _identity(path: str) -> tuple[int, int]:
     st = os.stat(path)
     return (st.st_dev, st.st_ino)
+
+
+_UUID_RE = re.compile(r"[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}")
+
+
+def _volume_uuid(path: str) -> str | None:
+    """The UUID of the volume holding ``path``, or None where none is readable.
+
+    macOS renumbers ``st_dev`` across reboots (#1253), and ``statvfs().f_fsid``
+    equals it there. ``getattrlist(ATTR_VOL_UUID)`` names the volume that holds
+    the object, not the one ``st_dev`` suggests: on an APFS firmlinked system,
+    ``stat("/")`` reports the Data volume's device while ``/`` is the sealed
+    system snapshot, and both spellings of a firmlinked path report the Data
+    volume's UUID (measured 2026-10-27 on macOS 27). A mounted snapshot reports its
+    own snapshot UUID, so a snapshot copy does not share the live volume's.
+    Linux has no stdlib route to a filesystem UUID, and its ``f_fsid`` is derived
+    differently per filesystem, so off macOS this returns None and callers bind
+    the device number as before. An all-zero UUID or a failed call is also None.
+    """
+    if sys.platform != "darwin":
+        return None
+    import ctypes
+    import ctypes.util
+
+    class AttrList(ctypes.Structure):
+        _fields_ = [("bitmapcount", ctypes.c_ushort), ("reserved", ctypes.c_ushort),
+                    ("commonattr", ctypes.c_uint32), ("volattr", ctypes.c_uint32),
+                    ("dirattr", ctypes.c_uint32), ("fileattr", ctypes.c_uint32),
+                    ("forkattr", ctypes.c_uint32)]
+
+    libc = ctypes.CDLL(ctypes.util.find_library("c"), use_errno=True)
+    # ATTR_BIT_MAP_COUNT, ATTR_VOL_INFO | ATTR_VOL_UUID. Common attributes cannot
+    # be requested in the same call (EINVAL), so the inode comes from stat.
+    request = AttrList(5, 0, 0, 0x80000000 | 0x00040000, 0, 0, 0)
+    buffer = ctypes.create_string_buffer(32)
+    if libc.getattrlist(os.fsencode(path), ctypes.byref(request), buffer, len(buffer), 0) != 0:
+        return None
+    return _decode_volume_uuid(buffer.raw[4:20])
+
+
+def _decode_volume_uuid(raw: bytes) -> str | None:
+    """A filesystem without a volume UUID reports sixteen zero bytes: none."""
+    return None if raw == bytes(16) else str(uuid.UUID(bytes=raw)).upper()
+
+
+def stable_identity(path: str) -> list:
+    """The identity a durable record binds for ``path``: tagged, boot-stable where possible.
+
+    ``["volume", <UUID>, <inode>]`` where the volume UUID is readable, else
+    ``["device", <st_dev>, <inode>]``. The two kinds never compare equal, so a
+    record bound to a volume refuses when the UUID becomes unreadable. The UUID
+    is read by path between two stats, and a path whose (device, inode) moved
+    between them is refused rather than bound to a mixed answer.
+    """
+    before = _identity(path)
+    volume = _volume_uuid(path)
+    if _identity(path) != before:
+        raise ConfigError(f"filesystem identity changed while it was read: {path}")
+    return ["volume", volume, before[1]] if volume else ["device", *before]
+
+
+def valid_identity(value: object, *, legacy: bool) -> bool:
+    """A recorded identity's shape: the legacy ``[st_dev, st_ino]`` pair or a tagged one."""
+    if legacy:
+        return isinstance(value, list) and len(value) == 2 and all(type(n) is int for n in value)
+    if not isinstance(value, list) or len(value) != 3 or type(value[2]) is not int:
+        return False
+    if value[0] == "volume":
+        return isinstance(value[1], str) and _UUID_RE.fullmatch(value[1]) is not None
+    return value[0] == "device" and type(value[1]) is int
+
+
+def bound_identity(stored: list, path: str) -> tuple[int, int] | None:
+    """``path``'s live (st_dev, st_ino) if it is still the object ``stored`` names, else None.
+
+    A legacy pair compares the live device and inode, exactly as before; a
+    tagged identity compares ``stable_identity``. The live pair is what the
+    in-boot guards (``remove_entry``, ``classify``'s mount check) compare.
+    """
+    live = _identity(path)
+    if valid_identity(stored, legacy=True):
+        return live if list(live) == stored else None
+    if not valid_identity(stored, legacy=False):
+        raise ConfigError(f"invalid recorded filesystem identity: {stored!r}")
+    return live if stable_identity(path) == stored and _identity(path) == live else None
 
 
 def _lineage(path: str) -> list[tuple[int, int]]:
@@ -952,14 +1038,14 @@ def create_review_round(root: str, head: str, settings: Settings, repo: Path) ->
     _round_root(root, settings, repo)
     if not isinstance(head, str) or re.fullmatch(r"[0-9a-f]{40}", head) is None:
         raise ConfigError("--head must be the full reviewed commit SHA")
-    root_identity = _identity(root)
+    root_identity = stable_identity(root)
     token = uuid.uuid4().hex
     path = Path(root) / f"review-{token}"
     path.mkdir(mode=0o700)
     record = {
-        "kind": "devkit-review-round", "version": 1, "id": token, "head": head,
-        "root": root, "path": str(path), "root_identity": list(root_identity),
-        "identity": list(_identity(str(path))),
+        "kind": "devkit-review-round", "version": ROUND_VERSION, "id": token, "head": head,
+        "root": root, "path": str(path), "root_identity": root_identity,
+        "identity": stable_identity(str(path)),
     }
     fd = os.open(path / ROUND_MARKER, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "w") as handle:
@@ -976,30 +1062,42 @@ def validate_review_round(record: dict, settings: Settings, repo: Path, *, head:
     if not isinstance(record, dict) or set(record) != ROUND_KEYS:
         raise ConfigError("invalid review round record shape")
     if (record["kind"] != "devkit-review-round" or type(record["version"]) is not int
-            or record["version"] != 1 or not isinstance(record["id"], str)
+            or record["version"] not in (1, ROUND_VERSION) or not isinstance(record["id"], str)
             or re.fullmatch(r"[0-9a-f]{32}", record["id"]) is None
             or not isinstance(record["head"], str) or re.fullmatch(r"[0-9a-f]{40}", record["head"]) is None
             or not isinstance(record["root"], str) or not isinstance(record["path"], str)):
         raise ConfigError("invalid review round record fields")
-    for key in ("identity", "root_identity"):
-        value = record[key]
-        if not isinstance(value, list) or len(value) != 2 or any(type(n) is not int for n in value):
-            raise ConfigError("invalid review round filesystem identity")
+    # A version 1 receipt binds the legacy (st_dev, st_ino) pair and keeps that
+    # exact check; version 2 binds stable_identity's tagged form. Neither
+    # version accepts the other's shape.
+    legacy = record["version"] == 1
+    if not all(valid_identity(record[key], legacy=legacy) for key in ("identity", "root_identity")):
+        raise ConfigError("invalid review round filesystem identity")
     roots = _round_root(record["root"], settings, repo)
     path = record["path"]
     if path != str(Path(record["root"]) / f"review-{record['id']}"):
         raise ConfigError("review round path does not match its allocation")
-    st = os.lstat(path)
-    if not stat.S_ISDIR(st.st_mode) or (st.st_dev, st.st_ino) != tuple(record["identity"]):
-        raise ConfigError("review round was replaced or is not a directory")
-    if _identity(record["root"]) != tuple(record["root_identity"]):
-        raise ConfigError("review round root was replaced")
+    _round_identities(record)
     if head is not None and record["head"] != head:
         raise ConfigError("review round belongs to another reviewed head")
     marker = Path(path) / ROUND_MARKER
     if (marker_required or os.path.lexists(marker)) and _read_round_json(marker) != record:
         raise ConfigError("review round allocation receipt does not match its marker")
     return roots
+
+
+def _round_identities(record: dict) -> tuple[tuple[int, int], tuple[int, int]]:
+    """The live (st_dev, st_ino) of a receipt's root and round, refusing a replaced one."""
+    st = os.lstat(record["path"])
+    path = bound_identity(record["identity"], record["path"]) if stat.S_ISDIR(st.st_mode) else None
+    # The inode ties this lstat (a directory, not a link) to the object bound
+    # above; remove_entry then re-compares the lstat pair right before deletion.
+    if path is None or path[1] != st.st_ino:
+        raise ConfigError("review round was replaced or is not a directory")
+    root = bound_identity(record["root_identity"], record["root"])
+    if root is None:
+        raise ConfigError("review round root was replaced")
+    return root, (st.st_dev, st.st_ino)
 
 
 def require_review_scratch(path: str, head: str, settings: Settings, repo: Path) -> str:
@@ -1036,7 +1134,7 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
     roots = validate_review_round(record, settings, repo, marker_required=not resuming)
     worktrees = registered_worktrees(settings.repos)
     stores = repository_stores(worktrees)
-    entry = classify(record["path"], device=record["root_identity"][0], worktrees=worktrees,
+    entry = classify(record["path"], device=_round_identities(record)[0][0], worktrees=worktrees,
                      stores=stores, roots=[r for r in roots if r != record["root"]],
                      grace_seconds=0, now=time.time(), owned=True)
     if entry.owner != STALE:
@@ -1052,15 +1150,16 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
         stores = repository_stores(worktrees)
     except ConfigError as exc:
         return Outcome(record["path"], "kept", str(exc))
-    fresh = classify(record["path"], device=record["root_identity"][0], worktrees=worktrees,
+    fresh = classify(record["path"], device=_round_identities(record)[0][0], worktrees=worktrees,
                      stores=stores, roots=[r for r in roots if r != record["root"]],
                      grace_seconds=0, now=time.time(), owned=True)
     if fresh.owner != STALE:
         return Outcome(record["path"], "kept", f"now {fresh.owner}: {fresh.reason}")
     validate_review_round(record, settings, repo, marker_required=not resuming)
+    live = _round_identities(record)[1]
     if before_remove is not None:
         before_remove()
-    remove_entry(record["path"], record["root"], tuple(record["identity"]))
+    remove_entry(record["path"], record["root"], live)
     return Outcome(record["path"], "removed")
 
 

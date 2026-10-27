@@ -1693,7 +1693,7 @@ def test_retirement_rejects_foreign_or_replaced_rounds(root, repo, kind):
     if kind == "receipt-id":
         receipt["id"] = "f" * 32
     elif kind == "receipt-inode":
-        receipt["identity"][1] += 1
+        receipt["identity"][-1] += 1
     elif kind == "marker":
         (path / sweep.ROUND_MARKER).write_text("{}")
     elif kind in ("replacement", "symlink"):
@@ -1713,6 +1713,132 @@ def test_retirement_rejects_foreign_or_replaced_rounds(root, repo, kind):
     with pytest.raises((sweep.ConfigError, OSError)):
         sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     assert (original / "keep").read_text() == "preserve"
+
+
+# --------------------------------------------------------------------------- #
+# boot-stable receipt identity (#1253)
+# --------------------------------------------------------------------------- #
+
+UUID_A = "AC62930A-94C1-4C33-BEB6-1E9E9C72714E"
+
+
+def _shift_devices(monkeypatch, by=1):
+    """Every path's device number moves at once, as a macOS reboot renumbers them."""
+    original = sweep._identity
+    monkeypatch.setattr(sweep, "_identity", lambda path: (original(path)[0] + by, original(path)[1]))
+
+
+def test_receipt_is_version_2_and_binds_stable_identity(root, repo):
+    _, receipt, path = _round(root, repo)
+    assert receipt["version"] == sweep.ROUND_VERSION == 2
+    assert receipt["identity"] == sweep.stable_identity(str(path))
+    assert receipt["root_identity"] == sweep.stable_identity(str(root))
+
+
+def test_volume_bound_round_allocated_before_a_renumber_retires_after_it(root, repo, monkeypatch):
+    monkeypatch.setattr(sweep, "_volume_uuid", lambda path: UUID_A)
+    with monkeypatch.context() as before_reboot:
+        _shift_devices(before_reboot, by=-1)
+        settings, receipt, path = _round(root, repo)
+    assert receipt["identity"][:2] == ["volume", UUID_A]
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "removed" and not path.exists()
+
+
+def test_device_bound_round_still_refuses_after_a_renumber(root, repo, monkeypatch):
+    monkeypatch.setattr(sweep, "_volume_uuid", lambda path: None)
+    settings, receipt, path = _round(root, repo)
+    assert receipt["identity"][0] == "device"
+    _shift_devices(monkeypatch)
+    with pytest.raises(sweep.ConfigError, match="round was replaced"):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert path.exists()
+
+
+def _as_version_1(receipt: dict, path: Path) -> dict:
+    """Rewrite a receipt and its marker as an allocation made before #1253."""
+    legacy = {**receipt, "version": 1, "identity": list(sweep._identity(str(path))),
+              "root_identity": list(sweep._identity(receipt["root"]))}
+    (path / sweep.ROUND_MARKER).write_text(json.dumps(legacy, sort_keys=True))
+    return legacy
+
+
+def test_version_1_receipt_keeps_its_device_check(root, repo, monkeypatch):
+    settings, receipt, path = _round(root, repo)
+    legacy = _as_version_1(receipt, path)
+    with monkeypatch.context() as renumbered:
+        _shift_devices(renumbered)
+        with pytest.raises(sweep.ConfigError, match="round was replaced"):
+            sweep.finish_review_round(legacy, settings, repo, apply=True, reviewers_finished=True)
+    result = sweep.finish_review_round(legacy, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "removed" and not path.exists()
+
+
+def test_receipt_of_an_unknown_version_is_refused(root, repo):
+    settings, receipt, path = _round(root, repo)
+    receipt = {**receipt, "version": sweep.ROUND_VERSION + 1}
+    (path / sweep.ROUND_MARKER).write_text(json.dumps(receipt, sort_keys=True))
+    with pytest.raises(sweep.ConfigError, match="invalid review round record fields"):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert path.exists()
+
+
+def test_an_all_zero_volume_uuid_is_none():
+    assert sweep._decode_volume_uuid(bytes(16)) is None
+    assert sweep._decode_volume_uuid(bytes.fromhex("AC62930A94C14C33BEB61E9E9C72714E")) == UUID_A
+
+
+@pytest.mark.parametrize("kind", ["v1-tagged", "v2-pair", "v2-kind", "v2-bad-uuid", "v2-bool-inode"])
+def test_receipt_identity_shape_must_match_its_version(root, repo, kind):
+    settings, receipt, path = _round(root, repo)
+    if kind == "v1-tagged":
+        receipt = {**receipt, "version": 1}
+    elif kind == "v2-pair":
+        receipt = {**receipt, "identity": list(sweep._identity(str(path)))}
+    elif kind == "v2-kind":
+        receipt = {**receipt, "identity": ["inode", *receipt["identity"][1:]]}
+    elif kind == "v2-bad-uuid":
+        receipt = {**receipt, "identity": ["volume", "not-a-uuid", receipt["identity"][-1]]}
+    else:
+        receipt = {**receipt, "identity": [*receipt["identity"][:2], True]}
+    (path / sweep.ROUND_MARKER).write_text(json.dumps(receipt, sort_keys=True))
+    with pytest.raises(sweep.ConfigError, match="invalid review round filesystem identity"):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert path.exists()
+
+
+@pytest.mark.parametrize("change", ["other-volume", "uuid-unreadable", "uuid-appears"])
+def test_round_refuses_another_volume_or_identity_kind(root, repo, monkeypatch, change):
+    start = None if change == "uuid-appears" else UUID_A
+    monkeypatch.setattr(sweep, "_volume_uuid", lambda path: start)
+    settings, receipt, path = _round(root, repo)
+    later = {"other-volume": "00000000-0000-0000-0000-000000000001", "uuid-unreadable": None,
+             "uuid-appears": UUID_A}[change]
+    monkeypatch.setattr(sweep, "_volume_uuid", lambda path: later)
+    with pytest.raises(sweep.ConfigError, match="round was replaced"):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert path.exists()
+
+
+def test_stable_identity_refuses_a_path_that_moves_while_read(base: Path, monkeypatch):
+    calls = iter([(1, 2), (1, 3)])
+    monkeypatch.setattr(sweep, "_identity", lambda path: next(calls))
+    monkeypatch.setattr(sweep, "_volume_uuid", lambda path: UUID_A)
+    with pytest.raises(sweep.ConfigError, match="changed while it was read"):
+        sweep.stable_identity(str(base))
+
+
+def test_bound_identity_refuses_a_malformed_recorded_identity(base: Path):
+    with pytest.raises(sweep.ConfigError, match="invalid recorded filesystem identity"):
+        sweep.bound_identity(["volume", UUID_A], str(base))
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="the volume UUID is read through macOS getattrlist")
+def test_volume_uuid_is_read_on_macos(base: Path):
+    identity = sweep.stable_identity(str(base))
+    assert identity[0] == "volume" and sweep.valid_identity(identity, legacy=False)
+    assert identity[2] == os.stat(base).st_ino
+    assert sweep._volume_uuid(str(base / "absent")) is None
 
 
 def test_prompt_round_binds_head_and_disallows_aliases(root, repo):
