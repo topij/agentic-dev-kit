@@ -151,14 +151,117 @@ class Registry:
 
     def load(self, token: str) -> dict:
         record = read_json(self.location(token) / "session.json")
-        if (record.get("schema") != SCHEMA or record.get("id") != token
-                or record.get("common_identity") != list(sweep._identity(str(self.common)))
-                or self.retirement_policy(record.get("policy", {})) != self.retirement_policy(self.policy)):
-            raise sweep.ConfigError("session repository identity or cleanup policy changed")
+        changed = self.differences(record, token)
+        if changed:
+            hint = ""
+            if all(item.startswith("device ") for item in changed):
+                hint = ("; only the device number differs, which a reboot or remount can renumber: "
+                        f"preview `session_cleanup.py reconcile {token}`")
+            raise sweep.ConfigError("session repository identity or cleanup policy changed: "
+                                    + "; ".join(changed) + hint)
+        self.check_journal(record)
+        return record
+
+    def differences(self, record: dict, token: str) -> list[str]:
+        """Each bound field that no longer matches, with its stored and current value."""
+        found = []
+        if record.get("schema") != SCHEMA:
+            found.append(f"schema (stored {record.get('schema')!r}, current {SCHEMA!r})")
+        if record.get("id") != token:
+            found.append(f"id (stored {record.get('id')!r}, current {token!r})")
+        stored, current = record.get("common_identity"), list(sweep._identity(str(self.common)))
+        if not (isinstance(stored, list) and len(stored) == 2 and all(type(n) is int for n in stored)):
+            found.append(f"common identity (stored {stored!r}, current {current})")
+        else:
+            found += [f"{name} (stored {old}, current {new})"
+                      for name, old, new in zip(("device", "inode"), stored, current, strict=True)
+                      if old != new]
+        try:
+            before = self.retirement_policy(record.get("policy", {}))
+        except sweep.ConfigError:
+            return [*found, "policy (stored value is not a mapping)"]
+        after = self.retirement_policy(self.policy)
+        for key in sorted(set(before) | set(after)):
+            if key not in before or key not in after or before[key] != after[key]:
+                show = [json.dumps(side[key]) if key in side else "absent" for side in (before, after)]
+                found.append(f"policy {key} (stored {show[0]}, current {show[1]})")
+        return found
+
+    @staticmethod
+    def check_journal(record: dict) -> None:
         if any(r["status"] == "removing" and not (r.get("approval") or record["approval"])
                for r in record["rounds"]):
             raise sweep.ConfigError("interrupted removal lacks its durable approval")
-        return record
+
+    def reconcile_plan(self, token: str) -> tuple[dict, dict]:
+        """Preview rebinding an inventory whose only changed binding is its device number.
+
+        macOS renumbers st_dev across reboots, so a record bound to (st_dev, st_ino)
+        can never load again. Reconcile accepts that one difference and nothing
+        else: schema, id, inode and policy (which carries the canonical common
+        dir) must still match. It retires no data. Every recorded round and
+        worktree path must be absent and no worktree still registered with Git;
+        a present one refuses, because its own recorded identity carries the old
+        device too and nothing here can re-verify it. Only FileNotFoundError
+        counts as absent: any other error inspecting a path refuses reconcile
+        rather than reading as gone. An unmounted root also reads as absent; marking its round removed
+        deletes nothing, and a returning directory is no longer managed here.
+        """
+        record = read_json(self.location(token) / "session.json")
+        changed = self.differences(record, token)
+        # The journal is checked first so its refusal is the one reported, not
+        # "nothing to reconcile" for an inventory that does not load either.
+        self.check_journal(record)
+        if not changed:
+            raise sweep.ConfigError("inventory loads unchanged; there is nothing to reconcile")
+        if not all(item.startswith("device ") for item in changed):
+            raise sweep.ConfigError("reconcile rebinds only a changed device number; other bound "
+                                    "fields differ: " + "; ".join(changed))
+        present = []
+        for path in ([r["receipt"]["path"] for r in record["rounds"]]
+                     + [w["path"] for w in record["worktrees"]]):
+            try:
+                os.lstat(canonical(Path(path)))
+            except FileNotFoundError:
+                continue
+            present.append(path)
+        registered = sweep.registered_worktrees(self.settings.repos)
+        present += [w["path"] for w in record["worktrees"]
+                    if w["path"] in registered and w["path"] not in present]
+        if present:
+            raise sweep.ConfigError("reconcile requires every recorded round and worktree to be absent "
+                                    "and unregistered; still present: " + ", ".join(present))
+        plan = {"session": token, "differences": changed,
+                "common_identity": {"stored": record["common_identity"],
+                                    "current": list(sweep._identity(str(self.common)))},
+                "rounds_marked_removed": [r["receipt"]["id"] for r in record["rounds"]
+                                          if r["status"] != "removed"],
+                # An unsealed round retained no evidence; the approver sees which.
+                "rounds_without_seal": [r["receipt"]["id"] for r in record["rounds"]
+                                        if r["status"] != "removed" and r.get("seal") is None
+                                        and record["seal"] is None],
+                "absent_worktrees": [w["path"] for w in record["worktrees"]]}
+        plan["approval_token"] = digest({"record": record, "plan": plan})
+        return record, plan
+
+    def reconcile(self, token: str, approval: str) -> dict:
+        record, plan = self.reconcile_plan(token)
+        if approval != plan["approval_token"]:
+            raise sweep.ConfigError("approval does not match this exact inventory and reconcile plan")
+        for entry in record["rounds"]:
+            if entry["status"] != "removed":
+                entry["status"] = "removed"
+                entry["reconciled"] = approval
+        history = record.get("reconciled", [])
+        if not isinstance(history, list):
+            raise sweep.ConfigError("recorded reconcile history must be a list")
+        record["reconciled"] = [*history,
+                                {"common_identity": plan["common_identity"], "approval": approval}]
+        record["common_identity"] = plan["common_identity"]["current"]
+        record["complete"] = True  # every recorded path was just verified absent
+        self.save(record)
+        self.load(token)
+        return {**plan, "applied": True}
 
     @staticmethod
     def retirement_policy(policy: dict) -> dict:
@@ -413,9 +516,19 @@ class Registry:
 
     def round_outcome(self, entry: dict) -> dict:
         receipt = entry["receipt"]
+        # A round already recorded removed whose path is gone has nothing left
+        # to act on, so its root is not re-validated: reconcile leaves the old
+        # device number in root_identity, and a wiped temp root may be absent
+        # or recreated. Every other shape keeps every check below: a removed
+        # round whose path is present, and an allocated or removing round
+        # whether its path is present or absent.
+        if entry["status"] == "removed" and not os.path.lexists(receipt["path"]):
+            return {"path": receipt["path"], "action": "absent", "reason": None}
         sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
-        if list(sweep._identity(receipt["root"])) != receipt["root_identity"]:
-            raise sweep.ConfigError("allocation root identity changed")
+        current = list(sweep._identity(receipt["root"]))
+        if current != receipt["root_identity"]:
+            raise sweep.ConfigError(f"allocation root identity changed (stored {receipt['root_identity']}, "
+                                    f"current {current})")
         if not os.path.lexists(receipt["path"]):
             # Absence is an idempotent result, not permission to delete a
             # replacement. If a path reappears its allocation identity must
@@ -655,7 +768,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("start")
     sub.add_parser("list")
-    for action in ("allocate", "track-worktree", "track-process", "seal", "preview", "apply"):
+    for action in ("allocate", "track-worktree", "track-process", "seal", "preview", "apply", "reconcile"):
         command = sub.add_parser(action)
         command.add_argument("session")
         if action == "allocate":
@@ -673,6 +786,9 @@ def main(argv: list[str] | None = None) -> int:
         elif action == "apply":
             command.add_argument("--approve", required=True)
             command.add_argument("--processes-finished", action="store_true")
+        elif action == "reconcile":
+            command.add_argument("--approve", metavar="APPROVAL_TOKEN",
+                                 help="apply the previewed plan; without it, only preview")
         if action in ("seal", "preview", "apply"):
             command.add_argument("--round", metavar="RECEIPT_ID",
                                  help="act on one allocated round without sealing the inventory")
@@ -684,6 +800,11 @@ def main(argv: list[str] | None = None) -> int:
             result = registry.inventories()
         else:
             with registry.lock():
+                if args.action == "reconcile":
+                    result = (registry.reconcile(args.session, args.approve) if args.approve is not None
+                              else registry.reconcile_plan(args.session)[1])
+                    print(json.dumps(result, indent=2))
+                    return 0
                 record = registry.start() if args.action == "start" else registry.load(args.session)
                 result = record
                 if args.action == "allocate":
