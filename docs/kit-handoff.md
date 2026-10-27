@@ -156,10 +156,12 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 **Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
 shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
-`proposal_correction` receipt, retires. As read on 2026-10-27, that state has not retired:
+`proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
+`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired:
 - a single-writer gate left by an exited owner (#1269) needs an interactive `recover` there;
 - the adopter tracks a separate failure of its scheduled draft in its own tracker;
-- whether #1111's shared root ends its identity mismatch is unobserved, because no run has reached the engine since.
+- whether #1111's shared root ends its identity mismatch is unobserved. On 2026-10-23 the draft stopped at input
+  validation, and the finalize stopped at the gate, before the state's identity check.
 
 **Owner:** [#979](https://github.com/topij/agentic-dev-kit/issues/979).
 
@@ -209,7 +211,8 @@ round-3 decision packet and round-4 findings on #1111 explain why receipt cleari
 was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
 timeout and report-containment findings.
 An adopter's real scheduled runs on 2026-10-23 each wrote a receipt that its wrapper re-checked against the expected
-invocation. Neither run reached completed-state retirement; see *Triage one-run cleanup*.
+invocation, as read on 2026-10-27 (sources in `saved_plans/adopter-upgrade-prep_2026-10-27.md`). Neither run reached
+completed-state retirement; see *Triage one-run cleanup*.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify the documented trusted launcher boundary for the adopter's scheduled calls.
