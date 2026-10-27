@@ -105,7 +105,9 @@ number, under the preconditions in `session-cleanup.md`. It deletes nothing, so 
 waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has the
 `f_fsid` and volume-UUID probes); its review's LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
-#1256. `state/review-evidence/` retention remains scoped to #861.
+#1256. `state/review-evidence/` retention remains scoped to #861. #1267 carries #1253's boot-stable identity change.
+Round 3 of #1262's review was on disk on 2026-10-27, kept by `session_cleanup.py preview --round` for an unparseable
+worktree record that a `test_panel_prompt.py` fixture wrote inside the round (#1265).
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
@@ -114,11 +116,12 @@ waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has th
 [#1255](https://github.com/topij/agentic-dev-kit/issues/1255),
 [#1256](https://github.com/topij/agentic-dev-kit/issues/1256),
 [#1259](https://github.com/topij/agentic-dev-kit/issues/1259),
-[#1263](https://github.com/topij/agentic-dev-kit/issues/1263).
+[#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
+[#1265](https://github.com/topij/agentic-dev-kit/issues/1265).
 
-▶ Next: from the primary checkout, preview `uv run scripts/session_cleanup.py reconcile <id>`
-for each inventory `list` reports unavailable. Apply `--approve <token>` only to those it
-accepts, on the operator's authorization, and report each refusal as it stands.
+▶ Next: once #1267 merges, preview `uv run scripts/session_cleanup.py reconcile <id>` from the primary checkout for
+each inventory `list` reports unavailable, so each inventory is rebound once. Apply `--approve <token>` only to those
+it accepts, on the operator's authorization, and report each refusal as it stands.
 
 ### Reviewer profiles
 
@@ -153,8 +156,14 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 **Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
 shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
-`proposal_correction` receipt, retires. **Owner:**
-[#979](https://github.com/topij/agentic-dev-kit/issues/979).
+`proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
+`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired:
+- a single-writer gate left by an exited owner (#1269) needs an interactive `recover` there;
+- the adopter tracks a separate failure of its scheduled draft in its own tracker;
+- whether #1111's shared root ends its identity mismatch is unobserved. On 2026-10-23 the draft stopped at input
+  validation, and the finalize stopped at the gate, before the state's identity check.
+
+**Owner:** [#979](https://github.com/topij/agentic-dev-kit/issues/979).
 
 ▶ Next: once cs-toolkit's scheduled triage draft has retired its completed LIVE state,
 confirm no state root holds a `proposal_correction`, then remove the shim (#979).
@@ -201,11 +210,12 @@ The preserved `fabed73e` implementation is design evidence; the
 round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
 was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
 timeout and report-containment findings.
+An adopter's real scheduled runs on 2026-10-23 each wrote a receipt that its wrapper re-checked against the expected
+invocation, as read on 2026-10-27 (sources in `saved_plans/adopter-upgrade-prep_2026-10-27.md`). Neither run reached
+completed-state retirement; see *Triage one-run cleanup*.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: verify cs-toolkit's real scheduled-run receipts and the documented trusted
-launcher boundary; installed wrapper code alone does not establish live invocation
-coverage or completed-state retirement.
+▶ Next: verify the documented trusted launcher boundary for the adopter's scheduled calls.
 
 ### Shared hook installation
 
@@ -273,21 +283,15 @@ with #1243's items in one PR, so the safety-critical panel runs once.
 
 ### Consumer upgrades
 
-**Status:** cs-toolkit's
-[in-parallel-oy/cs-toolkit#2769](https://github.com/in-parallel-oy/cs-toolkit/pull/2769)
-integrated caller enforcement and managed review rounds after the #2762 upgrade.
-`git show 5b49543928c4d4187598e18d17deececb9419a34:kit-manifest.json` in
-`/Users/topi/Coding/in-parallel/cs-toolkit` on 2026-10-20 recorded kit
-`b739bc46faa99764f3a10200dc2e02720e61a6de`. At that same adopter revision,
-`git show` of `scripts/scheduled_triage.py` and `config/automations.yaml` showed
-the per-call wrapper and its deliverable checks; `scripts/retire_triage_state.py`
-was a read-only guard. No real scheduled job or live state retirement was run here.
-The adopter handoff separates notification-provider integration from the installed
-receipt contract. The earlier local assessment,
-`saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates these upgrades.
-**Owner:** #1116, #990, #1011, #979.
+**Status:** a read-only upgrade-prep pass for the private adopter, from its installed kit `cd41724b` to `2a8fbb96`,
+ran on 2026-10-27. Its notes are local and untracked: `saved_plans/adopter-upgrade-prep_2026-10-27.md`. The
+adopter-specific next steps are in its own tracker. Hold `reconcile` on its unavailable cleanup inventories until
+#1267's change is installed there, so each inventory is rebound once. The scheduled-run findings are under *Triage
+one-run cleanup*. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
+these upgrades.
+**Owner:** #1116, #990, #1011, #979, #1253, #1269.
 
-▶ Next: verify cs-toolkit's scheduled-run receipts and completed-state retirement
-before removing the #979 shim; resolve unattended notification delivery as its own
-adopter decision. Reassess OpenKitchen's installation and lane prerequisites before
-an upgrade there.
+▶ Next: the operator runs an interactive triage `recover` in the adopter before its next scheduled draft. That clears
+only the gate. After #1267 merges, extend the prep notes for its range and upgrade the adopter following the kit's
+`upgrade.md`, then preview and apply `reconcile` with approval. Separately: resolve unattended notification delivery
+as its own adopter decision, and reassess OpenKitchen's installation and lane prerequisites before an upgrade there.
