@@ -94,13 +94,14 @@ age sweep judge them the same way in unowned entries; a nonempty `.git` file tha
 not start with `gitdir:` still keeps an unowned entry. #1193 (`043f61f2`) delivered #1186's residual LOWs (#1189),
 and #1192 (`5b50b225`) has `test_sweep_scratch.py` remove each test's tree at
 teardown (#1188). Not established: that a round in which a lens probes `.git` files can be
-retired. Triage archived that question without filing on 2026-10-24, and the rounds that
-raised it left when `/private/tmp` was emptied (#1253), which settles nothing about it.
+retired; triage archived that question without filing on 2026-10-24.
+`sweep_scratch.py --disk --json` at `ef8e4780` on 2026-10-27 listed none of the rounds kept
+on 2026-10-22 and 2026-10-23 (`review-72a279dd…` among them).
 #1258 (`ef8e4780`) retires each review round of an open session-cleanup inventory
 (`--round`) and has `allocate` refuse while an earlier round is unretired (#1254); its
-round-3 LOWs are #1259. Registry inventories made before macOS renumbered the
-volume's `st_dev` read as unavailable (#1253), which holds cs-toolkit's retained evidence
-in `.git/devkit`. Copies outside every managed root, such as Codex lens trees under
+round-3 LOWs are #1259. Registry inventories made before the volume's `st_dev` changed
+(cause not established) read as unavailable (#1253), which holds cs-toolkit's retained
+evidence in `.git/devkit`. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
 #1256. `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -112,12 +113,7 @@ in `.git/devkit`. Copies outside every managed root, such as Codex lens trees un
 [#1256](https://github.com/topij/agentic-dev-kit/issues/1256),
 [#1259](https://github.com/topij/agentic-dev-kit/issues/1259).
 
-▶ Next: #1253 — per its comment's revised fix: name the mismatched identity field in
-the refusal; add an explicit, previewed, operator-approved reconcile that validates
-everything else, for "an inventory whose recorded paths are all absent"; and bind new
-records to an identity that survives a device renumbering, while a changed volume or
-inode is still refused. Retiring cs-toolkit's held evidence through it is a separate,
-operator-approved step there; retention policy stays with #1256.
+▶ Next: #1253, scoped by its body and its comment's revised proposal.
 
 ### Reviewer profiles
 
