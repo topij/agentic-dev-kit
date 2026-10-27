@@ -203,8 +203,8 @@ class Registry:
         worktree path must be absent and no worktree still registered with Git;
         a present one refuses, because its own recorded identity carries the old
         device too and nothing here can re-verify it. Only FileNotFoundError
-        counts as absent: an unreadable parent refuses rather than reading as
-        gone. An unmounted root also reads as absent; marking its round removed
+        counts as absent: any other error inspecting a path refuses reconcile
+        rather than reading as gone. An unmounted root also reads as absent; marking its round removed
         deletes nothing, and a returning directory is no longer managed here.
         """
         record = read_json(self.location(token) / "session.json")
@@ -234,6 +234,10 @@ class Registry:
                                     "current": list(sweep._identity(str(self.common)))},
                 "rounds_marked_removed": [r["receipt"]["id"] for r in record["rounds"]
                                           if r["status"] != "removed"],
+                # An unsealed round retained no evidence; the approver sees which.
+                "rounds_without_seal": [r["receipt"]["id"] for r in record["rounds"]
+                                        if r["status"] != "removed" and r.get("seal") is None
+                                        and record["seal"] is None],
                 "absent_worktrees": [w["path"] for w in record["worktrees"]]}
         plan["approval_token"] = digest({"record": record, "plan": plan})
         return record, plan
@@ -510,6 +514,14 @@ class Registry:
 
     def round_outcome(self, entry: dict) -> dict:
         receipt = entry["receipt"]
+        # A round already recorded removed whose path is gone has nothing left
+        # to act on, so its root is not re-validated: reconcile leaves the old
+        # device number in root_identity, and a wiped temp root may be absent
+        # or recreated. Every other shape keeps every check below: a removed
+        # round whose path is present, and an allocated or removing round
+        # whether its path is present or absent.
+        if entry["status"] == "removed" and not os.path.lexists(receipt["path"]):
+            return {"path": receipt["path"], "action": "absent", "reason": None}
         sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
         current = list(sweep._identity(receipt["root"]))
         if current != receipt["root_identity"]:

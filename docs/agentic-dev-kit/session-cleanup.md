@@ -104,7 +104,9 @@ during this lifecycle. Such changes keep the old inventory unavailable until its
 original policy is restored; there is no migration override. `list` reports an
 unavailable record with its path and reason while still listing other inventories.
 The reason names each bound field that differs (`device`, `inode`, `schema`, `id`
-or `policy <key>`) with its stored and current values. Changing only
+or `policy <key>`) with its stored and current values; a key present on one side
+only shows `absent` on the other, and a malformed stored value is named as
+`common identity` or `policy (stored value is not a mapping)`. Changing only
 `scratch.grace_window` does not invalidate recorded retirement: this lifecycle
 already bypasses age through explicit ownership.
 
@@ -123,14 +125,17 @@ uv run <engine-dir>/session_cleanup.py reconcile <session> --approve <approval-t
 It accepts the device number as the only difference: schema, id, inode and policy
 (which carries the canonical common directory) must still match, and any other
 difference refuses. Every recorded round and worktree path must be absent and no
-recorded worktree may still be registered with Git; a path that cannot be read
-counts as present. The preview writes nothing and lists the stored and current
-identity, the rounds it will mark removed and the absent worktrees. Its token binds
-the stored record and that plan, and it is not itself operator consent: apply only
+recorded worktree may still be registered with Git; an error inspecting a path
+other than its absence refuses reconcile. The preview writes nothing and lists the
+stored and current identity, the rounds it will mark removed, which of those
+retained no evidence (`rounds_without_seal`) and the absent worktrees. Its token
+binds the stored record and that plan, including the current identity, and it is
+not itself operator consent: apply only
 under authorization covering that inventory. Apply rebinds the identity, marks the
 listed rounds removed, records the change under `reconciled` and marks the
 inventory complete. It deletes nothing, retained evidence included; an open
-inventory continues as before. An inventory with a round or worktree still present
+inventory continues as before, and its preview and apply report a removed round
+whose path is gone as `absent` without re-checking that round's root. An inventory with a round or worktree still present
 stays unavailable: those paths carry the old device number in their own recorded
 identities, which reconcile cannot re-verify. The same holds for an allocation
 receipt: `--finish-review-round` refuses a round that survived a renumbering as
