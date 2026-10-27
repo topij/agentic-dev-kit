@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "24637ac2cb5b85c01d04d01c70380548d700a85b834198dbeded817a56f9b568"
+      "sha256": "938677ffd120091064007ad8da3cbbd4c8d56f28cc54a0859a93b9817ecf3928"
     },
     "docs/agentic-dev-kit/skill-routing/cases.json": {
       "role": "repo-only",
@@ -627,7 +627,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "8c51fdbebc2d18ed6cb1a102fdbe0b9d6fac2c9771e8c77c8a859e09480386aa"
+      "sha256": "60051999c60611bab8ddc3e12f0761ce64a543f7fbc0eff414035d73b4d29576"
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
@@ -639,7 +639,7 @@
         "scripts/session_cleanup.py"
       ],
       "role": "engine",
-      "sha256": "1b9f58af507001b9c33c813d72ccd3ea64196789b6c88bef83cb486c326ce3fe"
+      "sha256": "9265b87197d765c9a05aeedafc98c5275c1146824b5180d03ef3c9489788c63d"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -783,7 +783,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "2bacfe8086d4a848dd0e33f51189109ec9baa06faf3a30c1948cdcc69786563d"
+      "sha256": "82baafdb4a75634e702b7e18256257d348888a6615b212cc66bef1e62ef63011"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",
@@ -795,7 +795,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "d2f881aaded1e650d57ea65588b2153f6a0a6693b78d9182a32a389e2e162601"
+      "sha256": "bb6b75c7c21a7eb5f73f4c21ce3b8b71e415f548360f6c7b1be7eee9fb034048"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

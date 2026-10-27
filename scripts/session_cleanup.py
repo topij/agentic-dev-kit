@@ -33,7 +33,11 @@ import sweep_scratch as sweep
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
 
-SCHEMA = "devkit-cleanup-session/1"
+SCHEMA = "devkit-cleanup-session/2"
+# Schema 1 bound (st_dev, st_ino), which macOS renumbers across reboots (#1253).
+# It still loads on that pair; a renumber's approved `reconcile` rebinds it to
+# stable_identity and schema 2.
+LEGACY_SCHEMA = "devkit-cleanup-session/1"
 LIMIT = 1024 * 1024
 KINDS = {"report", "finding", "verification", "compute", "source", "asset", "receipt"}
 
@@ -163,18 +167,30 @@ class Registry:
         return record
 
     def differences(self, record: dict, token: str) -> list[str]:
-        """Each bound field that no longer matches, with its stored and current value."""
+        """Each bound field that no longer matches, with its stored and current value.
+
+        A schema 1 record is compared in its own terms, (st_dev, st_ino), exactly
+        as before #1253, and loads while that pair matches; it is never
+        accepted on inode and path alone. Only a "device" difference is ever reported
+        with the `device ` prefix reconcile accepts: a different volume UUID, or
+        a change between the "volume" and "device" kinds, is another volume.
+        """
         found = []
-        if record.get("schema") != SCHEMA:
+        legacy = record.get("schema") == LEGACY_SCHEMA
+        if record.get("schema") not in (SCHEMA, LEGACY_SCHEMA):
             found.append(f"schema (stored {record.get('schema')!r}, current {SCHEMA!r})")
         if record.get("id") != token:
             found.append(f"id (stored {record.get('id')!r}, current {token!r})")
-        stored, current = record.get("common_identity"), list(sweep._identity(str(self.common)))
-        if not (isinstance(stored, list) and len(stored) == 2 and all(type(n) is int for n in stored)):
+        stored = record.get("common_identity")
+        current = list(sweep._identity(str(self.common))) if legacy else sweep.stable_identity(str(self.common))
+        if not sweep.valid_identity(stored, legacy=legacy):
             found.append(f"common identity (stored {stored!r}, current {current})")
+        elif not legacy and stored[0] != current[0]:
+            found.append(f"identity kind (stored {stored[0]!r}, current {current[0]!r})")
         else:
+            names = ("device", "inode") if legacy else (stored[0], "inode")
             found += [f"{name} (stored {old}, current {new})"
-                      for name, old, new in zip(("device", "inode"), stored, current, strict=True)
+                      for name, old, new in zip(names, stored[-2:], current[-2:], strict=True)
                       if old != new]
         try:
             before = self.retirement_policy(record.get("policy", {}))
@@ -196,27 +212,29 @@ class Registry:
     def reconcile_plan(self, token: str) -> tuple[dict, dict]:
         """Preview rebinding an inventory whose only changed binding is its device number.
 
-        macOS renumbers st_dev across reboots, so a record bound to (st_dev, st_ino)
-        can never load again. Reconcile accepts that one difference and nothing
+        macOS renumbers st_dev across reboots, so a record bound to the device
+        number (schema 1, or a schema 2 record bound to the "device" kind) can
+        never load again. Reconcile accepts that one difference and nothing
         else: schema, id, inode and policy (which carries the canonical common
-        dir) must still match. It retires no data. Every recorded round and
-        worktree path must be absent and no worktree still registered with Git;
-        a present one refuses, because its own recorded identity carries the old
-        device too and nothing here can re-verify it. Only FileNotFoundError
-        counts as absent: any other error inspecting a path refuses reconcile
-        rather than reading as gone. An unmounted root also reads as absent; marking its round removed
-        deletes nothing, and a returning directory is no longer managed here.
+        dir) must still match. It rebinds to ``stable_identity`` and schema 2,
+        and retires no data. Every recorded round and worktree path must be
+        absent and no worktree still registered with Git; a present one refuses,
+        because its own recorded identity carries the old device too and
+        nothing here can re-verify it. Only FileNotFoundError counts as absent:
+        any other error inspecting a path refuses reconcile rather than reading
+        as gone. An unmounted root also reads as absent; marking its round
+        removed deletes nothing, and a returning directory is no longer managed
+        here.
         """
         record = read_json(self.location(token) / "session.json")
         changed = self.differences(record, token)
-        # The journal is checked first so its refusal is the one reported, not
-        # "nothing to reconcile" for an inventory that does not load either.
-        self.check_journal(record)
-        if not changed:
-            raise sweep.ConfigError("inventory loads unchanged; there is nothing to reconcile")
         if not all(item.startswith("device ") for item in changed):
             raise sweep.ConfigError("reconcile rebinds only a changed device number; other bound "
                                     "fields differ: " + "; ".join(changed))
+        # Only once every bound field but the device is trusted (#1263).
+        self.check_journal(record)
+        if not changed:
+            raise sweep.ConfigError("inventory loads unchanged; there is nothing to reconcile")
         present = []
         for path in ([r["receipt"]["path"] for r in record["rounds"]]
                      + [w["path"] for w in record["worktrees"]]):
@@ -232,8 +250,9 @@ class Registry:
             raise sweep.ConfigError("reconcile requires every recorded round and worktree to be absent "
                                     "and unregistered; still present: " + ", ".join(present))
         plan = {"session": token, "differences": changed,
+                "schema": {"stored": record["schema"], "current": SCHEMA},
                 "common_identity": {"stored": record["common_identity"],
-                                    "current": list(sweep._identity(str(self.common)))},
+                                    "current": sweep.stable_identity(str(self.common))},
                 "rounds_marked_removed": [r["receipt"]["id"] for r in record["rounds"]
                                           if r["status"] != "removed"],
                 # An unsealed round retained no evidence; the approver sees which.
@@ -255,8 +274,10 @@ class Registry:
         history = record.get("reconciled", [])
         if not isinstance(history, list):
             raise sweep.ConfigError("recorded reconcile history must be a list")
-        record["reconciled"] = [*history,
-                                {"common_identity": plan["common_identity"], "approval": approval}]
+        record["reconciled"] = [*history, {"schema": plan["schema"],
+                                           "common_identity": plan["common_identity"],
+                                           "approval": approval}]
+        record["schema"] = SCHEMA
         record["common_identity"] = plan["common_identity"]["current"]
         record["complete"] = True  # every recorded path was just verified absent
         self.save(record)
@@ -290,7 +311,7 @@ class Registry:
         token = uuid.uuid4().hex
         self.location(token).mkdir(mode=0o700)
         record = {"schema": SCHEMA, "id": token, "policy": self.policy,
-                  "common_identity": list(sweep._identity(str(self.common))),
+                  "common_identity": sweep.stable_identity(str(self.common)),
                   "origin": str(self.repo), "head": git(self.repo, "rev-parse", "HEAD"),
                   "rounds": [], "worktrees": [], "pids": [], "seal": None,
                   "approval": None, "complete": False}
@@ -345,7 +366,7 @@ class Registry:
             raise sweep.ConfigError("worktree is not registered")
         if any(w["path"] == str(path) for w in record["worktrees"]):
             raise sweep.ConfigError("worktree already tracked")
-        record["worktrees"].append({"path": str(path), "identity": list(sweep._identity(str(path))),
+        record["worktrees"].append({"path": str(path), "identity": sweep.stable_identity(str(path)),
                                     "head": git(path, "rev-parse", "HEAD"), "runtime": runtime,
                                     "branch": git(path, "rev-parse", "--abbrev-ref", "HEAD")})
         record["complete"] = False
@@ -440,7 +461,7 @@ class Registry:
 
     def worktree_reason(self, worktree: dict) -> str | None:
         path = canonical(Path(worktree["path"]))
-        if list(sweep._identity(str(path))) != worktree["identity"]:
+        if sweep.bound_identity(worktree["identity"], str(path)) is None:
             return "worktree identity changed"
         if git(path, "rev-parse", "HEAD") != worktree["head"]:
             return "worktree head changed; inventory is stale"
@@ -524,9 +545,20 @@ class Registry:
         # whether its path is present or absent.
         if entry["status"] == "removed" and not os.path.lexists(receipt["path"]):
             return {"path": receipt["path"], "action": "absent", "reason": None}
+        # Reconcile marked this round removed while its path was absent, and its
+        # receipt still names the old device. The path is back (a remounted
+        # scratch volume, say); it is no longer managed here, so report it kept
+        # rather than refuse the whole inventory (#1263). Only reconcile sets
+        # "reconciled", and only on a round it marks removed; retire_round makes
+        # no removal attempt for such a round.
+        if entry.get("reconciled"):
+            return {"path": receipt["path"], "action": "kept",
+                    "reason": "round was marked removed by reconcile and its path reappeared; "
+                              "inspect and remove it by hand"}
         sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
-        current = list(sweep._identity(receipt["root"]))
-        if current != receipt["root_identity"]:
+        if sweep.bound_identity(receipt["root_identity"], receipt["root"]) is None:
+            legacy = sweep.valid_identity(receipt["root_identity"], legacy=True)
+            current = list(sweep._identity(receipt["root"])) if legacy else sweep.stable_identity(receipt["root"])
             raise sweep.ConfigError(f"allocation root identity changed (stored {receipt['root_identity']}, "
                                     f"current {current})")
         if not os.path.lexists(receipt["path"]):
@@ -576,13 +608,17 @@ class Registry:
             return entry["last_result"]
         self.retire_round(record, entry, result, lambda: self.verify_seal(record, entry["seal"]), approval)
         entry["last_result"] = {**preview, "complete": result["action"] in {"removed", "absent"}}
+        # A reconciled round whose path reappeared stays "removed" but is not
+        # gone, matching apply's path-based verdict for the same state.
         record["complete"] = (not record["worktrees"]
-                              and all(r["status"] == "removed" for r in record["rounds"]))
+                              and all(r["status"] == "removed" for r in record["rounds"])
+                              and not any(r.get("reconciled") and os.path.lexists(r["receipt"]["path"])
+                                          for r in record["rounds"]))
         self.save(record)
         return entry["last_result"]
 
     def retire_round(self, record: dict, entry: dict, result: dict, verify, approval: str | None = None) -> None:
-        if result["action"] in {"eligible", "kept"}:
+        if result["action"] in {"eligible", "kept"} and not entry.get("reconciled"):
             try:
                 verify()
                 if active_users([entry["receipt"]["path"]], record["pids"]):

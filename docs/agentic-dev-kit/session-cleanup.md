@@ -103,42 +103,12 @@ ownership. Do not change protection roots, dependency repositories or the regist
 during this lifecycle. Such changes keep the old inventory unavailable until its
 original policy is restored; there is no migration override. `list` reports an
 unavailable record with its path and reason while still listing other inventories.
-The reason names each bound field that differs (`device`, `inode`, `schema`, `id`
-or `policy <key>`) with its stored and current values; a key present on one side
+The reason names each bound field that differs (`volume`, `device`, `inode`,
+`identity kind`, `schema`, `id` or `policy <key>`) with its stored and current values; a key present on one side
 only shows `absent` on the other, and a malformed stored value is named as
 `common identity` or `policy (stored value is not a mapping)`. Changing only
 `scratch.grace_window` does not invalidate recorded retirement: this lifecycle
 already bypasses age through explicit ownership.
-
-### Reconcile a renumbered device
-
-The common-directory identity is the device and inode pair. macOS does not keep
-the device number stable across reboots, so after one every inventory refuses with
-`device (stored <n>, current <m>)` and a pointer to reconcile. Reconcile is a
-preview, then an approved apply:
-
-```sh
-uv run <engine-dir>/session_cleanup.py reconcile <session>
-uv run <engine-dir>/session_cleanup.py reconcile <session> --approve <approval-token>
-```
-
-It accepts the device number as the only difference: schema, id, inode and policy
-(which carries the canonical common directory) must still match, and any other
-difference refuses. Every recorded round and worktree path must be absent and no
-recorded worktree may still be registered with Git; an error inspecting a path
-other than its absence refuses reconcile. The preview writes nothing and lists the
-stored and current identity, the rounds it will mark removed, which of those
-retained no evidence (`rounds_without_seal`) and the absent worktrees. Its token
-binds the stored record and that plan, including the current identity, and it is
-not itself operator consent: apply only
-under authorization covering that inventory. Apply rebinds the identity, marks the
-listed rounds removed, records the change under `reconciled` and marks the
-inventory complete. It deletes nothing, retained evidence included; an open
-inventory continues as before. An inventory with a round or worktree still present
-stays unavailable: those paths carry the old device number in their own recorded
-identities, which reconcile cannot re-verify. The same holds for an allocation
-receipt: `--finish-review-round` refuses a round that survived a renumbering as
-replaced.
 
 Register actual writer process ids while they exist. Joining a parent is not
 proof its descendants ended:
@@ -164,6 +134,62 @@ ref; preserve an unreferenced detached commit on a branch before retrying.
 Checkout-local refs such as bisect/worktree/rewritten refs disappear on removal
 and cannot establish retention. Other custom ref namespaces are conservatively
 insufficient too. Codex's native archive preserves its commit snapshot instead.
+
+## Filesystem identity, and reconciling an inventory
+
+The registry and its allocation receipts bind each directory (the common directory,
+the scratch root, each round and each tracked worktree) by a filesystem identity
+that survives a reboot where the platform offers one:
+
+- `["volume", <UUID>, <inode>]` on macOS, from `getattrlist`'s volume UUID. macOS
+  renumbers the device number across reboots, and on Data-volume paths `statvfs`'s
+  `f_fsid` is that same number. The volume UUID belongs to the volume that holds the
+  directory, which `st_dev` does not tell apart: on an APFS firmlinked system
+  `stat("/")` reports the Data volume's device number, while `/` is the sealed system
+  snapshot with its own UUID.
+- `["device", <st_dev>, <inode>]` elsewhere, and on macOS when no volume UUID is
+  readable. Linux has no standard-library route to a filesystem UUID. A device
+  number that renumbers still makes these inventories unavailable, and reconcile
+  below is the way back.
+
+The two kinds never compare equal: a record bound to a volume refuses when its UUID
+becomes unreadable, or reads as another volume. The kind is fixed when the record is
+written, and reconcile does not rebind across kinds: a record bound to `device`
+because no UUID was readable then stays unavailable once one is, and needs a new
+inventory. New inventories use schema `devkit-cleanup-session/2`, and new
+allocation receipts `version` 2. A schema 1 inventory, written before boot-stable
+identities, keeps loading on its bare device and inode pair exactly as before, and
+is never accepted on inode and path alone; it moves to schema 2 only through
+reconcile, after a renumber. A version 1 receipt keeps its own device and inode
+check. Rounds and worktrees recorded into a schema 1 inventory from now on bind the
+new identity.
+
+Reconcile is a preview, then an approved apply:
+
+```sh
+uv run <engine-dir>/session_cleanup.py reconcile <session>
+uv run <engine-dir>/session_cleanup.py reconcile <session> --approve <approval-token>
+```
+
+It accepts the device number as the only difference, on a schema 1 inventory or on
+one bound to the `device` kind: schema, id, inode and policy (which carries the
+canonical common directory) must still match, and any other difference refuses.
+Every recorded round and worktree path must be absent and no recorded worktree may
+still be registered with Git; an error inspecting a path other than its absence
+refuses reconcile. It also refuses an unapproved interrupted removal, checked once
+every other bound field is trusted. The preview writes nothing and lists the
+differences, the stored and current schema and identity, the rounds it will mark
+removed, which of those retained no evidence (`rounds_without_seal`) and the absent
+worktrees. Its token binds the stored record and that plan, including the current
+identity, and it is not itself operator consent: apply only under authorization
+covering that inventory. Apply rebinds the common directory to the new identity and
+schema 2, marks the listed rounds removed, records the change under `reconciled`
+and marks the inventory complete. It deletes nothing, retained evidence included;
+an open inventory continues as before. An inventory with a round or worktree still
+present stays unavailable: those paths carry the old device number in their own
+recorded identities, which reconcile cannot re-verify. The same holds for a
+receipt: `--finish-review-round` refuses a device-bound round that survived a
+renumbering as replaced.
 
 ## Retain required evidence, then seal
 
@@ -232,7 +258,8 @@ approval and resumes with the same `apply --round`, and while any round is `remo
 that stops before removal, on an active user or a refusal, persists nothing: resolve
 the cause, preview again and apply with the new token. Each round apply records its
 own `last_result` on the round. The inventory reports `complete` while every round is
-removed and it tracks no worktree, so an inventory used only for rounds needs no final
+removed, no round reconcile marked removed has its path back, and it tracks no
+worktree, so an inventory used only for rounds needs no final
 seal. Tracked worktrees and kept rounds still retire through the inventory's seal,
 preview and apply.
 
@@ -295,11 +322,15 @@ tolerated in that state because recursive removal may have already unlinked it;
 replacement directories, changed roots and malformed surviving markers still
 refuse. Standalone `--finish-review-round` still requires its marker.
 
-A round already recorded `removed` whose path is gone previews and applies as
-`absent` without its root being re-checked: nothing is left to act on, and its root
-may be gone or recreated (a wiped temp directory, or a reconciled device number).
-Every other round keeps its root and identity checks, including a removed round
-whose path has reappeared.
+Once its inventory or round is sealed, a round already recorded `removed` whose
+path is gone previews and applies as `absent` without its root being re-checked
+(before that, `preview` and `preview --round` refuse with `seal required evidence
+before cleanup`): nothing is left to act on, and its root may be gone or recreated
+(a wiped temp directory, or a reconciled device number). A round reconcile marked
+removed whose path has reappeared, such as on a remounted scratch volume, previews
+and applies as `kept`, and no removal is attempted: it is no longer managed here, so
+inspect and remove it by hand. Every other round keeps its root and identity checks,
+including a removed round whose path has reappeared.
 
 Exit status is `0` for completed cleanup, `1` for kept/active/native-archive work,
 and `2` for refusal or unavailable prerequisites. Keep reasons mean incomplete
