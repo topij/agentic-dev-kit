@@ -1828,6 +1828,27 @@ def test_stable_identity_refuses_a_path_that_moves_while_read(base: Path, monkey
         sweep.stable_identity(str(base))
 
 
+def test_bound_identity_refuses_a_path_that_moves_after_its_stable_read(base: Path, monkeypatch):
+    # live pair, the two reads inside stable_identity, then the re-stat that moved
+    calls = iter([(1, 2), (1, 2), (1, 2), (1, 3)])
+    monkeypatch.setattr(sweep, "_identity", lambda path: next(calls))
+    monkeypatch.setattr(sweep, "_volume_uuid", lambda path: UUID_A)
+    assert sweep.bound_identity(["volume", UUID_A, 2], str(base)) is None
+
+
+def test_round_identities_tie_the_lstat_to_the_bound_object(root, repo, monkeypatch):
+    settings, receipt, path = _round(root, repo)
+    original = sweep.bound_identity
+
+    def other_inode(stored, target):
+        live = original(stored, target)
+        return (live[0], live[1] + 1) if target == str(path) else live
+    monkeypatch.setattr(sweep, "bound_identity", other_inode)
+    with pytest.raises(sweep.ConfigError, match="round was replaced"):
+        sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert path.exists()
+
+
 def test_bound_identity_refuses_a_malformed_recorded_identity(base: Path):
     with pytest.raises(sweep.ConfigError, match="invalid recorded filesystem identity"):
         sweep.bound_identity(["volume", UUID_A], str(base))

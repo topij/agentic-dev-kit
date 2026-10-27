@@ -288,13 +288,15 @@ _UUID_RE = re.compile(r"[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]
 def _volume_uuid(path: str) -> str | None:
     """The UUID of the volume holding ``path``, or None where none is readable.
 
-    macOS renumbers ``st_dev`` across reboots (#1253), and ``statvfs().f_fsid``
-    equals it there. ``getattrlist(ATTR_VOL_UUID)`` names the volume that holds
-    the object, not the one ``st_dev`` suggests: on an APFS firmlinked system,
-    ``stat("/")`` reports the Data volume's device while ``/`` is the sealed
-    system snapshot, and both spellings of a firmlinked path report the Data
-    volume's UUID (measured 2026-10-27 on macOS 27). A mounted snapshot reports its
-    own snapshot UUID, so a snapshot copy does not share the live volume's.
+    macOS renumbers ``st_dev`` across reboots (#1253), and on Data-volume paths
+    ``statvfs().f_fsid`` equals it. ``getattrlist(ATTR_VOL_UUID)`` names the
+    volume that holds the object, which ``st_dev`` does not: on an APFS
+    firmlinked system ``stat("/")`` reports the Data volume's ``st_dev`` while
+    ``/`` is the sealed system snapshot with its own UUID, and both spellings of
+    a firmlinked path report the Data volume's UUID. A mounted snapshot reports
+    its own snapshot UUID, so a snapshot copy does not share the live volume's.
+    Measured on 2026-10-27 on macOS 27 with this call, ``os.stat``, ``statfs``
+    and ``diskutil info``.
     Linux has no stdlib route to a filesystem UUID, and its ``f_fsid`` is derived
     differently per filesystem, so off macOS this returns None and callers bind
     the device number as before. An all-zero UUID or a failed call is also None.

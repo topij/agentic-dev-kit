@@ -159,8 +159,10 @@ class Registry:
         if changed or legacy:
             hint = ""
             if all(item.startswith("device ") for item in changed):
-                hint = ("; only the device number differs, which a reboot or remount can renumber"
-                        if changed else "")
+                if changed:
+                    # With the schema 1 entry below, the device is not the only difference.
+                    hint = (f"; {'the device number also' if legacy else 'only the device number'} "
+                            "differs, which a reboot or remount can renumber")
                 hint += f": preview `session_cleanup.py reconcile {token}`"
             if legacy:
                 changed = [f"schema (stored {LEGACY_SCHEMA!r}, current {SCHEMA!r}; "
@@ -225,9 +227,13 @@ class Registry:
         the same object, exactly as `load` accepted it before. Its common dir
         and each present worktree whose recorded pair still matches are rebound
         to ``stable_identity``; a present worktree that no longer matches
-        refuses. Round receipts keep their version: a version 1 receipt keeps
-        its own (st_dev, st_ino) check. An absent worktree keeps its pair, which
-        refuses it if the path returns.
+        refuses. No round that is not yet `removed` may be present: a live
+        round keeps a version 1 receipt bound to this boot's device number, and
+        once the inventory loads on its stable identity no reconcile mode could
+        recover that round after a renumber. Such a round whose path is absent
+        is marked removed, as in renumbered-device. An absent worktree keeps its
+        pair, which is compared with the live device and inode if the path
+        returns.
 
         ``renumbered-device``: only the device number differs (schema 1, or a
         schema 2 record bound to the "device" kind). Every recorded round and
@@ -267,6 +273,18 @@ class Registry:
                 raise sweep.ConfigError("reconcile requires every recorded round and worktree to be absent "
                                         "and unregistered; still present: " + ", ".join(present))
         else:
+            live = []
+            for entry in record["rounds"]:
+                if entry["status"] == "removed":
+                    continue
+                try:
+                    os.lstat(canonical(Path(entry["receipt"]["path"])))
+                except FileNotFoundError:
+                    continue
+                live.append(entry["receipt"]["path"])
+            if live:
+                raise sweep.ConfigError("schema-upgrade requires every round to be retired or absent; "
+                                        "still present: " + ", ".join(live))
             for worktree in record["worktrees"]:
                 path = canonical(Path(worktree["path"]))
                 try:
@@ -278,7 +296,7 @@ class Registry:
                 current = sweep.stable_identity(str(path))
                 if current != worktree["identity"]:
                     rebound.append({"path": str(path), "stored": worktree["identity"], "current": current})
-        retiring = [r for r in record["rounds"] if changed and r["status"] != "removed"]
+        retiring = [r for r in record["rounds"] if r["status"] != "removed"]  # verified absent above
         plan = {"session": token, "mode": "renumbered-device" if changed else "schema-upgrade",
                 "differences": changed,
                 "schema": {"stored": record["schema"], "current": SCHEMA},
@@ -642,8 +660,12 @@ class Registry:
             return entry["last_result"]
         self.retire_round(record, entry, result, lambda: self.verify_seal(record, entry["seal"]), approval)
         entry["last_result"] = {**preview, "complete": result["action"] in {"removed", "absent"}}
+        # A reconciled round whose path reappeared stays "removed" but is not
+        # gone, matching apply's path-based verdict for the same state.
         record["complete"] = (not record["worktrees"]
-                              and all(r["status"] == "removed" for r in record["rounds"]))
+                              and all(r["status"] == "removed" for r in record["rounds"])
+                              and not any(r.get("reconciled") and os.path.lexists(r["receipt"]["path"])
+                                          for r in record["rounds"]))
         self.save(record)
         return entry["last_result"]
 

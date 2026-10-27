@@ -142,17 +142,21 @@ the scratch root, each round and each tracked worktree) by a filesystem identity
 that survives a reboot where the platform offers one:
 
 - `["volume", <UUID>, <inode>]` on macOS, from `getattrlist`'s volume UUID. macOS
-  renumbers the device number across reboots, and its `statvfs` `f_fsid` is that
-  same number; the volume UUID belongs to the volume that holds the directory,
-  which on an APFS firmlinked system is the Data volume even where `st_dev`
-  suggests otherwise.
+  renumbers the device number across reboots, and on Data-volume paths `statvfs`'s
+  `f_fsid` is that same number. The volume UUID belongs to the volume that holds the
+  directory, which `st_dev` does not tell apart: on an APFS firmlinked system
+  `stat("/")` reports the Data volume's device number, while `/` is the sealed system
+  snapshot with its own UUID.
 - `["device", <st_dev>, <inode>]` elsewhere, and on macOS when no volume UUID is
   readable. Linux has no standard-library route to a filesystem UUID. A device
   number that renumbers still makes these inventories unavailable, and reconcile
   below is the way back.
 
 The two kinds never compare equal: a record bound to a volume refuses when its UUID
-becomes unreadable, or reads as another volume. Inventories use schema
+becomes unreadable, or reads as another volume. The kind is fixed when the record is
+written, and reconcile does not rebind across kinds: a record bound to `device`
+because no UUID was readable then stays unavailable once one is, and needs a new
+inventory. Inventories use schema
 `devkit-cleanup-session/2`, and allocation receipts `version` 2. A schema 1
 inventory, written before boot-stable identities, binds the bare device and inode
 pair, and stays unavailable until reconcile upgrades it. A version 1 receipt keeps
@@ -173,9 +177,14 @@ other bound field but the device number.
   common directory now. This boot's device number proves it is the same directory,
   as it did when the inventory last loaded. Apply rebinds the common directory, and
   each present tracked worktree whose recorded pair still matches, to the new
-  identity; a present worktree whose pair no longer matches refuses. Rounds keep
-  their receipts and statuses. An absent worktree keeps its old pair, which refuses
-  it if the path returns.
+  identity; a present worktree whose pair no longer matches refuses. No round that
+  is not yet `removed` may be present: a live round's version 1 receipt binds this
+  boot's device number, and after an upgrade no reconcile mode could recover it from
+  a renumber. Retire live rounds through `seal`, `preview` and `apply --round` while
+  the engine that wrote the inventory can still load it. A live round whose path is
+  absent is marked removed, deleting nothing, and the preview lists it. An absent
+  worktree keeps its old pair, which is compared with the live device and inode if
+  the path returns, so after a renumber it refuses.
 - **`renumbered-device`**: only the device number differs, on a schema 1 inventory
   or on one bound to the `device` kind. Every recorded round and worktree path must
   be absent and no recorded worktree may still be registered with Git; an error

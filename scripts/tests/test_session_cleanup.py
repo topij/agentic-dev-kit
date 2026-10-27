@@ -1444,6 +1444,15 @@ def as_schema_1(registry, record):
     for worktree in old["worktrees"]:
         found = os.stat(worktree["path"])
         worktree["identity"] = [found.st_dev, found.st_ino]
+    for entry in old["rounds"]:  # version 1 receipts, with their markers where present
+        receipt = entry["receipt"]
+        root = os.stat(receipt["root"])
+        path = Path(receipt["path"])
+        found = os.stat(path) if path.exists() else None
+        receipt.update(version=1, root_identity=[root.st_dev, root.st_ino],
+                       identity=[found.st_dev, found.st_ino] if found else [root.st_dev, receipt["identity"][-1]])
+        if found:
+            (path / cleanup.sweep.ROUND_MARKER).write_text(json.dumps(receipt, sort_keys=True))
     registry.save(old)
     return old
 
@@ -1452,7 +1461,11 @@ def test_schema_1_record_loads_only_after_an_approved_upgrade(session):
     registry, record, root = session
     task = task_tree(registry, root)
     registry.track_worktree(record, task, "git")
-    receipt = allocate(registry, record)
+    retired = allocate(registry, record)
+    seal(registry, record, retired, scope=retired["id"])
+    apply_round(registry, record, retired)
+    vanished = allocate(registry, record)
+    shutil.rmtree(vanished["path"])
     before = as_schema_1(registry, record)
     with pytest.raises(cleanup.sweep.ConfigError) as refused:
         registry.load(record["id"])
@@ -1461,7 +1474,8 @@ def test_schema_1_record_loads_only_after_an_approved_upgrade(session):
     assert "device (" not in str(refused.value)
     plan = registry.reconcile_plan(record["id"])[1]
     assert plan["mode"] == "schema-upgrade" and plan["differences"] == []
-    assert plan["rounds_marked_removed"] == [] and plan["absent_worktrees"] == []
+    assert plan["rounds_marked_removed"] == plan["rounds_without_seal"] == [vanished["id"]]
+    assert plan["absent_worktrees"] == []
     assert [item["path"] for item in plan["worktrees_rebound"]] == [str(task)]
     assert stored(registry, record) == before  # preview writes nothing
     registry.reconcile(record["id"], plan["approval_token"])
@@ -1469,10 +1483,58 @@ def test_schema_1_record_loads_only_after_an_approved_upgrade(session):
     assert current["schema"] == cleanup.SCHEMA
     assert current["common_identity"] == cleanup.sweep.stable_identity(str(registry.common))
     assert current["worktrees"][0]["identity"] == cleanup.sweep.stable_identity(str(task))
-    assert current["rounds"][0]["receipt"] == receipt and current["rounds"][0]["status"] == "allocated"
+    assert [r["receipt"] for r in current["rounds"]] == [r["receipt"] for r in before["rounds"]]
+    assert [r["status"] for r in current["rounds"]] == ["removed", "removed"]
+    assert current["rounds"][0]["receipt"]["version"] == 1  # receipts are not rewritten
     assert current["complete"] is before["complete"]
     assert current["reconciled"][0]["mode"] == "schema-upgrade"
     assert current["reconciled"][0]["schema"] == {"stored": cleanup.LEGACY_SCHEMA, "current": cleanup.SCHEMA}
+
+
+def test_schema_1_upgrade_refuses_a_present_live_round(session, monkeypatch):
+    """Its version 1 receipt could not survive a renumber once the inventory upgrades."""
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    before = as_schema_1(registry, record)
+    with pytest.raises(cleanup.sweep.ConfigError,
+                       match="every round to be retired or absent; still present: " + receipt["path"]):
+        registry.reconcile_plan(record["id"])
+    assert stored(registry, record) == before
+    # Removing the path by hand stays a way out after a renumber, as at the base.
+    shutil.rmtree(receipt["path"])
+    renumber(monkeypatch)
+    plan = registry.reconcile_plan(record["id"])[1]
+    assert plan["mode"] == "renumbered-device" and plan["rounds_marked_removed"] == [receipt["id"]]
+
+
+def test_schema_1_load_hint_does_not_call_the_device_the_only_difference(session, monkeypatch):
+    registry, record, _ = session
+    as_schema_1(registry, record)
+    renumber(monkeypatch)
+    with pytest.raises(cleanup.sweep.ConfigError) as refused:
+        registry.load(record["id"])
+    assert "the device number also differs" in str(refused.value)
+    assert "only the device number" not in str(refused.value)
+
+
+def test_apply_round_leaves_incomplete_a_reconciled_round_whose_path_reappeared(device_session, monkeypatch):
+    registry, record, root = device_session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    away = root / "unmounted-round"
+    Path(receipt["path"]).rename(away)
+    original = cleanup.sweep._identity
+
+    def common_renumbered(path):
+        device, number = original(path)
+        return (device + 1, number) if path == str(registry.common) else (device, number)
+    monkeypatch.setattr(cleanup.sweep, "_identity", common_renumbered)
+    registry.reconcile(record["id"], registry.reconcile_plan(record["id"])[1]["approval_token"])
+    away.rename(receipt["path"])
+    result = apply_round(registry, registry.load(record["id"]), receipt)
+    assert result["paths"][0]["action"] == "kept" and not result["complete"]
+    assert registry.load(record["id"])["complete"] is False
+    assert Path(receipt["path"]).is_dir()
 
 
 def test_schema_1_upgrade_refuses_a_worktree_whose_pair_moved(session):

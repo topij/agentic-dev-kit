@@ -17,14 +17,19 @@ or receipts unavailable.
   and a pointer to `reconcile`. To upgrade one, preview `session_cleanup.py reconcile
   <session>` and apply `--approve <token>` under operator authorization. The preview
   now carries `mode` (`schema-upgrade` or `renumbered-device`), `schema`
-  (`stored`/`current`) and `worktrees_rebound`. In `schema-upgrade` mode, rounds and
-  worktrees may still be present: it needs the device and inode to still match. In
-  `renumbered-device` mode, every recorded path must be absent, as before.
+  (`stored`/`current`) and `worktrees_rebound`. `schema-upgrade` mode needs the
+  device and inode to still match, and no round that is not yet `removed` may be
+  present; such a round whose path is absent is marked removed, deleting nothing.
+  Worktrees may still be present. **Before taking this upgrade, retire every live
+  round** (`seal`, `preview`, `apply --round`): this engine cannot load a schema 1
+  inventory to retire one, so a present live round afterwards must be preserved and
+  removed by hand before the upgrade applies. In `renumbered-device` mode, every
+  recorded path must be absent, as before.
   Recover inventories that became unavailable after a reboot the same way.
 - Refusals can name two new fields: `volume (stored <UUID>, current <UUID>)` and
-  `identity kind (stored 'volume', current 'device')`. Neither is reconcilable. Nor
-  is an inventory whose volume UUID changed, for example one restored onto another
-  volume.
+  `identity kind (stored 'volume', current 'device')`. Neither is reconcilable, in
+  either direction between the kinds. Nor is an inventory whose volume UUID changed,
+  for example one restored onto another volume.
 - `reconcile` now names a shape-broken record's differing field before it checks
   the removal journal, instead of failing with a bare `KeyError`.
 - A round that reconcile marked removed and whose path reappears now previews and
