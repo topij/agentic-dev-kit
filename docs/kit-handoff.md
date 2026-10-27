@@ -94,18 +94,27 @@ age sweep judge them the same way in unowned entries; a nonempty `.git` file tha
 not start with `gitdir:` still keeps an unowned entry. #1193 (`043f61f2`) delivered #1186's residual LOWs (#1189),
 and #1192 (`5b50b225`) has `test_sweep_scratch.py` remove each test's tree at
 teardown (#1188). Not established: that a round in which a lens probes `.git` files can be
-retired. On 2026-10-23, `sweep_scratch.py --json` at `d07cf199` in report mode
-kept `cb1751f8…`, `review-72a279dd…` and `review-a2d753b4…` for an unparseable `.git`
-file each; removing them is the operator's call (friction log, 2026-10-23).
-`state/review-evidence/` retention remains scoped to #861.
+retired; triage archived that friction entry without filing on 2026-10-24, and
+`sweep_scratch.py --disk --json` at `ef8e4780` on 2026-10-27 listed none of the rounds it kept.
+#1258 (`ef8e4780`) retires each review round of an open session-cleanup inventory
+(`--round`) and has `allocate` refuse while an earlier round is unretired (#1254); its
+round-3 LOWs are #1259. Registry inventories made before macOS renumbered the
+volume's `st_dev` read as unavailable (#1253), which holds cs-toolkit's retained evidence
+in `.git/devkit`. Copies outside every managed root, such as Codex lens trees under
+`~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
+#1256. `state/review-evidence/` retention remains scoped to #861.
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
-[#895](https://github.com/topij/agentic-dev-kit/issues/895).
+[#895](https://github.com/topij/agentic-dev-kit/issues/895),
+[#1253](https://github.com/topij/agentic-dev-kit/issues/1253),
+[#1255](https://github.com/topij/agentic-dev-kit/issues/1255),
+[#1256](https://github.com/topij/agentic-dev-kit/issues/1256),
+[#1259](https://github.com/topij/agentic-dev-kit/issues/1259).
 
-▶ Next: the 2026-10-23 friction entry's question — whether lens `.git` probes go
-outside the round, or the engine treats a multi-line `gitdir:` pointer as linking
-nothing, as git does.
+▶ Next: #1253 — an explicit, previewed reconcile for inventories whose recorded
+filesystem identity no longer matches, without weakening the identity check; then
+retire cs-toolkit's held evidence through it.
 
 ### Reviewer profiles
 
