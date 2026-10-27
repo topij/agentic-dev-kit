@@ -681,27 +681,52 @@ def test_the_conftest_safe_path_pattern_is_the_engines() -> None:
     assert _load()._SAFE_PATH.pattern == SAFE_PATH_PATTERN
 
 
-def test_a_verifier_case_passes_when_the_user_name_holds_an_at_sign(tmp_path):
-    """#1257: with ``USER`` and ``LOGNAME`` set to an email address, pytest's basetemp
-    became ``pytest-of-<name>@<domain>`` and the verifier refused every fixture
-    ``--scratch`` under it. One verifier case runs in a child pytest under such a user,
-    with its temp root inside this test's dir, so its basetemp holds the ``@``
-    whatever this run's user is."""
-    user = "probe@example.com"
-    temproot = tmp_path / "temproot"
+_AT_SIGN_USER = "probe@example.com"
+
+
+def _verifier_case_as_at_sign_user(temproot: Path, tmpdir: Path):
+    """Run one verifier case in a child pytest whose user name holds an ``@``.
+
+    The child's basetemp is ``<temproot>/pytest-of-probe@example.com``, whatever this
+    run's user is, so ``safe_tmp_path`` must fall back to a dir under ``tmpdir``.
+    ``PYTEST_ADDOPTS`` is dropped: an inherited ``-q`` hides the summary line and an
+    inherited ``--basetemp`` would make the child empty this run's basetemp.
+    """
     temproot.mkdir()
+    tmpdir.mkdir()
     node = (f"{Path(__file__).resolve()}::"
             "test_the_verifier_prompt_carries_no_lens_framing_by_default")
-    env = {**os.environ, "USER": user, "LOGNAME": user,
-           "PYTEST_DEBUG_TEMPROOT": str(temproot)}
+    env = {**os.environ, "USER": _AT_SIGN_USER, "LOGNAME": _AT_SIGN_USER,
+           "PYTEST_DEBUG_TEMPROOT": str(temproot), "TMPDIR": str(tmpdir)}
+    env.pop("PYTEST_ADDOPTS", None)
     child = subprocess.run(
         [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", node],
         cwd=REPO_ROOT, env=env, capture_output=True, text=True, timeout=300,
     )
+    # The condition under test held: the child's basetemp carried the user name.
+    assert (temproot / f"pytest-of-{_AT_SIGN_USER}").is_dir(), sorted(temproot.iterdir())
+    return child
+
+
+def test_a_verifier_case_passes_when_the_user_name_holds_an_at_sign(tmp_path, safe_tmp_path):
+    """#1257: with ``USER`` and ``LOGNAME`` set to an email address, pytest's basetemp
+    became ``pytest-of-<name>@<domain>`` and the verifier refused every fixture
+    ``--scratch`` under it. The child can only pass through ``safe_tmp_path``'s
+    fallback under its ``TMPDIR``, so an empty ``TMPDIR`` afterwards pins the
+    fallback's removal at teardown."""
+    tmpdir = safe_tmp_path / "child-tmp"
+    child = _verifier_case_as_at_sign_user(tmp_path / "temproot", tmpdir)
     assert child.returncode == 0, child.stdout[-3000:] + child.stderr[-2000:]
     assert "1 passed" in child.stdout, child.stdout[-2000:]
-    # The condition under test held: the child's basetemp carried the user name.
-    assert (temproot / f"pytest-of-{user}").is_dir(), sorted(p.name for p in temproot.iterdir())
+    assert not [p.name for p in tmpdir.iterdir() if p.name.startswith("devkit-test-")]
+
+
+def test_an_unsafe_system_temp_dir_fails_the_safe_fixture_by_name(tmp_path):
+    """With nowhere safe to fall back to, ``safe_tmp_path`` fails and names ``TMPDIR``
+    rather than handing the verifier a path it will refuse."""
+    child = _verifier_case_as_at_sign_user(tmp_path / "temproot", tmp_path / "tmp sp@ce")
+    assert child.returncode != 0, child.stdout[-2000:]
+    assert "point TMPDIR at a directory that does" in child.stdout, child.stdout[-3000:]
 
 
 @pytest.mark.parametrize("runtime, carrier", [
