@@ -156,11 +156,13 @@ The two kinds never compare equal: a record bound to a volume refuses when its U
 becomes unreadable, or reads as another volume. The kind is fixed when the record is
 written, and reconcile does not rebind across kinds: a record bound to `device`
 because no UUID was readable then stays unavailable once one is, and needs a new
-inventory. Inventories use schema
-`devkit-cleanup-session/2`, and allocation receipts `version` 2. A schema 1
-inventory, written before boot-stable identities, binds the bare device and inode
-pair, and stays unavailable until reconcile upgrades it. A version 1 receipt keeps
-its own device and inode check, so it retires within the boot that allocated it.
+inventory. New inventories use schema `devkit-cleanup-session/2`, and new
+allocation receipts `version` 2. A schema 1 inventory, written before boot-stable
+identities, keeps loading on its bare device and inode pair exactly as before, and
+is never accepted on inode and path alone; it moves to schema 2 only through
+reconcile, after a renumber. A version 1 receipt keeps its own device and inode
+check. Rounds and worktrees recorded into a schema 1 inventory from now on bind the
+new identity.
 
 Reconcile is a preview, then an approved apply:
 
@@ -169,42 +171,25 @@ uv run <engine-dir>/session_cleanup.py reconcile <session>
 uv run <engine-dir>/session_cleanup.py reconcile <session> --approve <approval-token>
 ```
 
-It accepts two shapes and refuses everything else. Id, inode and policy (which
-carries the canonical common directory) must match in both, and so must every
-other bound field but the device number.
-
-- **`schema-upgrade`**: a schema 1 inventory whose device and inode still match the
-  common directory now. This boot's device number proves it is the same directory,
-  as it did when the inventory last loaded. Apply rebinds the common directory, and
-  each present tracked worktree whose recorded pair still matches, to the new
-  identity; a present worktree whose pair no longer matches refuses. No round that
-  is not yet `removed` may be present: a live round's version 1 receipt binds this
-  boot's device number, and after an upgrade no reconcile mode could recover it from
-  a renumber. Retire live rounds through `seal`, `preview` and `apply --round` while
-  the engine that wrote the inventory can still load it. A live round whose path is
-  absent is marked removed, deleting nothing, and the preview lists it. An absent
-  worktree keeps its old pair, which is compared with the live device and inode if
-  the path returns, so after a renumber it refuses.
-- **`renumbered-device`**: only the device number differs, on a schema 1 inventory
-  or on one bound to the `device` kind. Every recorded round and worktree path must
-  be absent and no recorded worktree may still be registered with Git; an error
-  inspecting a path other than its absence refuses reconcile. Apply rebinds to the
-  new identity, marks the listed rounds removed and marks the inventory complete.
-  An inventory with a round or worktree still present stays unavailable: those
-  paths carry the old device number in their own recorded identities, which
-  reconcile cannot re-verify. The same holds for a receipt: `--finish-review-round`
-  refuses a device-bound round that survived a renumbering as replaced.
-
-A schema 1 inventory is never accepted on inode and path alone. Reconcile also
-refuses an unapproved interrupted removal, checked once every other bound field is
-trusted. The preview writes nothing. It lists its `mode`, the differences, the
-stored and current schema and identity, the rounds it will mark removed, which of
-those retained no evidence (`rounds_without_seal`), the absent worktrees and the
-worktrees it rebinds. Its token binds the stored record and that plan, including
-the current identity, and it is not itself operator consent: apply only under
-authorization covering that inventory. Apply records the change under `reconciled`
-and deletes nothing, retained evidence included; an open inventory continues as
-before.
+It accepts the device number as the only difference, on a schema 1 inventory or on
+one bound to the `device` kind: schema, id, inode and policy (which carries the
+canonical common directory) must still match, and any other difference refuses.
+Every recorded round and worktree path must be absent and no recorded worktree may
+still be registered with Git; an error inspecting a path other than its absence
+refuses reconcile. It also refuses an unapproved interrupted removal, checked once
+every other bound field is trusted. The preview writes nothing and lists the
+differences, the stored and current schema and identity, the rounds it will mark
+removed, which of those retained no evidence (`rounds_without_seal`) and the absent
+worktrees. Its token binds the stored record and that plan, including the current
+identity, and it is not itself operator consent: apply only under authorization
+covering that inventory. Apply rebinds the common directory to the new identity and
+schema 2, marks the listed rounds removed, records the change under `reconciled`
+and marks the inventory complete. It deletes nothing, retained evidence included;
+an open inventory continues as before. An inventory with a round or worktree still
+present stays unavailable: those paths carry the old device number in their own
+recorded identities, which reconcile cannot re-verify. The same holds for a
+receipt: `--finish-review-round` refuses a device-bound round that survived a
+renumbering as replaced.
 
 ## Retain required evidence, then seal
 
@@ -273,7 +258,8 @@ approval and resumes with the same `apply --round`, and while any round is `remo
 that stops before removal, on an active user or a refusal, persists nothing: resolve
 the cause, preview again and apply with the new token. Each round apply records its
 own `last_result` on the round. The inventory reports `complete` while every round is
-removed and it tracks no worktree, so an inventory used only for rounds needs no final
+removed, no round reconcile marked removed has its path back, and it tracks no
+worktree, so an inventory used only for rounds needs no final
 seal. Tracked worktrees and kept rounds still retire through the inventory's seal,
 preview and apply.
 

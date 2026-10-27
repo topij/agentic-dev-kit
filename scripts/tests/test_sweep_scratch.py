@@ -1788,7 +1788,8 @@ def test_an_all_zero_volume_uuid_is_none():
     assert sweep._decode_volume_uuid(bytes.fromhex("AC62930A94C14C33BEB61E9E9C72714E")) == UUID_A
 
 
-@pytest.mark.parametrize("kind", ["v1-tagged", "v2-pair", "v2-kind", "v2-bad-uuid", "v2-bool-inode"])
+@pytest.mark.parametrize("kind", ["v1-tagged", "v2-pair", "v2-kind", "v2-bad-uuid", "v2-bool-inode",
+                                  "v2-bool-device"])
 def test_receipt_identity_shape_must_match_its_version(root, repo, kind):
     settings, receipt, path = _round(root, repo)
     if kind == "v1-tagged":
@@ -1799,8 +1800,10 @@ def test_receipt_identity_shape_must_match_its_version(root, repo, kind):
         receipt = {**receipt, "identity": ["inode", *receipt["identity"][1:]]}
     elif kind == "v2-bad-uuid":
         receipt = {**receipt, "identity": ["volume", "not-a-uuid", receipt["identity"][-1]]}
-    else:
+    elif kind == "v2-bool-inode":
         receipt = {**receipt, "identity": [*receipt["identity"][:2], True]}
+    else:
+        receipt = {**receipt, "identity": ["device", True, receipt["identity"][-1]]}
     (path / sweep.ROUND_MARKER).write_text(json.dumps(receipt, sort_keys=True))
     with pytest.raises(sweep.ConfigError, match="invalid review round filesystem identity"):
         sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)

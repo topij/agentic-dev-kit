@@ -7,25 +7,17 @@ On macOS a reboot that renumbers the device number no longer makes new inventori
 or receipts unavailable.
 
 - New inventories are `schema: "devkit-cleanup-session/2"`, and their
-  `common_identity` and each worktree's `identity` take the tagged form. New
+  `common_identity` takes the tagged form, as does each worktree `identity` recorded
+  from now on, in any inventory. New
   receipts from `sweep_scratch.py --create-review-round` and `session_cleanup.py
   allocate` are `version: 2`, with tagged `identity` and `root_identity`. A version 1
   receipt is still accepted, with its old `[st_dev, st_ino]` check. A tool that reads
   these fields as a two-integer pair must accept the three-element form.
-- A schema 1 inventory no longer loads. `list` reports it unavailable with
-  `schema (stored 'devkit-cleanup-session/1', current 'devkit-cleanup-session/2'; …)`
-  and a pointer to `reconcile`. To upgrade one, preview `session_cleanup.py reconcile
-  <session>` and apply `--approve <token>` under operator authorization. The preview
-  now carries `mode` (`schema-upgrade` or `renumbered-device`), `schema`
-  (`stored`/`current`) and `worktrees_rebound`. `schema-upgrade` mode needs the
-  device and inode to still match, and no round that is not yet `removed` may be
-  present; such a round whose path is absent is marked removed, deleting nothing.
-  Worktrees may still be present. **Before taking this upgrade, retire every live
-  round** (`seal`, `preview`, `apply --round`): this engine cannot load a schema 1
-  inventory to retire one, so a present live round afterwards must be preserved and
-  removed by hand before the upgrade applies. In `renumbered-device` mode, every
-  recorded path must be absent, as before.
-  Recover inventories that became unavailable after a reboot the same way.
+- A schema 1 inventory keeps loading on its `[st_dev, st_ino]` pair, as before. After
+  a reboot that renumbers the device, `reconcile <session>` (preview, then
+  `--approve <token>` under operator authorization) rebinds it to the new identity
+  and schema 2, under the existing preconditions. Its preview and the `reconciled`
+  history now carry `schema` (`stored`/`current`).
 - Refusals can name two new fields: `volume (stored <UUID>, current <UUID>)` and
   `identity kind (stored 'volume', current 'device')`. Neither is reconcilable, in
   either direction between the kinds. Nor is an inventory whose volume UUID changed,

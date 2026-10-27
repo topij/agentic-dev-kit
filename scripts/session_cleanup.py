@@ -35,7 +35,8 @@ from kitconfig import get, load_config, repo_root  # noqa: E402
 
 SCHEMA = "devkit-cleanup-session/2"
 # Schema 1 bound (st_dev, st_ino), which macOS renumbers across reboots (#1253).
-# It loads only after an approved `reconcile` rebinds it to stable_identity.
+# It still loads on that pair; a renumber's approved `reconcile` rebinds it to
+# stable_identity and schema 2.
 LEGACY_SCHEMA = "devkit-cleanup-session/1"
 LIMIT = 1024 * 1024
 KINDS = {"report", "finding", "verification", "compute", "source", "asset", "receipt"}
@@ -155,18 +156,11 @@ class Registry:
     def load(self, token: str) -> dict:
         record = read_json(self.location(token) / "session.json")
         changed = self.differences(record, token)
-        legacy = record.get("schema") == LEGACY_SCHEMA
-        if changed or legacy:
+        if changed:
             hint = ""
             if all(item.startswith("device ") for item in changed):
-                if changed:
-                    # With the schema 1 entry below, the device is not the only difference.
-                    hint = (f"; {'the device number also' if legacy else 'only the device number'} "
-                            "differs, which a reboot or remount can renumber")
-                hint += f": preview `session_cleanup.py reconcile {token}`"
-            if legacy:
-                changed = [f"schema (stored {LEGACY_SCHEMA!r}, current {SCHEMA!r}; "
-                           "the stored schema binds the device number)", *changed]
+                hint = ("; only the device number differs, which a reboot or remount can renumber: "
+                        f"preview `session_cleanup.py reconcile {token}`")
             raise sweep.ConfigError("session repository identity or cleanup policy changed: "
                                     + "; ".join(changed) + hint)
         self.check_journal(record)
@@ -175,9 +169,9 @@ class Registry:
     def differences(self, record: dict, token: str) -> list[str]:
         """Each bound field that no longer matches, with its stored and current value.
 
-        A schema 1 record is compared in its own terms, (st_dev, st_ino), so a
-        reconcile can tell an unchanged legacy inventory from a renumbered one;
-        `load` still refuses it. Only a "device" difference is ever reported
+        A schema 1 record is compared in its own terms, (st_dev, st_ino), exactly
+        as before #1253, and loads while that pair matches; it is never
+        accepted on inode and path alone. Only a "device" difference is ever reported
         with the `device ` prefix reconcile accepts: a different volume UUID, or
         a change between the "volume" and "device" kinds, is another volume.
         """
@@ -216,98 +210,56 @@ class Registry:
             raise sweep.ConfigError("interrupted removal lacks its durable approval")
 
     def reconcile_plan(self, token: str) -> tuple[dict, dict]:
-        """Preview rebinding an inventory to the current schema and identity.
+        """Preview rebinding an inventory whose only changed binding is its device number.
 
-        Two shapes are accepted and nothing else; schema (1 or 2), id, inode
-        and policy (which carries the canonical common dir) must match in both.
-        It retires no data.
-
-        ``schema-upgrade``: a schema 1 record whose (st_dev, st_ino) still
-        matches the common dir now, so this boot's device number proves it is
-        the same object, exactly as `load` accepted it before. Its common dir
-        and each present worktree whose recorded pair still matches are rebound
-        to ``stable_identity``; a present worktree that no longer matches
-        refuses. No round that is not yet `removed` may be present: a live
-        round keeps a version 1 receipt bound to this boot's device number, and
-        once the inventory loads on its stable identity no reconcile mode could
-        recover that round after a renumber. Such a round whose path is absent
-        is marked removed, as in renumbered-device. An absent worktree keeps its
-        pair, which is compared with the live device and inode if the path
-        returns.
-
-        ``renumbered-device``: only the device number differs (schema 1, or a
-        schema 2 record bound to the "device" kind). Every recorded round and
-        worktree path must be absent and no worktree still registered with Git;
-        a present one refuses, because its own recorded identity carries the old
-        device too and nothing here can re-verify it. Only FileNotFoundError
-        counts as absent: any other error inspecting a path refuses reconcile
-        rather than reading as gone. An unmounted root also reads as absent; marking its round removed
-        deletes nothing, and a returning directory is no longer managed here.
-
-        A schema 1 record is never accepted on inode and path alone.
+        macOS renumbers st_dev across reboots, so a record bound to the device
+        number (schema 1, or a schema 2 record bound to the "device" kind) can
+        never load again. Reconcile accepts that one difference and nothing
+        else: schema, id, inode and policy (which carries the canonical common
+        dir) must still match. It rebinds to ``stable_identity`` and schema 2,
+        and retires no data. Every recorded round and worktree path must be
+        absent and no worktree still registered with Git; a present one refuses,
+        because its own recorded identity carries the old device too and
+        nothing here can re-verify it. Only FileNotFoundError counts as absent:
+        any other error inspecting a path refuses reconcile rather than reading
+        as gone. An unmounted root also reads as absent; marking its round
+        removed deletes nothing, and a returning directory is no longer managed
+        here.
         """
         record = read_json(self.location(token) / "session.json")
-        legacy = record.get("schema") == LEGACY_SCHEMA
         changed = self.differences(record, token)
         if not all(item.startswith("device ") for item in changed):
-            raise sweep.ConfigError("reconcile rebinds only a changed device number or a schema 1 "
-                                    "inventory; other bound fields differ: " + "; ".join(changed))
+            raise sweep.ConfigError("reconcile rebinds only a changed device number; other bound "
+                                    "fields differ: " + "; ".join(changed))
         # Only once every bound field but the device is trusted (#1263).
         self.check_journal(record)
-        if not changed and not legacy:
+        if not changed:
             raise sweep.ConfigError("inventory loads unchanged; there is nothing to reconcile")
-        rebound = []
-        if changed:
-            present = []
-            for path in ([r["receipt"]["path"] for r in record["rounds"]]
-                         + [w["path"] for w in record["worktrees"]]):
-                try:
-                    os.lstat(canonical(Path(path)))
-                except FileNotFoundError:
-                    continue
-                present.append(path)
-            registered = sweep.registered_worktrees(self.settings.repos)
-            present += [w["path"] for w in record["worktrees"]
-                        if w["path"] in registered and w["path"] not in present]
-            if present:
-                raise sweep.ConfigError("reconcile requires every recorded round and worktree to be absent "
-                                        "and unregistered; still present: " + ", ".join(present))
-        else:
-            live = []
-            for entry in record["rounds"]:
-                if entry["status"] == "removed":
-                    continue
-                try:
-                    os.lstat(canonical(Path(entry["receipt"]["path"])))
-                except FileNotFoundError:
-                    continue
-                live.append(entry["receipt"]["path"])
-            if live:
-                raise sweep.ConfigError("schema-upgrade requires every round to be retired or absent; "
-                                        "still present: " + ", ".join(live))
-            for worktree in record["worktrees"]:
-                path = canonical(Path(worktree["path"]))
-                try:
-                    os.lstat(path)
-                except FileNotFoundError:
-                    continue
-                if sweep.bound_identity(worktree["identity"], str(path)) is None:
-                    raise sweep.ConfigError(f"worktree identity changed; cannot rebind {path}")
-                current = sweep.stable_identity(str(path))
-                if current != worktree["identity"]:
-                    rebound.append({"path": str(path), "stored": worktree["identity"], "current": current})
-        retiring = [r for r in record["rounds"] if r["status"] != "removed"]  # verified absent above
-        plan = {"session": token, "mode": "renumbered-device" if changed else "schema-upgrade",
-                "differences": changed,
+        present = []
+        for path in ([r["receipt"]["path"] for r in record["rounds"]]
+                     + [w["path"] for w in record["worktrees"]]):
+            try:
+                os.lstat(canonical(Path(path)))
+            except FileNotFoundError:
+                continue
+            present.append(path)
+        registered = sweep.registered_worktrees(self.settings.repos)
+        present += [w["path"] for w in record["worktrees"]
+                    if w["path"] in registered and w["path"] not in present]
+        if present:
+            raise sweep.ConfigError("reconcile requires every recorded round and worktree to be absent "
+                                    "and unregistered; still present: " + ", ".join(present))
+        plan = {"session": token, "differences": changed,
                 "schema": {"stored": record["schema"], "current": SCHEMA},
                 "common_identity": {"stored": record["common_identity"],
                                     "current": sweep.stable_identity(str(self.common))},
-                "rounds_marked_removed": [r["receipt"]["id"] for r in retiring],
+                "rounds_marked_removed": [r["receipt"]["id"] for r in record["rounds"]
+                                          if r["status"] != "removed"],
                 # An unsealed round retained no evidence; the approver sees which.
-                "rounds_without_seal": [r["receipt"]["id"] for r in retiring
-                                        if r.get("seal") is None and record["seal"] is None],
-                "absent_worktrees": [w["path"] for w in record["worktrees"]] if changed else [],
-                "worktrees_rebound": rebound}
+                "rounds_without_seal": [r["receipt"]["id"] for r in record["rounds"]
+                                        if r["status"] != "removed" and r.get("seal") is None
+                                        and record["seal"] is None],
+                "absent_worktrees": [w["path"] for w in record["worktrees"]]}
         plan["approval_token"] = digest({"record": record, "plan": plan})
         return record, plan
 
@@ -316,22 +268,18 @@ class Registry:
         if approval != plan["approval_token"]:
             raise sweep.ConfigError("approval does not match this exact inventory and reconcile plan")
         for entry in record["rounds"]:
-            if entry["receipt"]["id"] in plan["rounds_marked_removed"]:
+            if entry["status"] != "removed":
                 entry["status"] = "removed"
                 entry["reconciled"] = approval
-        current = {item["path"]: item["current"] for item in plan["worktrees_rebound"]}
-        for worktree in record["worktrees"]:
-            worktree["identity"] = current.get(worktree["path"], worktree["identity"])
         history = record.get("reconciled", [])
         if not isinstance(history, list):
             raise sweep.ConfigError("recorded reconcile history must be a list")
-        record["reconciled"] = [*history, {"mode": plan["mode"], "schema": plan["schema"],
+        record["reconciled"] = [*history, {"schema": plan["schema"],
                                            "common_identity": plan["common_identity"],
                                            "approval": approval}]
         record["schema"] = SCHEMA
         record["common_identity"] = plan["common_identity"]["current"]
-        if plan["mode"] == "renumbered-device":
-            record["complete"] = True  # every recorded path was just verified absent
+        record["complete"] = True  # every recorded path was just verified absent
         self.save(record)
         self.load(token)
         return {**plan, "applied": True}
