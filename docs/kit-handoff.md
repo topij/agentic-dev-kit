@@ -106,7 +106,7 @@ waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has th
 `f_fsid` and volume-UUID probes); its review's LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
 #1256. `state/review-evidence/` retention remains scoped to #861.
-`review-01234b4030e84455b64ed357affdc5ec`, the delta round from #1262's review, is still on disk. On 2026-10-27
+`review-01234b4030e84455b64ed357affdc5ec`, round 3 of #1262's review, is still on disk. On 2026-10-27
 `session_cleanup.py preview --round` kept it for an unparseable worktree record, which a `test_panel_prompt.py`
 fixture wrote inside the round (#1265).
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
@@ -120,9 +120,9 @@ fixture wrote inside the round (#1265).
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1265](https://github.com/topij/agentic-dev-kit/issues/1265).
 
-▶ Next: from the primary checkout, preview `uv run scripts/session_cleanup.py reconcile <id>`
-for each inventory `list` reports unavailable. Apply `--approve <token>` only to those it
-accepts, on the operator's authorization, and report each refusal as it stands.
+▶ Next: once #1267 (#1253's change) merges, preview `uv run scripts/session_cleanup.py reconcile <id>` from the
+primary checkout for each inventory `list` reports unavailable, so each inventory is rebound once. Apply
+`--approve <token>` only to those it accepts, on the operator's authorization, and report each refusal as it stands.
 
 ### Reviewer profiles
 
@@ -208,13 +208,12 @@ The preserved `fabed73e` implementation is design evidence; the
 round-3 decision packet and round-4 findings on #1111 explain why receipt clearing
 was removed. #1116 carries the identity follow-ups, including the cs-toolkit upgrade's
 timeout and report-containment findings.
+cs-toolkit's real scheduled draft and finalize runs of 2026-10-23 each wrote a receipt that its wrapper re-checked
+against the expected invocation. That evidence is under `state/automation-progress/triage-calls/` in cs-toolkit, read
+on 2026-10-27. Neither run reached completed-state retirement; see *Consumer upgrades*.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify the documented trusted launcher boundary for cs-toolkit's scheduled calls.
-
-Its real draft and finalize runs of 2026-10-23 each wrote a receipt that the wrapper re-checked against the expected
-invocation. That evidence is under `state/automation-progress/triage-calls/` in cs-toolkit, read on 2026-10-27.
-Neither run reached completed-state retirement; see *Consumer upgrades*.
 
 ### Shared hook installation
 
@@ -289,7 +288,7 @@ with #1243's items in one PR, so the safety-critical panel runs once.
 
 A read-only `kit_doctor` and changelog pass from that baseline to kit `2a8fbb96`, done on 2026-10-27, is in
 `saved_plans/cs-toolkit-upgrade-prep_2026-10-27.md`. That file is local and untracked. Extend it for #1253's range
-once that merges.
+once #1267, which carries that change, merges.
 
 cs-toolkit's scheduled triage runs on 2026-10-23 wrote receipts, and the wrapper re-checked them. Both runs failed,
 and the completed LIVE state has not retired:
@@ -302,7 +301,8 @@ inventory is rebound once. The earlier local assessment,
 **Owner:** #1116, #990, #1011, #979, #1253, #1266; CUS-1852 in cs-toolkit's Linear.
 
 ▶ Next: the operator runs an interactive `/triage-friction-log recover` in cs-toolkit's primary checkout before its
-Friday `triage-friction-log-draft` firing (`fri 14:00` in its `config/automations.yaml`). After #1253 merges, extend
-the prep notes and upgrade cs-toolkit following the kit's `upgrade.md`, then preview and apply `reconcile` with
-approval. Separately: resolve unattended notification delivery as its own adopter decision, and reassess
+Friday `triage-friction-log-draft` firing (`fri 14:00` in its `config/automations.yaml`). That clears only the gate:
+the draft can still fail on its request bytes until CUS-1852 is fixed, so retirement needs both. After #1267
+merges, extend the prep notes and upgrade cs-toolkit following the kit's `upgrade.md`, then preview and apply
+`reconcile` with approval. Separately: resolve unattended notification delivery as its own adopter decision, and reassess
 OpenKitchen's installation and lane prerequisites before an upgrade there.
