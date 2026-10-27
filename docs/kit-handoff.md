@@ -106,6 +106,9 @@ waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has th
 `f_fsid` and volume-UUID probes); its review's LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
 #1256. `state/review-evidence/` retention remains scoped to #861.
+`review-01234b4030e84455b64ed357affdc5ec`, the delta round from #1262's review, is still on disk. On 2026-10-27
+`session_cleanup.py preview --round` kept it for an unparseable worktree record, which a `test_panel_prompt.py`
+fixture wrote inside the round (#1265).
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
@@ -114,7 +117,8 @@ waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has th
 [#1255](https://github.com/topij/agentic-dev-kit/issues/1255),
 [#1256](https://github.com/topij/agentic-dev-kit/issues/1256),
 [#1259](https://github.com/topij/agentic-dev-kit/issues/1259),
-[#1263](https://github.com/topij/agentic-dev-kit/issues/1263).
+[#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
+[#1265](https://github.com/topij/agentic-dev-kit/issues/1265).
 
 ▶ Next: from the primary checkout, preview `uv run scripts/session_cleanup.py reconcile <id>`
 for each inventory `list` reports unavailable. Apply `--approve <token>` only to those it
@@ -153,8 +157,11 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 **Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
 shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
-`proposal_correction` receipt, retires. **Owner:**
-[#979](https://github.com/topij/agentic-dev-kit/issues/979).
+`proposal_correction` receipt, retires. That retirement is blocked, as read on 2026-10-27:
+- a stale single-writer gate (#1266) needs an interactive `recover` in cs-toolkit;
+- the 2026-10-23 draft failed on its request bytes (CUS-1852).
+
+**Owner:** [#979](https://github.com/topij/agentic-dev-kit/issues/979).
 
 ▶ Next: once cs-toolkit's scheduled triage draft has retired its completed LIVE state,
 confirm no state root holds a `proposal_correction`, then remove the shim (#979).
@@ -203,9 +210,11 @@ was removed. #1116 carries the identity follow-ups, including the cs-toolkit upg
 timeout and report-containment findings.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
-▶ Next: verify cs-toolkit's real scheduled-run receipts and the documented trusted
-launcher boundary; installed wrapper code alone does not establish live invocation
-coverage or completed-state retirement.
+▶ Next: verify the documented trusted launcher boundary for cs-toolkit's scheduled calls.
+
+Its real draft and finalize runs of 2026-10-23 each wrote a receipt that the wrapper re-checked against the expected
+invocation. That evidence is under `state/automation-progress/triage-calls/` in cs-toolkit, read on 2026-10-27.
+Neither run reached completed-state retirement; see *Consumer upgrades*.
 
 ### Shared hook installation
 
@@ -273,21 +282,27 @@ with #1243's items in one PR, so the safety-critical panel runs once.
 
 ### Consumer upgrades
 
-**Status:** cs-toolkit's
-[in-parallel-oy/cs-toolkit#2769](https://github.com/in-parallel-oy/cs-toolkit/pull/2769)
-integrated caller enforcement and managed review rounds after the #2762 upgrade.
-`git show 5b49543928c4d4187598e18d17deececb9419a34:kit-manifest.json` in
-`/Users/topi/Coding/in-parallel/cs-toolkit` on 2026-10-20 recorded kit
-`b739bc46faa99764f3a10200dc2e02720e61a6de`. At that same adopter revision,
-`git show` of `scripts/scheduled_triage.py` and `config/automations.yaml` showed
-the per-call wrapper and its deliverable checks; `scripts/retire_triage_state.py`
-was a read-only guard. No real scheduled job or live state retirement was run here.
-The adopter handoff separates notification-provider integration from the installed
-receipt contract. The earlier local assessment,
-`saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates these upgrades.
-**Owner:** #1116, #990, #1011, #979.
+**Status:** cs-toolkit installed kit `cd41724b` in
+[in-parallel-oy/cs-toolkit#2942](https://github.com/in-parallel-oy/cs-toolkit/pull/2942). That is the
+`kit_commit` in `git show origin/main:kit-manifest.json`, read in `/Users/topi/Coding/in-parallel/cs-toolkit` at
+`d2f16e78` on 2026-10-27.
 
-▶ Next: verify cs-toolkit's scheduled-run receipts and completed-state retirement
-before removing the #979 shim; resolve unattended notification delivery as its own
-adopter decision. Reassess OpenKitchen's installation and lane prerequisites before
-an upgrade there.
+A read-only `kit_doctor` and changelog pass from that baseline to kit `2a8fbb96`, done on 2026-10-27, is in
+`saved_plans/cs-toolkit-upgrade-prep_2026-10-27.md`. That file is local and untracked. Extend it for #1253's range
+once that merges.
+
+cs-toolkit's scheduled triage runs on 2026-10-23 wrote receipts, and the wrapper re-checked them. Both runs failed,
+and the completed LIVE state has not retired:
+- the draft on its request bytes (CUS-1852);
+- the finalize on a single-writer gate held since 2026-10-16 by an owner that has exited (#1266).
+
+Hold `reconcile` on cs-toolkit's unavailable cleanup inventories until #1253's change is installed there, so each
+inventory is rebound once. The earlier local assessment,
+`saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates these upgrades.
+**Owner:** #1116, #990, #1011, #979, #1253, #1266; CUS-1852 in cs-toolkit's Linear.
+
+▶ Next: the operator runs an interactive `/triage-friction-log recover` in cs-toolkit's primary checkout before its
+Friday `triage-friction-log-draft` firing (`fri 14:00` in its `config/automations.yaml`). After #1253 merges, extend
+the prep notes and upgrade cs-toolkit following the kit's `upgrade.md`, then preview and apply `reconcile` with
+approval. Separately: resolve unattended notification delivery as its own adopter decision, and reassess
+OpenKitchen's installation and lane prerequisites before an upgrade there.
