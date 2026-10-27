@@ -100,9 +100,8 @@ on 2026-10-22 and 2026-10-23 (`review-72a279dd…` among them).
 #1258 (`ef8e4780`) retires each review round of an open session-cleanup inventory
 (`--round`) and has `allocate` refuse while an earlier round is unretired (#1254); its
 round-3 LOWs are #1259. #1261 (`87a5f18b`) names the differing bound field in an
-unavailable inventory's refusal and adds an approved `reconcile` that rebinds an
-inventory whose only change is the device number and whose recorded paths are all
-absent. It deletes nothing, so cs-toolkit's retained evidence in `.git/devkit` still
+unavailable inventory's refusal and adds an approved `reconcile` for a changed device
+number, under the preconditions in `session-cleanup.md`. It deletes nothing, so cs-toolkit's retained evidence in `.git/devkit` still
 waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has the
 `f_fsid` and volume-UUID probes); its review's LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
@@ -117,9 +116,9 @@ waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has th
 [#1259](https://github.com/topij/agentic-dev-kit/issues/1259),
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263).
 
-▶ Next: reconcile this repository's unavailable inventories from the primary checkout:
-`uv run scripts/session_cleanup.py list`, then `reconcile <id>` for each, applying
-`--approve <token>` only on the operator's authorization.
+▶ Next: from the primary checkout, preview `uv run scripts/session_cleanup.py reconcile <id>`
+for each inventory `list` reports unavailable. Apply `--approve <token>` only to those it
+accepts, on the operator's authorization, and report each refusal as it stands.
 
 ### Reviewer profiles
 
