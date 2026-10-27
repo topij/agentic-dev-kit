@@ -647,7 +647,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "2d3ab3e74fe5e0077c25ebfdefc280b1b12708c44aea5bad237ced6a5c72a62e"
+      "sha256": "2896f645effdb3b49758bdd48b1c8d7d339cc5bf13cd3ae4387b95c85a02f2e4"
     },
     "scripts/tests/fixtures/codex_parallel_batch_expected.json": {
       "role": "repo-only",
@@ -739,7 +739,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "9149ce6f14bd0094afcb51bcb77824b5c06d4178ec3bb1a6b9b87378ad827f15"
+      "sha256": "484a8286c02b6d4a1903309ffc6bdabbd7003457016377ad94b413df7a8ce257"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -771,7 +771,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "0c98cb89e328fdd6795a3e0ff19e2c78c9d3c3a36e8fedba68d29d9b44dc3c48"
+      "sha256": "20401d07aef8818b039f00a955c97df629b80cc631c5107c281ff1a4ccb57275"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",

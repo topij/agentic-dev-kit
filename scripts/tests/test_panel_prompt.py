@@ -1772,7 +1772,7 @@ def test_a_renumbering_slip_is_refused_even_though_the_count_is_unchanged(tmp_pa
 # --- round 2 findings: the branch fix did not close its class -------------------
 
 
-def test_a_worktree_on_its_own_lane_branch_is_refused(repo, tmp_path):
+def test_a_worktree_on_its_own_lane_branch_is_refused(repo):
     """`dev_session.sh` builds lanes with `git worktree add -b`, so a review tree
     can sit on a real branch that is NOT the branch under review.
 
@@ -1782,7 +1782,7 @@ def test_a_worktree_on_its_own_lane_branch_is_refused(repo, tmp_path):
     branch under review only if its tip IS the head under review.
     """
     base, head = _revs(repo)
-    lane = tmp_path / "lane"
+    lane = repo.parent / "lane"  # beside repo, where _run looks for scratch-root
     _git(repo, "worktree", "add", "-b", "lane/throwaway", str(lane), base)
     out = _run(lane, "--lens", "adversarial", "--head", head, "--base", base)
     assert out.returncode == 2, out.stdout
