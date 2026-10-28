@@ -3745,9 +3745,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "**Decide whether there is anything to hand over.**" in flattened
         assert "If nothing is left, the handoff is not edited." in flattened
         assert (
-            "**The default home is the session's own pull request, before its review.**"
+            "**The default home is the pull request the record belongs to, before its review.**"
             in flattened
         )
+        assert "**Run the handoff test before every pull request goes to review**" in flattened
+        assert "**Route friction when it is found**" in flattened
         # A workstream is a subject, and a batch is filed per pull request.
         assert (
             "**A workstream is named for its subject, never for a date, a run mode, "
@@ -4550,8 +4552,16 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "If nothing is left, add a session entry anyway.", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "**The default home is the session's own pull request, before its review.**",
+            "**The default home is the pull request the record belongs to, before its review.**",
             "**The default home is a separate wrap-up pull request.**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**Run the handoff test before every pull request goes to review**",
+            "**Run the handoff test before the session's last pull request goes to review**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "**Route friction when it is found**",
+            "**Route friction at the end of the session**", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Closing a workstream is not among them",

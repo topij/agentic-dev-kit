@@ -683,8 +683,8 @@ failure makes the overall outcome `incomplete-resumable`.
    `<handoff-history>` if the archive sweep ran; also stage any existing project-status
    artifact this workflow changed).
 
-   **The default home is the pull request the record belongs to, before its
-   review.** Commit the record on that pull request's branch before the opening
+   **The default home is the pull request the record belongs to, before its review.**
+   Commit the record on that pull request's branch before the opening
    review pass is requested, so one review covers the change and its record and no
    second pull request exists to review. Each pull request carries only what its
    own handoff test found; a closing run puts what no pull request covered on one
