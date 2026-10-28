@@ -111,7 +111,8 @@ holds round `01234b40` (round 3 of #1262's review), which `session_cleanup.py pr
 2026-10-27 for a worktree record whose path holds a newline, written inside the round by a `test_panel_prompt.py`
 fixture (#1265). #1277 (`e372ba36`) released that record's keep, and `configured.git` fixture dirs still keep the
 round (#1279). #1277's review rounds `5ced121b` and `e388daaa` are also kept on disk, in inventory `a5b9c398`, by lens
-probe leftovers: a `.git` file naming a newline path (#1280) and a `configured.git` dir (#1279).
+probe leftovers: a `.git` file whose `gitdir:` pointer spans lines, which `_linked_gitdir_reason` keeps on purpose and
+no open ticket covers yet, and a `configured.git` dir (#1279).
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
@@ -125,7 +126,7 @@ probe leftovers: a `.git` file naming a newline path (#1280) and a `configured.g
 
 ▶ Next: #1279 — clear `test_panel_prompt.py`'s `configured.git` keeper. Then preview rounds `01234b40`, `5ced121b`
 and `e388daaa` with `session_cleanup.py preview --round`, and retire each one it reports eligible, with the operator's
-approval. A round still kept for a newline `.git` file waits on #1280.
+approval. Round `5ced121b` stays kept for its multi-line `.git` pointer until a change, not yet ticketed, releases it.
 
 ### Reviewer profiles
 
@@ -295,9 +296,11 @@ ran on 2026-10-27. Its notes are local and untracked: `saved_plans/adopter-upgra
 adopter-specific next steps are in its own tracker. cs-toolkit then installed kit `31b7c84f`
 (in-parallel-oy/cs-toolkit#2981, 2026-10-27). The operator reported on 2026-10-28 that its cleanup inventories were
 reconciled and that `recover` quarantined its stale LIVE triage gate on 2026-10-27. A read-only probe in cs-toolkit's
-primary checkout on 2026-10-28, with its installed engine, found no LIVE gate, and its completed LIVE state failing
-`canonical_state` (`configuration identity mismatch`) but passing `validate_session_state(..., retiring=True)`. A
-session-starting entry there would retire it; the held bundle blocks only while a gate with its digest exists. The
+primary checkout on 2026-10-28, with its installed engine at kit `31b7c84f`, found no LIVE gate, and its completed
+LIVE state failing `canonical_state` on its configuration fingerprint (not #1111's repository identity) but passing
+`validate_session_state(..., retiring=True)`. That implies, without having been run, that a session-starting entry
+there retires it. Its `state-present-held` bundle `6d1168cb…` is keyed to the quarantined gate's digest, so it blocks
+nothing while no gate is present. The
 scheduled-run findings are under *Triage one-run cleanup*. Separate
 adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
 reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
