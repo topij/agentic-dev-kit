@@ -3759,6 +3759,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "the test is provenance, not a match" in flattened
         assert "from before this session is a recurrence" in flattened
         assert "park a new dated entry that names the earlier one" in flattened
+        assert "When those rules park the finding and an earlier `<friction-log>` entry covers it" in flattened
         assert "cleanup refuses a dirty tree, so commit or carry the entry before retiring that worktree" in flattened
         assert "reports the finding in its pull request body or its `docs/handoff/<scope>.md` fragment" in flattened
         # A workstream is a subject, and a batch is filed per pull request.
@@ -4603,8 +4604,12 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "from before this session is already routed", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "park a new dated entry that names the\n   earlier one",
-            "edit the earlier entry to add the\n   occurrence", 1
+            "park a new dated entry\n   that names the earlier one",
+            "edit the earlier entry\n   to add the occurrence", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "When those rules park\n   the finding and an earlier",
+            "Whatever the rules decide,\n   when an earlier", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "cleanup refuses a dirty tree, so commit or\ncarry the entry before retiring that worktree",
@@ -21800,6 +21805,7 @@ def test_parallel_joint_wrap_up_routes_lane_friction_before_its_pr() -> None:
 
 def test_getting_started_says_cleanup_applies_without_a_closing_run() -> None:
     # A session with no reason to offer the closing run still cleans up as it goes.
+    require_kit_source()  # getting-started.md is kit documentation, not an installed file
     text = " ".join((REPO_ROOT / "docs" / "getting-started.md").read_text(encoding="utf-8").split())
     assert "a session whose PRs passed the handoff test does not need one" in text
     assert "clean up what the session created as you go either way" in text

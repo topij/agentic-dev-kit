@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "8ae8d4a1b7dfc29c574be34f065b579f8e329c6bf03453e2c24ba84de9a3e395"
+      "sha256": "03622addd3ffd0fc1571706f1cc154347216507bef0a4bf86f770be07af9e3b2"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -743,7 +743,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "b0d98f0e9a646b1fedea734b30411d1aba16dea738c45724901a203b1bb3fe6c"
+      "sha256": "37aa36c31a5ce379512a85d24c327092a2aeb059e5329d33b4c63d5e74692c76"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
