@@ -817,19 +817,39 @@ def _main_repo_reason(git_dir: str, entry: str) -> str | None:
                 text = handle.read(_GIT_FILE_MAX + 1)
         except OSError as exc:
             return f"unreadable worktree record {gitdir_file}: {exc.strerror}"
-        lines = text.strip().splitlines()
-        if len(text) > _GIT_FILE_MAX or len(lines) != 1:
+        # Read the record whole, as git does (#1265): git writes the worktree's
+        # `.git` path verbatim plus one newline, and a path may itself hold a
+        # newline. `git worktree prune` strips only trailing CR and LF; `git
+        # worktree list` trims trailing whitespace, then drops `/.git`. Inputs
+        # that share this shape, and what each gets:
+        # - a one-line record git wrote: read as before;
+        # - a record git wrote for a path holding a newline: read whole, so a
+        #   worktree inside the entry no longer keeps it, and one outside still
+        #   does;
+        # - a record with leading or trailing blanks once the line ends are
+        #   stripped: kept, as unparseable. Git writes none, and its two readers
+        #   disagree on trailing ones;
+        # - a record holding a newline whose path does not exist, or cannot be
+        #   statted, wherever it points: kept, as unparseable. A hand-made
+        #   record (`/outside/wt\nx/.git`) reads whole as a missing path, and
+        #   a one-line missing path is cleared as prunable, but before #1265
+        #   every multi-line record was kept, and only the case git writes is
+        #   released here;
+        # - over the read cap: kept, as before.
+        target = text.rstrip("\r\n")
+        if len(text) > _GIT_FILE_MAX or not target or target != target.strip():
             return f"unparseable worktree record {gitdir_file}"
-        target = lines[0].strip()
         if not os.path.isabs(target):
             target = os.path.join(os.path.dirname(gitdir_file), target)
         try:
             worktree = os.path.dirname(os.path.realpath(target))
         except (OSError, ValueError):
             return f"unparseable worktree record {gitdir_file}"
+        state = _target_state(target)
+        if "\n" in target and state != "present":
+            return f"unparseable worktree record {gitdir_file}"
         if worktree == entry or worktree.startswith(entry + os.sep):
             continue
-        state = _target_state(target)
         if state == "unknown":
             return f"cannot stat the worktree {worktree} named by {gitdir_file}"
         if state == "present":

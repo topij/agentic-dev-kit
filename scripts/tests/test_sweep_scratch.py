@@ -1533,6 +1533,74 @@ def test_age_sweep_keeps_a_bare_fixture_by_each_shape_of_its_worktree_record(roo
     assert session.exists()
 
 
+# Worktree names a suite gives Git, each holding a newline: `test_panel_prompt.py`'s
+# `newline-only` and `both` cases (#1265). Git records the path verbatim, so the
+# record spans two lines.
+NEWLINE_WORKTREE_NAMES = ["x\nAuthor-note", "x`\nAuthor-note`"]
+
+
+def _clone_with_worktree(clone: Path, repo: Path, wt: Path) -> Path:
+    _git(repo, "clone", "-q", str(repo), str(clone))
+    _git(clone, "worktree", "add", "-q", "--detach", str(wt))
+    (record,) = (clone / ".git" / "worktrees").iterdir()
+    assert "\n" in (record / "gitdir").read_text().rstrip("\n")
+    return clone
+
+
+@pytest.mark.parametrize("name", NEWLINE_WORKTREE_NAMES)
+def test_finished_round_retires_a_worktree_record_whose_inside_path_holds_a_newline(root, repo, name):
+    # #1265: a lens ran the suite in its round; the worktree the record names is
+    # inside the round, so nothing outside depends on the clone's git dir.
+    settings, receipt, path = _round(root, repo)
+    case = path / "bt1" / "test_case0"
+    _clone_with_worktree(case / "repo", repo, case / "scratch-root" / name)
+    assert sweep.finish_review_round(receipt, settings, repo).action == "eligible"
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "removed"
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("name", NEWLINE_WORKTREE_NAMES)
+def test_finished_round_keeps_a_worktree_record_whose_outside_path_holds_a_newline(
+    root, repo, base, name
+):
+    settings, receipt, path = _round(root, repo)
+    outside = base / name
+    _clone_with_worktree(path / "bt1" / "repo", repo, outside)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "lives outside this entry" in result.reason
+    assert path.exists() and (outside / ".git").is_file()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{missing}\nx/.git\n",  # holds a newline but names no path that exists
+        "{outside}/.git \n",  # a trailing blank, which git's two readers disagree on
+        " {outside}/.git\n",
+        "\n{outside}/.git\n",
+    ],
+    ids=["newline-missing", "trailing-blank", "leading-blank", "leading-newline"],
+)
+def test_finished_round_keeps_a_hand_made_worktree_record_git_does_not_write(
+    root, repo, base, content
+):
+    settings, receipt, path = _round(root, repo)
+    outside = base / "outside-wt"
+    clone = _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
+    (record,) = (clone / ".git" / "worktrees").iterdir()
+    outside.mkdir()
+    (outside / ".git").write_text(f"gitdir: {record}\n", encoding="utf-8")
+    (record / "gitdir").write_text(
+        content.format(missing=base / "gone", outside=outside), encoding="utf-8"
+    )
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "unparseable worktree record" in result.reason
+    assert path.exists()
+
+
 @pytest.mark.parametrize("dependent_first", [False, True])
 def test_age_sweep_judges_every_detached_git_dir_in_an_entry(root, repo, base, dependent_first):
     # Both name orders, so whichever the walk lists first, a judgement of only
