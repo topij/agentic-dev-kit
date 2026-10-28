@@ -871,7 +871,7 @@
     },
     "scripts/tests/test_triage_symlinked_state_gate.py": {
       "role": "test",
-      "sha256": "40df60c12bc7e5982341df9693f9494efb09be1134fe2af5d4f269b3a74ed424"
+      "sha256": "87d555b7b266932d10c085dfc6ce328458be751bbbd786a45c487b511d1fc207"
     },
     "scripts/tests/test_triage_worktree_identity.py": {
       "role": "test",

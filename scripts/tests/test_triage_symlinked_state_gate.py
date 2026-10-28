@@ -2,18 +2,18 @@
 
 The adopter's scheduler runs triage from a temporary linked worktree whose
 `state/` is a symlink to the primary checkout's. One LIVE run was refused with
-`repository identity mismatch`, and the gate survived it. These tests take that
-shape with no `DEVKIT_STATE_ROOT`, so the state root is found from the worktree
-and runs through the symlink. The repository-identity refusal comes from a
-completed state another checkout wrote to the same state root. In the adopter's
-case the state came from a kit that predates #1111's shared root. Both reach the
-same refusal after the gate is held.
+`repository identity mismatch`, and a gate whose owner had exited was found
+afterwards. These tests take that shape with no `DEVKIT_STATE_ROOT`, so the state
+root is found from the worktree and runs through the symlink. The
+repository-identity refusal comes from a completed state another checkout wrote
+to the same state root. The engine raises it at the same point, after the gate is
+held, whatever identity the state records.
 
 The first test shows the refused `new` releases its gate. The second shows one
-route by which a gate survives: the interactive `recover` the run made next keeps
-its own gate as part of the `state-present-held` evidence it captures. After that,
-every later LIVE run is refused as `single-writer-gate`. Neither test can rule out
-a process killed before the release handler ran.
+route by which a gate is left behind: the interactive `recover` the run made next
+keeps its own gate as part of the `state-present-held` evidence it captures, and a
+later unattended `new` is then refused as `single-writer-gate`. Neither test can
+rule out a process killed before the release handler ran.
 """
 
 from __future__ import annotations
@@ -95,7 +95,7 @@ def test_a_live_new_refused_after_the_gate_is_held_releases_it_through_a_symlink
     assert not (state / LIVE_GATE).exists()
 
 
-def test_the_gate_that_outlives_the_refused_run_is_the_one_recover_keeps_as_held_evidence(
+def test_recover_after_the_refused_run_leaves_its_own_gate_as_held_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     state, worktree = symlinked_worktree(tmp_path, monkeypatch)
