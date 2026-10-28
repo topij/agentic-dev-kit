@@ -14,5 +14,6 @@ what is still unrouted. The full `wrap-up` runs on the operator's request, and t
 agent offers it in one line when a session ends with half-finished state, a decision
 that exists only in the conversation, or unrouted friction. A parked friction-log entry
 is committed only on a pull request that has not gone to review yet. Update the wrap-up
-skill descriptions, and the handoff sentence in your `AGENTS.md` and the header of your
-`docs/friction-log.md` (both rendered from `docs/templates/`), to pick up the new timing.
+skill descriptions, the handoff sentence in your `AGENTS.md`, and the headers of your
+`docs/handoff.md` and `docs/friction-log.md` (all rendered from `docs/templates/`), to
+pick up the new timing.

@@ -223,7 +223,9 @@ next `session-start` reads both the handoff and the inbox, neither thread is los
 When the session ends, ask for the full `wrap-up`. The agent offers it in one line
 when there is a reason: half-finished state such as an unpushed branch or a review
 round on disk, a decision that lives only in the conversation, or friction not yet
-routed. With none of those, a session whose PRs passed the handoff test is done.
+routed. With none of those, the closing run would have nothing to record, so a
+session whose PRs passed the handoff test does not need one; clean up what the
+session created as you go either way.
 
 For disposable review rounds and task checkouts, follow the
 [evidence retention and cleanup guide](developer-guide.md#retain-evidence-and-finish-session-cleanup).

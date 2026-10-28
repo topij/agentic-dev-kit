@@ -35,8 +35,11 @@ working tree then, and committed on a pull request that has not yet gone to revi
 for the same reason a handoff edit is: a push after a review has started moves the
 head it reviewed. With no such pull request, the entry stays uncommitted until the
 session opens one, or until a closing run carries it. Uncommitted friction is
-half-finished state, so it is a reason to offer that run. A lane writes neither file;
-it reports the finding in its pull request body, and the cockpit routes it.
+half-finished state, so it is a reason to offer that run, and it also keeps the
+worktree it sits in from being removed: cleanup refuses a dirty tree, so commit or
+carry the entry before retiring that worktree. A lane writes neither file; it reports
+the finding in its pull request body or its `docs/handoff/<scope>.md` fragment, and
+the cockpit's joint wrap-up routes it ([`parallel.md`](parallel.md)).
 
 **Close the session with the full workflow when the operator asks for it.** Unasked,
 offer it in one line when the session is ending and any of these is true, and
@@ -390,10 +393,12 @@ failure makes the overall outcome `incomplete-resumable`.
 1. **Route this session's friction** — if this session surfaced a bug, friction, or
    idea specific to a workflow (a skill, a cron/CI job, a pipeline), it goes to one of
    two places. Route each finding when it is found, as the top of this workflow says;
-   a closing run routes only what is still unrouted. Nothing records what was
-   routed earlier, so before routing a finding at closing, look for it in
-   `<friction-log>`, including the uncommitted working tree, and in the tracker search
-   below; a finding found there is already routed. **Which place is decided by what you can already write
+   a closing run routes only what this session has not routed yet. Nothing records
+   what was routed earlier, so the test is provenance, not a match: a finding is
+   already routed only when this session wrote its `<friction-log>` entry (committed
+   or still in the working tree) or filed or commented on its tracker item. An entry
+   or item on the same mechanism from before this session is a recurrence, which the
+   duplicate rule below records as an occurrence rather than skipping. **Which place is decided by what you can already write
    down, not by how bad it is.**
 
    **File it in your tracker now** when the finding has all three of:

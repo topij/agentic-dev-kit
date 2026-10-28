@@ -3753,6 +3753,11 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "committed on a pull request that has not yet gone to review" in flattened
         assert "A lane's `dev/*` pull request never carries the record" in flattened
         assert "offer it in one line when the session is ending and any of these is true" in flattened
+        assert "Uncommitted friction is half-finished state, so it is a reason to offer that run" in flattened
+        assert "A lane writes neither file; it reports the finding" in flattened
+        assert "the cockpit's joint wrap-up routes it" in flattened
+        assert "the test is provenance, not a match" in flattened
+        assert "from before this session is a recurrence" in flattened
         # A workstream is a subject, and a batch is filed per pull request.
         assert (
             "**A workstream is named for its subject, never for a date, a run mode, "
@@ -4577,6 +4582,22 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "offer it in one line when the session is ending",
             "ask whether to run it whenever the session is ending", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "Uncommitted friction is\nhalf-finished state, so it is a reason to offer that run",
+            "Uncommitted friction is\nfine to leave", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A lane writes neither file; it reports\nthe finding",
+            "A lane commits friction straight to the friction log; it reports\nthe finding", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "the test is provenance, not a match",
+            "the test is a match in either place", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "from before this session is a recurrence",
+            "from before this session is already routed", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Closing a workstream is not among them",
