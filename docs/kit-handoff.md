@@ -157,8 +157,9 @@ and an engine-owned rollback waits for a recurrence (#892).
 shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
 `proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
 `saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired. What stands, or stood, in its way:
-- the single-writer gate an exited owner left (#1269), since cleared: the operator reports that `recover` quarantined
-  it on 2026-10-27;
+- a single-writer gate that outlived its owner, since cleared: the operator reports that `recover` quarantined it on
+  2026-10-27. #1276 (`70c3a7d`) showed `new` releases its gate in that worktree shape, and #1269 records the survivor
+  as left by `recover`'s held-evidence path, which #1272 tracks;
 - the adopter tracks a separate failure of its scheduled draft in its own tracker;
 - whether #1111's shared root ends its identity mismatch is unobserved. On 2026-10-23 the draft stopped at input
   validation, and the finalize stopped at the gate, before the state's identity check.
@@ -291,6 +292,6 @@ reconciled and that `recover` quarantined its stale LIVE triage gate on 2026-10-
 adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
 reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades.
-**Owner:** #1116, #990, #1011, #979, #1269.
+**Owner:** #1116, #990, #1011, #979, #1272.
 
 ▶ Next: after the scheduled draft and finalize on Fri 2026-10-30 (the operator's schedule, given 2026-10-28), confirm the completed LIVE state retired, then #979.
