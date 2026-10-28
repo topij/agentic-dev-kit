@@ -120,7 +120,7 @@ fixture (#1265).
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1265](https://github.com/topij/agentic-dev-kit/issues/1265).
 
-▶ Next: once #1277 (#1265's fix) merges, retire round `01234b40` locally, with the operator's approval.
+▶ Next: once #1277, the change for #1265, merges, retire round `01234b40` locally, with the operator's approval.
 
 ### Reviewer profiles
 
