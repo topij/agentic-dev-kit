@@ -686,13 +686,17 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
     valid = False
     parses = False
     try:
-        canonical_state(state_raw, settings=settings, mode=store.mode)
+        # `retiring=True` as `recover` judges a state with no gate: a completed
+        # state valid but for a later configuration change is one the next
+        # session-starting entry retires, so it is preserved here, not held
+        # (#1272). The tolerance covers completed states only.
+        canonical_state(state_raw, settings=settings, mode=store.mode, retiring=True)
         parses = True
         # `recover`'s own predicate: a completed state whose frozen artifact
         # is gone is not preserved as valid, because the entry `recover` would
         # send the operator to hard-stops on it (#859). An in-flight state
         # keeps `canonical_state` alone, so it stays restorable.
-        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=False)
+        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=True)
         valid = True
     except TriageError:
         pass

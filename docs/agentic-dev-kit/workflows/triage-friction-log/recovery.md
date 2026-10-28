@@ -272,14 +272,16 @@ before retiring it: state validation, then the published frozen snapshot artifac
 the forge-prefix checks on its forge operations. A completed state that is valid but for
 a configuration change made after it finished passes it, so it is refused as valid
 (`captured state is valid; recovery refused`) and left for *Completed-state retirement*
-rather than captured as invalid. A completed state that fails only the artifact or forge
+rather than captured as invalid. Behind a gate whose owner is proven dead, the action plan
+judges it the same way: it is preserved and the gate quarantined
+(`preserve-valid-state-and-quarantine-old-gate`), never held. A completed state that fails only the artifact or forge
 checks, including an artifact it cannot read, fails it. It is captured and offered
 `retire-terminal-invalid-state` only when git proves its sweep, as below; otherwise
 `recover` writes nothing and refuses it (`state fails the session-starting checks and no
 retirement is proven; recovery refused`), so restoring the artifact or landing the sweep
 still leaves a route out, and the action plan preserves it as before when it passes
-state validation under the current configuration (one that fails that is classified as
-any invalid state). The refusal's resume action names the check that failed: an
+state validation as a session-starting entry applies it (one that fails that is
+classified as any invalid state). The refusal's resume action names the check that failed: an
 artifact failure says to restore the published frozen snapshot artifact or land the
 run's sweep, and a forge-prefix failure, whose artifact is present, says to reconcile the
 state's recorded forge operations with the forge or land the run's sweep. A state in any

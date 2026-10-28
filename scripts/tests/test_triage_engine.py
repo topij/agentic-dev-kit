@@ -2893,6 +2893,26 @@ def test_resume_of_a_completed_state_stays_bound_to_the_current_configuration(
     assert not retired.exists()
 
 
+def test_recover_over_a_dead_gate_preserves_a_completed_state_valid_but_for_a_later_config_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Behind a gate whose owner exited, a completed state that differs only in its
+    configuration fingerprint is preserved and its gate quarantined, as with no gate
+    (#1272). Holding it would leave a terminal bundle for a state that the next
+    session-starting entry retires."""
+    root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
+    change_config(root)
+    _gate_owner(root)
+    planned = run("recover", context="interactive", request={}, start=root)
+    assert planned["recovery_plan"]["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
+    recovered = _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])
+    assert recovered["detail"] == "resume"
+    assert state_path.read_bytes() == completed_raw
+    result = run(None, context="interactive", request={}, start=root)
+    assert result["detail"].startswith(f"retired completed state to {retired} ")
+    assert retired.read_bytes() == completed_raw
+
+
 def test_an_active_state_stays_bound_to_the_current_configuration(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

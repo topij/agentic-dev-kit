@@ -1649,8 +1649,8 @@ def validate_recoverable_state(
     so still passes `canonical_state` as a retiring entry, is captured by
     `recover` or `test` only when its retirement is proven; otherwise the
     entry refuses it, writing nothing. When retirement is not proven, `state_action_plan`
-    preserves such a state if it also passes `canonical_state` under the
-    current configuration, and holds it otherwise. A completed state that fails
+    preserves such a state if it also passes `canonical_state` as a retiring
+    entry, and holds it otherwise. A completed state that fails
     `canonical_state` itself is captured as any invalid state.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
