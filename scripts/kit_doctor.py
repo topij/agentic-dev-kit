@@ -259,6 +259,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_triage_providers.py", "test"),
     ("scripts/tests/test_triage_engine.py", "test"),
     ("scripts/tests/test_triage_worktree_identity.py", "test"),
+    ("scripts/tests/test_triage_symlinked_state_gate.py", "test"),
     ("scripts/tests/test_triage_outcome_receipts.py", "test"),
     ("scripts/tests/test_triage_caller.py", "test"),
     ("scripts/tests/test_finalize_triage.py", "test"),
