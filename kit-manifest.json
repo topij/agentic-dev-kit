@@ -84,7 +84,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "3553109f6b6e4d195e864520b8930c71b1bd8a63655e65ba7be228eee35119bb"
+      "sha256": "665f1d6ebb312af68326052b62ecaf7ebedadb377b7f76012eea794bab6910a9"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "8c8273044ce409a68e97b5d59e961c50bcb4e845966f6d7b6249c1a23f3dd509"
+      "sha256": "cae4c6aa56dfeec4586f9d55805fd29de5e77048587a049bd2379ec81a67eceb"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -163,7 +163,7 @@
     },
     "docs/templates/handoff.md.tmpl": {
       "role": "template",
-      "sha256": "dd6666a7eb94af74efbfcbbd89fe59be87484f6c901f403863d2bc268af1b17c"
+      "sha256": "4809ea7b9a9978059d09ae1cf5ce394eb90f30dc67ae7ce7ed6a32ab1be5cae2"
     },
     "init.sh": {
       "role": "installer",
@@ -743,7 +743,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c41365523c4ea0d3a2249689107ac4a2f348243971c0b041f62f1fb47a2018da"
+      "sha256": "829580004a3e25d61541eb4848f176333205be3e5f254b4fb0d4a3ec94596f5b"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

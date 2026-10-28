@@ -158,9 +158,9 @@ let a cheaper tier do the mechanical building.
 ## 4 · Open a PR and watch it — `pr-watch`
 
 Every change goes through a branch and a PR — and opening the PR is *not* the end
-of the task. If this is the session's last PR, run `wrap-up` (section 5) before you
-request its opening review, preferably before opening it, so any handoff edit rides
-this PR and is reviewed with it. Open completed work ready for review. Then:
+of the task. Run `wrap-up`'s handoff test (section 5) before you request its opening
+review, preferably before opening it, so any handoff edit rides this PR and is
+reviewed with it. Open completed work ready for review. Then:
 
 ```text
 /pr-watch 42          # Claude; `$pr-watch 42` in Codex
@@ -181,13 +181,13 @@ self-merge.
 
 ## 5 · Hand off — `wrap-up`
 
-Before the session's last PR goes to review, preferably before opening it,
-`wrap-up` asks whether the session left anything
-its pull requests, commits and tracker issues do not already record. When the
-answer is no, it commits nothing. When there is something — a decision, an
+Before each PR goes to review, preferably before opening it, `wrap-up`'s handoff
+test asks whether the work left anything its pull request, commits and tracker
+issues do not already record. When the answer is no, which is the usual result, it
+commits nothing. When there is something — a decision, an
 abandoned approach, a next step with no ticket — it updates the entry of the
-workstream the session worked on in `docs/handoff.md`, on the session's own pull
-request before its review. Other workstreams' next steps stay as they were…
+workstream the work belongs to in `docs/handoff.md`, on that pull request before
+its review. Other workstreams' next steps stay as they were:
 
 ```markdown
 ## Workstreams
@@ -199,9 +199,9 @@ request before its review. Other workstreams' next steps stay as they were…
 ▶ Next: add the reset-email template and the rate-limit guard.
 ```
 
-…and routes any friction you hit. Anything you can already explain — a
-reproduction, a named mechanism, *and* a fix — it offers to file straight to your
-tracker, because a triage pass could add nothing to it. It files on your go-ahead, and
+Friction is routed when you hit it, not saved for the end. Anything you can
+already explain — a reproduction, a named mechanism, *and* a fix — the agent offers
+to file straight to your tracker, because a triage pass could add nothing to it. It files on your go-ahead, and
 parks the finding instead whenever that route is unavailable — you decline, there is no
 tracker configured, the create fails, or nobody is there to ask because the session is
 unattended. What you *can't* yet explain goes to
@@ -219,6 +219,11 @@ unattended. What you *can't* yet explain goes to
 That one parks because it has no mechanism and no fix yet — only a next diagnostic
 step — not because it is minor. Any one missing part is enough to park it. Because the
 next `session-start` reads both the handoff and the inbox, neither thread is lost.
+
+When the session ends, ask for the full `wrap-up`. The agent offers it in one line
+when there is a reason: half-finished state such as an unpushed branch or a review
+round on disk, a decision that lives only in the conversation, or friction not yet
+routed. With none of those, a session whose PRs passed the handoff test is done.
 
 For disposable review rounds and task checkouts, follow the
 [evidence retention and cleanup guide](developer-guide.md#retain-evidence-and-finish-session-cleanup).
@@ -242,13 +247,13 @@ Single incidents route **down** (to the tracker); repeated patterns route **up**
 (to a check or a rule). That asymmetry is deliberate — it's what keeps your rule set small
 and your friction log honest instead of ratcheting every week.
 
-The **down**-route runs on two clocks, not one. `/wrap-up` takes it immediately for
-anything already issue-shaped; `/triage-friction-log` takes it for everything else
+The **down**-route runs on two clocks, not one. `wrap-up`'s friction-routing step
+takes it as soon as a finding is found, for anything already issue-shaped; `/triage-friction-log` takes it for everything else
 that proves to be a single incident — explicable by now or not. Neither is the
 **up**-route: that is `post-merge-systemize`'s, over a different corpus entirely
 (merged-PR review comments, not inbox entries), which is why a pattern has to show up
 across PRs before it earns a rule. So an inbox that stays small is the system working,
-and one that fills with things you could have filed at session end means `/wrap-up`'s
+and one that fills with things you could have filed when you found them means `wrap-up`'s
 friction-routing step is being skipped — not that triage is overdue.
 
 > **Note:** these workflows share their doctrine across Claude and Codex. External

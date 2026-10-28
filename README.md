@@ -74,7 +74,7 @@ flowchart LR
 
 [`session-start`](docs/agentic-dev-kit/workflows/session-start.md) supplies the
 briefing. [`wrap-up`](docs/agentic-dev-kit/workflows/wrap-up.md) records only what
-the PR, commits and tracker do not already hold, before review.
+the PR, commits and tracker do not already hold, before each PR's review.
 [`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md) owns the review loop;
 merge authority remains a separate project decision. Use the
 [session recipe](docs/developer-guide.md#run-a-development-session) to start.
@@ -381,10 +381,11 @@ classified; forge readiness includes unfiltered review evidence rather than list
 or locally acknowledged comments alone, and detached HEAD is named instead of rendered
 as a blank branch. Only explicitly
 unconfigured or untriggered declarations may be omitted.
-Wrap-up first decides whether the session left anything its pull requests, commits and
-tracker issues do not record; when it left nothing, the run is a no-op with no commit,
-pull request or review. Otherwise its record rides the session's own pull request
-before review. Wrap-up requires the configured document-budget engine, preserves
+Wrap-up's handoff test runs before every pull request's review and decides whether the
+work left anything its pull request, commits and tracker issues do not record; when it
+left nothing, the usual result, nothing is committed. Otherwise its record rides that
+pull request before review. Friction is routed when it is found, and the full wrap-up
+closes a session on the operator's request. Wrap-up requires the configured document-budget engine, preserves
 operator-owned changes, sends an interactive issue-shaped finding through tracker search
 and an exact-payload decision before parking, and reserves the friction log for incomplete
 or accumulating findings and unavailable, declined, or ambiguous tracker routes. Its

@@ -24,11 +24,13 @@ status in the configured handoff, not in `AGENTS.md`.
   `docs/agentic-dev-kit/workflows/pr-watch.md`.
 - Use `parallel` only for lanes with disjoint source-file footprints. The cockpit
   owns the configured handoff and friction log; lanes report through their PR bodies.
-- Before a session's last pull request goes to review, use `wrap-up`. It decides
-  whether the session left anything its pull requests, commits and tracker issues
-  do not already record, commits only that to the configured handoff on that pull
-  request, captures workflow friction, and keeps the next step of the workstream
-  the session worked on. A session that left nothing commits nothing.
+- Before every pull request goes to review, run `wrap-up`'s handoff test. It
+  decides whether the work left anything its pull request, commits and tracker
+  issues do not already record, and commits only that to the configured handoff on
+  that pull request; most pull requests leave nothing and commit nothing. Route
+  workflow friction when it is found. Run the full `wrap-up` when the operator asks,
+  and offer it in one line when a session ends with half-finished state, a decision
+  only in the conversation, or unrouted friction.
 - Delete the files and directories the session created once nothing needs them,
   while working and before ending, following *Clean up what this session created*
   in `docs/agentic-dev-kit/session-cleanup.md`. Never delete what the session did

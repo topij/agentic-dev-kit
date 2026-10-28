@@ -115,12 +115,13 @@ sequenceDiagram
 
 `session-start` makes no content edits or acknowledgements; its pr-watch read may
 record the settle baseline. `pr-watch` checks the exact PR head and review
-evidence; opening a PR is not completion. `wrap-up` runs before the session's last
-PR goes to review. It writes the configured handoff only for what that PR, the
-session's commits and the tracker do not already record, and commits it on that PR so
-one review covers both; when nothing is left, it commits nothing. It also routes
-friction. A separate wrap-up PR is only for a session whose PRs are already reviewed
-or merged, or that had none.
+evidence; opening a PR is not completion. `wrap-up`'s handoff test runs before
+every PR goes to review. It writes the configured handoff only for what that PR, its
+commits and the tracker do not already record, and commits it on that PR so one review
+covers both; when nothing is left, which is the usual result, it commits nothing.
+Friction is routed when it is found. The full `wrap-up` closes a session on the
+operator's request, and a separate wrap-up PR is only for a record no unreviewed PR
+can carry.
 Merge authority is separate from review readiness. For a non-lane PR without a
 project merge policy, the [wrap-up contract](agentic-dev-kit/workflows/wrap-up.md#authority-contract)
 holds the merge for an exact operator decision.
