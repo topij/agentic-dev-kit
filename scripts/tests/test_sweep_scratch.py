@@ -1573,38 +1573,62 @@ def test_finished_round_keeps_a_worktree_record_whose_outside_path_holds_a_newli
     assert path.exists() and (outside / ".git").is_file()
 
 
-@pytest.mark.parametrize(
-    "content",
-    [
-        "{missing}\nx/.git\n",  # holds a newline but names no path that exists
-        "{path}/gone\nwt/.git\n",  # the same, inside the round: kept wherever it points
-        "{outside}/.git \n",  # a trailing blank, which git's two readers disagree on
-        " {outside}/.git\n",
-        "\n{outside}/.git\n",
-        "",  # empty: would otherwise resolve to the records dir, inside the round
-        "\n",
-    ],
-    ids=[
-        "newline-missing", "newline-missing-inside", "trailing-blank", "leading-blank",
-        "leading-newline", "empty", "newline-only",
-    ],
-)
-def test_finished_round_keeps_a_hand_made_worktree_record_git_does_not_write(
-    root, repo, base, content
-):
+def _round_with_record(root, repo, base, content):
+    """A round holding a clone whose one worktree record is overwritten with ``content``."""
     settings, receipt, path = _round(root, repo)
     outside = base / "outside-wt"
     clone = _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
     (record,) = (clone / ".git" / "worktrees").iterdir()
     outside.mkdir()
     (outside / ".git").write_text(f"gitdir: {record}\n", encoding="utf-8")
+    (path / "inside-wt").mkdir()
     (record / "gitdir").write_text(
         content.format(missing=base / "gone", outside=outside, path=path), encoding="utf-8"
     )
+    return settings, receipt, path
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{missing}\nx/.git\n",  # holds a newline but names no path that exists
+        "{path}/gone\nwt/.git\n",  # the same, inside the round: kept wherever it points
+        "{missing}\x0cx/.git\n",  # a form feed, a line break to `str.splitlines`
+        "",  # empty: would otherwise resolve to the records dir, inside the round
+        "\n",
+    ],
+    ids=["newline-missing", "newline-missing-inside", "form-feed-missing", "empty", "newline-only"],
+)
+def test_finished_round_keeps_a_hand_made_worktree_record_git_does_not_write(
+    root, repo, base, content
+):
+    settings, receipt, path = _round_with_record(root, repo, base, content)
     result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     assert result.action == "kept"
     assert "unparseable worktree record" in result.reason
     assert path.exists()
+
+
+@pytest.mark.parametrize(
+    "content, kept",
+    [
+        ("{outside}/.git \n", True),
+        (" {outside}/.git\n", True),
+        ("\n{outside}/.git\n", True),
+        (" {path}/inside-wt/.git\n", False),  # a lens probing git wrote this one
+    ],
+    ids=["trailing-blank", "leading-blank", "leading-newline", "leading-blank-inside"],
+)
+def test_finished_round_reads_a_blank_padded_one_line_record_as_before(
+    root, repo, base, content, kept
+):
+    # Before #1265 a one-line record was stripped of outer blanks, and it still is.
+    settings, receipt, path = _round_with_record(root, repo, base, content)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == ("kept" if kept else "removed")
+    assert path.exists() is kept
+    if kept:
+        assert "lives outside this entry" in result.reason
 
 
 def test_finished_round_keeps_a_worktree_record_whose_newline_path_cannot_be_statted(

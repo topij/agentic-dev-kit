@@ -817,27 +817,25 @@ def _main_repo_reason(git_dir: str, entry: str) -> str | None:
                 text = handle.read(_GIT_FILE_MAX + 1)
         except OSError as exc:
             return f"unreadable worktree record {gitdir_file}: {exc.strerror}"
-        # Read the record whole, as git does (#1265): git writes the worktree's
-        # `.git` path verbatim plus one newline, and a path may itself hold a
-        # newline. `git worktree prune` strips only trailing CR and LF; `git
-        # worktree list` trims trailing whitespace, then drops `/.git`. Inputs
-        # that share this shape, and what each gets:
-        # - a one-line record git wrote: read as before;
+        # Read the record whole (#1265): git writes the worktree's `.git` path
+        # verbatim plus one newline, and a path may itself hold a newline, as
+        # git's own readers allow. Outer whitespace is stripped as before, so a
+        # one-line record reads exactly as it did. Inputs that share this shape,
+        # and what each gets:
+        # - a one-line record, blanks around it or not: read as before;
         # - a record git wrote for a path holding a newline: read whole, so a
         #   worktree inside the entry no longer keeps it, and one outside still
         #   does;
-        # - a record with leading or trailing blanks once the line ends are
-        #   stripped: kept, as unparseable. Git writes none, and its two readers
-        #   disagree on trailing ones;
-        # - a record holding a newline whose path does not exist, or cannot be
-        #   statted, wherever it points: kept, as unparseable. A hand-made
+        # - a record holding a line break (any `str.splitlines` splits on, as
+        #   before) whose path does not exist, or cannot be statted, wherever it
+        #   points: kept, as unparseable. A hand-made
         #   record (`/outside/wt\nx/.git`) reads whole as a missing path, and
         #   a one-line missing path is cleared as prunable, but before #1265
         #   every multi-line record was kept, and only the case git writes is
         #   released here;
-        # - over the read cap: kept, as before.
-        target = text.rstrip("\r\n")
-        if len(text) > _GIT_FILE_MAX or not target or target != target.strip():
+        # - an empty or blank record, or one over the read cap: kept, as before.
+        target = text.strip()
+        if len(text) > _GIT_FILE_MAX or not target:
             return f"unparseable worktree record {gitdir_file}"
         if not os.path.isabs(target):
             target = os.path.join(os.path.dirname(gitdir_file), target)
@@ -846,7 +844,7 @@ def _main_repo_reason(git_dir: str, entry: str) -> str | None:
         except (OSError, ValueError):
             return f"unparseable worktree record {gitdir_file}"
         state = _target_state(target)
-        if "\n" in target and state != "present":
+        if len(target.splitlines()) > 1 and state != "present":
             return f"unparseable worktree record {gitdir_file}"
         if worktree == entry or worktree.startswith(entry + os.sep):
             continue
