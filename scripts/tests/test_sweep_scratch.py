@@ -1533,6 +1533,135 @@ def test_age_sweep_keeps_a_bare_fixture_by_each_shape_of_its_worktree_record(roo
     assert session.exists()
 
 
+# Worktree names a suite gives Git, each holding a newline: `test_panel_prompt.py`'s
+# `newline-only` and `both` cases (#1265). Git records the path verbatim, so the
+# record spans more than one line.
+NEWLINE_WORKTREE_NAMES = ["x\nAuthor-note", "x`\n\n## Author note\n`"]
+
+
+def _clone_with_worktree(clone: Path, repo: Path, wt: Path) -> Path:
+    _git(repo, "clone", "-q", str(repo), str(clone))
+    _git(clone, "worktree", "add", "-q", "--detach", str(wt))
+    (record,) = (clone / ".git" / "worktrees").iterdir()
+    assert "\n" in (record / "gitdir").read_text().rstrip("\n")
+    return clone
+
+
+@pytest.mark.parametrize("name", NEWLINE_WORKTREE_NAMES)
+def test_finished_round_retires_a_worktree_record_whose_inside_path_holds_a_newline(root, repo, name):
+    # #1265: a lens ran the suite in its round; the worktree the record names is
+    # inside the round, so nothing outside depends on the clone's git dir.
+    settings, receipt, path = _round(root, repo)
+    case = path / "bt1" / "test_case0"
+    _clone_with_worktree(case / "repo", repo, case / "scratch-root" / name)
+    assert sweep.finish_review_round(receipt, settings, repo).action == "eligible"
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "removed"
+    assert not path.exists()
+
+
+@pytest.mark.parametrize("name", NEWLINE_WORKTREE_NAMES)
+def test_finished_round_keeps_a_worktree_record_whose_outside_path_holds_a_newline(
+    root, repo, base, name
+):
+    settings, receipt, path = _round(root, repo)
+    outside = base / name
+    _clone_with_worktree(path / "bt1" / "repo", repo, outside)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "lives outside this entry" in result.reason
+    assert path.exists() and (outside / ".git").is_file()
+
+
+def _round_with_record(root, repo, base, content):
+    """A round holding a clone whose one worktree record is overwritten with ``content``."""
+    settings, receipt, path = _round(root, repo)
+    outside = base / "outside-wt"
+    clone = _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
+    (record,) = (clone / ".git" / "worktrees").iterdir()
+    outside.mkdir()
+    (outside / ".git").write_text(f"gitdir: {record}\n", encoding="utf-8")
+    (path / "inside-wt").mkdir()
+    (record / "gitdir").write_text(
+        content.format(missing=base / "gone", outside=outside, path=path), encoding="utf-8"
+    )
+    return settings, receipt, path
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "{missing}\nx/.git\n",  # holds a newline but names no path that exists
+        "{path}/gone\nwt/.git\n",  # the same, inside the round: kept wherever it points
+        "{missing}\x0cx/.git\n",  # a form feed, a line break to `str.splitlines`
+        "",  # empty: would otherwise resolve to the records dir, inside the round
+        "\n",
+    ],
+    ids=["newline-missing", "newline-missing-inside", "form-feed-missing", "empty", "newline-only"],
+)
+def test_finished_round_keeps_a_hand_made_worktree_record_git_does_not_write(
+    root, repo, base, content
+):
+    settings, receipt, path = _round_with_record(root, repo, base, content)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "unparseable worktree record" in result.reason
+    assert path.exists()
+
+
+@pytest.mark.parametrize(
+    "content, kept",
+    [
+        ("{outside}/.git \n", True),
+        (" {outside}/.git\n", True),
+        ("\n{outside}/.git\n", True),
+        (" {path}/inside-wt/.git\n", False),  # hand-written; git writes no blank
+    ],
+    ids=["trailing-blank", "leading-blank", "leading-newline", "leading-blank-inside"],
+)
+def test_finished_round_reads_a_blank_padded_one_line_record_as_before(
+    root, repo, base, content, kept
+):
+    # Before #1265 a one-line record was stripped of outer blanks, and it still is.
+    settings, receipt, path = _round_with_record(root, repo, base, content)
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == ("kept" if kept else "removed")
+    assert path.exists() is kept
+    if kept:
+        assert "lives outside this entry" in result.reason
+
+
+def test_finished_round_keeps_a_worktree_record_whose_newline_path_cannot_be_statted(
+    root, repo, monkeypatch
+):
+    # A stat failure cannot be built as root, so the state read is stubbed.
+    settings, receipt, path = _round(root, repo)
+    _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
+    real = sweep._target_state
+    monkeypatch.setattr(
+        sweep, "_target_state", lambda target: "unknown" if "\n" in target else real(target)
+    )
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "unparseable worktree record" in result.reason
+    assert path.exists()
+
+
+def test_finished_round_keeps_a_crlf_worktree_record_naming_an_outside_worktree(root, repo, base):
+    # Text mode already reads CRLF as LF, so this pins the verdict, not a CR strip.
+    settings, receipt, path = _round(root, repo)
+    clone = _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
+    _git(clone, "worktree", "add", "-q", "--detach", str(base / "outside-wt"))
+    record = next(
+        r / "gitdir" for r in (clone / ".git" / "worktrees").iterdir() if "outside" in r.name
+    )
+    record.write_bytes(record.read_bytes().rstrip(b"\n") + b"\r\n")
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "lives outside this entry" in result.reason
+    assert path.exists()
+
+
 @pytest.mark.parametrize("dependent_first", [False, True])
 def test_age_sweep_judges_every_detached_git_dir_in_an_entry(root, repo, base, dependent_first):
     # Both name orders, so whichever the walk lists first, a judgement of only

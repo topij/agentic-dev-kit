@@ -102,26 +102,28 @@ on 2026-10-22 and 2026-10-23 (`review-72a279dd…` among them).
 round-3 LOWs are #1259. #1261 (`87a5f18b`) names the differing bound field in an
 unavailable inventory's refusal and adds an approved `reconcile` for a changed device
 number, under the preconditions in `session-cleanup.md`. It deletes nothing, so cs-toolkit's retained evidence in `.git/devkit` still
-waits on #1256. #1253 stays open for a boot-stable identity (#1261's body has the
-`f_fsid` and volume-UUID probes); its review's LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
+waits on #1256. #1261's review LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
-#1256. `state/review-evidence/` retention remains scoped to #861. #1267 carries #1253's boot-stable identity change.
-Round 3 of #1262's review was on disk on 2026-10-27, kept by `session_cleanup.py preview --round` for an unparseable
-worktree record that a `test_panel_prompt.py` fixture wrote inside the round (#1265).
+#1256. `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) shipped #1253's binding of inventories
+and receipts to a boot-stable identity. On 2026-10-28, from the primary checkout and with the operator's approval,
+every device-renumbered inventory in this repository was reconciled. Inventory `8cf42b14` stayed incomplete: it
+holds round `01234b40` (round 3 of #1262's review), which `session_cleanup.py preview --round` kept on
+2026-10-27 for a worktree record whose path holds a newline, written inside the round by a `test_panel_prompt.py`
+fixture (#1265).
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895),
-[#1253](https://github.com/topij/agentic-dev-kit/issues/1253),
 [#1255](https://github.com/topij/agentic-dev-kit/issues/1255),
 [#1256](https://github.com/topij/agentic-dev-kit/issues/1256),
 [#1259](https://github.com/topij/agentic-dev-kit/issues/1259),
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1265](https://github.com/topij/agentic-dev-kit/issues/1265).
 
-▶ Next: once #1267 merges, preview `uv run scripts/session_cleanup.py reconcile <id>` from the primary checkout for
-each inventory `list` reports unavailable, so each inventory is rebound once. Apply `--approve <token>` only to those
-it accepts, on the operator's authorization, and report each refusal as it stands.
+▶ Next: once #1277, the change for #1265, merges, preview round `01234b40` locally. #1277 releases only its worktree
+record that names a newline path, and only while that worktree's directory exists. The round also holds `configured.git`
+git dirs that `test_panel_prompt.py`'s object-database test leaves, which the engine still keeps as git dirs not beside
+their own work tree. Retire it, with the operator's approval, once `preview --round` reports it eligible.
 
 ### Reviewer profiles
 
@@ -157,8 +159,10 @@ and an engine-owned rollback waits for a recurrence (#892).
 **Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
 shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
 `proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
-`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired:
-- a single-writer gate left by an exited owner (#1269) needs an interactive `recover` there;
+`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired. What stands, or stood, in its way:
+- a single-writer gate that outlived its owner, since cleared: the operator reports that `recover` quarantined it on
+  2026-10-27. #1276 (`70c3a7d`) showed `new` releases its gate in a linked worktree whose `state/` links to the
+  primary's, and #1269 records the survivor as left by `recover`'s held-evidence path, which #1272 tracks;
 - the adopter tracks a separate failure of its scheduled draft in its own tracker;
 - whether #1111's shared root ends its identity mismatch is unobserved. On 2026-10-23 the draft stopped at input
   validation, and the finalize stopped at the gate, before the state's identity check.
@@ -285,13 +289,12 @@ with #1243's items in one PR, so the safety-critical panel runs once.
 
 **Status:** a read-only upgrade-prep pass for the private adopter, from its installed kit `cd41724b` to `2a8fbb96`,
 ran on 2026-10-27. Its notes are local and untracked: `saved_plans/adopter-upgrade-prep_2026-10-27.md`. The
-adopter-specific next steps are in its own tracker. Hold `reconcile` on its unavailable cleanup inventories until
-#1267's change is installed there, so each inventory is rebound once. The scheduled-run findings are under *Triage
-one-run cleanup*. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
+adopter-specific next steps are in its own tracker. cs-toolkit then installed kit `31b7c84f`
+(in-parallel-oy/cs-toolkit#2981, 2026-10-27). The operator reported on 2026-10-28 that its cleanup inventories were
+reconciled and that `recover` quarantined its stale LIVE triage gate on 2026-10-27. The scheduled-run findings are under *Triage one-run cleanup*. Separate
+adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
+reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades.
-**Owner:** #1116, #990, #1011, #979, #1253, #1269.
+**Owner:** #1116, #990, #1011, #979, #1272.
 
-▶ Next: the operator runs an interactive triage `recover` in the adopter before its next scheduled draft. That clears
-only the gate. After #1267 merges, extend the prep notes for its range and upgrade the adopter following the kit's
-`upgrade.md`, then preview and apply `reconcile` with approval. Separately: resolve unattended notification delivery
-as its own adopter decision, and reassess OpenKitchen's installation and lane prerequisites before an upgrade there.
+▶ Next: after the scheduled draft and finalize on Fri 2026-10-30 (the operator's schedule, given 2026-10-28), confirm the completed LIVE state retired, then remove the shim (#979).
