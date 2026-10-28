@@ -24,6 +24,10 @@
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
 
+## 2026-10-28
+
+- **M — two sessions acted on #1277 at once**: a cloud session pushed `274fa3bf` while this one prepared the same push, and only the refused push showed the overlap, not `pr_watch`. Repro only; park until it recurs.
+
 ## 2026-10-24 — Backlog migrated by triage session 34cfc9d2f69d4462a37af84ce5a975c7
 
 Engine mode: `engine-backed`.
