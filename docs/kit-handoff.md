@@ -156,7 +156,7 @@ and an engine-owned rollback waits for a recurrence (#892).
 **Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
 shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
 `proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
-`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired. What stood in its way:
+`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired. What stands, or stood, in its way:
 - the single-writer gate an exited owner left (#1269), since cleared: the operator reports that `recover` quarantined
   it on 2026-10-27;
 - the adopter tracks a separate failure of its scheduled draft in its own tracker;
@@ -286,8 +286,8 @@ with #1243's items in one PR, so the safety-critical panel runs once.
 **Status:** a read-only upgrade-prep pass for the private adopter, from its installed kit `cd41724b` to `2a8fbb96`,
 ran on 2026-10-27. Its notes are local and untracked: `saved_plans/adopter-upgrade-prep_2026-10-27.md`. The
 adopter-specific next steps are in its own tracker. cs-toolkit then installed kit `31b7c84f`
-(in-parallel-oy/cs-toolkit#2981, 2026-10-27); its cleanup inventories were reconciled, and `recover` quarantined its
-stale LIVE triage gate on 2026-10-27. The scheduled-run findings are under *Triage one-run cleanup*. Separate
+(in-parallel-oy/cs-toolkit#2981, 2026-10-27). The operator reported on 2026-10-28 that its cleanup inventories were
+reconciled and that `recover` quarantined its stale LIVE triage gate on 2026-10-27. The scheduled-run findings are under *Triage one-run cleanup*. Separate
 adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
 reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades.
