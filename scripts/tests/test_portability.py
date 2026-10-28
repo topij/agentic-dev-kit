@@ -21763,6 +21763,10 @@ def _assert_parallel_routes_lane_friction(text: str) -> None:
     assert "before the next step opens any pull request" in flattened
     assert "a `dev/*` branch cannot carry a `<friction-log>` entry" in flattened
     assert "or the step above parked an entry, open it" in flattened
+    assert "from this cockpit session and before the next step" in flattened
+    assert "A parked entry is committed with the handoff record in the next step's pull request." in flattened
+    assert "open it as its own `chore: update handoff` PR" in flattened
+    assert "When it left nothing and nothing parked" in flattened
     # The routing step comes before the step that opens the handoff PR.
     assert flattened.index("Route the friction the lanes reported") < flattened.index(
         "or the step above parked an entry, open it"
@@ -21780,6 +21784,10 @@ def test_parallel_joint_wrap_up_routes_lane_friction_before_its_pr() -> None:
         text.replace(step, "", 1),
         text.replace("before the next\n   step opens any pull request", "after the next\n   step opens its pull request", 1),
         text.replace(", or the step above parked an entry,", ",", 1),
+        text.replace("from this cockpit session and before", "from the lane and before", 1),
+        text.replace("A parked entry is committed\n   with the handoff record in the next step's pull request.", "", 1),
+        text.replace("open it as its\n   own `chore: update handoff` PR", "open it on the lane's dev/* PR", 1),
+        text.replace("When it left nothing and nothing\n   parked", "When it left nothing", 1),
         text.replace(step, "", 1).replace(
             "\nOverflow that doesn't fit a PR body", "\n" + step + "Overflow that doesn't fit a PR body", 1
         ),
@@ -21809,7 +21817,7 @@ def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
             "Never create a `## Workstreams` entry for the batch itself",
             "Create a `## Workstreams` entry for the batch itself", 1,
         ),
-        text.replace("the batch ends without\n   a handoff commit", "the batch opens\n   a handoff PR", 1),
+        text.replace("the batch\n   ends without a handoff commit", "the batch\n   opens a handoff PR", 1),
     )
     for mutated in mutations:
         assert mutated != text

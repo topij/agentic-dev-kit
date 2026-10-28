@@ -400,9 +400,9 @@ wrap-up **from this cockpit session**:
 1. When the test left something, or the step above parked an entry, open it as its
    own `chore: update handoff` PR (this
    checkout sits on the protected branch, and the lanes' PRs are already reviewed or
-   merged, so this is `wrap-up`'s separate-PR route). When it left nothing — every
-   scope merged and each workstream's `▶ Next:` still true — the batch ends without
-   a handoff commit.
+   merged, so this is `wrap-up`'s separate-PR route). When it left nothing and nothing
+   parked — every scope merged and each workstream's `▶ Next:` still true — the batch
+   ends without a handoff commit.
 
 Overflow that doesn't fit a PR body (richer lessons, friction-log entries) goes to a
 uniquely-named `docs/handoff/<scope>.md` fragment that rides the session's **own** PR
