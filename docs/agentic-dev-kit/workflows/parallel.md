@@ -397,6 +397,12 @@ wrap-up **from this cockpit session**:
    scope merged and each workstream's `▶ Next:` still true — the batch ends without
    a handoff commit.
 
+1. Route the friction the lanes reported, in their PR bodies or fragments, through
+   `wrap-up`'s friction-routing step, from this cockpit session: a lane cannot ask
+   the operator for a tracker go-ahead, and its branch cannot carry a
+   `<friction-log>` entry. A parked entry rides the handoff PR when there is one, or
+   a `chore:` PR of its own.
+
 Overflow that doesn't fit a PR body (richer lessons, friction-log entries) goes to a
 uniquely-named `docs/handoff/<scope>.md` fragment that rides the session's **own** PR
 — disjoint path, zero collision — and the cockpit folds what of it passes the

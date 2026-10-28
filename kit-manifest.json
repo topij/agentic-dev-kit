@@ -76,7 +76,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "5dc49dd1876504abfd7ec579d1c9a4d002bac87061a3bbc7fd858a5bee268184"
+      "sha256": "275ef83e3bde9cbbe192e2345f3af37f306ce53947ab63040adb3e3391152c87"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -84,7 +84,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "3553109f6b6e4d195e864520b8930c71b1bd8a63655e65ba7be228eee35119bb"
+      "sha256": "665f1d6ebb312af68326052b62ecaf7ebedadb377b7f76012eea794bab6910a9"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -95,7 +95,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "97949f40b5a386919b38454febe9ecffb7fb8e9e8e90b701105fdc3cdc05cd40"
+      "sha256": "13feceb533e2a2f65c0ddf5979aa80c9cb1f16dcf4a55fb38bfc1a333d19ce70"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "8c8273044ce409a68e97b5d59e961c50bcb4e845966f6d7b6249c1a23f3dd509"
+      "sha256": "f04672d510177a22fab0482a1c64eb40931777195b3b80490ad0579fd8a34190"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -143,7 +143,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "383d93ab498eda23a7e368ec15ce55e646504dbcc7f1db79173408988b92801f"
+      "sha256": "2040203db39e3dfea5fb5ad387f3757a7f699fbeefd457b028e9047da77140d1"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -155,7 +155,7 @@
     },
     "docs/templates/friction-log.md.tmpl": {
       "role": "template",
-      "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+      "sha256": "75ce6d3b4523de03462d3e24ead52c33837f7c293ffbfba608890a58f5884820"
     },
     "docs/templates/handoff-history.md.tmpl": {
       "role": "template",
@@ -163,7 +163,7 @@
     },
     "docs/templates/handoff.md.tmpl": {
       "role": "template",
-      "sha256": "dd6666a7eb94af74efbfcbbd89fe59be87484f6c901f403863d2bc268af1b17c"
+      "sha256": "4809ea7b9a9978059d09ae1cf5ce394eb90f30dc67ae7ce7ed6a32ab1be5cae2"
     },
     "init.sh": {
       "role": "installer",
@@ -743,7 +743,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c41365523c4ea0d3a2249689107ac4a2f348243971c0b041f62f1fb47a2018da"
+      "sha256": "ecebcc9116208d82836568dbc20c88e40a89ac1d587bc271e43f267c809ab3de"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

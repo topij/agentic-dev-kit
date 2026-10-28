@@ -1,8 +1,8 @@
 # agentic-dev-kit — Living Plan (Handoff)
 
 > **Forward-looking handoff (Principle #1).** Read this at the start of every session
-> (`/session-start`); update it at the end (`/wrap-up`) when the session left something
-> to hand over. This file — not an agent's memory, not a scratch note — is the single
+> (`/session-start`); update it on a pull request (`/wrap-up`'s handoff test) when the
+> work left something to hand over. This file — not an agent's memory, not a scratch note — is the single
 > source of truth for what is in progress and next.
 >
 > **Why `kit-*.md` and not `handoff.md`:** `docs/handoff.md` is the *skeleton shipped to

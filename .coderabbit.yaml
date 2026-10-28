@@ -69,8 +69,8 @@
 #
 # WHAT THIS DOES NOT SOLVE, so nobody re-derives it later. It reallocates the
 # unit; it does not create more. A five-lane batch still needs five units, and
-# the second PR of a session — the wrap-up PR, ~30 minutes behind the work PR —
-# is still refused and still falls to the panel. That is the #375/#377 shape,
+# a second PR in a session (in 2026-08 that was the wrap-up PR, ~30 minutes
+# behind the work PR) is still refused and still falls to the panel. That is the #375/#377 shape,
 # unchanged. Only paying fixes those, and paying was declined 2026-08-17.
 reviews:
   auto_review:

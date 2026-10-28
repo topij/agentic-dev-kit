@@ -1,7 +1,9 @@
 # Wrap up
 
-End-of-session wrap-up. Decide whether the session left anything to hand over, and
-if it did, record it in the living handoff on the session's own pull request.
+Decide whether the work left anything to hand over, and if it did, record it in the
+living handoff on the pull request it belongs to. It has two parts with different
+triggers: the **handoff test** belongs to each pull request, and **closing the
+session** belongs to the session.
 
 **A session can end with nothing to hand over.** What a merged pull request, its body,
 a commit or a tracker issue already records, `session-start` reads first-hand from
@@ -11,12 +13,49 @@ and a session that left none of it ends as `successful-noop`: no commit, no pull
 request, no review. *Decide whether there is anything to hand over* below is the
 test.
 
-**Run it before the session's last pull request goes to review**, not after it
-merges: a handoff edit committed there is reviewed with the change it describes, in
-the same pass. The surest moment is before that pull request is opened, so the
-record is in the first head any reviewer or bot sees; once a review has started,
-a push moves the head it reviewed. A wrap-up started after that review only opens a pull request of its
-own when the test below finds something no other source holds.
+**Run the handoff test before every pull request goes to review**, not only before
+a session's last one, which no agent can identify while the session is still going.
+A handoff edit committed there is reviewed with the change it describes, in the same
+pass. The surest moment is before the pull request is opened, so the record is in the
+first head any reviewer or bot sees; once a review has started, a push moves the head
+it reviewed. The test's scope is that pull request's own work: a decision it made, an
+approach it abandoned, a workstream `▶ Next:` it finished, moved or replaced. It is
+*Decide whether there is anything to hand over* below, applied to the pull request,
+then *Update `<handoff>`* and the steps that commit it only when the test leaves
+something. **Most pull requests leave nothing**, because their body, commits,
+changelog fragment and tickets already say it all; those do not touch `<handoff>`. A
+lane's `dev/*` pull request never carries the record; the cockpit's joint wrap-up
+does ([`parallel.md`](parallel.md)).
+
+**Route friction when it is found**, not at the end of the session, so that nothing
+depends on a closing run that may not happen. *Route this session's friction* below
+is the procedure, run at the point the finding is written down: a tracker filing
+takes the operator's go-ahead then. A parked `<friction-log>` entry is written to the
+working tree then, and committed on a pull request that has not yet gone to review,
+for the same reason a handoff edit is: a push after a review has started moves the
+head it reviewed. With no such pull request, the entry stays uncommitted until the
+session opens one, or until a closing run carries it. Uncommitted friction is
+half-finished state, so it is a reason to offer that run, and it also keeps the
+worktree it sits in from being removed: cleanup refuses a dirty tree, so commit or
+carry the entry before retiring that worktree. A lane writes neither file; it reports
+the finding in its pull request body or its `docs/handoff/<scope>.md` fragment, and
+the cockpit's joint wrap-up routes it ([`parallel.md`](parallel.md)).
+
+**Close the session with the full workflow when the operator asks for it.** Unasked,
+offer it in one line when the session is ending and any of these is true, and
+otherwise say nothing about it:
+
+- half-finished state exists: an unpushed branch, a running job, a temporary tree, a
+  review round still on disk;
+- a decision or an abandoned approach exists only in the conversation, in no pull
+  request the session opened;
+- a finding is still unrouted, or a parked entry is still uncommitted;
+- the operator is stopping or switching away with work still in progress.
+
+A closing run works through every step below over the session as a whole: what no
+pull request's handoff test covered, friction still unrouted, cleanup and the scratch
+report. When the session's pull requests are already reviewed or merged, a record it
+leaves opens a pull request of its own.
 
 ## Resolve configuration
 
@@ -179,7 +218,8 @@ failure makes the overall outcome `incomplete-resumable`.
    **this session began**: its branch's fork point from the protected branch, or the
    time it started. Not since the handoff's newest entry — another session working a
    different workstream may have wrapped up after this one started, and its work is
-   not yours to record.
+   not yours to record. A handoff test run for one pull request reads that pull
+   request's diff and log, against the protected branch.
 
 1. **Decide whether there is anything to hand over.** The handoff carries only what
    no other source holds. Ask of each thing the session did or learned whether one of
@@ -352,8 +392,14 @@ failure makes the overall outcome `incomplete-resumable`.
 
 1. **Route this session's friction** — if this session surfaced a bug, friction, or
    idea specific to a workflow (a skill, a cron/CI job, a pipeline), it goes to one of
-   two places. **Which one is decided by what you can already write down, not by how
-   bad it is.**
+   two places. Route each finding when it is found, as the top of this workflow says;
+   a closing run routes only what this session has not routed yet. Nothing records
+   what was routed earlier, so the test is provenance, not a match: a finding is
+   already routed only when this session wrote its `<friction-log>` entry (committed
+   or still in the working tree) or filed or commented on its tracker item. An entry
+   or item on the same mechanism from before this session is a recurrence, which the
+   duplicate rule below records as an occurrence rather than skipping. **Which place is decided by what you can already write
+   down, not by how bad it is.**
 
    **File it in your tracker now** when the finding has all three of:
 
@@ -647,12 +693,12 @@ failure makes the overall outcome `incomplete-resumable`.
    `<handoff-history>` if the archive sweep ran; also stage any existing project-status
    artifact this workflow changed).
 
-   **The default home is the session's own pull request, before its review.**
-   Commit the record on the session's feature branch before the opening review
-   pass is requested, so one review covers the change and its record and no
-   second pull request exists to review. A session with several pull requests
-   puts the record on the last one to go to review, or on each one whose
-   workstream entry it changes. **An isolated lane's pull request never carries
+   **The default home is the pull request the record belongs to, before its review.**
+   Commit the record on that pull request's branch before the opening
+   review pass is requested, so one review covers the change and its record and no
+   second pull request exists to review. Each pull request carries only what its
+   own handoff test found; a closing run puts what no pull request covered on one
+   the session still has unreviewed, or on a pull request of its own. **An isolated lane's pull request never carries
    it**: a `dev/*` branch that touches `<handoff>` or `<friction-log>` is refused
    by the pre-push hook, and the cockpit's joint wrap-up in `parallel.md` takes
    a batch's record instead.

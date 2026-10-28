@@ -52,11 +52,11 @@ failure is just as real: reacting to every single incident by rewriting the
 standing rules produces rule-bloat that nobody reads and that drowns the few
 rules that actually matter.
 
-**Mechanism.** A dated inbox file written to at session end, plus a periodic (e.g.
+**Mechanism.** A dated inbox file written to when friction is found, plus a periodic (e.g.
 weekly) triage pass over it. Routing is asymmetric — down by default, up only on
 repetition — and each finding routes at whichever of those two moments it is *ready*
 for. A finding that already carries a reproduction, a named mechanism and a proposed
-fix is complete, so it goes **down** to the tracker immediately at session end; the
+fix is complete, so it goes **down** to the tracker as soon as it is found; the
 triage pass could add nothing to it but latency. The inbox holds the remainder —
 findings still missing one of those three, and single instances of a shape that only
 matters if it recurs. The triage pass then graduates *those*: still **down** for a
@@ -65,7 +65,7 @@ multi-occurrence **pattern**. Deferring the up-route to repetition is what keeps
 flywheel self-regulating instead of ratcheting every week.
 
 The two moments differ in what they can know, which is why the split falls where it
-does. At session end you have the live context and can say *why* something happened;
+does. When you find it you have the live context and can say *why* something happened;
 at triage you have several entries side by side and can see that a shape has
 recurred. Asking either moment to do the other's job is what makes the inbox either a
 ticket queue or a graveyard.
