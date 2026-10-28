@@ -397,8 +397,11 @@ failure makes the overall outcome `incomplete-resumable`.
    what was routed earlier, so the test is provenance, not a match: a finding is
    already routed only when this session wrote its `<friction-log>` entry (committed
    or still in the working tree) or filed or commented on its tracker item. An entry
-   or item on the same mechanism from before this session is a recurrence, which the
-   duplicate rule below records as an occurrence rather than skipping. **Which place is decided by what you can already write
+   or item on the same mechanism from before this session is a recurrence, not a
+   reason to skip. For a tracker item, add the occurrence as the duplicate rule below
+   says. For an earlier `<friction-log>` entry, park a new dated entry that names the
+   earlier one, and leave the earlier entry as it is: editing, graduating or sweeping
+   it is `triage-friction-log`'s write. **Which place is decided by what you can already write
    down, not by how bad it is.**
 
    **File it in your tracker now** when the finding has all three of:
