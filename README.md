@@ -304,7 +304,7 @@ Each piece maps to one or more of the ten principles in
 
 | Piece | Principle(s) | Purpose |
 |---|---|---|
-| `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan: one entry per open workstream, read at session start and updated at wrap-up only for what no PR, commit or tracker issue records. Dated session entries from the earlier layout sweep to the history file once it crosses a line budget. |
+| `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan: one entry per open workstream, read at session start and updated by wrap-up's handoff test before each PR's review, only for what no PR, commit or tracker issue records. Dated session entries from the earlier layout sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
 | `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads a `CLAUDE.md` instead of `AGENTS.md` once one exists) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |

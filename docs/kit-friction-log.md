@@ -1,7 +1,7 @@
 # Friction Log — agentic-dev-kit
 
 > **Lean inbox (Principle #2 — the friction flywheel).** Friction surfaced during real use,
-> recorded at session end. Single incidents route **down** to the tracker; a genuine
+> recorded when it is found. Single incidents route **down** to the tracker; a genuine
 > multi-occurrence **pattern** graduates **up** into a rule or skill change.
 >
 > **What lands here is what is not yet issue-shaped.** A finding that already carries a

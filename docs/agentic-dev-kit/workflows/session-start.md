@@ -602,5 +602,5 @@ wrapped up gets no preference for it.
   subject, as in work on the lane launcher. Name the entry. `wrap-up` offers to fold it into workstreams
   named for their subjects, and only does so with the operator's approval. Don't fold
   it inline.
-- Pairs with `wrap-up` (session end). Use `pr-watch` to action a 🔴 PR item,
+- Pairs with `wrap-up` (its handoff test before each pull request, its closing run at session end). Use `pr-watch` to action a 🔴 PR item,
   the `triage-friction-log` workflow to clear the inbox.

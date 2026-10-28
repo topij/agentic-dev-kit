@@ -3750,6 +3750,9 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         )
         assert "**Run the handoff test before every pull request goes to review**" in flattened
         assert "**Route friction when it is found**" in flattened
+        assert "committed on a pull request that has not yet gone to review" in flattened
+        assert "A lane's `dev/*` pull request never carries the record" in flattened
+        assert "offer it in one line when the session is ending and any of these is true" in flattened
         # A workstream is a subject, and a batch is filed per pull request.
         assert (
             "**A workstream is named for its subject, never for a date, a run mode, "
@@ -4562,6 +4565,18 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "**Route friction when it is found**",
             "**Route friction at the end of the session**", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "committed on a pull request that has not yet gone to review",
+            "committed on the pull request open at the time", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "A\nlane's `dev/*` pull request never carries the record",
+            "A\nlane's `dev/*` pull request also carries the record", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "offer it in one line when the session is ending",
+            "ask whether to run it whenever the session is ending", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Closing a workstream is not among them",
@@ -21733,6 +21748,10 @@ def _assert_pr_watch_handoff_test_ordering(text: str) -> None:
         "**Every pull request runs `wrap-up`'s handoff test before its opening "
         "review is requested**"
     ) in flattened
+    assert (
+        "A lane's `dev/*` pull request is the exception: its record goes to the "
+        "cockpit's joint wrap-up."
+    ) in flattened
 
 
 def test_pr_watch_runs_the_handoff_test_before_the_opening_review() -> None:
@@ -21741,10 +21760,14 @@ def test_pr_watch_runs_the_handoff_test_before_the_opening_review() -> None:
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
     ).read_text(encoding="utf-8")
     _assert_pr_watch_handoff_test_ordering(text)
-    mutated = text.replace("handoff test before its opening", "handoff test after its opening", 1)
-    assert mutated != text
-    with pytest.raises(AssertionError):
-        _assert_pr_watch_handoff_test_ordering(mutated)
+    mutations = (
+        text.replace("handoff test before its opening", "handoff test after its opening", 1),
+        text.replace("A lane's `dev/*` pull request is the\nexception", "A lane's `dev/*` pull request is no\nexception", 1),
+    )
+    for mutated in mutations:
+        assert mutated != text
+        with pytest.raises(AssertionError):
+            _assert_pr_watch_handoff_test_ordering(mutated)
 
 
 def test_rule_proposals_report_their_net_line_change() -> None:

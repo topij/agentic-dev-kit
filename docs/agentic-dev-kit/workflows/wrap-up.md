@@ -30,10 +30,13 @@ does ([`parallel.md`](parallel.md)).
 **Route friction when it is found**, not at the end of the session, so that nothing
 depends on a closing run that may not happen. *Route this session's friction* below
 is the procedure, run at the point the finding is written down: a tracker filing
-takes the operator's go-ahead then, and a parked `<friction-log>` entry rides the
-pull request open at the time, or the next one the session opens. A lane writes
-neither file; it reports the finding in its pull request body, and the cockpit routes
-it.
+takes the operator's go-ahead then. A parked `<friction-log>` entry is written to the
+working tree then, and committed on a pull request that has not yet gone to review,
+for the same reason a handoff edit is: a push after a review has started moves the
+head it reviewed. With no such pull request, the entry stays uncommitted until the
+session opens one, or until a closing run carries it. Uncommitted friction is
+half-finished state, so it is a reason to offer that run. A lane writes neither file;
+it reports the finding in its pull request body, and the cockpit routes it.
 
 **Close the session with the full workflow when the operator asks for it.** Unasked,
 offer it in one line when the session is ending and any of these is true, and
@@ -43,7 +46,7 @@ otherwise say nothing about it:
   review round still on disk;
 - a decision or an abandoned approach exists only in the conversation, in no pull
   request the session opened;
-- a finding is still unrouted;
+- a finding is still unrouted, or a parked entry is still uncommitted;
 - the operator is stopping or switching away with work still in progress.
 
 A closing run works through every step below over the session as a whole: what no
@@ -387,8 +390,10 @@ failure makes the overall outcome `incomplete-resumable`.
 1. **Route this session's friction** — if this session surfaced a bug, friction, or
    idea specific to a workflow (a skill, a cron/CI job, a pipeline), it goes to one of
    two places. Route each finding when it is found, as the top of this workflow says;
-   a closing run routes only what is still unrouted, and never files or parks a
-   finding a second time. **Which place is decided by what you can already write
+   a closing run routes only what is still unrouted. Nothing records what was
+   routed earlier, so before routing a finding at closing, look for it in
+   `<friction-log>`, including the uncommitted working tree, and in the tracker search
+   below; a finding found there is already routed. **Which place is decided by what you can already write
    down, not by how bad it is.**
 
    **File it in your tracker now** when the finding has all three of:

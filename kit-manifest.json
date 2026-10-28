@@ -95,7 +95,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "97949f40b5a386919b38454febe9ecffb7fb8e9e8e90b701105fdc3cdc05cd40"
+      "sha256": "13feceb533e2a2f65c0ddf5979aa80c9cb1f16dcf4a55fb38bfc1a333d19ce70"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "37fec86b8f9adfbfe81c344325b42cb4fce8cb7899589ce7acaa46748adb9e39"
+      "sha256": "4be3589e8483a64795f13862518a777019309f639a95699da2e82814e689c091"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -143,7 +143,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "383d93ab498eda23a7e368ec15ce55e646504dbcc7f1db79173408988b92801f"
+      "sha256": "2040203db39e3dfea5fb5ad387f3757a7f699fbeefd457b028e9047da77140d1"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -155,7 +155,7 @@
     },
     "docs/templates/friction-log.md.tmpl": {
       "role": "template",
-      "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+      "sha256": "75ce6d3b4523de03462d3e24ead52c33837f7c293ffbfba608890a58f5884820"
     },
     "docs/templates/handoff-history.md.tmpl": {
       "role": "template",
@@ -743,7 +743,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c7515b6f6348785e4704debf24bc5e98ebf782a95c7745f2d6163b068f2bd735"
+      "sha256": "14760e0d8029a0afce79c06b8657c6c445e9ff45196eb4b8821220f0af571a1f"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
