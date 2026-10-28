@@ -686,13 +686,17 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
     valid = False
     parses = False
     try:
-        canonical_state(state_raw, settings=settings, mode=store.mode)
+        # `retiring=True` as `recover` judges a state with no gate: a completed
+        # state valid but for a later configuration change is one the next
+        # session-starting entry retires, so it is preserved here, not held
+        # (#1272). The tolerance covers completed states only.
+        canonical_state(state_raw, settings=settings, mode=store.mode, retiring=True)
         parses = True
         # `recover`'s own predicate: a completed state whose frozen artifact
         # is gone is not preserved as valid, because the entry `recover` would
         # send the operator to hard-stops on it (#859). An in-flight state
         # keeps `canonical_state` alone, so it stays restorable.
-        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=False)
+        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=True)
         valid = True
     except TriageError:
         pass
@@ -767,6 +771,14 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
     return {"action_core": action_core, "action_core_digest": digest(action_core), "held": None}
 
 
+def completed_phase(state_raw: bytes) -> bool:
+    try:
+        parsed = loads_exact(state_raw)
+    except Exception:
+        return False
+    return isinstance(parsed, dict) and parsed.get("phase") == "completed"
+
+
 def resume_state_action(store: ArtifactStore, prepared: dict[str, Any]) -> dict[str, Any]:
     core = prepared["capture_core"]
     action = prepared["action_core"]
@@ -777,7 +789,11 @@ def resume_state_action(store: ArtifactStore, prepared: dict[str, Any]) -> dict[
     gate_raw = decode_bytes(core["old_gate_bytes"])
     if action["action"] == "preserve-valid-state-and-quarantine-old-gate":
         _quarantine_group(_old_gate_quarantine_items(store, core), gate_raw)
-        return {"result": "resume", "state_digest": core["state_digest"]}
+        # `resume` reports a completed state and never retires it, and refuses
+        # one written under an earlier configuration, so a completed state
+        # names the session-starting entry that retires it (#1272).
+        result = "start-new-session" if completed_phase(state_raw) else "resume"
+        return {"result": result, "state_digest": core["state_digest"]}
     target = Path(action["quarantine_path"])
     current_state_observation, current_state_raw = observe(store.state_path)
     if current_state_raw == state_raw:
