@@ -8,8 +8,10 @@ multi-line record, and an entry or review round holding it was kept as
 `live-worktree: unparseable worktree record`. Such a record is now judged by the path it
 names:
 
-- a worktree inside the entry no longer keeps it, so `--finish-review-round` retires a
-  round a lens ran that suite in;
+- a worktree inside the entry that exists no longer keeps it, so that record no longer
+  keeps a round a lens ran that suite in. Every other keeper still applies: a round
+  that also holds a git dir not beside its own work tree, such as the `configured.git`
+  that `test_panel_prompt.py`'s object-database test leaves, is still kept;
 - a worktree outside the entry that exists still keeps it, now with the reason
   `repository whose worktree ... lives outside this entry`;
 - a record holding a line break whose path does not exist, or cannot be statted, is

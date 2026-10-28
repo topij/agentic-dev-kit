@@ -831,8 +831,10 @@ def _main_repo_reason(git_dir: str, entry: str) -> str | None:
         #   points: kept, as unparseable. A hand-made
         #   record (`/outside/wt\nx/.git`) reads whole as a missing path, and
         #   a one-line missing path is cleared as prunable, but before #1265
-        #   every multi-line record was kept, and only the case git writes is
-        #   released here;
+        #   every multi-line record was kept, and only one naming a path that
+        #   exists is released here. Git writes the missing case too, once the
+        #   worktree's directory is deleted. Text mode reads a CR inside a path
+        #   as LF, so a path holding a CR names a missing path and is kept;
         # - an empty or blank record, or one over the read cap: kept, as before.
         target = text.strip()
         if len(text) > _GIT_FILE_MAX or not target:

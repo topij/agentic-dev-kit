@@ -120,7 +120,10 @@ fixture (#1265).
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1265](https://github.com/topij/agentic-dev-kit/issues/1265).
 
-▶ Next: once #1277, the change for #1265, merges, retire round `01234b40` locally, with the operator's approval.
+▶ Next: once #1277, the change for #1265, merges, preview round `01234b40` locally. #1277 releases only its worktree
+record that names a newline path, and only while that worktree's directory exists. The round also holds `configured.git`
+git dirs that `test_panel_prompt.py`'s object-database test leaves, which the engine still keeps as git dirs not beside
+their own work tree. Retire it, with the operator's approval, once `preview --round` reports it eligible.
 
 ### Reviewer profiles
 
@@ -158,8 +161,8 @@ shape check in `model.py` stays until cs-toolkit's completed LIVE state, which c
 `proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
 `saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired. What stands, or stood, in its way:
 - a single-writer gate that outlived its owner, since cleared: the operator reports that `recover` quarantined it on
-  2026-10-27. #1276 (`70c3a7d`) showed `new` releases its gate in that worktree shape, and #1269 records the survivor
-  as left by `recover`'s held-evidence path, which #1272 tracks;
+  2026-10-27. #1276 (`70c3a7d`) showed `new` releases its gate in a linked worktree whose `state/` links to the
+  primary's, and #1269 records the survivor as left by `recover`'s held-evidence path, which #1272 tracks;
 - the adopter tracks a separate failure of its scheduled draft in its own tracker;
 - whether #1111's shared root ends its identity mismatch is unobserved. On 2026-10-23 the draft stopped at input
   validation, and the finalize stopped at the gate, before the state's identity check.
@@ -294,4 +297,4 @@ reassess before an upgrade there. The earlier local assessment, `saved_plans/con
 these upgrades.
 **Owner:** #1116, #990, #1011, #979, #1272.
 
-▶ Next: after the scheduled draft and finalize on Fri 2026-10-30 (the operator's schedule, given 2026-10-28), confirm the completed LIVE state retired, then #979.
+▶ Next: after the scheduled draft and finalize on Fri 2026-10-30 (the operator's schedule, given 2026-10-28), confirm the completed LIVE state retired, then remove the shim (#979).

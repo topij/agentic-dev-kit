@@ -1615,7 +1615,7 @@ def test_finished_round_keeps_a_hand_made_worktree_record_git_does_not_write(
         ("{outside}/.git \n", True),
         (" {outside}/.git\n", True),
         ("\n{outside}/.git\n", True),
-        (" {path}/inside-wt/.git\n", False),  # a lens probing git wrote this one
+        (" {path}/inside-wt/.git\n", False),  # hand-written; git writes no blank
     ],
     ids=["trailing-blank", "leading-blank", "leading-newline", "leading-blank-inside"],
 )
@@ -1648,7 +1648,7 @@ def test_finished_round_keeps_a_worktree_record_whose_newline_path_cannot_be_sta
 
 
 def test_finished_round_keeps_a_crlf_worktree_record_naming_an_outside_worktree(root, repo, base):
-    # Git's prune strips a trailing CR as well as LF, so this record still names it.
+    # Text mode already reads CRLF as LF, so this pins the verdict, not a CR strip.
     settings, receipt, path = _round(root, repo)
     clone = _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
     _git(clone, "worktree", "add", "-q", "--detach", str(base / "outside-wt"))
