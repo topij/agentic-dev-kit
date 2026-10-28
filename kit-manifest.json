@@ -222,7 +222,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "bb40b1bda89d94533314495e8910fc3f641e30213bee0611ce98d0828c32b6b7"
+      "sha256": "a02500e3740f4bc73a6b0ee1f4c3d5e0bac24a26400aa429d29769d319fc9d5f"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -868,6 +868,10 @@
     "scripts/tests/test_triage_state.py": {
       "role": "test",
       "sha256": "26676cf8cf5e265499a3d22c38e5d959f61fbe8e8efc1fcc6ce5af7b79952323"
+    },
+    "scripts/tests/test_triage_symlinked_state_gate.py": {
+      "role": "test",
+      "sha256": "40df60c12bc7e5982341df9693f9494efb09be1134fe2af5d4f269b3a74ed424"
     },
     "scripts/tests/test_triage_worktree_identity.py": {
       "role": "test",

@@ -9,10 +9,11 @@ completed state another checkout wrote to the same state root. In the adopter's
 case the state came from a kit that predates #1111's shared root. Both reach the
 same refusal after the gate is held.
 
-The first test shows the refused `new` releases its gate. The second shows where
-a surviving gate comes from: the interactive `recover` the run made next keeps
+The first test shows the refused `new` releases its gate. The second shows one
+route by which a gate survives: the interactive `recover` the run made next keeps
 its own gate as part of the `state-present-held` evidence it captures. After that,
-every later LIVE run is refused as `single-writer-gate`.
+every later LIVE run is refused as `single-writer-gate`. Neither test can rule out
+a process killed before the release handler ran.
 """
 
 from __future__ import annotations
@@ -65,6 +66,9 @@ def symlinked_worktree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple
     (worktree / "state").symlink_to(state, target_is_directory=True)
     monkeypatch.delenv("DEVKIT_STATE_ROOT")
     monkeypatch.delenv("DEVKIT_ROOT", raising=False)
+    # A kit lane exports this, and with no sandbox the resolver would then refuse
+    # the unsandboxed write this fixture makes on purpose.
+    monkeypatch.delenv("DEVKIT_REFUSE_UNSANDBOXED_STATE", raising=False)
     monkeypatch.chdir(worktree)
     return state, worktree
 
