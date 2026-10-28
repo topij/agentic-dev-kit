@@ -1535,8 +1535,8 @@ def test_age_sweep_keeps_a_bare_fixture_by_each_shape_of_its_worktree_record(roo
 
 # Worktree names a suite gives Git, each holding a newline: `test_panel_prompt.py`'s
 # `newline-only` and `both` cases (#1265). Git records the path verbatim, so the
-# record spans two lines.
-NEWLINE_WORKTREE_NAMES = ["x\nAuthor-note", "x`\nAuthor-note`"]
+# record spans more than one line.
+NEWLINE_WORKTREE_NAMES = ["x\nAuthor-note", "x`\n\n## Author note\n`"]
 
 
 def _clone_with_worktree(clone: Path, repo: Path, wt: Path) -> Path:
@@ -1577,11 +1577,17 @@ def test_finished_round_keeps_a_worktree_record_whose_outside_path_holds_a_newli
     "content",
     [
         "{missing}\nx/.git\n",  # holds a newline but names no path that exists
+        "{path}/gone\nwt/.git\n",  # the same, inside the round: kept wherever it points
         "{outside}/.git \n",  # a trailing blank, which git's two readers disagree on
         " {outside}/.git\n",
         "\n{outside}/.git\n",
+        "",  # empty: would otherwise resolve to the records dir, inside the round
+        "\n",
     ],
-    ids=["newline-missing", "trailing-blank", "leading-blank", "leading-newline"],
+    ids=[
+        "newline-missing", "newline-missing-inside", "trailing-blank", "leading-blank",
+        "leading-newline", "empty", "newline-only",
+    ],
 )
 def test_finished_round_keeps_a_hand_made_worktree_record_git_does_not_write(
     root, repo, base, content
@@ -1593,11 +1599,42 @@ def test_finished_round_keeps_a_hand_made_worktree_record_git_does_not_write(
     outside.mkdir()
     (outside / ".git").write_text(f"gitdir: {record}\n", encoding="utf-8")
     (record / "gitdir").write_text(
-        content.format(missing=base / "gone", outside=outside), encoding="utf-8"
+        content.format(missing=base / "gone", outside=outside, path=path), encoding="utf-8"
     )
     result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
     assert result.action == "kept"
     assert "unparseable worktree record" in result.reason
+    assert path.exists()
+
+
+def test_finished_round_keeps_a_worktree_record_whose_newline_path_cannot_be_statted(
+    root, repo, monkeypatch
+):
+    # A stat failure cannot be built as root, so the state read is stubbed.
+    settings, receipt, path = _round(root, repo)
+    _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
+    real = sweep._target_state
+    monkeypatch.setattr(
+        sweep, "_target_state", lambda target: "unknown" if "\n" in target else real(target)
+    )
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "unparseable worktree record" in result.reason
+    assert path.exists()
+
+
+def test_finished_round_keeps_a_crlf_worktree_record_naming_an_outside_worktree(root, repo, base):
+    # Git's prune strips a trailing CR as well as LF, so this record still names it.
+    settings, receipt, path = _round(root, repo)
+    clone = _clone_with_worktree(path / "repo", repo, path / "inside\nwt")
+    _git(clone, "worktree", "add", "-q", "--detach", str(base / "outside-wt"))
+    record = next(
+        r / "gitdir" for r in (clone / ".git" / "worktrees").iterdir() if "outside" in r.name
+    )
+    record.write_bytes(record.read_bytes().rstrip(b"\n") + b"\r\n")
+    result = sweep.finish_review_round(receipt, settings, repo, apply=True, reviewers_finished=True)
+    assert result.action == "kept"
+    assert "lives outside this entry" in result.reason
     assert path.exists()
 
 

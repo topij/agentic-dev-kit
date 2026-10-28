@@ -104,8 +104,8 @@ unavailable inventory's refusal and adds an approved `reconcile` for a changed d
 number, under the preconditions in `session-cleanup.md`. It deletes nothing, so cs-toolkit's retained evidence in `.git/devkit` still
 waits on #1256. #1261's review LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
-#1256. `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) bound inventories and receipts to a
-boot-stable identity, and #1253 is closed. On 2026-10-28, from the primary checkout and with the operator's approval,
+#1256. `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) shipped #1253's binding of inventories
+and receipts to a boot-stable identity. On 2026-10-28, from the primary checkout and with the operator's approval,
 every device-renumbered inventory in this repository was reconciled. Inventory `8cf42b14` stayed incomplete: it
 holds round `01234b40` (round 3 of #1262's review), which `session_cleanup.py preview --round` kept on
 2026-10-27 for a worktree record whose path holds a newline, written inside the round by a `test_panel_prompt.py`
@@ -120,7 +120,7 @@ fixture (#1265).
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1265](https://github.com/topij/agentic-dev-kit/issues/1265).
 
-▶ Next: once #1265 merges, retire round `01234b40` locally.
+▶ Next: once #1277 (#1265's fix) merges, retire round `01234b40` locally, with the operator's approval.
 
 ### Reviewer profiles
 
@@ -156,8 +156,9 @@ and an engine-owned rollback waits for a recurrence (#892).
 **Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
 shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
 `proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
-`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired:
-- the single-writer gate an exited owner left (#1269) was cleared on 2026-10-27, when `recover` quarantined it;
+`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired. What stood in its way:
+- the single-writer gate an exited owner left (#1269), since cleared: the operator reports that `recover` quarantined
+  it on 2026-10-27;
 - the adopter tracks a separate failure of its scheduled draft in its own tracker;
 - whether #1111's shared root ends its identity mismatch is unobserved. On 2026-10-23 the draft stopped at input
   validation, and the finalize stopped at the gate, before the state's identity check.
@@ -292,4 +293,4 @@ reassess before an upgrade there. The earlier local assessment, `saved_plans/con
 these upgrades.
 **Owner:** #1116, #990, #1011, #979, #1269.
 
-▶ Next: after the scheduled draft and finalize on Fri 2026-10-30, confirm the completed LIVE state retired, then #979.
+▶ Next: after the scheduled draft and finalize on Fri 2026-10-30 (the operator's schedule, given 2026-10-28), confirm the completed LIVE state retired, then #979.

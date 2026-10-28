@@ -1,10 +1,10 @@
-## A worktree record whose path holds a newline no longer keeps its entry
+## A worktree record whose path holds a newline no longer keeps an entry that also holds its worktree
 
 CHANGED (gate semantics): `sweep_scratch.py` now reads a `worktrees/*/gitdir` record
 whole, stripping only its trailing line ends, rather than refusing any record that is
 not one line (#1265). Git writes a worktree's path verbatim, so a worktree named with a
 newline (`test_panel_prompt.py`'s `newline-only` and `both` cases build one) left a
-two-line record, and an entry or review round holding it was kept as
+multi-line record, and an entry or review round holding it was kept as
 `live-worktree: unparseable worktree record`. Such a record is now judged by the path it
 names:
 
