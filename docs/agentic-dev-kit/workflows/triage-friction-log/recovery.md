@@ -262,7 +262,10 @@ prepared envelope before changing the old gate. A fresh invocation can resume th
 prepared action. Revalidate the unchanged state and every old-gate name, then quarantine
 only the proven-stale gate. Once the old gate is absent, the byte-identical valid state
 is again selected by ordinary `resume`; the recovery invocation does not parse it a
-second time or start work under an unowned gate.
+second time or start work under an unowned gate. A preserved `completed` state is the
+exception: `resume` never retires one, and refuses one written under an earlier
+configuration, so the result reports `start-new-session` and a session-starting entry
+(no entry, or `new`) retires it.
 
 Classify invalid captured state conservatively. Only a readable state that proves it
 never reached `attempting` and contains no verified tracker identifier or repository/PR
@@ -271,18 +274,19 @@ evidence may offer `abandon <action-core-digest>` to the present interactive ope
 before retiring it: state validation, then the published frozen snapshot artifact, then
 the forge-prefix checks on its forge operations. A completed state that is valid but for
 a configuration change made after it finished passes it, so it is refused as valid
-(`captured state is valid; recovery refused`) and left for *Completed-state retirement*
-rather than captured as invalid. Behind a gate whose owner is proven dead, the action plan
-judges it the same way: it is preserved and the gate quarantined
-(`preserve-valid-state-and-quarantine-old-gate`), never held. A completed state that fails only the artifact or forge
-checks, including an artifact it cannot read, fails it. It is captured and offered
+(`captured state is valid; recovery refused`, with a resume action naming a
+session-starting entry rather than `resume`) and left for *Completed-state retirement*
+rather than captured as invalid. Behind a gate whose owner is proven dead, the action
+plan judges it the same way: it is preserved and the gate quarantined
+(`preserve-valid-state-and-quarantine-old-gate`), never held. A completed state that
+fails only the artifact or forge checks, including an artifact it cannot read, fails it. It is captured and offered
 `retire-terminal-invalid-state` only when git proves its sweep, as below; otherwise
 `recover` writes nothing and refuses it (`state fails the session-starting checks and no
 retirement is proven; recovery refused`), so restoring the artifact or landing the sweep
 still leaves a route out, and the action plan preserves it as before when it passes
 state validation as a session-starting entry applies it (one that fails that is
-classified as any invalid state). The refusal's resume action names the check that failed: an
-artifact failure says to restore the published frozen snapshot artifact or land the
+classified as any invalid state). The refusal's resume action names the check that
+failed: an artifact failure says to restore the published frozen snapshot artifact or land the
 run's sweep, and a forge-prefix failure, whose artifact is present, says to reconcile the
 state's recorded forge operations with the forge or land the run's sweep. A state in any
 other phase is judged by state validation alone, so an in-flight run whose artifact is

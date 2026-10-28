@@ -771,6 +771,14 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
     return {"action_core": action_core, "action_core_digest": digest(action_core), "held": None}
 
 
+def completed_phase(state_raw: bytes) -> bool:
+    try:
+        parsed = loads_exact(state_raw)
+    except Exception:
+        return False
+    return isinstance(parsed, dict) and parsed.get("phase") == "completed"
+
+
 def resume_state_action(store: ArtifactStore, prepared: dict[str, Any]) -> dict[str, Any]:
     core = prepared["capture_core"]
     action = prepared["action_core"]
@@ -781,7 +789,11 @@ def resume_state_action(store: ArtifactStore, prepared: dict[str, Any]) -> dict[
     gate_raw = decode_bytes(core["old_gate_bytes"])
     if action["action"] == "preserve-valid-state-and-quarantine-old-gate":
         _quarantine_group(_old_gate_quarantine_items(store, core), gate_raw)
-        return {"result": "resume", "state_digest": core["state_digest"]}
+        # `resume` reports a completed state and never retires it, and refuses
+        # one written under an earlier configuration, so a completed state
+        # names the session-starting entry that retires it (#1272).
+        result = "start-new-session" if completed_phase(state_raw) else "resume"
+        return {"result": result, "state_digest": core["state_digest"]}
     target = Path(action["quarantine_path"])
     current_state_observation, current_state_raw = observe(store.state_path)
     if current_state_raw == state_raw:

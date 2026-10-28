@@ -2906,8 +2906,13 @@ def test_recover_over_a_dead_gate_preserves_a_completed_state_valid_but_for_a_la
     planned = run("recover", context="interactive", request={}, start=root)
     assert planned["recovery_plan"]["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
     recovered = _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])
-    assert recovered["detail"] == "resume"
+    assert recovered["detail"] == "start-new-session"
     assert state_path.read_bytes() == completed_raw
+    # `resume` would refuse it; the named session-starting entry retires it.
+    assert run("resume", context="interactive", request={}, start=root)["detail"] == "configuration identity mismatch"
+    refused = run("recover", context="interactive", request={}, start=root)
+    assert refused["detail"] == "captured state is valid; recovery refused"
+    assert refused["resume_action"].startswith("start a new session")
     result = run(None, context="interactive", request={}, start=root)
     assert result["detail"].startswith(f"retired completed state to {retired} ")
     assert retired.read_bytes() == completed_raw
@@ -3757,7 +3762,8 @@ def test_a_kill_during_completed_state_retirement_holds_rather_than_starting_fre
         planned = run("recover", context="interactive", request={}, start=root)
         assert planned["detail"] == "state-present recovery action awaits exact approval"
         assert planned["recovery_plan"]["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
-        assert _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])["detail"] == "resume"
+        # A completed state names the session-starting entry that retires it (#1272).
+        assert _approve_recovery(root, planned["recovery_plan"]["action_core_digest"])["detail"] == "start-new-session"
         restarted = run("new", context="interactive", request={}, start=root)
         assert restarted["detail"].startswith("retired completed state to ")
         assert retired.name in restarted["detail"]
