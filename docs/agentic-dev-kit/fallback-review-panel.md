@@ -1534,7 +1534,10 @@ already-valid composed chain), proves each boundary is
 ancestral, records the exact changed paths (both the source and destination of a
 rename), preserves each pass's review-bot caveats, and revalidates the chain,
 paths, and caveats on every poll. Missing objects, non-ancestry, a broken
-boundary, path drift, or malformed caveat data invalidates the receipt. Omitting
+boundary, path drift, or malformed caveat data invalidates the receipt. A receipt
+whose disposition leaves a repair to commit takes `--repair-pending`, which keeps
+`mergeable` false until the repair is pushed (`#1288`; `pr-watch.md` has the
+order). Omitting
 `--compose-parent` preserves the legacy
 current-head receipt shape, but it replaces the prior receipt and therefore is
 not evidence of composed parent-plus-delta coverage. The posted verdict lines

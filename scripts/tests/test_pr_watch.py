@@ -13811,3 +13811,169 @@ def test_the_largest_total_count_across_pages_is_the_measure(
         pr_watch._truncated_reads.clear()
         pr_watch._http_get_all_wrapped("https://api.github.com/w", "t", "check_runs")
         assert pr_watch._truncated_reads == ["https://api.github.com/w"], counts
+
+
+# --------------------------------------------------------------------------- #
+# --repair-pending: a receipt whose repair is still local holds the gate (#1288)
+# --------------------------------------------------------------------------- #
+
+
+def test_a_repair_pending_receipt_at_the_head_is_not_mergeable() -> None:
+    """#1284's exact shape. A delta pass left LOW findings, the receipt was
+    recorded at the reviewed head so the next delta could compose on it, and the
+    repair was committed but not pushed. Without the hold, that head read
+    `mergeable` and was merged without the repair."""
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    held = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={
+            "head": "abc123",
+            "source": "fallback:panel",
+            "repair_pending": True,
+        },
+        **_settled(view),
+    )
+    plain = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={"head": "abc123", "source": "fallback:panel"},
+        **_settled(view),
+    )
+
+    assert plain["mergeable"] is True
+    assert held["review_evidence"]["valid"] is True
+    assert held["converged"] is True
+    assert held["mergeable"] is False
+    assert held["done"] is False
+    assert [b for b in held["merge_blockers"] if "--repair-pending" in b]
+    assert "--repair-pending" in pr_watch.render(held)
+
+
+def test_pushing_the_repair_releases_the_hold() -> None:
+    """The head moving is what ends the hold: the receipt stops applying, and
+    the gate falls back to asking for evidence at the new head, as for any push."""
+    pr_watch = _load_pr_watch()
+    view = _green_view(headRefOid="def456")
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={
+            "head": "abc123",
+            "source": "fallback:panel",
+            "repair_pending": True,
+        },
+        **_settled(view),
+    )
+
+    assert not [b for b in report["merge_blockers"] if "--repair-pending" in b]
+    assert "independent review evidence is missing for current head" in (
+        report["merge_blockers"]
+    )
+
+
+def test_bot_coverage_does_not_answer_a_pending_repair() -> None:
+    """The hold is route-independent: a bot review at the same head is a review
+    of the diff without the repair the receipt says is coming."""
+    pr_watch = _load_pr_watch()
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={
+            "head": "abc123",
+            "source": "fallback:panel",
+            "repair_pending": True,
+        },
+        **_settled(view),
+    )
+
+    assert report["review_evidence"]["bots"] == ["coderabbit"]
+    assert report["mergeable"] is False
+
+
+@pytest.mark.parametrize(
+    ("value", "holds"),
+    [(True, True), ("yes", True), (1, True), (None, True), (False, False)],
+)
+def test_only_an_explicit_false_reads_as_no_repair_pending(
+    value: object, holds: bool
+) -> None:
+    """The state file is plain JSON anything can edit, so every value but an
+    absent key or `false` holds: a malformed flag fails closed."""
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={
+            "head": "abc123",
+            "source": "fallback:panel",
+            "repair_pending": value,
+        },
+        **_settled(view),
+    )
+
+    assert report["mergeable"] is (not holds)
+
+
+def test_record_review_stores_the_hold_only_when_asked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(
+        pr_watch,
+        "_gh_json",
+        lambda _args: {"number": 7, "headRefOid": "reviewed-head"},
+    )
+
+    held = pr_watch.record_review(
+        7, "fallback:codex", "reviewed-head", repair_pending=True
+    )
+    assert held["review_receipt"]["repair_pending"] is True
+    assert pr_watch.load_state(7)["review_receipt"]["repair_pending"] is True
+    assert "repair pending" in pr_watch.render_record_review(held)
+
+    released = pr_watch.record_review(7, "fallback:codex", "reviewed-head")
+    assert "repair_pending" not in released["review_receipt"]
+    assert "repair_pending" not in pr_watch.load_state(7)["review_receipt"]
+
+
+def test_the_repair_pending_flag_is_only_valid_with_record_review(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    pr_watch = _load_pr_watch()
+
+    with pytest.raises(SystemExit):
+        pr_watch.main(["9", "--repair-pending"])
+
+    assert "--repair-pending is only valid with --record-review" in (
+        capsys.readouterr().err
+    )
+
+
+def test_the_workflow_orders_the_repair_push_before_the_stamp() -> None:
+    workflow = " ".join(
+        read_workflow(
+            REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+        ).split()
+    )
+
+    assert (
+        "record it with `--repair-pending`, then push the repair at once and run "
+        "the test stamp after." in workflow
+    )
+    assert "GitHub's merge button and `gh pr merge` do not read it" in workflow

@@ -38,7 +38,8 @@ the key would silently authorize merges on unreviewed PRs.
 The caller loops: run this -> if not converged, fix the failures / address or
 reply to the new comments -> `--mark-seen` -> wait -> run again. `converged`
 flips true once CI is green and every finding has been handled; `mergeable`
-additionally waits on `--record-review`.
+additionally waits on `--record-review`. A receipt recorded with
+`--repair-pending` keeps `mergeable` false until the repair is pushed (#1288).
 
 It also REPORTS, in `evidence_findings`, review evidence that is missing from
 the pull request while the merge gate is satisfied: a receipt with no
@@ -4769,6 +4770,7 @@ def record_review(
     lenses: str | None = None,
     compose_parent: str | None = None,
     disposition: str | None = None,
+    repair_pending: bool = False,
     now: datetime | None = None,
 ) -> dict:
     """Persist independent-review evidence bound to the PR's current head SHA.
@@ -4829,6 +4831,16 @@ def record_review(
     A ``fallback:delta`` receipt is refused, before the pull request is read,
     unless ``disposition`` carries each named lens's draw verdicts; see
     :func:`check_delta_verdicts` (#921).
+
+    ``repair_pending`` records that the review's repair is committed but not yet
+    pushed: the receipt is taken at the reviewed head, as a later delta needs, and
+    :func:`build_report` keeps ``mergeable`` false while the PR head is still that
+    head (#1288). On #1284 a receipt taken before a local fix round made the
+    reviewed head mergeable, and it was merged without the fix. The flag is the
+    caller's explicit statement, never read out of the disposition's prose
+    (``safety-critical-changes.md`` rule 1). Pushing the repair moves the head and
+    the receipt stops applying; recording again at the same head without the flag
+    withdraws the hold.
 
     **A post this call sees fail writes no receipt.** The sequence is: every
     refusal above, then the receipt dict, then the comment, then the save — so a
@@ -4960,6 +4972,11 @@ def record_review(
         # now would not stand for the bot's review of this design — and that was
         # printing everywhere except where a receipt is actually taken.
         receipt["bots_behind_head"] = {e["bot"]: e["sha"] for e in behind}
+    if repair_pending:
+        # Before the disposition is posted, so the comment's receipt is the one
+        # saved. Not a caveat copied into composed coverage: it is resolved by the
+        # head moving, which retires this receipt as the current one.
+        receipt["repair_pending"] = True
     if compose_parent is not None:
         parent_head = compose_parent.strip()
         if source != "fallback:delta":
@@ -5997,6 +6014,19 @@ def build_report(
         merge_blockers.append(f"composed review coverage is invalid: {coverage_error}")
     elif not review_evidence["valid"]:
         merge_blockers.append("independent review evidence is missing for current head")
+    # Independent of which route made the evidence valid: bot coverage at this
+    # head does not answer a repair the reviewer's own receipt says is coming
+    # (#1288). Any value but an absent key or `false` holds, so a hand-edited
+    # `"repair_pending": "yes"` fails closed rather than open.
+    if (
+        isinstance(review_receipt, dict)
+        and receipt_head == head
+        and review_receipt.get("repair_pending", False) is not False
+    ):
+        merge_blockers.append(
+            "the review receipt at current head was recorded with --repair-pending: "
+            "push the repair, or record again without the flag if none is coming"
+        )
     if not rollup_settled:
         # One prefix, two wordings, because a reader who cannot tell them apart
         # cannot act: "no baseline" means no clock is running, "stable Nm of Mm"
@@ -6646,6 +6676,11 @@ def render_record_review(report: dict) -> str:
             f"  ⚠ review-bot state was unreadable ({receipt['bot_signal']}) when this "
             "receipt was taken — the queued-reviewer guard did not run"
         )
+    if receipt.get("repair_pending"):
+        lines.append(
+            "  repair pending — not mergeable at this head; push the repair now, "
+            "before running the test stamp"
+        )
     # Type-guarded like the sibling receipt fields: the state file is plain
     # JSON on disk and anything that can run this engine can edit it, so a
     # non-list or a list of non-strings must not crash the render.
@@ -7051,6 +7086,15 @@ def main(argv: list[str] | None = None) -> int:
             "safety-critical: verdict lines under a '<lens>:' line"
         ),
     )
+    parser.add_argument(
+        "--repair-pending",
+        action="store_true",
+        help=(
+            "with --record-review: the review's repair is committed but not yet "
+            "pushed. The receipt keeps `mergeable` false while the PR head is still "
+            "the reviewed head; pushing the repair releases it (#1288)"
+        ),
+    )
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument(
         "--mark-seen",
@@ -7112,6 +7156,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--compose-parent requires --record-review fallback:delta")
     if args.disposition is not None and args.record_review is None:
         parser.error("--disposition is only valid with --record-review")
+    if args.repair_pending and args.record_review is None:
+        parser.error("--repair-pending is only valid with --record-review")
     if (
         args.disposition is not None
         and args.disposition != "-"
@@ -7195,6 +7241,7 @@ def main(argv: list[str] | None = None) -> int:
                 lenses=args.lenses,
                 compose_parent=args.compose_parent,
                 disposition=disposition,
+                repair_pending=args.repair_pending,
             )
         except (RuntimeError, KeyError, ValueError) as exc:
             print(f"error: {exc}", file=sys.stderr)

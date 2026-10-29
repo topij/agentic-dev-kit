@@ -240,7 +240,14 @@ Repeat until the report says **converged**:
      under a `<lens>:` line, without which the engine refuses the receipt
      (`#921`). `--compose-parent` preserves the
      standing full-pass receipt, records the reviewed delta boundary and exact
-     changed paths, and makes ancestry/path drift invalidate merge evidence. For a
+     changed paths, and makes ancestry/path drift invalidate merge evidence.
+     **When a receipt's disposition leaves a repair to commit, record it with
+     `--repair-pending`, then push the repair at once and run the test stamp
+     after.** The receipt is taken at the reviewed head because the next delta
+     composes on it, and without the flag it makes that head `mergeable` while the
+     repair is still local: `#1284` merged that way (`#1288`). The flag holds
+     `mergeable` false until the head moves. It holds only this engine's report:
+     GitHub's merge button and `gh pr merge` do not read it. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
      If current-head evidence is already valid, do not rerun the panel; keep the
      outage visible and acknowledge the notice as an already-covered round. An

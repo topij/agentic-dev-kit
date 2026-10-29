@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "5358f1c0d962821384984cbb3e68e5877665e10753c6eec8e167639e4bbab9bd"
+      "sha256": "242753048c7d1d7f329b86242da8d3093d98a0a40dbfff609d835ab55d16e399"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -84,7 +84,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "665f1d6ebb312af68326052b62ecaf7ebedadb377b7f76012eea794bab6910a9"
+      "sha256": "4c6448a6624229d4b735ba85abf4fde445c633faa49b8b1ce7057ebc834e6853"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -607,7 +607,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "0325d88927db7128090e01fe62dd7a3ce4b29b3639f8d0aed1369e6d041ef9c0"
+      "sha256": "0ccc2cd367d1d97bf9c382a688af41982c7049a450cfd6eb3760e2ef39aef4c5"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -751,7 +751,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "2588a00212bb06c811afcfeb7b5423c17738e1c04775bcc76a91a156c2923263"
+      "sha256": "65605b328096057b5ecde9000ce54d34f895f445c41fb8742176a18100ce8008"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
