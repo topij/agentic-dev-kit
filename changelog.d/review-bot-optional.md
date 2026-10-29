@@ -13,3 +13,10 @@ default. It now gets no bot, so that bot's pending check stops holding the merge
 and its review of the merging head no longer satisfies the merge gate on its
 own; the fallback review is owed instead. A config that already lists
 the bot is unaffected.
+
+`post-merge-systemize` needs a trusted review-finding source, and a review bot
+was the only one the shipped config named. With `review.bots: []` and the
+shipped `systemize.operator_logins: []`, the engine refuses with
+`no trusted review source: configure systemize.operator_logins or review.bots`.
+Set `systemize.operator_logins` to the forge logins whose PR comments should
+count as review findings; `init.sh` prompts for it.

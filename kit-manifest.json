@@ -803,7 +803,7 @@
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",
-      "sha256": "953db5492635a24e1167801e209f92c449a53e120667c232e2db5b98f289e046"
+      "sha256": "f18d78a304a451d283c47ae183b91cfb31d8d11024e0b803a7402c662c1c5e8f"
     },
     "scripts/tests/test_systemize_digest.py": {
       "role": "test",
