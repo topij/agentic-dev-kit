@@ -5868,6 +5868,7 @@ def _record_composed(
     lenses: str = "correctness",
     allow_pending_bot: bool = False,
     disposition: str | None = None,
+    repair_pending: bool = False,
 ) -> tuple[dict, dict]:
     monkeypatch.setattr(pr_watch, "require_gh_backend", lambda operation: None)
     monkeypatch.setattr(
@@ -5897,6 +5898,7 @@ def _record_composed(
         lenses=lenses,
         compose_parent=parent,
         disposition=disposition,
+        repair_pending=repair_pending,
         now=NOW,
     )
     return recorded[0]["review_receipt"], report
@@ -13977,3 +13979,73 @@ def test_the_workflow_orders_the_repair_push_before_the_stamp() -> None:
         "the test stamp after." in workflow
     )
     assert "GitHub's merge button and `gh pr merge` do not read it" in workflow
+
+
+def test_a_composed_hold_is_withdrawn_by_composing_on_its_own_head(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The withdrawal the blocker text and pr-watch.md name, on the receipt shape
+    the `--repair-pending` route is used with. Repeating the original
+    `--compose-parent` is refused, since the held receipt is now the standing one;
+    composing on the held head itself is accepted and drops the hold."""
+    pr_watch = _load_pr_watch()
+    parent = {
+        "head": "parent-head",
+        "source": "fallback:panel",
+        "lenses": ["adversarial", "correctness"],
+    }
+    held, _ = _record_composed(monkeypatch, pr_watch, parent, repair_pending=True)
+    assert held["repair_pending"] is True
+
+    with pytest.raises(ValueError, match="does not match the standing receipt head"):
+        _record_composed(monkeypatch, pr_watch, held)
+
+    released, _ = _record_composed(monkeypatch, pr_watch, held, parent="final-head")
+    assert "repair_pending" not in released
+    assert pr_watch._validate_composed_coverage(released, "final-head") == (True, None)
+    assert released["coverage"]["full_parent"]["head"] == "parent-head"
+
+    view = _green_view(headRefOid="final-head")
+    report = pr_watch.build_report(
+        view, [], set(), review_receipt=released, **_settled(view)
+    )
+    assert not [b for b in report["merge_blockers"] if "--repair-pending" in b]
+
+
+def test_the_cli_threads_repair_pending_to_the_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The flag reaching `record_review` from argv, so a dropped argument cannot
+    leave `--repair-pending` accepted and inert."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "resolve_pr", lambda explicit: 9)
+    monkeypatch.setattr(
+        pr_watch, "_gh_json", lambda args: {"number": 9, "headRefOid": "abc123"}
+    )
+    monkeypatch.setattr(
+        pr_watch, "fetch_check_details", lambda pr, **kw: pr_watch.CheckDetails([], "ok")
+    )
+    saved: list[dict] = []
+    monkeypatch.setattr(pr_watch, "save_state", lambda pr, state: saved.append(state))
+    monkeypatch.setattr(pr_watch, "load_state", lambda pr: {})
+
+    argv = ["9", "--record-review", "fallback:panel", "--head", "abc123"]
+    assert pr_watch.main([*argv, "--repair-pending"]) == 0
+    assert saved[-1]["review_receipt"]["repair_pending"] is True
+    assert pr_watch.main(argv) == 0
+    assert "repair_pending" not in saved[-1]["review_receipt"]
+
+
+def test_the_workflow_says_when_a_valid_head_needs_the_push_first() -> None:
+    workflow = " ".join(
+        read_workflow(
+            REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+        ).split()
+    )
+
+    assert (
+        "When current-head `review_evidence` is already valid, a repair you have "
+        "not pushed leaves that head `mergeable`." in workflow
+    )
+    assert "acknowledge them after the repair is pushed, not before" in workflow
+    assert "a composed delta receipt with `--compose-parent <this head>`" in workflow

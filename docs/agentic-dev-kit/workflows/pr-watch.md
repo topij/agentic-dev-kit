@@ -246,7 +246,10 @@ Repeat until the report says **converged**:
      after.** The receipt is taken at the reviewed head because the next delta
      composes on it, and without the flag it makes that head `mergeable` while the
      repair is still local: `#1284` merged that way (`#1288`). The flag holds
-     `mergeable` false until the head moves. It holds only this engine's report:
+     `mergeable` false until the head moves, or until the pass is recorded again
+     at that head without the flag, which is how to withdraw it when no repair is
+     coming: a plain receipt by the same command, a composed delta receipt with
+     `--compose-parent <this head>`. It holds only this engine's report:
      GitHub's merge button and `gh pr merge` do not read it. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
      If current-head evidence is already valid, do not rerun the panel; keep the
@@ -315,6 +318,14 @@ Repeat until the report says **converged**:
    counted (`#981`), so record that round. Then read the poll's `review_rounds`:
    **if `spent` is true, do not push the fix round unless an operator go-ahead on
    the PR covers it** — go to *Round budget* under Stop conditions.
+
+   **When current-head `review_evidence` is already valid, a repair you have not
+   pushed leaves that head `mergeable`.** That is the case when a configured bot's
+   review covers the head, or an earlier receipt stands at it. A recorded round
+   gates nothing, so push the repair at once and run the test stamp after it. A
+   bot round's findings hold `converged`, and `mergeable` with it, until you
+   `--mark-seen` them, so acknowledge them after the repair is pushed, not before
+   (`#1288`).
 
 1. **Acknowledge the round:** once you've handled this round's findings, run `uv run
    <engine-dir>/pr_watch.py <PR#> --mark-seen` so they don't resurface. `--mark-seen` never

@@ -1537,8 +1537,9 @@ paths, and caveats on every poll. Missing objects, non-ancestry, a broken
 boundary, path drift, or malformed caveat data invalidates the receipt. A receipt
 whose disposition leaves a repair to commit takes `--repair-pending`, which keeps
 `mergeable` false until the repair is pushed (`#1288`; `pr-watch.md` has the
-order). Omitting
-`--compose-parent` preserves the legacy
+order and the withdrawal).
+
+Omitting `--compose-parent` preserves the legacy
 current-head receipt shape, but it replaces the prior receipt and therefore is
 not evidence of composed parent-plus-delta coverage. The posted verdict lines
 remain the surviving outside-the-tree evidence for the author-drawn prose and

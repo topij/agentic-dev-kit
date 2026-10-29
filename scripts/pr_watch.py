@@ -4839,8 +4839,12 @@ def record_review(
     reviewed head mergeable, and it was merged without the fix. The flag is the
     caller's explicit statement, never read out of the disposition's prose
     (``safety-critical-changes.md`` rule 1). Pushing the repair moves the head and
-    the receipt stops applying; recording again at the same head without the flag
-    withdraws the hold.
+    the receipt stops applying. Recording the pass again at the same head without
+    the flag withdraws the hold: a plain receipt by the same command, a composed
+    ``fallback:delta`` receipt with ``compose_parent`` naming that head itself,
+    which composes a delta with no changed paths onto the held receipt. Repeating
+    its original ``compose_parent`` is refused, because the held receipt is now the
+    standing one.
 
     **A post this call sees fail writes no receipt.** The sequence is: every
     refusal above, then the receipt dict, then the comment, then the save — so a
@@ -4973,9 +4977,8 @@ def record_review(
         # printing everywhere except where a receipt is actually taken.
         receipt["bots_behind_head"] = {e["bot"]: e["sha"] for e in behind}
     if repair_pending:
-        # Before the disposition is posted, so the comment's receipt is the one
-        # saved. Not a caveat copied into composed coverage: it is resolved by the
-        # head moving, which retires this receipt as the current one.
+        # Not a caveat copied into composed coverage: it is resolved by the head
+        # moving, which retires this receipt as the current one.
         receipt["repair_pending"] = True
     if compose_parent is not None:
         parent_head = compose_parent.strip()
@@ -5731,7 +5734,8 @@ def build_report(
       *verdict* at the current head is ``CHANGES_REQUESTED`` — latest verdict
       rather than latest review, which is #494's correction — see
       :func:`objecting_bot_coverage`, and note that no receipt satisfies that
-      one).
+      one), or a current-head receipt recorded with ``--repair-pending``, which
+      holds whichever route made the evidence valid (#1288).
     - ``converged`` — :func:`decide_converged`: all checks green, no fresh
       comments, and not ``settling``. The **watch-loop** predicate: "is there
       more to fix?" A converged PR is NOT necessarily safe to merge.
@@ -6025,7 +6029,9 @@ def build_report(
     ):
         merge_blockers.append(
             "the review receipt at current head was recorded with --repair-pending: "
-            "push the repair, or record again without the flag if none is coming"
+            "push the repair, or, if none is coming, record the pass again at this "
+            "head without the flag (a composed delta receipt: --compose-parent "
+            "<this head>)"
         )
     if not rollup_settled:
         # One prefix, two wordings, because a reader who cannot tell them apart
