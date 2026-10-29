@@ -1414,7 +1414,8 @@ migrate_kit_schema() {
     - "review skipped"
     - "no review credits"' || true
 
-  ensure_review_key fallback_panel '  # The independent pass when a configured bot cannot review. One isolated,
+  ensure_review_key fallback_panel '  # The independent pass: the review of every PR when no bot is configured, and
+  # the stand-in when a configured bot cannot review. One isolated,
   # fresh-context reviewer PER LENS — `safety-critical-changes.md` rule 2 wants two
   # disjoint lenses, which a single command cannot be. `fallback_commands` elsewhere
   # in this section is the DEGRADED one-lens mode for a runtime that cannot isolate

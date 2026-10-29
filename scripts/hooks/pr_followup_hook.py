@@ -191,14 +191,16 @@ def _lens_compute_phrase(config, kitconfig, runtime: str = _DEFAULT_RUNTIME) -> 
 
 def _load_review_config(
     runtime: str = _DEFAULT_RUNTIME,
-) -> tuple[list[str], str, str, list[str], str, str]:
+) -> tuple[list[str] | None, str, str, list[str], str, str]:
     """Read ``(review.bots, review.fallback_commands.<runtime>, paths.engines,
     review.fallback_panel lens names, review.fallback_panel.receipt_source,
     rendered review.fallback_panel.lens_compute.<runtime> clause)``.
 
     Best-effort: any failure (missing config, kitconfig unimportable, malformed
     values) falls back to generic defaults rather than raising — this hook must
-    never fail a session over a config read.
+    never fail a session over a config read. On that failure ``bots`` is
+    ``None``, not ``[]``: an unread config has not said "no bot", so the reminder
+    must not say it either.
     """
     try:
         here = Path(__file__).resolve()
@@ -255,7 +257,7 @@ def _load_review_config(
         )
     except Exception:
         return (
-            [],
+            None,
             _DEFAULT_FALLBACK_COMMAND,
             _DEFAULT_ENGINES_DIR,
             # NO default lens roster, deliberately: this path means the config
@@ -271,11 +273,20 @@ def _load_review_config(
         )
 
 
-def _bot_names(bots: list[str]) -> list[str]:
-    return [b.strip() for b in bots if isinstance(b, str) and b.strip()]
+def _bot_names(bots: list[str] | None) -> list[str]:
+    return [b.strip() for b in bots or [] if isinstance(b, str) and b.strip()]
 
 
-def _bot_description(bots: list[str]) -> str:
+def _has_bot(bots: list[str] | None) -> bool:
+    """Whether to keep the outage wording. ``None`` (the config could not be
+    read) keeps it too: only a config that was read and names no bot gets the
+    no-bot wording, which asserts that no bot is configured."""
+    return bots is None or bool(_bot_names(bots))
+
+
+def _bot_description(bots: list[str] | None) -> str:
+    if bots is None:
+        return "the configured review bot(s)"
     # No bot is the shipped default (a third-party reviewer is opt-in), so the
     # findings to wait on are the fallback review's and any other reviewer's.
     names = _bot_names(bots)
@@ -455,7 +466,7 @@ def build_reminder(
             lenses=lenses,
             panel_source=panel_source,
             lens_compute=lens_compute,
-            has_bot=bool(_bot_names(bots)),
+            has_bot=_has_bot(bots),
             mandate=(
                 "That independently confirmed lifecycle is MANDATORY under the "
                 "kit's PR follow-through policy (PRINCIPLES.md #5/#8);"
@@ -493,7 +504,7 @@ def build_unresolved_warning(runtime: str = _DEFAULT_RUNTIME) -> str:
             lenses=lenses,
             panel_source=panel_source,
             lens_compute=lens_compute,
-            has_bot=bool(_bot_names(bots)),
+            has_bot=_has_bot(bots),
             mandate=(
                 "For that independently confirmed lifecycle, the shared PR "
                 "follow-through policy MUST be completed;"

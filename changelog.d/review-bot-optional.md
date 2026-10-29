@@ -10,9 +10,11 @@ If your repo runs CodeRabbit or another reviewer, check that
 `config/dev-model.yaml` names it explicitly, e.g. `bots: [coderabbit]`. A config
 whose `review:` section has no `bots` key used to get CodeRabbit from the engine
 default. It now gets no bot. That bot's pending check stops holding the merge,
-its CHANGES_REQUESTED review stops blocking it, its review of the merging head no
-longer satisfies the merge gate on its own, and `post-merge-systemize` no longer
-treats its comments as review findings. The fallback review is owed instead. A config that already lists
+the bot-named `configured review bot requested changes` blocker stops applying to
+it (the aggregate `review decision is CHANGES_REQUESTED` blocker, which reads
+every reviewer, still can), its review of the merging head no longer satisfies
+the merge gate on its own, and `post-merge-systemize` no longer treats its
+comments as review findings. The fallback review is owed instead. A config that already lists
 the bot is unaffected.
 
 `post-merge-systemize` needs a trusted review-finding source, and a review bot
