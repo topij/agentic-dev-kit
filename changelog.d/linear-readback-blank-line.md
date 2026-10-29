@@ -2,13 +2,12 @@
 
 CHANGED (gate semantics): a tracker read-back that differs from the approved payload
 only by one empty line between a line of text (a paragraph, heading, quote or ordered
-item: any line with non-space content that is not an unordered-list item or fenced code) and the unordered-list item
-under it, outside fenced code, now verifies instead of holding the operation as `ambiguous`
-(#1291). Linear's editor inserts that line, so every approved payload with a
-paragraph followed directly by a list was created and then held at `reconciliation`.
-Two empty lines, an empty line before anything other than a list item, a
-whitespace-only line and a fence delimiter on either side still leave the attempt
-ambiguous; bullet-marker spelling is relaxed as before.
+item: any line with non-space content that is not an unordered-list item or fenced
+code) and the unordered-list item under it, outside fenced code, now verifies instead
+of holding the operation as `ambiguous` (#1291). Two empty lines, an empty line before
+anything other than a list item, a whitespace-only line and a fence delimiter on
+either side still leave the attempt ambiguous; bullet-marker spelling is relaxed as
+before.
 
 Refresh `scripts/lib/triage/model.py` with
 `docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md` and
