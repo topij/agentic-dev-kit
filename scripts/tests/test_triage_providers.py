@@ -228,6 +228,7 @@ def test_linear_blank_line_before_a_list_does_not_block_verification():
     ("p\n- a", "p\n \n- a", False),
     ("p\n \n- a", "p\n \n\n- a", False),
     ("p\n- a", "\np\n- a", False),
+    ("- a\ntext", "\n- a\ntext", False),
     # Inside a fence, and beside a fence delimiter, every line stays exact.
     ("```\np\n- a\n```", "```\np\n\n- a\n```", False),
     ("```\np\n```\n- a", "```\np\n```\n\n- a", False),

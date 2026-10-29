@@ -72,9 +72,10 @@ def _editor_list_form(body: str) -> str:
     """Compare a body's lists as Linear's editor stores them, outside fenced code.
 
     Each unordered-list marker is spelled `-`, and a single empty line between
-    a paragraph line and the list item that follows it is dropped. A fence
-    delimiter line is neither a paragraph line nor a list item, so a blank line
-    beside one stays.
+    a text line and the list item that follows it is dropped. A text line is any
+    line with non-space content that is not a list item and not fenced code, so
+    a heading, quote or ordered item counts. A fence delimiter is neither, so a
+    blank line beside one stays.
     """
     lines = body.split("\n")
     # For each line: "code" inside a fence or a delimiter, "list", "blank",
@@ -108,7 +109,7 @@ def tracker_payload_matches(observed: Any, approved: dict[str, Any]) -> bool:
 
     Linear stores Markdown through its editor, which rewrites lists whatever
     was sent: it returns every bullet as `*` (CUS-1670, 2026-10-05) and puts an
-    empty line between a paragraph line and a list item that follows it
+    empty line between a text line and a list item that follows it
     (CUS-1862, 2026-10-29, #1291). So both sides are compared in that form
     (`_editor_list_form`). Every other byte of the title, body, project and
     labels must still be equal, and the read-back keeps the bytes the tracker

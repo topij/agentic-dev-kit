@@ -155,7 +155,9 @@ phase are forbidden earlier.
   except in two list-layout changes Linear's editor makes, both judged outside fenced
   code blocks. It returns every bullet as `*`, so `-`, `*` and `+` compare equal as an
   unordered-list marker. It puts an empty line between a paragraph line and a list item
-  that follows it, so that one empty line compares equal to none; two empty lines, an
+  that follows it, so one empty line after any line with non-space content that is
+  not a list item or fenced code (a heading, quote or ordered item counts) and
+  before a list item compares equal to none; two empty lines, an
   empty line anywhere else, a whitespace-only line, and a fence delimiter line on
   either side stay exact. A fence counts only when opened within three spaces of the
   margin, so a marker in indented or list-nested code is relaxed as well. That is what an *exact* tracker
