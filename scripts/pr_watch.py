@@ -39,7 +39,8 @@ The caller loops: run this -> if not converged, fix the failures / address or
 reply to the new comments -> `--mark-seen` -> wait -> run again. `converged`
 flips true once CI is green and every finding has been handled; `mergeable`
 additionally waits on `--record-review`. A receipt recorded with
-`--repair-pending` keeps `mergeable` false until the repair is pushed (#1288).
+`--repair-pending` keeps `mergeable` false until the repair is pushed, or the
+pass is recorded again without the flag (#1288).
 
 It also REPORTS, in `evidence_findings`, review evidence that is missing from
 the pull request while the merge gate is satisfied: a receipt with no
@@ -6030,8 +6031,8 @@ def build_report(
         merge_blockers.append(
             "the review receipt at current head was recorded with --repair-pending: "
             "push the repair, or, if none is coming, record the pass again at this "
-            "head without the flag (a composed delta receipt: --compose-parent "
-            "<this head>)"
+            "head without the flag, a fresh review claim (a composed delta receipt: "
+            "--compose-parent <this head>)"
         )
     if not rollup_settled:
         # One prefix, two wordings, because a reader who cannot tell them apart
@@ -7098,7 +7099,8 @@ def main(argv: list[str] | None = None) -> int:
         help=(
             "with --record-review: the review's repair is committed but not yet "
             "pushed. The receipt keeps `mergeable` false while the PR head is still "
-            "the reviewed head; pushing the repair releases it (#1288)"
+            "the reviewed head. Pushing the repair releases it, and so does "
+            "recording the pass again at that head without the flag (#1288)"
         ),
     )
     mode_group = parser.add_mutually_exclusive_group()

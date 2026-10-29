@@ -141,6 +141,10 @@ Repeat until the report says **converged**:
    and approving. A later `COMMENTED` or `PENDING` review by the same bot leaves it
    standing.
 
+   A fourth reads **`the review receipt at current head was recorded with
+   --repair-pending`** (`#1288`): push the repair the receipt's disposition
+   announced.
+
    `done` also appears in the report. It is a **legacy alias for `mergeable`**, kept
    so that an older `dev_session.sh` still gates on merge authorization. Prefer
    `converged` / `mergeable`; never assume `done` means "the loop finished."
@@ -248,8 +252,8 @@ Repeat until the report says **converged**:
      repair is still local: `#1284` merged that way (`#1288`). The flag holds
      `mergeable` false until the head moves, or until the pass is recorded again
      at that head without the flag, which is how to withdraw it when no repair is
-     coming: a plain receipt by the same command, a composed delta receipt with
-     `--compose-parent <this head>`. It holds only this engine's report:
+     coming. That records the pass again, a fresh review claim: a plain receipt by
+     the same command, a composed delta receipt with `--compose-parent <this head>`. It holds only this engine's report:
      GitHub's merge button and `gh pr merge` do not read it. For a
      lane, use `<engine-dir>/dev_session.sh pr-watch <scope>` with the same flags.
      If current-head evidence is already valid, do not rerun the panel; keep the

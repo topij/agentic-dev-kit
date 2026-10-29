@@ -5885,7 +5885,10 @@ def _record_composed(
     monkeypatch.setattr(
         pr_watch,
         "_delta_paths",
-        lambda base, delta_head: list(paths or ["docs/review-record.md"]),
+        # A delta from a head to itself changes nothing, as `git diff` reports it.
+        lambda base, delta_head: (
+            [] if base == delta_head else list(paths or ["docs/review-record.md"])
+        ),
     )
     if disposition is None:
         disposition = _delta_verdicts(lenses)
@@ -14002,6 +14005,7 @@ def test_a_composed_hold_is_withdrawn_by_composing_on_its_own_head(
 
     released, _ = _record_composed(monkeypatch, pr_watch, held, parent="final-head")
     assert "repair_pending" not in released
+    assert released["coverage"]["deltas"][-1]["paths"] == []
     assert pr_watch._validate_composed_coverage(released, "final-head") == (True, None)
     assert released["coverage"]["full_parent"]["head"] == "parent-head"
 
@@ -14010,6 +14014,60 @@ def test_a_composed_hold_is_withdrawn_by_composing_on_its_own_head(
         view, [], set(), review_receipt=released, **_settled(view)
     )
     assert not [b for b in report["merge_blockers"] if "--repair-pending" in b]
+
+
+def test_the_blocker_names_both_withdrawals() -> None:
+    pr_watch = _load_pr_watch()
+    view = _green_view()
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={
+            "head": "abc123",
+            "source": "fallback:panel",
+            "repair_pending": True,
+        },
+        **_settled(view),
+    )
+
+    (blocker,) = [b for b in report["merge_blockers"] if "--repair-pending" in b]
+    assert "push the repair" in blocker
+    assert "record the pass again at this head without the flag" in blocker
+    assert "--compose-parent <this head>" in blocker
+
+
+def test_bot_coverage_does_not_answer_a_pending_repair_on_an_invalid_receipt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The case where the route label is not `receipt`: the held receipt is at
+    the head but its composed coverage does not validate, and the bot's review
+    alone makes the evidence valid. The hold still applies."""
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(
+        pr_watch,
+        "_validate_composed_coverage",
+        lambda receipt, head, **kw: (False, "boundary is not ancestral"),
+    )
+    view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+
+    report = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        review_receipt={
+            "head": "abc123",
+            "source": "fallback:delta",
+            "repair_pending": True,
+            "coverage": {"version": 1},
+        },
+        **_settled(view),
+    )
+
+    assert report["review_evidence"]["route"] == "bot-coverage"
+    assert [b for b in report["merge_blockers"] if "--repair-pending" in b]
 
 
 def test_the_cli_threads_repair_pending_to_the_receipt(

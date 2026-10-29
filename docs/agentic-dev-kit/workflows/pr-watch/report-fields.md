@@ -280,12 +280,6 @@ bot-state read that failed all yield no evidence. A *pending* bot still blocks o
 its own grace window, and an unacknowledged outage notice still blocks
 `converged`.
 
-A receipt at this head recorded with `--repair-pending` raises its own
-`merge_blockers[]` entry, whichever route made the evidence valid, so a poll can
-read `review_evidence.valid` and `converged` true and `mergeable` false (`#1288`).
-The receipt carries the flag as `repair_pending: true`. Pushing the repair moves
-the head and the entry goes; `pr-watch.md` says how to withdraw it without a push.
-
 The other routine reason is a `merge_blockers[]` entry reading
 **`check rollup has not settled for current head`**. The merge gate waits for
 the check rollup to stop changing size before believing it is complete,
@@ -340,6 +334,13 @@ objection *and* then supplied the independent-review evidence, needing no
 commit, no dismissal, and no act by anyone. If you are wondering why your
 reviewer's own later comment did not unblock the merge, that is the reason,
 and it is deliberate.
+
+A fourth blocker reads **`the review receipt at current head was recorded with
+--repair-pending`** (`#1288`). The receipt's disposition announced a repair that is
+not pushed yet. It holds whichever route made the evidence valid, so a poll can read
+`review_evidence.valid` and `converged` true and `mergeable` false. The receipt
+carries the flag as `repair_pending: true`. Pushing the repair moves the head and
+the entry goes; `pr-watch.md` says how to withdraw it without a push.
 
 ## The review request at convergence
 
