@@ -32,7 +32,8 @@ doctrine into this runtime; it does not fork it.
   along with customer-facing send paths,
   destructive operations, and kill/recovery paths, are governed by
   [`docs/agentic-dev-kit/safety-critical-changes.md`](docs/agentic-dev-kit/safety-critical-changes.md);
-  when the configured review bot cannot review, the substitute is the panel in
+  with no review bot configured, or when a configured one cannot review, the
+  independent review is the panel in
   [`docs/agentic-dev-kit/fallback-review-panel.md`](docs/agentic-dev-kit/fallback-review-panel.md).
 - **When creating a tracker ticket, record its execution environment and required
   inputs before presenting the payload.** Follow

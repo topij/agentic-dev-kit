@@ -45,7 +45,8 @@ cp -r /path/to/agentic-dev-kit/. .
 > [upgrade section](../README.md#upgrading-an-already-adopted-repo) explains the route.
 
 `init.sh` prompts you for project name, agent runtime, operator logins, tracker board,
-the protected branch, your notification user key and your review bots, and stamps them
+the protected branch, your notification user key and any third-party review bot
+(optional: answer `none` and the kit's review panel reviews every PR), and stamps them
 into `config/dev-model.yaml`.
 That file arrives with `review.safety_critical_paths` listing only the kit's own gate
 files, CI workflows, hook scripts and runtime hook registrations. Add your own send,
@@ -170,8 +171,10 @@ reviewed with it. Open completed work ready for review. Then:
 underneath is `uv run scripts/pr_watch.py 42`.) It polls CI and review comments and
 doesn't stop until the PR is **green and clean**:
 every check passing, and every review finding either fixed or replied-to with a
-reason. A review bot being down isn't a waiver — run an independent review pass
-instead.
+reason. Without a review bot, the independent review is run by the agent at the
+converged head with fresh-context review lenses: one for an ordinary change, two
+for a safety-critical one. A configured bot being down isn't a waiver either; the
+same pass runs instead.
 
 For a **risky** change — a send-gate, a destructive migration, a recovery/kill
 path — the shared safety doctrine (`docs/agentic-dev-kit/safety-critical-changes.md`)

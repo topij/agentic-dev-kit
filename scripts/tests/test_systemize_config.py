@@ -42,12 +42,23 @@ def _drop(key: str):
     return edit
 
 
-def test_shipped_config_loads_engine_backed(tmp_path: Path) -> None:
+def test_shipped_config_loads_engine_backed_once_an_operator_is_named(tmp_path: Path) -> None:
+    """The shipped config names no trusted review source: no review bot (a bot is
+    opt-in) and no operator login (a template copy must never trust a foreign
+    identity). So it fails closed, naming the fix, until init.sh's operator
+    prompt fills `operator_logins`; with that one key set it loads as shipped."""
     text = (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
-    settings = load_settings(make_repo(tmp_path, config_edit=lambda _: text))
+    shipped = loads(text)
+    assert shipped["review"]["bots"] == []
+    assert shipped["systemize"]["operator_logins"] == []
+    with pytest.raises(SystemizeError, match="configure systemize.operator_logins or review.bots"):
+        load_settings(make_repo(tmp_path / "shipped", config_edit=lambda _: text))
+
+    named = _set("operator_logins", '["operator"]')(text)
+    settings = load_settings(make_repo(tmp_path / "named", config_edit=lambda _: named))
     assert settings.engine_mode == "engine-backed"
-    assert settings.heartbeat_job == loads(text)["systemize"]["heartbeat_job"]
-    assert settings.operator_logins or settings.reviewer_logins
+    assert settings.heartbeat_job == shipped["systemize"]["heartbeat_job"]
+    assert settings.operator_logins and not settings.reviewer_logins
 
 
 @pytest.mark.parametrize("key", REQUIRED_KEYS)

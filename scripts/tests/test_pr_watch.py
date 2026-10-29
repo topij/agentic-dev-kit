@@ -51,8 +51,17 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     is deliberate: the failure mode of a test that silently reads ambient
     config is invisible here and only shows up in somebody else's repo, so the
     safe state is the default and wanting otherwise has to be written down.
+
+    The one value pinned AWAY from the engine default is ``bots``. The engine
+    ships with no review bot (a third-party reviewer is opt-in), but these tests
+    exercise how a configured bot's checks and comments reach the gates, so
+    they run with CodeRabbit configured, as a repo that names one does. A test
+    about the no-bot case sets ``module._REVIEW_BOTS = ()`` itself, and
+    ``test_a_review_bot_is_opt_in`` pins the shipped default.
     """
-    defaults = module._load_review_config(ENGINE_DIR / "does-not-exist" / "dev-model.yaml")
+    defaults = module._load_review_config(
+        ENGINE_DIR / "does-not-exist" / "dev-model.yaml"
+    )._replace(bots=("coderabbit",))
     module._REVIEW_CONFIG = defaults
     module._NOISE_MARKERS = defaults.noise_markers
     module._REVIEW_UNAVAILABLE_MARKERS = defaults.unavailable_markers
@@ -3067,6 +3076,25 @@ def test_missing_config_falls_back_to_defaults_silently(
     assert capsys.readouterr().err == ""
 
 
+def test_a_review_bot_is_opt_in(tmp_path: Path) -> None:
+    """No third-party reviewer is assumed: with `review.bots` absent, or with no
+    config at all, no bot is configured and the fallback panel is the review. A
+    bot counts only once a repo names it."""
+    pr_watch = _load_pr_watch()
+
+    absent_key = pr_watch._load_review_config(
+        _write_config(tmp_path / "a", "review:\n  require_ci: true\n")
+    )
+    no_config = pr_watch._load_review_config(tmp_path / "absent.yaml")
+    named = pr_watch._load_review_config(
+        _write_config(tmp_path / "b", "review:\n  bots: [coderabbit]\n")
+    )
+
+    assert absent_key.bots == ()
+    assert no_config.bots == ()
+    assert named.bots == ("coderabbit",)
+
+
 def test_unreadable_config_warns_and_falls_back_without_crashing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -3222,7 +3250,10 @@ def test_every_config_derived_global_is_pinned() -> None:
         field for _, field in pinned_globals.values()
     }
 
-    expected = pr_watch._load_review_config(ENGINE_DIR / "nope" / "dev-model.yaml")
+    # The pin's one deliberate departure from the defaults (see its docstring).
+    expected = pr_watch._load_review_config(
+        ENGINE_DIR / "nope" / "dev-model.yaml"
+    )._replace(bots=("coderabbit",))
     for name, (sentinel, _field) in pinned_globals.items():
         setattr(pr_watch, name, sentinel)
     pr_watch._REVIEW_CONFIG = "zzz-sentinel-config"

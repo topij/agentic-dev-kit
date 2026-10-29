@@ -30,8 +30,8 @@ changes one of them or that config file, and one isolated lens otherwise: see
    is not enough: an adversarial/bypass-focused pass and a general-correctness pass
    routinely find **disjoint** holes. A send/publish gate needs BOTH lenses before
    merge. A single-lens "converged" verdict is an incomplete review, not a green
-   light. When your review bot is unavailable, the substitute that satisfies this
-   rule is the panel in [`fallback-review-panel.md`](fallback-review-panel.md) —
+   light. With no review bot configured, or when yours is unavailable, what
+   satisfies this rule is the panel in [`fallback-review-panel.md`](fallback-review-panel.md) —
    a single fallback command run in the author's own context does not.
 
 1. **Adversarial review to convergence, not one pass.** Re-review after each fix

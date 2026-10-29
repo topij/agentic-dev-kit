@@ -850,6 +850,51 @@ def test_reminder_falls_back_to_the_single_command_with_no_panel_configured():
     assert "/my-review" not in panel
 
 
+@pytest.mark.parametrize("bots", [[], [""], [" "], ["", "  "]])
+def test_blank_bot_names_read_as_no_bot_as_the_engine_reads_them(monkeypatch, bots):
+    """`pr_watch` drops blank `review.bots` entries, so `[" "]` is no bot there.
+    The hook must agree, or it would say a bot is configured while the engine
+    owes the fallback review."""
+    hook = _load_hook()
+    config = ("/code-review", "scripts", ["adversarial", "correctness"], "fallback:panel", "")
+    monkeypatch.setattr(hook, "_load_review_config", lambda _runtime="claude": (bots, *config))
+
+    for text in (hook.build_reminder(), hook.build_unresolved_warning()):
+        assert "No review bot is configured" in text
+        assert "If a review bot is unavailable" not in text
+
+
+def test_with_no_bot_configured_the_fallback_review_is_owed_unconditionally(monkeypatch):
+    """No bot is the shipped default, so nothing can be "unavailable": the
+    reminder must say the fallback review is the PR's own review, with no
+    outage condition in front of it. A named bot keeps the outage wording."""
+    hook = _load_hook()
+    lenses = ["adversarial", "correctness"]
+    config = ("/code-review", "scripts", lenses, "fallback:panel", "")
+
+    monkeypatch.setattr(hook, "_load_review_config", lambda _runtime="claude": ([], *config))
+    for text in (hook.build_reminder(), hook.build_unresolved_warning()):
+        assert "No review bot is configured, so the fallback review is this PR's" in text
+        assert "If a review bot is unavailable" not in text
+        assert "the configured review bot(s)" not in text
+        assert "PANEL" in text
+        assert "Having no bot is never a review waiver." in text
+        assert "Never treat the outage as a review waiver." not in text
+
+    monkeypatch.setattr(
+        hook, "_load_review_config", lambda _runtime="claude": (["coderabbit"], *config)
+    )
+    # Both builders, so neither call site can drop to the no-bot wording alone.
+    for named in (hook.build_reminder(), hook.build_unresolved_warning()):
+        assert "If a review bot is unavailable" in named
+        assert "findings from coderabbit" in named
+        assert "No review bot is configured" not in named
+        assert "Never treat the outage as a review waiver." in named
+
+    degraded = hook._fallback_instruction("/my-review", [], has_bot=False)
+    assert "`/my-review`" in degraded and "this PR's review" in degraded
+
+
 def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypatch):
     """A missing/unreadable config must never raise — the hook falls back to
     generic wording rather than failing the session."""
@@ -862,7 +907,8 @@ def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypat
 
     monkeypatch.setattr(kitconfig, "load_config", _boom)
     bots, fallback, engines, lenses, panel_source, lens_compute = hook._load_review_config()
-    assert bots == []
+    # None, not []: an unread config has not said "no bot" (see the no-bot test).
+    assert bots is None
     assert fallback == "/code-review"
     assert engines == "scripts"
     # No panel known → the reminder degrades to the single command rather than
@@ -893,6 +939,12 @@ def test_an_unreadable_config_never_advertises_a_panel(monkeypatch):
     assert "PANEL" not in reminder
     assert "/code-review" in reminder  # the compatible single-command wording
     assert "review waiver" in reminder
+    # Nothing was read, so nothing may be asserted about the config: the
+    # outage wording stays, never the no-bot claim.
+    for text in (reminder, hook.build_unresolved_warning()):
+        assert "No review bot is configured" not in text
+        assert "If a review bot is unavailable" in text
+        assert "the configured review bot(s)" in text
 
 
 def test_lens_compute_renders_both_controls_from_config(monkeypatch):

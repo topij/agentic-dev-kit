@@ -1414,7 +1414,8 @@ migrate_kit_schema() {
     - "review skipped"
     - "no review credits"' || true
 
-  ensure_review_key fallback_panel '  # The independent pass when a configured bot cannot review. One isolated,
+  ensure_review_key fallback_panel '  # The independent pass: the review of every PR when no bot is configured, and
+  # the stand-in when a configured bot cannot review. One isolated,
   # fresh-context reviewer PER LENS — `safety-critical-changes.md` rule 2 wants two
   # disjoint lenses, which a single command cannot be. `fallback_commands` elsewhere
   # in this section is the DEGRADED one-lens mode for a runtime that cannot isolate
@@ -1492,9 +1493,11 @@ migrate_kit_schema() {
   # pr_watch reads it to decide which checks and comment authors belong to a
   # reviewer. The interactive prompt later only REWRITES an existing line, so a
   # `review:` section predating the key would silently fall through to the
-  # engine default — benign while the default matches, dangerous for an adopter
-  # whose reviewer is not CodeRabbit.
-  ensure_review_key bots '  bots: [coderabbit]' || true
+  # engine default. Both are now empty: a third-party reviewer is optional, and
+  # without one the fallback panel is the review. A repo whose `review:` section
+  # predates the key and that DOES run a bot gets `[]` here and must name it, at
+  # the prompt below or by hand — the changelog entry for this change says so.
+  ensure_review_key bots '  bots: []' || true
 
   ensure_review_key bot_author_aliases '  # Exact GitHub logins trusted to speak for each configured reviewer.
   # Custom bots whose check name and author login differ belong here; never use
@@ -2519,7 +2522,7 @@ cur_bots_raw=$(get_field "review:" "" "^  bots:")
 # name `'coderabbit'`, which pr_watch then silently fails to match (review
 # panel on #87). We ask for a plain comma list.
 cur_bots_display=$(printf '%s' "$cur_bots_raw" | sed -e 's/^\[//' -e 's/\]$//' -e 's/"//g' -e "s/'//g")
-bots_answer=$(ask "Review bots (comma-separated, or 'none')" "$cur_bots_display")
+bots_answer=$(ask "Third-party review bots, e.g. coderabbit (comma-separated, or 'none' to have the fallback panel review every PR)" "$cur_bots_display")
 # Tolerate an answer typed with brackets ("[coderabbit]") — it is the same
 # comma list, not a nested one (issue #62).
 bots_answer=$(printf '%s' "$bots_answer" | sed -e 's/^[[:space:]]*\[//' -e 's/\][[:space:]]*$//')

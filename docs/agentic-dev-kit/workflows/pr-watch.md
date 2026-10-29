@@ -45,8 +45,12 @@ or unattended run may take that route only when the same run can perform the rea
 transition; a hook that deliberately skips unattended execution is not a substitute.
 
 Read `config/dev-model.yaml` first. Resolve `<engine-dir>` from `paths.engines`.
-When a configured review bot is unavailable, the substitute pass is the
-**panel** in `review.fallback_panel` — read
+**A third-party review bot is optional.** With `review.bots: []`, the shipped
+default, the independent review of every pull request is the fallback review
+`review_class` owes (one lens, or the panel on a safety-critical change), run at
+the converged head: see *Converged* under *Stop conditions*. When a bot is
+configured and unavailable, the same pass substitutes for it. The
+**panel** is `review.fallback_panel` — read
 [`../fallback-review-panel.md`](../fallback-review-panel.md) before running it.
 `review.fallback_commands` is the degraded one-lens mode for a runtime that
 cannot isolate a reviewer.
@@ -477,6 +481,15 @@ Self-pace on a bounded cadence — don't busy-wait:
 
 - **Converged** — `converged: true` (green + clean). Report and finish. This is the
   goal of the loop. State `mergeable` too: convergence is not merge clearance.
+  - **With no review bot configured** (`review.bots: []`), there is no review to
+    request and no outage to wait for, so nothing sets `review_unavailable_reason`
+    and the *Reviewer unavailable* step under *Loop* never triggers. The signal is
+    `review_class` instead (the text render's `review class:` line, printed while
+    the head has no valid evidence): at the converged head, run the fallback
+    review it owes — one lens, or the two-lens panel — the way that step runs and
+    records it, and record its receipt against that head. That pass is the pull
+    request's independent review, not a substitute for one. The next bullet, on
+    requesting a review, applies only to a configured bot.
   - **If the current head has no review coverage, request a review here.** Read
     `review_bots.coverage`: an entry whose `covers_head` is false — or no entry at
     all — means nothing has reviewed the diff that is about to merge. Convergence
