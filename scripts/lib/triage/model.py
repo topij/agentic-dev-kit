@@ -68,9 +68,18 @@ _CODE_FENCE = re.compile(r" {0,3}(`{3,}|~{3,})")
 _LIST_MARKER = re.compile(r"^([ \t]*)[-*+](?=[ \t])")
 
 
-def _hyphen_list_markers(body: str) -> str:
-    """Spell each unordered-list marker outside a fenced code block as `-`."""
+def _editor_list_form(body: str) -> str:
+    """Compare a body's lists as Linear's editor stores them, outside fenced code.
+
+    Each unordered-list marker is spelled `-`, and a single empty line between
+    a paragraph line and the list item that follows it is dropped. A fence
+    delimiter line is neither a paragraph line nor a list item, so a blank line
+    beside one stays.
+    """
     lines = body.split("\n")
+    # For each line: "code" inside a fence or a delimiter, "list", "blank",
+    # "space" (whitespace only) or "text".
+    kinds = []
     fence = ""
     for index, line in enumerate(lines):
         opened = _CODE_FENCE.match(line)
@@ -78,26 +87,37 @@ def _hyphen_list_markers(body: str) -> str:
             if (opened and opened.group(1)[0] == fence[0] and len(opened.group(1)) >= len(fence)
                     and not line[opened.end():].strip()):
                 fence = ""
+            kinds.append("code")
         elif opened:
             fence = opened.group(1)
-        else:
+            kinds.append("code")
+        elif _LIST_MARKER.match(line):
             lines[index] = _LIST_MARKER.sub(r"\1-", line, count=1)
-    return "\n".join(lines)
+            kinds.append("list")
+        else:
+            kinds.append("blank" if line == "" else "text" if line.strip() else "space")
+    return "\n".join(
+        line for index, line in enumerate(lines)
+        if not (kinds[index] == "blank" and 0 < index < len(lines) - 1
+                and kinds[index - 1] == "text" and kinds[index + 1] == "list")
+    )
 
 
 def tracker_payload_matches(observed: Any, approved: dict[str, Any]) -> bool:
     """Whether a tracker read-back carries the approved payload.
 
-    Linear stores Markdown through its editor and returns every bullet as `*`,
-    whatever was sent: CUS-1670 came back that way on 2026-10-05. So a bullet's
-    marker is compared as `-` on both sides. Every other byte of the title,
-    body, project and labels must still be equal, and the read-back keeps the
-    bytes the tracker returned.
+    Linear stores Markdown through its editor, which rewrites lists whatever
+    was sent: it returns every bullet as `*` (CUS-1670, 2026-10-05) and puts an
+    empty line between a paragraph line and a list item that follows it
+    (CUS-1862, 2026-10-29, #1291). So both sides are compared in that form
+    (`_editor_list_form`). Every other byte of the title, body, project and
+    labels must still be equal, and the read-back keeps the bytes the tracker
+    returned.
     """
     if not isinstance(observed, dict) or not isinstance(observed.get("body"), str) or not isinstance(approved.get("body"), str):
         return False
-    return (digest({**observed, "body": _hyphen_list_markers(observed["body"])})
-            == digest({**approved, "body": _hyphen_list_markers(approved["body"])}))
+    return (digest({**observed, "body": _editor_list_form(observed["body"])})
+            == digest({**approved, "body": _editor_list_form(approved["body"])}))
 
 
 def tracker_destination(tracker: dict[str, Any]) -> dict[str, Any]:
