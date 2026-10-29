@@ -3758,6 +3758,10 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
         assert "the cockpit's joint wrap-up routes it" in flattened
         assert "the test is provenance, not a match" in flattened
         assert "from before this session is a recurrence" in flattened
+        assert "park a new dated entry that names the earlier one" in flattened
+        assert "When those rules park the finding and an earlier `<friction-log>` entry covers it" in flattened
+        assert "cleanup refuses a dirty tree, so commit or carry the entry before retiring that worktree" in flattened
+        assert "reports the finding in its pull request body or its `docs/handoff/<scope>.md` fragment" in flattened
         # A workstream is a subject, and a batch is filed per pull request.
         assert (
             "**A workstream is named for its subject, never for a date, a run mode, "
@@ -4598,6 +4602,21 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
         ("wrap-up", wrap, wrap.replace(
             "from before this session is a recurrence",
             "from before this session is already routed", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "park a new dated entry\n   that names the earlier one",
+            "edit the earlier entry\n   to add the occurrence", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "When those rules park\n   the finding and an earlier",
+            "Whatever the rules decide,\n   when an earlier", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            "cleanup refuses a dirty tree, so commit or\ncarry the entry before retiring that worktree",
+            "cleanup handles a dirty tree", 1
+        )),
+        ("wrap-up", wrap, wrap.replace(
+            " or its `docs/handoff/<scope>.md` fragment", "", 1
         )),
         ("wrap-up", wrap, wrap.replace(
             "Closing a workstream is not among them",
@@ -21743,6 +21762,55 @@ def _assert_parallel_files_lanes_by_subject(text: str) -> None:
     assert "the batch ends without a handoff commit" in flattened
 
 
+def _assert_parallel_routes_lane_friction(text: str) -> None:
+    flattened = " ".join(text.split())
+    assert "Route the friction the lanes reported" in flattened
+    assert "before the next step opens any pull request" in flattened
+    assert "a `dev/*` branch cannot carry a `<friction-log>` entry" in flattened
+    assert "or the step above parked an entry, open it" in flattened
+    assert "from this cockpit session and before the next step" in flattened
+    assert "A parked entry is committed with the handoff record in the next step's pull request." in flattened
+    assert "open it as its own `chore: update handoff` PR" in flattened
+    assert "When it left nothing and nothing parked" in flattened
+    # The routing step comes before the step that opens the handoff PR.
+    assert flattened.index("Route the friction the lanes reported") < flattened.index(
+        "or the step above parked an entry, open it"
+    )
+
+
+def test_parallel_joint_wrap_up_routes_lane_friction_before_its_pr() -> None:
+    # Lanes report friction; the cockpit routes it before opening the handoff PR.
+    text = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "parallel.md"
+    ).read_text(encoding="utf-8")
+    _assert_parallel_routes_lane_friction(text)
+    step = text[text.index("1. Route the friction the lanes reported"):text.index("1. When the test left something")]
+    mutations = (
+        text.replace(step, "", 1),
+        text.replace("before the next\n   step opens any pull request", "after the next\n   step opens its pull request", 1),
+        text.replace(", or the step above parked an entry,", ",", 1),
+        text.replace("from this cockpit session and before", "from the lane and before", 1),
+        text.replace("A parked entry is committed\n   with the handoff record in the next step's pull request.", "", 1),
+        text.replace("open it as its\n   own `chore: update handoff` PR", "open it on the lane's dev/* PR", 1),
+        text.replace("When it left nothing and nothing\n   parked", "When it left nothing", 1),
+        text.replace(step, "", 1).replace(
+            "\nOverflow that doesn't fit a PR body", "\n" + step + "Overflow that doesn't fit a PR body", 1
+        ),
+    )
+    for mutated in mutations:
+        assert mutated != text
+        with pytest.raises(AssertionError):
+            _assert_parallel_routes_lane_friction(mutated)
+
+
+def test_getting_started_says_cleanup_applies_without_a_closing_run() -> None:
+    # A session with no reason to offer the closing run still cleans up as it goes.
+    require_kit_source()  # getting-started.md is kit documentation, not an installed file
+    text = " ".join((REPO_ROOT / "docs" / "getting-started.md").read_text(encoding="utf-8").split())
+    assert "a session whose PRs passed the handoff test does not need one" in text
+    assert "clean up what the session created as you go either way" in text
+
+
 def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
     # A batch's wrap-up files each lane by subject, never in one batch entry.
     text = (
@@ -21755,7 +21823,7 @@ def test_parallel_files_each_lane_under_its_subjects_workstream() -> None:
             "Never create a `## Workstreams` entry for the batch itself",
             "Create a `## Workstreams` entry for the batch itself", 1,
         ),
-        text.replace("the batch ends without\n   a handoff commit", "the batch opens\n   a handoff PR", 1),
+        text.replace("the batch\n   ends without a handoff commit", "the batch\n   opens a handoff PR", 1),
     )
     for mutated in mutations:
         assert mutated != text

@@ -391,17 +391,18 @@ wrap-up **from this cockpit session**:
    batch is how the work ran, not a line of work. The tally line the reconciler
    printed goes in the chat and, when a PR is opened, in its body.
 
-1. When the test left something, open it as its own `chore: update handoff` PR (this
-   checkout sits on the protected branch, and the lanes' PRs are already reviewed or
-   merged, so this is `wrap-up`'s separate-PR route). When it left nothing — every
-   scope merged and each workstream's `▶ Next:` still true — the batch ends without
-   a handoff commit.
-
 1. Route the friction the lanes reported, in their PR bodies or fragments, through
-   `wrap-up`'s friction-routing step, from this cockpit session: a lane cannot ask
-   the operator for a tracker go-ahead, and its branch cannot carry a
-   `<friction-log>` entry. A parked entry rides the handoff PR when there is one, or
-   a `chore:` PR of its own.
+   `wrap-up`'s friction-routing step, from this cockpit session and before the next
+   step opens any pull request. Lanes report friction rather than route it, because a
+   `dev/*` branch cannot carry a `<friction-log>` entry. A parked entry is committed
+   with the handoff record in the next step's pull request.
+
+1. When the test left something, or the step above parked an entry, open it as its
+   own `chore: update handoff` PR (this
+   checkout sits on the protected branch, and the lanes' PRs are already reviewed or
+   merged, so this is `wrap-up`'s separate-PR route). When it left nothing and nothing
+   parked — every scope merged and each workstream's `▶ Next:` still true — the batch
+   ends without a handoff commit.
 
 Overflow that doesn't fit a PR body (richer lessons, friction-log entries) goes to a
 uniquely-named `docs/handoff/<scope>.md` fragment that rides the session's **own** PR

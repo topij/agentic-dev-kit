@@ -76,7 +76,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "275ef83e3bde9cbbe192e2345f3af37f306ce53947ab63040adb3e3391152c87"
+      "sha256": "cf6423c97e15798d06a31c1d0be9745639290e427cb20599345c57ad1ba1f5f6"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "f04672d510177a22fab0482a1c64eb40931777195b3b80490ad0579fd8a34190"
+      "sha256": "03622addd3ffd0fc1571706f1cc154347216507bef0a4bf86f770be07af9e3b2"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -743,7 +743,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "ecebcc9116208d82836568dbc20c88e40a89ac1d587bc271e43f267c809ab3de"
+      "sha256": "37aa36c31a5ce379512a85d24c327092a2aeb059e5329d33b4c63d5e74692c76"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
