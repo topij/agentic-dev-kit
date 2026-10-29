@@ -79,7 +79,8 @@
 # that default: the fallback panel is every PR's independent review, recorded as
 # a receipt. Nothing requests a CodeRabbit review at the converged head any more,
 # because `pr_watch` owes that request only to a configured bot. So ruling 2's
-# premise is gone, and with auto-review off the bot would never run at all.
+# premise is gone, and with auto-review off the bot would run only when someone
+# typed `@coderabbitai review` by hand.
 #
 # Automatic review at PR open is back ON, so the free unit is spent whenever one
 # is available. Findings it posts before the merge arrive as ordinary PR
