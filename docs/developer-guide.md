@@ -258,7 +258,9 @@ uv run scripts/sweep_scratch.py --disk --json
 
 Between review rounds, retire the finished round with `seal`, `preview` and
 `apply --round <receipt-id>`; `allocate` refuses a new round while an earlier one is
-unretired, unless you keep it on purpose with `--keep-previous "<reason>"`.
+unretired, unless you keep it on purpose with `--keep-previous "<reason>"`. A round
+whose retirement was interrupted (`removing`) refuses the next allocation whatever
+the reason; resume it with the same `apply --round` first.
 
 Preview the selected inventory before requesting authorization for its exact paths.
 The preview token binds the scope; it is not operator consent. The lifecycle guide

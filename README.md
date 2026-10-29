@@ -116,8 +116,8 @@ flowchart LR
 
 The [cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) owns retention,
 consent and kept-path recovery. A session deletes what it created once nothing
-needs it, while it works (each review round retires before the next is allocated)
-and again at `wrap-up`. Ending a session does not authorize deletion, but a standing
+needs it, while it works (with a cleanup registry, each review round retires before
+the next is allocated) and again at `wrap-up`. Ending a session does not authorize deletion, but a standing
 grant in `AGENTS.md` can cover the session's own recorded paths; copy the *Session
 cleanup* section of [`docs/AGENTS-sections.md`](docs/AGENTS-sections.md) to opt in.
 The grant replaces asking, not the engine's previews and guards, and an age sweep
@@ -336,7 +336,7 @@ Each piece maps to one or more of the ten principles in
 | `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning; the same tripwire watches an instruction file's size. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. An instruction file such as `AGENTS.md` has nothing to sweep into, so its entry omits `archive` and the warning prints the remedy alone. Warn-only by default — it exits 0 even when a doc is over budget, and returns 1 only under `--strict`. It exits 2 on a usage or config error whatever the flags, so a `path:` naming a doc you have since renamed will gate any pipeline that runs it. |
 | `scripts/skill_routing_eval.py` | #8 Mechanism over memory | Scores the prompts in `docs/agentic-dev-kit/skill-routing/cases.json` against every model-invoked skill's `description`, for both runtimes, and fails when a request misses its skill, a negative case reaches it, or two descriptions overlap. Lexical and offline; `make test` runs it. |
 | `scripts/pr_watch.py` | #5 | The poll-fix-ack and merge-evidence engine behind `pr-watch`. Exact-head receipts remain backward-compatible; a `fallback:delta` pass recorded with `--compose-parent` preserves and revalidates its full-review parent, delta ancestry, and changed paths. |
-| `scripts/panel_prompt.py` | #5, #9 Deterministic scaffolding | Assembles each lens's launch prompt for the isolated review panel from `fallback-review-panel.md`'s contract and the lens's configured `focus`, resolving the review base from the remote so a stale base cannot reach a reviewer. |
+| `scripts/panel_prompt.py` | #5, #9 Deterministic scaffolding | Assembles each lens's launch prompt for the isolated review panel from `fallback-review-panel.md`'s contract and the lens's configured `focus`, resolving the review base from the remote by default; a base supplied with `--base` is flagged in the prompt as not resolved from the remote. |
 | `scripts/review_eval.py` | #5, #8 | Maintainer tool that scores lens and optional verifier reports against known-bug and clean cases from the kit's history, to measure a reviewer prompt or compute change. A score is not a review of the PR being merged. |
 | `scripts/session_cleanup.py` | #8 Mechanism over memory | The completed-session cleanup lifecycle over `sweep_scratch.py`: a persisted inventory of the session's review rounds and worktrees, sealed evidence in shared Git metadata, per-round retirement, preview/approve/apply with fresh guards, and `reconcile` for an inventory whose device number changed across a reboot. |
 | `scripts/verify_live_validation_bundle.py` | #9 Deterministic scaffolding | Verifies retained redacted live-runtime evidence, externally expected source/review/runtime bindings, applied-compute attestations, and the separate receipt required before a parity capability promotion. |
