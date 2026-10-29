@@ -219,6 +219,8 @@ def test_linear_blank_line_before_a_list_does_not_block_verification():
 @pytest.mark.parametrize("approved, observed, matches", [
     ("p\n- a", "p\n\n- a", True),
     ("p\n\n- a", "p\n- a", True),
+    ("p\n- a\n", "p\n\n- a\n", True),
+    ("p\n", "p\n", True),
     ("  p\n  - a", "  p\n\n  - a", True),
     # Only one empty line, only before a list item, only after a paragraph line.
     ("p\n- a", "p\n\n\n- a", False),
