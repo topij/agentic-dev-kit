@@ -54,6 +54,7 @@ from .providers import (
 )
 from .recovery import (
     capture_state_present,
+    completed_phase,
     gate_only_plan,
     persist_test_gate_held,
     prepare_gate_only,
@@ -1649,8 +1650,8 @@ def validate_recoverable_state(
     so still passes `canonical_state` as a retiring entry, is captured by
     `recover` or `test` only when its retirement is proven; otherwise the
     entry refuses it, writing nothing. When retirement is not proven, `state_action_plan`
-    preserves such a state if it also passes `canonical_state` under the
-    current configuration, and holds it otherwise. A completed state that fails
+    preserves such a state if it also passes `canonical_state` as a retiring
+    entry, and holds it otherwise. A completed state that fails
     `canonical_state` itself is captured as any invalid state.
     """
     state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
@@ -2011,7 +2012,11 @@ def run(
                     lease.held = False
                     return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restart only from the exact recovery receipt", detail=str(receipt.get("kind")), waiting_on="rerun")
                 lease.release()
-                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="resume", detail="captured state is valid; recovery refused")
+                # A completed state is retired by a session-starting entry, never
+                # by `resume`, which refuses one written under an earlier
+                # configuration (#1272).
+                next_entry = "start a new session (no entry, or new); it retires the completed state" if completed_phase(state_raw) else "resume"
+                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="captured state is valid; recovery refused")
             if entry == "test":
                 try:
                     # `recover`'s predicate (#1002): a completed test state the

@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "5358f1c0d962821384984cbb3e68e5877665e10753c6eec8e167639e4bbab9bd"
+      "sha256": "f2d6e26fb20866a4ac70338de59ba13e552fc2279ccb88c3c6941cdd139147cb"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -76,7 +76,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "5dc49dd1876504abfd7ec579d1c9a4d002bac87061a3bbc7fd858a5bee268184"
+      "sha256": "cf6423c97e15798d06a31c1d0be9745639290e427cb20599345c57ad1ba1f5f6"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -84,18 +84,18 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "3553109f6b6e4d195e864520b8930c71b1bd8a63655e65ba7be228eee35119bb"
+      "sha256": "9306cb5d3685789ff8f6a900bb7943e5363604071d9666a63e06cb2f389451d7"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "7774b77c94d59ce6dbdcef322d727f9f44cb016466daf52da586fee4aa28473b"
+      "sha256": "1aa726ecfbf8237f20571052283a458d0d310e5b71de5ed0fe1ccd8c00b85b15"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "97949f40b5a386919b38454febe9ecffb7fb8e9e8e90b701105fdc3cdc05cd40"
+      "sha256": "13feceb533e2a2f65c0ddf5979aa80c9cb1f16dcf4a55fb38bfc1a333d19ce70"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -120,14 +120,14 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "febcf9ea3906e4345ef762db0caee445395261a307a232aa4f8dd02d87df00ca"
+      "sha256": "b2afb20f07bb70768e830e6f004a89e202540e75704110b482259e8f0409c434"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md": {
       "required_by": [
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "9b635b288756bffa0bf359614c03031ea62ddf7074fa676fe0ccaac2db9b7911"
+      "sha256": "17397a80987715cc606c02181e234ad78a942bedf7f54ea0052dfcf48dd9ec04"
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "8c8273044ce409a68e97b5d59e961c50bcb4e845966f6d7b6249c1a23f3dd509"
+      "sha256": "03622addd3ffd0fc1571706f1cc154347216507bef0a4bf86f770be07af9e3b2"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -143,7 +143,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "383d93ab498eda23a7e368ec15ce55e646504dbcc7f1db79173408988b92801f"
+      "sha256": "2040203db39e3dfea5fb5ad387f3757a7f699fbeefd457b028e9047da77140d1"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -155,7 +155,7 @@
     },
     "docs/templates/friction-log.md.tmpl": {
       "role": "template",
-      "sha256": "1e5fa714719cf147c03d03569e875e32a843c4b9f189025415d35dc2c326a062"
+      "sha256": "75ce6d3b4523de03462d3e24ead52c33837f7c293ffbfba608890a58f5884820"
     },
     "docs/templates/handoff-history.md.tmpl": {
       "role": "template",
@@ -163,7 +163,7 @@
     },
     "docs/templates/handoff.md.tmpl": {
       "role": "template",
-      "sha256": "dd6666a7eb94af74efbfcbbd89fe59be87484f6c901f403863d2bc268af1b17c"
+      "sha256": "4809ea7b9a9978059d09ae1cf5ce394eb90f30dc67ae7ce7ed6a32ab1be5cae2"
     },
     "init.sh": {
       "role": "installer",
@@ -222,7 +222,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "bb40b1bda89d94533314495e8910fc3f641e30213bee0611ce98d0828c32b6b7"
+      "sha256": "a02500e3740f4bc73a6b0ee1f4c3d5e0bac24a26400aa429d29769d319fc9d5f"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -522,7 +522,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "72f54eb0cc9d209800457b880c30ef75d6a05ca8af1a73ab3d5ce69256211f59"
+      "sha256": "c1c728e13ad0844e4a4a67249430a74ba959d17eb6028b735b73214cd02c9b4c"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
@@ -563,7 +563,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "f29ac7a4a400bb68a0ac772f3bd7546462a02c2e5aa0987c0833ee1a6109dd3e"
+      "sha256": "7bc0439ad71a0df50cd0a75cfa1f50800a6dc1d7612cff2cc42c8b47ac4e7985"
     },
     "scripts/lib/triage/outcome.py": {
       "required_by": [
@@ -587,7 +587,7 @@
         "scripts/lib/triage/engine.py"
       ],
       "role": "engine",
-      "sha256": "009504b3297b14a33963080d2b4cc5ef143a7b2d7ad1cff8cb17daf733d5af37"
+      "sha256": "7f783fa8b9b82deeea9f472199fe96910afa8357f6ab0a608da35b0a44e7dbd5"
     },
     "scripts/lib/triage/storage.py": {
       "required_by": [
@@ -607,7 +607,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "0325d88927db7128090e01fe62dd7a3ce4b29b3639f8d0aed1369e6d041ef9c0"
+      "sha256": "ef743e6e6957418f978273870d7bae0eb0b14003ab181aa4f15e1691cea11086"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -639,7 +639,7 @@
         "scripts/session_cleanup.py"
       ],
       "role": "engine",
-      "sha256": "9265b87197d765c9a05aeedafc98c5275c1146824b5180d03ef3c9489788c63d"
+      "sha256": "d32cfa04a33088f0c2e63286f707da525de7a3d3a7cb606a03e9947d6ad0fb14"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -703,7 +703,7 @@
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
-      "sha256": "fcf4e4aac1c48b3064551b7d7217d610193353a60971a50f19a5292582d20279"
+      "sha256": "89d7cfaea2a91aba71f47d79a9dbe4ec96f7ba3414e0f42a163613886cc8a7f6"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
@@ -743,7 +743,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "c41365523c4ea0d3a2249689107ac4a2f348243971c0b041f62f1fb47a2018da"
+      "sha256": "37aa36c31a5ce379512a85d24c327092a2aeb059e5329d33b4c63d5e74692c76"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -751,7 +751,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "2588a00212bb06c811afcfeb7b5423c17738e1c04775bcc76a91a156c2923263"
+      "sha256": "84fa62f4dc68906d35457f44e2fb0d264038b39042e31bb033a58b834b8749b7"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
@@ -795,7 +795,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "bb6b75c7c21a7eb5f73f4c21ce3b8b71e415f548360f6c7b1be7eee9fb034048"
+      "sha256": "297756b7886cd20088c44ec60361fa5ea93d20e35a033978a781abb4ff95a79d"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",
@@ -839,7 +839,7 @@
     },
     "scripts/tests/test_triage_engine.py": {
       "role": "test",
-      "sha256": "414a3bff155bf0b32ec9a7b5198b2e505bb88d9cc05461aabfda9a02fde1c289"
+      "sha256": "9316206b9b66f6cf85b34f26ab066fbb3b2147663f748da6ad413e7020c6bc04"
     },
     "scripts/tests/test_triage_gate.py": {
       "role": "test",
@@ -859,7 +859,7 @@
     },
     "scripts/tests/test_triage_providers.py": {
       "role": "test",
-      "sha256": "03320738a8a5e543745564ca9ef1a2df214c936e41c1ba239dedddef03af1949"
+      "sha256": "e75a832c695007f00bb3bae1e46da506f157ceed4e7ca661a09c07f8bfb12149"
     },
     "scripts/tests/test_triage_recovery.py": {
       "role": "test",
@@ -868,6 +868,10 @@
     "scripts/tests/test_triage_state.py": {
       "role": "test",
       "sha256": "26676cf8cf5e265499a3d22c38e5d959f61fbe8e8efc1fcc6ce5af7b79952323"
+    },
+    "scripts/tests/test_triage_symlinked_state_gate.py": {
+      "role": "test",
+      "sha256": "87d555b7b266932d10c085dfc6ce328458be751bbbd786a45c487b511d1fc207"
     },
     "scripts/tests/test_triage_worktree_identity.py": {
       "role": "test",

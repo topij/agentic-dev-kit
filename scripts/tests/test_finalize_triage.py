@@ -1866,6 +1866,41 @@ def test_recover_takes_the_first_parent_merge_commit_of_a_merge_landed_sweep(
 
 
 @pytest.mark.evidence
+def test_a_stale_gate_plan_preserves_a_finished_sweep_valid_but_for_a_later_config_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#1272: a completed archive-sweep state whose sweep landed, captured over a
+    gate, differs from the current configuration only in its fingerprint. The plan
+    preserves it for the session-starting entry to retire, rather than retiring it
+    as an invalid state or holding it."""
+    from triage.gate import acquire
+    from triage.model import repository_identity
+    from triage.recovery import capture_state_present, state_action_plan
+
+    root, state_path, worktree, _terminal = _engine_completed_sweep(tmp_path, monkeypatch)
+    _land_sweep(root, worktree)
+    config = root / "config/dev-model.yaml"
+    before = config.read_text(encoding="utf-8")
+    after = before.replace('systemize_branch_pattern: "chore/systemize-{date}"', 'systemize_branch_pattern: "chore/systemize-{date}-later"')
+    assert after != before
+    config.write_text(after, encoding="utf-8")
+    settings = load_settings(root)
+    raw = state_path.read_bytes()
+    with pytest.raises(TriageError, match="configuration identity mismatch"):
+        canonical_state(raw, settings=settings, mode="live")
+    store = ArtifactStore(settings, "live")
+    lease = acquire(store, repository_identity=repository_identity(settings), config_fingerprint=settings.fingerprint, run_identity=None)
+    try:
+        capture = capture_state_present(store, settings, require_terminated=False, publish=False)
+        plan = state_action_plan(store, settings, capture)
+    finally:
+        lease.release()
+    assert plan["held"] is None
+    assert plan["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
+    assert state_path.read_bytes() == raw
+
+
+@pytest.mark.evidence
 def test_recover_looks_for_the_sweep_only_after_the_runs_draft_head(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

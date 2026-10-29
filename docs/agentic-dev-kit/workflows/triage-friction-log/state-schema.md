@@ -152,10 +152,15 @@ phase are forbidden earlier.
   canonical `{title, body, project, labels}` as the tracker returned it, plus its
   independently recomputed digest. Verification requires the marker, destination, and
   identifier to match the operation, and the observed payload to equal the approved one
-  except in how each unordered-list marker outside a fenced code block is spelled:
-  Linear's editor returns every bullet as `*`, so `-`, `*` and `+` compare equal there.
-  A fence counts only when opened within three spaces of the margin, so a marker in
-  indented or list-nested code is relaxed as well. That is what an *exact* tracker
+  except in two list-layout changes Linear's editor makes, both judged outside fenced
+  code blocks. It returns every bullet as `*`, so `-`, `*` and `+` compare equal as an
+  unordered-list marker. It puts an empty line between a paragraph line and a list item
+  that follows it, so one empty line after any line with non-space content that is
+  not a list item or fenced code (a heading, quote or ordered item counts) and
+  before a list item compares equal to none; two empty lines, an
+  empty line anywhere else, a whitespace-only line, and a fence delimiter line on
+  either side stay exact. A fence counts only when opened within three spaces of the
+  margin, so a marker in indented or list-nested code is relaxed as well. That is what an *exact* tracker
   match means throughout this workflow; any other difference leaves the attempt
   ambiguous. The complete decision plan plus its exact attempted
   operation prefix accounts for every approved tracker payload without cross-payload or duplicate

@@ -1,7 +1,7 @@
 # Friction Log — agentic-dev-kit
 
 > **Lean inbox (Principle #2 — the friction flywheel).** Friction surfaced during real use,
-> recorded at session end. Single incidents route **down** to the tracker; a genuine
+> recorded when it is found. Single incidents route **down** to the tracker; a genuine
 > multi-occurrence **pattern** graduates **up** into a rule or skill change.
 >
 > **What lands here is what is not yet issue-shaped.** A finding that already carries a
@@ -23,6 +23,10 @@
 > Each marker's own block records what it swept.
 >
 > Tracker board: https://github.com/topij/agentic-dev-kit/issues
+
+## 2026-10-28
+
+- **Two sessions acted on #1277 at once, and neither knew.** Severity M, kept for accumulation. Steps: a cloud session held #1277's round-budget packet; the 2026-10-28 local session ran a panel on the operator's go-ahead and posted its disposition; the cloud session then pushed `274fa3bf`, and the local session's push of the same narrowing was refused as non-fast-forward. Nothing in `pr_watch` showed the overlap. Missing: a mechanism and a remedy.
 
 ## 2026-10-24 — Backlog migrated by triage session 34cfc9d2f69d4462a37af84ce5a975c7
 

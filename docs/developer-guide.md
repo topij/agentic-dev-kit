@@ -56,13 +56,14 @@ For changes to these guides, run the [documentation checks](documentation-checks
    run `make test` with a long enough tool timeout to receive the pytest summary.
    Its `check-syntax` target has the limitation recorded in [AGENTS.md](../AGENTS.md);
    inspect changed shell scripts separately until that gap is repaired.
-4. Invoke `wrap-up` before requesting the final PR's opening review, preferably
-   before opening the PR. It asks whether the session left anything the PR, its
+4. Run `wrap-up`'s handoff test before requesting each PR's opening review,
+   preferably before opening the PR. It asks whether the work left anything the PR, its
    commits and the tracker do not already record — a decision, an abandoned approach, a next step
    with no ticket. If so, it commits that to the workstream's entry in the
    configured handoff on the same PR, so one review covers both; if not, it commits
-   nothing. It also routes friction. Tracker writes need a decision on their exact
-   payload. Verify any final edits, then open completed work ready for review.
+   nothing, which is the usual result. Route friction when you find it. Tracker
+   writes need a decision on their exact payload. Run the full `wrap-up` to close a
+   session that leaves half-finished state or decisions only in the conversation. Verify any final edits, then open completed work ready for review.
 5. Invoke `pr-watch` for the exact PR, and continue through CI and review findings.
    Ready status starts review; it does not grant merge authority. Follow the
    project's merge policy for the final act.
@@ -70,7 +71,7 @@ For changes to these guides, run the [documentation checks](documentation-checks
 ```mermaid
 flowchart LR
     Brief["session-start<br/>briefing and environment"] --> Task["task worktree<br/>branch and edit"]
-    Task --> Wrap{"wrap-up<br/>delete own scratch;<br/>unrecorded handoff?"}
+    Task --> Wrap{"wrap-up handoff test<br/>unrecorded handoff?"}
     Wrap -->|yes| Record["commit record<br/>with the change"]
     Wrap -->|no| Verify
     Record --> Verify["project verification"]
@@ -171,8 +172,8 @@ prints a subcommand's usage without creating anything.
 
 ## Route friction and recurring findings
 
-Record an incomplete or accumulating finding in the configured friction log. At
-`wrap-up`, an issue-shaped finding goes through tracker search and an exact-payload
+Route a finding when it is found. Record an incomplete or accumulating finding in
+the configured friction log. An issue-shaped finding goes through tracker search and an exact-payload
 decision first. Invoke `triage-friction-log` to freeze and review inbox entries;
 its approval step decides which entries to file, archive, or park. A budget warning
 alone does not authorize a tracker write or archive sweep.
@@ -233,7 +234,7 @@ exact path the session recorded when it made it, never a name or an age. Without
 standing grant, present those paths for the operator's approval. To grant it once,
 copy the *Session cleanup* section of [`AGENTS-sections.md`](AGENTS-sections.md) into
 your `AGENTS.md`; the grant covers only the session's own recorded paths, keeps every
-engine preview and guard, and never covers an age sweep. `wrap-up` finishes this
+engine preview and guard, and never covers an age sweep. The full `wrap-up` that closes a session finishes this
 cleanup and reports what it removed and what it kept, with reasons.
 
 When `scratch.session_registry` is configured, use the

@@ -75,10 +75,10 @@ flowchart LR
 
 [`session-start`](docs/agentic-dev-kit/workflows/session-start.md) supplies the
 briefing. [`wrap-up`](docs/agentic-dev-kit/workflows/wrap-up.md) records only what
-the PR, commits and tracker do not already hold, before review; when nothing is left
-it commits nothing. [`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md) owns the
-review loop. Independent review is a configured bot's review of the current head, or
-a completed pass of the kit's own
+the PR, commits and tracker do not already hold, before each PR's review; when nothing
+is left it commits nothing. [`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md)
+owns the review loop. Independent review is a configured bot's review of the current
+head, or a completed pass of the kit's own
 [isolated lens panel](docs/agentic-dev-kit/fallback-review-panel.md): fresh-context
 reviewers chosen by the change's review class, an optional verifier that checks their
 findings, and a head-bound receipt with typed dispositions. Merge authority remains a
@@ -117,7 +117,7 @@ flowchart LR
 The [cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) owns retention,
 consent and kept-path recovery. A session deletes what it created once nothing
 needs it, while it works (with a cleanup registry, each review round retires before
-the next is allocated) and again at `wrap-up`. Ending a session does not authorize deletion, but a standing
+the next is allocated) and again in the full `wrap-up` that closes a session. Ending a session does not authorize deletion, but a standing
 grant in `AGENTS.md` can cover the session's own recorded paths; copy the *Session
 cleanup* section of [`docs/AGENTS-sections.md`](docs/AGENTS-sections.md) to opt in.
 The grant replaces asking, not the engine's previews and guards, and an age sweep
@@ -315,7 +315,7 @@ Each piece maps to one or more of the ten principles in
 
 | Piece | Principle(s) | Purpose |
 |---|---|---|
-| `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan: one entry per open workstream, read at session start and updated at wrap-up only for what no PR, commit or tracker issue records. Dated session entries from the earlier layout sweep to the history file once it crosses a line budget. |
+| `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan: one entry per open workstream, read at session start and updated by wrap-up's handoff test before each PR's review, only for what no PR, commit or tracker issue records. Dated session entries from the earlier layout sweep to the history file once it crosses a line budget. |
 | `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
 | `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads a `CLAUDE.md` instead of `AGENTS.md` once one exists) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
@@ -395,10 +395,11 @@ classified; forge readiness includes unfiltered review evidence rather than list
 or locally acknowledged comments alone, and detached HEAD is named instead of rendered
 as a blank branch. Only explicitly
 unconfigured or untriggered declarations may be omitted.
-Wrap-up first decides whether the session left anything its pull requests, commits and
-tracker issues do not record; when it left nothing, the run is a no-op with no commit,
-pull request or review. Otherwise its record rides the session's own pull request
-before review. Wrap-up requires the configured document-budget engine, preserves
+Wrap-up's handoff test runs before every pull request's review and decides whether the
+work left anything its pull request, commits and tracker issues do not record; when it
+left nothing, the usual result, nothing is committed. Otherwise its record rides that
+pull request before review. Friction is routed when it is found, and the full wrap-up
+closes a session on the operator's request. Wrap-up requires the configured document-budget engine, preserves
 operator-owned changes, sends an interactive issue-shaped finding through tracker search
 and an exact-payload decision before parking, and reserves the friction log for incomplete
 or accumulating findings and unavailable, declined, or ambiguous tracker routes. Its

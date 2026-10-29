@@ -4,11 +4,11 @@
 
 > **Lean inbox (Principle #2 — the friction flywheel).** Friction surfaced during real
 > use — a bug, an awkward workflow, a recurring annoyance — recorded the moment it's
-> fresh, at session end.
+> found, while it's fresh.
 >
 > **What lands here is what is not yet issue-shaped.** A finding that already carries a
-> reproduction, a named mechanism and a proposed fix is filed straight to the tracker at
-> session end, by `wrap-up`'s friction-routing step and on the operator's go-ahead — a
+> reproduction, a named mechanism and a proposed fix is filed straight to the tracker when
+> it is found, by `wrap-up`'s friction-routing step and on the operator's go-ahead — a
 > triage pass could add nothing to it but latency. When that route is unavailable (no
 > operator, no tracker, a failed create) the finding parks here instead.
 > This file holds the remainder: findings still missing one of those three, and single

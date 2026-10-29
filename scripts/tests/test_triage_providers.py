@@ -194,6 +194,53 @@ def test_tracker_payload_matches_keeps_text_and_open_fences_exact(approved, obse
     assert tracker_payload_matches(payload(approved), payload(approved)) is True
 
 
+# The shape of CUS-1862 on 2026-10-29 (#1291): Linear put an empty line between a
+# paragraph line and the list under it, and spelled the bullets `*`.
+PARAGRAPH_THEN_LIST = "**Acceptance.**\n- one\n- two\n\n**Environment.**\n\n- Target: `cloud`\n"
+PARAGRAPH_THEN_LIST_LINEAR = "**Acceptance.**\n\n* one\n* two\n\n**Environment.**\n\n* Target: `cloud`\n"
+
+
+def test_linear_blank_line_before_a_list_does_not_block_verification():
+    transport = LinearTransport()
+    def store_as(query, variables):
+        result = transport(query, variables)
+        if "TriageCreate(" in query:
+            transport.issues[-1]["description"] = PARAGRAPH_THEN_LIST_LINEAR + MARKER
+        return result
+    payload = {**linear_payload(), "body": PARAGRAPH_THEN_LIST + MARKER}
+    tracker = LinearIssues(transport=store_as, sleep=lambda _: None)
+    observed = tracker.create(LINEAR_DESTINATION, payload)
+    assert observed.status == "verified"
+    assert observed.read_back["payload"]["body"] == PARAGRAPH_THEN_LIST_LINEAR + MARKER
+    assert tracker.create(LINEAR_DESTINATION, payload).verified_route == "pre-existing-exact-match"
+    assert sum("TriageCreate(" in q for q, _ in transport.calls) == 1
+
+
+@pytest.mark.parametrize("approved, observed, matches", [
+    ("p\n- a", "p\n\n- a", True),
+    ("p\n\n- a", "p\n- a", True),
+    ("p\n- a\n", "p\n\n- a\n", True),
+    ("p\n", "p\n", True),
+    ("  p\n  - a", "  p\n\n  - a", True),
+    # Only one empty line, only before a list item, only after a paragraph line.
+    ("p\n- a", "p\n\n\n- a", False),
+    ("p\nq", "p\n\nq", False),
+    ("p\n\nq", "p\nq", False),
+    ("- a\n- b", "- a\n\n- b", False),
+    ("p\n- a", "p\n \n- a", False),
+    ("p\n \n- a", "p\n \n\n- a", False),
+    ("p\n- a", "\np\n- a", False),
+    ("- a\ntext", "\n- a\ntext", False),
+    # Inside a fence, and beside a fence delimiter, every line stays exact.
+    ("```\np\n- a\n```", "```\np\n\n- a\n```", False),
+    ("```\np\n```\n- a", "```\np\n```\n\n- a", False),
+])
+def test_tracker_payload_matches_relaxes_only_the_blank_line_before_a_list(approved, observed, matches):
+    def payload(body):
+        return {"title": "t", "body": body, "project": "p", "labels": ["x"]}
+    assert tracker_payload_matches(payload(observed), payload(approved)) is matches
+
+
 def test_github_create_verifies_a_read_back_that_differs_only_in_bullet_markers() -> None:
     payload = {"title": "title", "body": "- first\n- second\n" + MARKER, "project": "owner/repo", "labels": ["bug"]}
     stored = {**payload, "body": "* first\n+ second\n" + MARKER}
