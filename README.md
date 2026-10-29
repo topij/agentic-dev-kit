@@ -110,7 +110,7 @@ flowchart LR
     Preview --> Decision{"Standing grant or<br/>operator approval<br/>covers these paths?"}
     Decision -->|yes| Apply["Apply with fresh guards"]
     Decision -->|no| Keep["Keep and report"]
-    Apply --> Report["Wrap-up lists removed<br/>and kept paths"]
+    Apply --> Report["Full wrap-up lists<br/>removed and kept paths"]
     Keep --> Report
 ```
 
