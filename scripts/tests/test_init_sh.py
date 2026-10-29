@@ -1001,6 +1001,21 @@ def test_rerun_preserves_tracker_url_with_backslash_for_both_readers(tmp_path: P
     assert _config(repo) == text
 
 
+def test_a_review_section_without_bots_gains_the_empty_default(tmp_path: Path) -> None:
+    """A `review:` section predating `review.bots` gets the key added, and the
+    value added is `[]`: a third-party reviewer is opt-in, so the migration must
+    not name one on the adopter's behalf. The non-interactive prompt then keeps
+    the added value, which is what makes the added default the result."""
+    config = _replace_config(shipped_config(), "  bots: []\n", "", 1)
+    assert "bots" not in yaml.safe_load(config)["review"]
+    repo = _fixture(tmp_path, config=config)
+
+    _run_init(repo)
+    text = _config(repo)
+    assert yaml.safe_load(text)["review"]["bots"] == []
+    assert "\n  bots: []\n" in text
+
+
 def test_rerun_normalizes_single_quoted_bots_item(tmp_path: Path) -> None:
     """A hand-written `bots: ['coderabbit']` is valid YAML naming the reviewer
     `coderabbit` — the double-quote-only strip re-serialized it as the literal

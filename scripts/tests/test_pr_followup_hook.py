@@ -850,6 +850,33 @@ def test_reminder_falls_back_to_the_single_command_with_no_panel_configured():
     assert "/my-review" not in panel
 
 
+def test_with_no_bot_configured_the_fallback_review_is_owed_unconditionally(monkeypatch):
+    """No bot is the shipped default, so nothing can be "unavailable": the
+    reminder must say the fallback review is the PR's own review, with no
+    outage condition in front of it. A named bot keeps the outage wording."""
+    hook = _load_hook()
+    lenses = ["adversarial", "correctness"]
+    config = ("/code-review", "scripts", lenses, "fallback:panel", "")
+
+    monkeypatch.setattr(hook, "_load_review_config", lambda _runtime="claude": ([], *config))
+    for text in (hook.build_reminder(), hook.build_unresolved_warning()):
+        assert "No review bot is configured, so the fallback review is this PR's" in text
+        assert "If a review bot is unavailable" not in text
+        assert "the configured review bot(s)" not in text
+        assert "PANEL" in text
+
+    monkeypatch.setattr(
+        hook, "_load_review_config", lambda _runtime="claude": (["coderabbit"], *config)
+    )
+    named = hook.build_reminder()
+    assert "If a review bot is unavailable" in named
+    assert "findings from coderabbit" in named
+    assert "No review bot is configured" not in named
+
+    degraded = hook._fallback_instruction("/my-review", [], has_bot=False)
+    assert "`/my-review`" in degraded and "this PR's review" in degraded
+
+
 def test_load_review_config_degrades_gracefully_when_config_unreadable(monkeypatch):
     """A missing/unreadable config must never raise — the hook falls back to
     generic wording rather than failing the session."""

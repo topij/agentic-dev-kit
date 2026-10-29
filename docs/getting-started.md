@@ -171,9 +171,10 @@ reviewed with it. Open completed work ready for review. Then:
 underneath is `uv run scripts/pr_watch.py 42`.) It polls CI and review comments and
 doesn't stop until the PR is **green and clean**:
 every check passing, and every review finding either fixed or replied-to with a
-reason. Without a review bot, the independent review is a fresh-context review
-lens the agent runs at the converged head; a configured bot being down isn't a
-waiver either — the same pass runs instead.
+reason. Without a review bot, the independent review is run by the agent at the
+converged head with fresh-context review lenses: one for an ordinary change, two
+for a safety-critical one. A configured bot being down isn't a waiver either; the
+same pass runs instead.
 
 For a **risky** change — a send-gate, a destructive migration, a recovery/kill
 path — the shared safety doctrine (`docs/agentic-dev-kit/safety-critical-changes.md`)

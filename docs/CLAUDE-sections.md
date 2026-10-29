@@ -59,8 +59,9 @@ Because review is non-trivial, split PRs by **risk**, not by size:
 Opening or pushing to a PR is not "done" — **monitoring and fixing it is part of the same
 task, not a separate request.** After you `gh pr create` / `gh pr ready`, or push a fix
 commit to a PR branch, **run the watch-and-fix loop and don't yield the turn until the PR
-is green and clean** — CI fully passing AND every configured review bot's (`review.bots`)
-finding either fixed or replied-to with a reason. Stop early only for a genuine blocker
+is green and clean** — CI fully passing AND every review finding (from a configured
+`review.bots` reviewer, or from the fallback review when none is configured, the
+shipped default) either fixed or replied-to with a reason. Stop early only for a genuine blocker
 that needs an operator decision (a finding that's a product/design call, an unrecoverable
 infra failure) — then report the specific blocker and ask.
 

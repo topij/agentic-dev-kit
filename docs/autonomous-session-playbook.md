@@ -86,7 +86,8 @@ Follow this top to bottom, per ticket.
   re-review every incremental push — after fixing, confirm your fix-commit lands after the
   bot's last review rather than waiting indefinitely for a re-review that may not come.
   Fix real findings (commit + push → re-watch); reply-with-reason to nitpicks you keep. If
-  every configured bot is unavailable (rate-limited, no credits, skipped the PR), run
+  no bot is configured (`review.bots: []`, the shipped default), or every configured bot
+  is unavailable (rate-limited, no credits, skipped the PR), run
   the `review.fallback_panel` pass — one isolated fresh-context reviewer per lens, per
   `docs/agentic-dev-kit/fallback-review-panel.md`. Handle its findings, then bind that
   evidence to the current head with `uv run <engine-dir>/pr_watch.py <PR#>

@@ -271,12 +271,16 @@ def _load_review_config(
         )
 
 
+def _bot_names(bots: list[str]) -> list[str]:
+    return [b.strip() for b in bots if isinstance(b, str) and b.strip()]
+
+
 def _bot_description(bots: list[str]) -> str:
-    if not bots:
-        return "the configured review bot(s)"
-    names = [b.strip() for b in bots if isinstance(b, str) and b.strip()]
+    # No bot is the shipped default (a third-party reviewer is opt-in), so the
+    # findings to wait on are the fallback review's and any other reviewer's.
+    names = _bot_names(bots)
     if not names:
-        return "the configured review bot(s)"
+        return "the fallback review and any other reviewer"
     return " / ".join(names)
 
 
@@ -286,8 +290,13 @@ def _fallback_instruction(
     panel_source: str = _DEFAULT_PANEL_RECEIPT_SOURCE,
     engines_dir: str = _DEFAULT_ENGINES_DIR,
     lens_compute: str = "",
+    has_bot: bool = True,
 ) -> str:
-    """What to run when a bot is unavailable.
+    """What to run when a bot is unavailable, or always when none is configured.
+
+    ``has_bot`` is false when ``review.bots`` names no bot, the shipped default.
+    Then no bot can be "unavailable", so the condition is replaced: the fallback
+    review is the PR's own independent review, run at the converged head.
 
     Names the PANEL when one is configured, because a single command in this
     session's own context is the author reviewing their own diff — which
@@ -311,8 +320,13 @@ def _fallback_instruction(
         # between the two routes (#585). This hook does not compute it: it fires
         # before a poll has run, and naming both routes costs nothing.
         return (
-            "If a review bot is unavailable, run the fallback review the PR's "
-            "`review_class` owes, per docs/agentic-dev-kit/fallback-review-panel.md. "
+            (
+                "If a review bot is unavailable, run the fallback review the PR's "
+                if has_bot
+                else "No review bot is configured, so the fallback review is this "
+                "PR's independent review: at the converged head, run the one the PR's "
+            )
+            + "`review_class` owes, per docs/agentic-dev-kit/fallback-review-panel.md. "
             "A safety-critical PR takes the PANEL — one isolated, fresh-context "
             f"reviewer per lens ({', '.join(lenses)}) — recorded with "
             f"`uv run {engines_dir}/pr_watch.py <PR#> "
@@ -321,10 +335,17 @@ def _fallback_instruction(
             "names there, recorded with "
             f"`uv run {engines_dir}/pr_watch.py <PR#> "
             '--record-review "fallback:lens" --lenses <name> --head <polled-sha>`. '
-            "Never treat the outage as a review waiver." + lens_compute
+            + ("Never treat the outage as a review waiver." if has_bot else "Having no bot is never a review waiver.")
+            + lens_compute
             # Appended only for the PANEL branch: the degraded one-lens fallback
             # runs in the cockpit's own context, so there is no separate lens to
             # give a model or an effort level to.
+        )
+    if not has_bot:
+        return (
+            "No review bot is configured, so run the configured fallback "
+            f"(`{fallback_command}`) at the converged head as this PR's review; "
+            "having no bot is never a review waiver."
         )
     return (
         f"If a review bot is unavailable, run the configured fallback "
@@ -382,6 +403,7 @@ def _watch_instruction(
     panel_source: str,
     lens_compute: str,
     mandate: str,
+    has_bot: bool = True,
 ) -> str:
     """Complete the shared watch policy after candidate resolution."""
     return (
@@ -399,6 +421,7 @@ def _watch_instruction(
             panel_source,
             engines_dir,
             lens_compute,
+            has_bot,
         )
         + " Only stop early if you hit something that genuinely needs an "
         "operator decision. A spent review round budget is one: when the poll's "
@@ -432,6 +455,7 @@ def build_reminder(
             lenses=lenses,
             panel_source=panel_source,
             lens_compute=lens_compute,
+            has_bot=bool(_bot_names(bots)),
             mandate=(
                 "That independently confirmed lifecycle is MANDATORY under the "
                 "kit's PR follow-through policy (PRINCIPLES.md #5/#8);"
@@ -469,6 +493,7 @@ def build_unresolved_warning(runtime: str = _DEFAULT_RUNTIME) -> str:
             lenses=lenses,
             panel_source=panel_source,
             lens_compute=lens_compute,
+            has_bot=bool(_bot_names(bots)),
             mandate=(
                 "For that independently confirmed lifecycle, the shared PR "
                 "follow-through policy MUST be completed;"
