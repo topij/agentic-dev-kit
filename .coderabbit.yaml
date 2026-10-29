@@ -89,9 +89,11 @@
 # hold `mergeable` (a panel receipt can open the gate while its review is still
 # running, so its findings can land after the merge), the bot-named
 # "configured review bot requested changes" blocker does not apply to it, and
-# its verdict does not satisfy the gate. A standing CHANGES_REQUESTED from it can
-# still raise the aggregate "review decision is CHANGES_REQUESTED" blocker, which
-# reads every reviewer's latest verdict. Treat it as a
+# its verdict does not satisfy the gate. The aggregate "review decision is
+# CHANGES_REQUESTED" blocker catches its CHANGES_REQUESTED only on the REST
+# transport; on `gh` it is GitHub's own reviewDecision, which a bot that is not
+# a required reviewer usually does not move (this repo's ruleset requires no
+# approvals). Do not rely on it. Treat it as a
 # second opinion that may arrive late. Incremental review stays OFF (ruling 1
 # still holds).
 #

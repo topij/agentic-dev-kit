@@ -53,8 +53,8 @@ def _pin_engine_defaults(module: ModuleType) -> None:
     safe state is the default and wanting otherwise has to be written down.
 
     The one value pinned AWAY from the engine default is ``bots``. The engine
-    ships with no review bot (a third-party reviewer is opt-in), but most of these
-    tests exercise how a configured bot's checks and comments reach the gates, so
+    ships with no review bot (a third-party reviewer is opt-in), but these tests
+    exercise how a configured bot's checks and comments reach the gates, so
     they run with CodeRabbit configured, as a repo that names one does. A test
     about the no-bot case sets ``module._REVIEW_BOTS = ()`` itself, and
     ``test_a_review_bot_is_opt_in`` pins the shipped default.

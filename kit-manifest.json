@@ -747,11 +747,11 @@
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "723a87d5d6c591e907e64d849b0193dd6e721fce98ccaf24c5aac01fcd43b0f8"
+      "sha256": "9a67356befd487d64802e1de257a55e1e994f84f1d9060ed99abdce625bf4af7"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "4490b6300288d4adda9fdd46d08a52898f3bad346b4db82497124b5ad7a206f0"
+      "sha256": "d03309203201c2989c28f395c997699b521f0ca6f29bd722a89e6004b25d19d3"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

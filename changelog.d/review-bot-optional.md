@@ -13,8 +13,10 @@ BREAKING (gate semantics): a config whose `review:` section has no `bots` key us
 to get CodeRabbit from the engine default, and now gets no bot. For that bot:
 - its pending check stops holding `mergeable`;
 - the bot-named `configured review bot requested changes` blocker stops applying
-  to it (the aggregate `review decision is CHANGES_REQUESTED` blocker, which reads
-  every reviewer, still can);
+  to it. Do not count on the aggregate `review decision is CHANGES_REQUESTED`
+  blocker instead: it reads every reviewer only on the REST transport, and on the
+  `gh` transport it is GitHub's own `reviewDecision`, which a bot that is not a
+  required reviewer usually does not move;
 - its review of the merging head no longer satisfies the merge gate on its own;
   the fallback review is owed instead;
 - `post-merge-systemize` no longer treats its comments as review findings.

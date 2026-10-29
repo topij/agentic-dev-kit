@@ -850,6 +850,20 @@ def test_reminder_falls_back_to_the_single_command_with_no_panel_configured():
     assert "/my-review" not in panel
 
 
+@pytest.mark.parametrize("bots", [[], [""], [" "], ["", "  "]])
+def test_blank_bot_names_read_as_no_bot_as_the_engine_reads_them(monkeypatch, bots):
+    """`pr_watch` drops blank `review.bots` entries, so `[" "]` is no bot there.
+    The hook must agree, or it would say a bot is configured while the engine
+    owes the fallback review."""
+    hook = _load_hook()
+    config = ("/code-review", "scripts", ["adversarial", "correctness"], "fallback:panel", "")
+    monkeypatch.setattr(hook, "_load_review_config", lambda _runtime="claude": (bots, *config))
+
+    for text in (hook.build_reminder(), hook.build_unresolved_warning()):
+        assert "No review bot is configured" in text
+        assert "If a review bot is unavailable" not in text
+
+
 def test_with_no_bot_configured_the_fallback_review_is_owed_unconditionally(monkeypatch):
     """No bot is the shipped default, so nothing can be "unavailable": the
     reminder must say the fallback review is the PR's own review, with no
