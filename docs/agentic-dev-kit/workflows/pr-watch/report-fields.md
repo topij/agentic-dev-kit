@@ -236,8 +236,11 @@ merge back. Empty on the `gh` backend.
 `review.unavailable_markers`, `review.informational_checks` and
 `review.bot_pending_grace_minutes` are read from config; the engine only carries
 them as fallbacks for a missing config.
-`review.bots` and `review.informational_checks` ship with the *same* value and
-different jobs: the latter is a blocking policy ("this check never blocks the
+`review.bots` ships empty: a third-party reviewer is optional, and with none the
+fallback review is every pull request's independent review. `review.informational_checks`
+still ships `[coderabbit]`, which is inert until such a check appears and keeps one
+that does from wedging the loop. The two keys have
+different jobs even when they hold the same name: the latter is a blocking policy ("this check never blocks the
 watch loop"), the former an identity ("this check belongs to a reviewer whose
 state the merge gate cares about"). Bot names match case-insensitively as a
 **substring** of a check name (your own CI and bot config). Comment authors are

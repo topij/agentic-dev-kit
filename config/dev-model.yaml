@@ -283,8 +283,11 @@ tracker:
     project_id: ""
     label_name: ""
 review:
-  # Independent review present on this repo (Principle #5). A down bot is not a
-  # review waiver; select the current runtime's substitute pass instead.
+  # Third-party review bots on this repo, if any (Principle #5). OPTIONAL: with
+  # `[]`, the default, the fallback panel is every pull request's independent
+  # review (one lens, or both on a safety-critical path). Name a bot here only if
+  # one actually reviews this repo, e.g. `bots: [coderabbit]`. A named bot that
+  # is down is not a review waiver; the panel substitutes for it.
   # Also read by pr_watch.py to identify which status checks and comment authors
   # belong to a reviewer, so its outage/pending state can reach the merge gate.
   # Matched case-insensitively: as a SUBSTRING of a check name (your own CI and
@@ -294,7 +297,7 @@ review:
   # comment on a public PR, so prefix matching would let a lookalike login speak
   # for the reviewer. Keep entries specific enough not to collide with a CI job
   # name.
-  bots: [coderabbit]
+  bots: []
   # Exact GitHub logins trusted to speak for each configured reviewer. Keep
   # aliases explicit: prefix inference lets a lookalike account impersonate a
   # reviewer. Custom bots whose check name and author login differ belong here.

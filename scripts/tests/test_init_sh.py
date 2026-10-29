@@ -834,14 +834,15 @@ def _shipped_with_tracker_url(url_value: str) -> str:
 def test_rerun_on_shipped_config_preserves_every_value_and_is_stable(tmp_path: Path) -> None:
     """A non-interactive re-run over the shipped config must change no value,
     and a further re-run must be byte-identical (the documented upgrade path).
-    The bots byte-assertion pins the quoted-item list serialization — value
-    equality alone let a revert to unquoted items survive (panel, #87)."""
+    The shipped config names no review bot, so the bots line must stay the
+    empty list; the quoted-item serialization of a named bot is pinned by
+    `test_rerun_normalizes_single_quoted_bots_item` (panel, #87)."""
     repo = _fixture(tmp_path, config=shipped_config())
 
     _run_init(repo)
     once = _config(repo)
     assert yaml.safe_load(once) == yaml.safe_load(shipped_config())
-    assert 'bots: ["coderabbit"]' in once
+    assert "\n  bots: []\n" in once
 
     _run_init(repo)
     assert _config(repo) == once
@@ -1004,7 +1005,7 @@ def test_rerun_normalizes_single_quoted_bots_item(tmp_path: Path) -> None:
     """A hand-written `bots: ['coderabbit']` is valid YAML naming the reviewer
     `coderabbit` — the double-quote-only strip re-serialized it as the literal
     name `'coderabbit'`, which pr_watch silently fails to match (panel, #87)."""
-    config = _replace_config(shipped_config(), "  bots: [coderabbit]", "  bots: ['coderabbit']")
+    config = _replace_config(shipped_config(), "  bots: []", "  bots: ['coderabbit']")
     assert "  bots: ['coderabbit']" in config
     repo = _fixture(tmp_path, config=config)
 
@@ -1032,7 +1033,7 @@ def test_rerun_drops_yaml_significant_chars_from_bots_items(tmp_path: Path) -> N
     """A quote or backslash inside a bots item would corrupt the whole flow
     list when re-wrapped; such characters cannot appear in a real bot handle
     and are dropped so the config stays loadable (CodeRabbit on #87)."""
-    config = _replace_config(shipped_config(), '  bots: [coderabbit]', '  bots: ["a\\"b"]')
+    config = _replace_config(shipped_config(), '  bots: []', '  bots: ["a\\"b"]')
     assert '  bots: ["a\\"b"]' in config
     repo = _fixture(tmp_path, config=config)
 
@@ -3004,7 +3005,7 @@ def test_installer_refuses_multiline_quote_decoy_in_triage(
 def test_installer_refuses_block_children_under_a_prompt_owned_value(
     tmp_path: Path, replacement: str
 ) -> None:
-    config = _replace_config(shipped_config(), "  bots: [coderabbit]", replacement, 1)
+    config = _replace_config(shipped_config(), "  bots: []", replacement, 1)
     assert yaml.safe_load(config)["review"]["bots"] == ["coderabbit"]
     repo = _fixture(tmp_path, config=config, git=True, templates=True)
     existing = {
@@ -3034,7 +3035,7 @@ def test_installer_refuses_block_children_under_a_prompt_owned_value(
     ("old_line", "replacement", "section", "key"),
     [
         (
-            "  bots: [coderabbit]",
+            "  bots: []",
             "  bots: # retained comment\n    - coderabbit",
             "review",
             "bots",
@@ -3124,7 +3125,7 @@ def test_installer_refuses_unsupported_yaml_syntax_on_a_line_owned_path(
     ("old_line", "replacement"),
     [
         ("  handoff: docs/kit-handoff.md", "  handoff: [../../../outside/handoff.md]"),
-        ("  bots: [coderabbit]", "  bots: coderabbit"),
+        ("  bots: []", "  bots: coderabbit"),
         (
             '  project_name: "topij/agentic-dev-kit"',
             "  project_name: {value: topij/agentic-dev-kit}",

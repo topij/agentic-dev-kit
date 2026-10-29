@@ -1492,9 +1492,11 @@ migrate_kit_schema() {
   # pr_watch reads it to decide which checks and comment authors belong to a
   # reviewer. The interactive prompt later only REWRITES an existing line, so a
   # `review:` section predating the key would silently fall through to the
-  # engine default — benign while the default matches, dangerous for an adopter
-  # whose reviewer is not CodeRabbit.
-  ensure_review_key bots '  bots: [coderabbit]' || true
+  # engine default. Both are now empty: a third-party reviewer is optional, and
+  # without one the fallback panel is the review. A repo whose `review:` section
+  # predates the key and that DOES run a bot gets `[]` here and must name it, at
+  # the prompt below or by hand — the changelog entry for this change says so.
+  ensure_review_key bots '  bots: []' || true
 
   ensure_review_key bot_author_aliases '  # Exact GitHub logins trusted to speak for each configured reviewer.
   # Custom bots whose check name and author login differ belong here; never use
@@ -2519,7 +2521,7 @@ cur_bots_raw=$(get_field "review:" "" "^  bots:")
 # name `'coderabbit'`, which pr_watch then silently fails to match (review
 # panel on #87). We ask for a plain comma list.
 cur_bots_display=$(printf '%s' "$cur_bots_raw" | sed -e 's/^\[//' -e 's/\]$//' -e 's/"//g' -e "s/'//g")
-bots_answer=$(ask "Review bots (comma-separated, or 'none')" "$cur_bots_display")
+bots_answer=$(ask "Third-party review bots, e.g. coderabbit (comma-separated, or 'none' to have the fallback panel review every PR)" "$cur_bots_display")
 # Tolerate an answer typed with brackets ("[coderabbit]") — it is the same
 # comma list, not a nested one (issue #62).
 bots_answer=$(printf '%s' "$bots_answer" | sed -e 's/^[[:space:]]*\[//' -e 's/\][[:space:]]*$//')
