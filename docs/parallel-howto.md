@@ -70,7 +70,7 @@ scripts/dev_session.sh list          # or just run parallel with no argument
 
 You get one row per lane: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted
 count) · RUN · OVERLAP · SANDBOX path`. RUN says whether a headless lane is running,
-finished or lost; OVERLAP names other lanes changing the same files. Nothing is
+has finished (its receipt status, such as `completed` or `stalled`) or was lost; OVERLAP names other lanes changing the same files. Nothing is
 created or changed. If there are no lanes, the table is empty.
 
 **Follow it live** while a batch is in flight:

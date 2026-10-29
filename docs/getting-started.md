@@ -170,8 +170,10 @@ this PR and is reviewed with it. Open completed work ready for review. Then:
 underneath is `uv run scripts/pr_watch.py 42`.) It polls CI and review comments and
 doesn't stop until the PR is **green and clean**:
 every check passing, and every review finding either fixed or replied-to with a
-reason. A review bot being down isn't a waiver — run an independent review pass
-instead.
+reason. A review bot being down isn't a waiver — run the kit's isolated lens panel
+instead ([fallback review contract](agentic-dev-kit/fallback-review-panel.md)): fresh-context
+reviewers chosen by the change's review class, an optional verifier that checks
+their findings, and a receipt bound to the PR head.
 
 For a **risky** change — a send-gate, a destructive migration, a recovery/kill
 path — the shared safety doctrine (`docs/agentic-dev-kit/safety-critical-changes.md`)
@@ -222,8 +224,12 @@ next `session-start` reads both the handoff and the inbox, neither thread is los
 
 For disposable review rounds and task checkouts, follow the
 [evidence retention and cleanup guide](developer-guide.md#retain-evidence-and-finish-session-cleanup).
-Keep required evidence before retiring scratch, and obtain authorization for the
-concrete deletion scope. A wrap-up invocation alone does not provide it.
+A session deletes the paths it created and recorded once nothing needs them, and
+`wrap-up` reports what it removed and what it kept. Keep required evidence before
+retiring scratch, and obtain authorization for the concrete deletion scope: either
+the operator's approval, or a standing grant you copy into `AGENTS.md` from the
+*Session cleanup* section of [`AGENTS-sections.md`](AGENTS-sections.md). A wrap-up
+invocation alone does not provide it.
 
 ## 6 · Turn the flywheel
 

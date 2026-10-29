@@ -55,12 +55,13 @@ flowchart TD
     Plan --> L1["lane A<br/>worktree + branch + sandbox"]
     Plan --> L2["lane B<br/>worktree + branch + sandbox"]
     Plan --> L3["lane C<br/>worktree + branch + sandbox"]
-    L1 --> D1["green · marked ready"]
-    L2 --> D2["green · marked ready"]
-    L3 --> D3["green · marked ready"]
-    D1 --> R["cockpit reconciles<br/>list --watch + reconcile_sessions.sh"]
-    D2 --> R
-    D3 --> R
+    L1 --> D1["terminal: pr-ready<br/>green · marked ready"]
+    L2 --> D2["terminal: no-pr<br/>or blocked<br/>with reason"]
+    L3 --> D3["no terminal line<br/>resumed, else stalled"]
+    D1 --> B["cockpit board<br/>list --watch: RUN · OVERLAP"]
+    D2 --> B
+    D3 --> B
+    B --> R["cockpit reconciles<br/>reconcile_sessions.sh"]
     R --> M["cockpit merges<br/>via dev_session.sh merge (self class)<br/>or operator sign-off (operator class)"]
 ```
 
@@ -115,7 +116,18 @@ polling. Draft is reserved for material unfinished work that must already exist 
 because required forge-hosted validation cannot run before the PR exists; that lane owns
 the draft assertion, completion, ready transition, and ready assertion. Active CI
 polling, narrative ownership, branch hygiene, and the no-merge boundary remain in the
-same contract. **Marking ready is the lane's; landing it is the cockpit's.** Fetch the
+same contract. **Marking ready is the lane's; landing it is the cockpit's.**
+
+The contract also asks the lane to end its final text with one terminal line:
+`LANE-TERMINAL: pr-ready #<n>`, `LANE-TERMINAL: no-pr <reason>` or
+`LANE-TERMINAL: blocked <reason>`. The headless launcher counts a lane as `completed`
+only with that line. A Claude lane that exits without it is resumed in the same
+session up to `parallel.max_resumes` times; one that still names none, or a Codex
+lane, which cannot be resumed this way, is recorded `stalled` (exit 75). The contract
+further keeps each shell call to one simple command, has the lane write commit
+messages and PR text to files under `<state.dirname>/lane/` and pass them with
+`git commit -F` and `gh pr create --body-file`, and undoes changes with
+`git restore`. Fetch the
 contract yourself with `dev_session.sh print-contract`, or read it in
 [`workflows/parallel-headless.md`](agentic-dev-kit/workflows/parallel-headless.md#the-lane-contract-preamble-inject-this-verbatim)
 — this guide summarizes the lifecycle without copying the verbatim contract.
@@ -129,7 +141,11 @@ scripts/dev_session.sh list --watch        # re-render every 30s
 The live board marks every row that changed since the last frame with a leading `*` —
 a CI flip, a new commit, the DIRTY count moving, a RUN or OVERLAP change, a PR-state
 change — and surfaces a
-silently-dead lane that stops moving. Use it as the cockpit's ambient board while a
+silently-dead lane that stops moving. `RUN` says whether a headless lane is starting or
+running, shows its terminal receipt's status (such as `completed` or `stalled`), or
+marks it `lost` when the wrapper died; `OVERLAP` names other lanes changing the same files, the
+footprint check made visible after launch. Lane sessions live beside the primary
+checkout, so the board reads the same from any of its worktrees. Use it as the cockpit's ambient board while a
 batch runs; full behavior (piped output, `--max-iters`, per-call timeouts) is in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#live-board--parallel-list---watch-interval).
 
@@ -158,8 +174,13 @@ keeps only the reconcile-before-merge reasoning.
 The risk read from planning suggests a neutral tier (Principle #7): a mechanical
 sweep may use `cheap`, while a subtle decision may warrant `expensive`. Keep the
 recommendation in the lane handoff. Interactive `new` prints launch guidance; the
-operator applies a model or effort control if the runtime exposes one. The headless
-wrapper does not apply a tier from this recommendation. Read the
+operator applies a model or effort control if the runtime exposes one. For a
+headless lane, pass the tier to the wrapper: `launch_lane.py --tier <tier>` reads
+`models.runtime_mappings.<runtime>.<tier>` and puts that runtime's model and effort
+controls on the lane's argv, and refuses before launch when the tier is not mapped.
+Without `--tier` the wrapper applies no tier. The receipt records the compute it
+applied, and a Claude lane's terminal receipt adds its token, cost and turn usage
+(a Codex lane records none). Read the
 [shared tier route](agentic-dev-kit/workflows/parallel.md#per-lane-effort-tier-risk--reasoning-effort--model)
 before claiming that a lane ran at a particular model or effort.
 
