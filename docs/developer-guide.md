@@ -71,12 +71,12 @@ For changes to these guides, run the [documentation checks](documentation-checks
 ```mermaid
 flowchart LR
     Brief["session-start<br/>briefing and environment"] --> Task["task worktree<br/>branch and edit"]
-    Task --> Wrap{"wrap-up<br/>unrecorded handoff?"}
+    Task --> Wrap{"wrap-up handoff test<br/>unrecorded handoff?"}
     Wrap -->|yes| Record["commit record<br/>with the change"]
     Wrap -->|no| Verify
     Record --> Verify["project verification"]
     Verify --> PR["open ready PR<br/>assert ready"]
-    PR --> Watch["pr-watch<br/>CI and independent review"]
+    PR --> Watch["pr-watch<br/>CI and independent review<br/>lens panel by default"]
     Watch --> Authority{"merge gates and<br/>project authority?"}
     Authority -->|authorized| Merge["merge and read back"]
     Authority -->|operator decision needed| Hold["hold exact PR head"]
@@ -95,9 +95,13 @@ For the review loop and its stop conditions, use the [PR watch workflow](agentic
 | `mergeable` | The engine's merge gate is satisfied; the project's merge policy must also authorize the actor. |
 | `done` | Legacy alias for `mergeable`; do not use it to mean the watch loop ended. |
 
-A reviewer outage follows the [fallback review contract](agentic-dev-kit/fallback-review-panel.md).
-The computed review class determines the required lenses. The optional verifier
-assesses findings; it does not grant merge authority. Record dispositions with the
+Independent review is the kit's isolated lens panel by default, run at the converged
+head under the [fallback review contract](agentic-dev-kit/fallback-review-panel.md).
+A third-party review bot is opt-in through `review.bots`; when a configured bot is
+down, the same pass runs, since an outage is not a waiver. The computed review class determines the required lenses,
+and `panel_prompt.py` assembles each lens's prompt from the contract. The optional
+verifier, whose compute is `review.fallback_panel.verifier_compute`, checks each
+finding before disposition; it does not grant merge authority. Record dispositions with the
 review receipt so the findings survive outside local watch state. Follow the
 [watch loop](agentic-dev-kit/workflows/pr-watch.md) for review requests, round
 budgets and contained LOW repairs.
@@ -152,9 +156,22 @@ still needs project and current-request authority and must merge through the
 cockpit's `dev_session.sh merge` wrapper. See the [task recipes](parallel-howto.md)
 for watching, reconciling, and removing lanes.
 
-The neutral `cheap`, `default`, and `expensive` tiers help choose compute. A
-suggested tier is not proof that a runtime applied a model or effort setting;
-follow the [parallel workflow's tier route](agentic-dev-kit/workflows/parallel.md#per-lane-effort-tier-risk--reasoning-effort--model).
+The neutral `cheap`, `default`, and `expensive` tiers help choose compute. For an
+interactive lane a suggested tier is not proof that a runtime applied a model or
+effort setting; the operator applies it. A headless lane launched with
+`launch_lane.py --tier <tier>` gets `models.runtime_mappings.<runtime>.<tier>` on its
+argv, and its receipt records the compute and, for Claude, the token and cost usage.
+Follow the [parallel workflow's tier route](agentic-dev-kit/workflows/parallel.md#per-lane-effort-tier-risk--reasoning-effort--model).
+
+A lane finishes by naming its terminal state on its last line:
+`LANE-TERMINAL: pr-ready #<n>`, `no-pr <reason>` or `blocked <reason>`. A headless
+Claude lane whose runtime exits successfully without it is resumed up to
+`parallel.max_resumes` times when its session can be resumed. A lane that still names
+no terminal state, including a Codex lane without one, is recorded `stalled` and shows
+so in the board's `RUN` column; a failed, denied or interrupted round is recorded as
+such instead. `launch_lane.py --ticket <n>` hands the lane its GitHub
+issue so the lane does not have to fetch it. `dev_session.sh <subcommand> --help`
+prints a subcommand's usage without creating anything.
 
 ## Route friction and recurring findings
 
@@ -213,6 +230,16 @@ Do not treat an unavailable forge or tracker as an empty result.
 
 ## Retain evidence and finish session cleanup
 
+A session deletes what it created once nothing needs it: a review round once its
+findings are recorded, a lens worktree once its report is retained, a throwaway clone
+once its result is read, a merged lane through `dev_session.sh rm`. Ownership is the
+exact path the session recorded when it made it, never a name or an age. Without a
+standing grant, present those paths for the operator's approval. To grant it once,
+copy the *Session cleanup* section of [`AGENTS-sections.md`](AGENTS-sections.md) into
+your `AGENTS.md`; the grant covers only the session's own recorded paths, keeps every
+engine preview and guard, and never covers an age sweep. The full `wrap-up` that closes a session finishes this
+cleanup and reports what it removed and what it kept, with reasons.
+
 When `scratch.session_registry` is configured, use the
 [completed-session cleanup lifecycle](agentic-dev-kit/session-cleanup.md).
 Start an inventory before allocating review rounds; track actual writers and
@@ -233,9 +260,20 @@ uv run scripts/session_cleanup.py list
 uv run scripts/sweep_scratch.py --disk --json
 ```
 
+Between review rounds, retire the finished round with `seal`, `preview` and
+`apply --round <receipt-id>`; `allocate` refuses a new round while an earlier one is
+unretired, unless you keep it on purpose with `--keep-previous "<reason>"`. A round
+whose retirement was interrupted (`removing`) refuses the next allocation whatever
+the reason; resume it with the same `apply --round` first.
+
 Preview the selected inventory before requesting authorization for its exact paths.
 The preview token binds the scope; it is not operator consent. The lifecycle guide
 covers approved apply, kept paths and interrupted cleanup. App-managed Codex
 worktrees use native archive after the guards allow it, followed by another apply
 to confirm completion. A queued archive or a keep reason remains unfinished work.
-Session-start and ordinary wrap-up do not authorize deletion.
+If inventories turn `unavailable` after a macOS reboot with a refusal naming
+`device (stored …, current …)` and every recorded round and worktree is gone (and no
+worktree is still registered with Git), run `reconcile <session>` on each to preview the
+rebinding and apply it with `--approve <token>` under authorization; it deletes
+nothing. Reaching session-start or wrap-up does not itself authorize deletion; the
+authority is the standing grant or the operator's approval.
