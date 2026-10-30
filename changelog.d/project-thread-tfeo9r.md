@@ -10,8 +10,12 @@ A session-starting entry holds it in place rather than retiring it.
 Before you refresh `scripts/lib/triage/`, check that no triage state file under your
 state root holds a `proposal_correction` field. If one does, let a session-starting run
 of the engine you have now retire it, or delete the file with the operator's approval,
-before you refresh. Do not run `recover` on such a state after refreshing: it ends in a
-terminal `external-attempt-absence-unproven` hold that leaves the single-writer gate and
-a recovery bundle behind, and every later entry then stops on the held gate. Refresh `scripts/lib/triage/` and its
-tests together. If you assert that a completed state with the receipt retires, expect
-the refusal instead.
+before you refresh. Refresh `scripts/lib/triage/` and its tests together. If you assert
+that a completed state with the receipt retires, expect the refusal instead.
+
+If you refreshed first, no engine entry retires such a state: delete the file with the
+operator's approval. Do not run `recover` on it. For most such states `recover` ends in
+an `external-attempt-absence-unproven` hold that leaves the single-writer gate lock and
+a recovery bundle behind, after which every entry stops on the held gate. If that has
+already happened, deleting the state no longer clears the hold: the gate lock and the
+bundle have to go too, again with the operator's approval.
