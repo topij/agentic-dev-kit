@@ -173,8 +173,9 @@ doesn't stop until the PR is **green and clean**:
 every check passing, and every review finding either fixed or replied-to with a
 reason. Without a review bot, the independent review is run by the agent at the
 converged head with fresh-context review lenses: one for an ordinary change, two
-for a safety-critical one. A configured bot being down isn't a waiver either; the
-same pass runs instead.
+for a safety-critical one, then an optional verifier that checks their findings and
+a receipt bound to the PR head ([fallback review contract](agentic-dev-kit/fallback-review-panel.md)).
+A configured bot being down isn't a waiver either; the same pass runs instead.
 
 For a **risky** change — a send-gate, a destructive migration, a recovery/kill
 path — the shared safety doctrine (`docs/agentic-dev-kit/safety-critical-changes.md`)
@@ -232,8 +233,12 @@ session created as you go either way.
 
 For disposable review rounds and task checkouts, follow the
 [evidence retention and cleanup guide](developer-guide.md#retain-evidence-and-finish-session-cleanup).
-Keep required evidence before retiring scratch, and obtain authorization for the
-concrete deletion scope. A wrap-up invocation alone does not provide it.
+A session deletes the paths it created and recorded once nothing needs them, and
+the full `wrap-up` reports what it removed and what it kept. Keep required evidence before
+retiring scratch, and obtain authorization for the concrete deletion scope: either
+the operator's approval, or a standing grant you copy into `AGENTS.md` from the
+*Session cleanup* section of [`AGENTS-sections.md`](AGENTS-sections.md). A wrap-up
+invocation alone does not provide it.
 
 ## 6 · Turn the flywheel
 

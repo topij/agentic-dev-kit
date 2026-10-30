@@ -67,16 +67,24 @@ flowchart LR
     Start["Brief and choose work"] --> Work["Edit in task worktree"]
     Work --> Record["Wrap up and verify"]
     Record --> Review["Open ready PR and watch"]
-    Review --> Decision{"Gates satisfied and<br/>actor authorized?"}
+    Review --> Independent["Independent review<br/>lens panel, or an<br/>opted-in bot"]
+    Independent --> Decision{"Gates satisfied and<br/>actor authorized?"}
     Decision -->|yes| Merge["Merge and read back"]
     Decision -->|no| Hold["Resolve blocker or hold"]
 ```
 
 [`session-start`](docs/agentic-dev-kit/workflows/session-start.md) supplies the
 briefing. [`wrap-up`](docs/agentic-dev-kit/workflows/wrap-up.md) records only what
-the PR, commits and tracker do not already hold, before each PR's review.
-[`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md) owns the review loop;
-merge authority remains a separate project decision. Use the
+the PR, commits and tracker do not already hold, before each PR's review; when nothing
+is left it commits nothing. [`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md)
+owns the review loop. By default, independent review is a completed pass of the kit's
+own [isolated lens panel](docs/agentic-dev-kit/fallback-review-panel.md) at the
+converged head: fresh-context
+reviewers chosen by the change's review class, an optional verifier that checks their
+findings, and a head-bound receipt with typed dispositions. A third-party review bot
+is opt-in through `review.bots`; once named, its review of the current head also
+counts, and the same pass runs when it is down. Merge authority remains a
+separate project decision. Use the
 [session recipe](docs/developer-guide.md#run-a-development-session) to start.
 
 ### Turn experience into improvements
@@ -99,19 +107,24 @@ the [detailed flywheel](docs/architecture.md#friction-flywheel) shows the routes
 
 ```mermaid
 flowchart LR
-    Inventory["Inventory and track writers"] --> Retain["End writers and seal evidence"]
-    Retain --> Preview["Preview exact paths"]
-    Preview --> Decision{"Operator authorizes<br/>this scope?"}
+    Record["Record each path<br/>this session creates"] --> Done["Its result is read<br/>and evidence retained"]
+    Done --> Preview["Preview exact paths"]
+    Preview --> Decision{"Standing grant or<br/>operator approval<br/>covers these paths?"}
     Decision -->|yes| Apply["Apply with fresh guards"]
-    Decision -->|no| Keep["Keep inventory"]
+    Decision -->|no| Keep["Keep and report"]
+    Apply --> Report["Full wrap-up lists<br/>removed and kept paths"]
+    Keep --> Report
 ```
 
 The [cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) owns retention,
 consent and kept-path recovery. A session deletes what it created once nothing
-needs it; ending a session does not authorize deletion, but a standing grant in
-`AGENTS.md` can cover the session's own recorded paths.
-[The detailed flow](docs/architecture.md#evidence-retention-and-cleanup) includes
-native archive and completion checks.
+needs it, while it works (with a cleanup registry, each review round retires before
+the next is allocated, unless kept with `--keep-previous "<reason>"`) and again in the full `wrap-up` that closes a session. Ending a session does not authorize deletion, but a standing
+grant in `AGENTS.md` can cover the session's own recorded paths; copy the *Session
+cleanup* section of [`docs/AGENTS-sections.md`](docs/AGENTS-sections.md) to opt in.
+The grant replaces asking, not the engine's previews and guards, and an age sweep
+still needs the operator. [The detailed flow](docs/architecture.md#evidence-retention-and-cleanup)
+includes native archive, reboot reconciliation and completion checks.
 
 For a blocked task, use the [symptom-to-recovery table](docs/troubleshooting.md).
 Before editing or replacing a file, check the [ownership reference](docs/ownership.md).
@@ -325,8 +338,11 @@ Each piece maps to one or more of the ten principles in
 | `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning; the same tripwire watches an instruction file's size. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. An instruction file such as `AGENTS.md` has nothing to sweep into, so its entry omits `archive` and the warning prints the remedy alone. Warn-only by default — it exits 0 even when a doc is over budget, and returns 1 only under `--strict`. It exits 2 on a usage or config error whatever the flags, so a `path:` naming a doc you have since renamed will gate any pipeline that runs it. |
 | `scripts/skill_routing_eval.py` | #8 Mechanism over memory | Scores the prompts in `docs/agentic-dev-kit/skill-routing/cases.json` against every model-invoked skill's `description`, for both runtimes, and fails when a request misses its skill, a negative case reaches it, or two descriptions overlap. Lexical and offline; `make test` runs it. |
 | `scripts/pr_watch.py` | #5 | The poll-fix-ack and merge-evidence engine behind `pr-watch`. Exact-head receipts remain backward-compatible; a `fallback:delta` pass recorded with `--compose-parent` preserves and revalidates its full-review parent, delta ancestry, and changed paths. |
+| `scripts/panel_prompt.py` | #5, #9 Deterministic scaffolding | Assembles each lens's launch prompt for the isolated review panel from `fallback-review-panel.md`'s contract and the lens's configured `focus`, resolving the review base from the remote by default; a base supplied with `--base` is flagged in the prompt as not resolved from the remote. |
+| `scripts/review_eval.py` | #5, #8 | Maintainer tool that scores lens and optional verifier reports against known-bug and clean cases from the kit's history, to measure a reviewer prompt or compute change. A score is not a review of the PR being merged. |
+| `scripts/session_cleanup.py` | #8 Mechanism over memory | The completed-session cleanup lifecycle over `sweep_scratch.py`: a persisted inventory of the session's review rounds and worktrees, sealed evidence in shared Git metadata, per-round retirement, preview/approve/apply with fresh guards, and `reconcile` for an inventory whose device number changed across a reboot. |
 | `scripts/verify_live_validation_bundle.py` | #9 Deterministic scaffolding | Verifies retained redacted live-runtime evidence, externally expected source/review/runtime bindings, applied-compute attestations, and the separate receipt required before a parity capability promotion. |
-| `scripts/dev_session.sh`, `scripts/launch_lane.py`, `scripts/reconcile_sessions.sh` | #3 | Worktree/lane issuer, environment-capable per-runtime launcher (Codex and Claude), and reconciler. |
+| `scripts/dev_session.sh`, `scripts/launch_lane.py`, `scripts/reconcile_sessions.sh` | #3, #7 | Worktree/lane issuer and live board, environment-capable per-runtime launcher (Codex and Claude), and reconciler. The launcher can apply a compute tier (`--tier`), read the lane's ticket (`--ticket`), resume a Claude lane that stops without naming its terminal state, and records a Claude lane's token and cost usage in the terminal receipt. |
 | `scripts/hooks/pre-push` | #8 Mechanism over memory | A hook, not a memory — refuses a push that would corrupt the narrative files. |
 
 Trusted-client behavior is recorded separately from repository structure. The
@@ -478,8 +494,13 @@ edited by both (the sandbox prevents *state* collisions, not *source* merge conf
 
 The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
 disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
-lane works to a green, ready-for-review PR → the cockpit reconciles every lane and completes
-the recorded merge path. **Lanes assert their own ready state but never merge**: a
+lane runs until it names its terminal state: `pr-ready` with a green, ready-for-review
+PR, or `no-pr` or `blocked` with a reason → the cockpit watches the board (`dev_session.sh
+list --watch`, which shows whether a headless lane is running and which lanes change
+the same files), reconciles every lane and completes the recorded merge path. A
+headless Claude lane whose runtime exits successfully without naming a terminal state is resumed in the same
+session up to `parallel.max_resumes` times; one still without it, or a Codex lane,
+which the launcher cannot resume, is recorded `stalled`. **Lanes assert their own ready state but never merge**: a
 `self`-class lane is closed out by the cockpit through `scripts/dev_session.sh merge`
 (no operator sign-off needed), an `operator`-class one only by an explicit operator
 decision.

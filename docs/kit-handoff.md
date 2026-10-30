@@ -300,7 +300,10 @@ nothing while no gate is present. The
 scheduled-run findings are under *Triage one-run cleanup*. Separate
 adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
 reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
-these upgrades.
+these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-toolkit#3014, merged 2026-10-29), which
+contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-parallel-oy/cs-toolkit#3020, merged
+2026-10-30). Its vendored PR follow-up hook still words the fallback review as conditional on a bot outage until it
+installs #1301.
 **Owner:** #1116, #990, #1011, #979, #1282.
 
-▶ Next: cs-toolkit reported on 2026-10-29 that its completed LIVE state had retired (see *Triage one-run cleanup*), so removing the shim (#1305) owes cs-toolkit nothing more. Separately, upgrade cs-toolkit to a kit at or after `dd51941b` (#1277's round retention and #1281's recovery fix) following `upgrade.md`.
+▶ Next: cs-toolkit reported on 2026-10-29 that its completed LIVE state had retired (see *Triage one-run cleanup*), so removing the shim (#1305) owes cs-toolkit nothing more. Separately, upgrade cs-toolkit to a kit at or after `e68010213` (#1301: the hook's no-bot wording and the empty `review.bots` default; its config already names no bot, so the changelog's BREAKING entries need no config change there) following `upgrade.md`.
