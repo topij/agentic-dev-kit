@@ -119,7 +119,7 @@ flowchart LR
 The [cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) owns retention,
 consent and kept-path recovery. A session deletes what it created once nothing
 needs it, while it works (with a cleanup registry, each review round retires before
-the next is allocated) and again in the full `wrap-up` that closes a session. Ending a session does not authorize deletion, but a standing
+the next is allocated, unless kept with `--keep-previous "<reason>"`) and again in the full `wrap-up` that closes a session. Ending a session does not authorize deletion, but a standing
 grant in `AGENTS.md` can cover the session's own recorded paths; copy the *Session
 cleanup* section of [`docs/AGENTS-sections.md`](docs/AGENTS-sections.md) to opt in.
 The grant replaces asking, not the engine's previews and guards, and an age sweep
@@ -494,11 +494,11 @@ edited by both (the sandbox prevents *state* collisions, not *source* merge conf
 
 The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
 disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
-lane works to a green, ready-for-review PR and ends by naming its terminal state
-(`pr-ready`, `no-pr` or `blocked`) → the cockpit watches the board (`dev_session.sh
+lane runs until it names its terminal state: `pr-ready` with a green, ready-for-review
+PR, or `no-pr` or `blocked` with a reason → the cockpit watches the board (`dev_session.sh
 list --watch`, which shows whether a headless lane is running and which lanes change
 the same files), reconciles every lane and completes the recorded merge path. A
-headless Claude lane that stops without naming a terminal state is resumed in the same
+headless Claude lane whose runtime exits successfully without naming a terminal state is resumed in the same
 session up to `parallel.max_resumes` times; one still without it, or a Codex lane,
 which the launcher cannot resume, is recorded `stalled`. **Lanes assert their own ready state but never merge**: a
 `self`-class lane is closed out by the cockpit through `scripts/dev_session.sh merge`

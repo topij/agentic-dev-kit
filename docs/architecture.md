@@ -106,7 +106,7 @@ sequenceDiagram
     loop Until review and CI settle
         Agent->>Forge: pr-watch poll
         Forge-->>Agent: checks and findings
-        opt No opted-in bot reviewed this head (the default)
+        opt No bot configured (the default), or a configured bot unavailable
             Agent->>Agent: lens panel round, then retire its scratch
         end
         Agent->>Forge: push repair or answer finding
@@ -142,7 +142,7 @@ flowchart TB
     Bot["opt-in: qualifying<br/>configured-bot review<br/>of this head"] --> Evidence["independent review evidence"]
     Class["computed review class"] --> Lenses["isolated lens panel<br/>fresh-context reviewers"]
     Lenses --> Verifier["optional verifier<br/>checks each finding"]
-    Verifier --> Receipt["head-bound receipt<br/>typed dispositions"]
+    Verifier --> Receipt["head-bound receipt<br/>plus typed dispositions<br/>posted on the PR"]
     Lenses -.->|no verifier configured| Receipt
     Receipt --> Evidence
     Converged --> Gate{"mergeable?<br/>evidence + no merge blockers"}
@@ -189,8 +189,8 @@ flowchart TB
     Sandbox --> Launcher
     Launcher --> Terminal{"runtime exited cleanly;<br/>lane names its<br/>terminal state?"}
     Terminal -->|"pr-ready, no-pr or blocked"| Receipt["terminal receipt<br/>compute, usage, lane state"]
-    Terminal -->|"no: Claude resume<br/>within max_resumes"| Launcher
-    Terminal -->|"no resume left,<br/>or a Codex lane"| Stalled["receipt status stalled"]
+    Terminal -->|"no terminal state:<br/>Claude resume<br/>within max_resumes"| Launcher
+    Terminal -->|"no terminal state;<br/>no resume left, or Codex"| Stalled["receipt status stalled"]
     Worktree --> PR["lane PR"]
     Receipt --> Board["cockpit board<br/>list --watch: RUN, OVERLAP"]
     Stalled --> Board
@@ -211,8 +211,10 @@ one. `--tier` applies `models.runtime_mappings` to the lane's argv; `--ticket` r
 the GitHub issue and appends it to the prompt. A lane ends by naming its terminal
 state on its last line (`LANE-TERMINAL: pr-ready #<n>`, `no-pr <reason>` or
 `blocked <reason>`); a Claude lane whose runtime exits successfully without it is resumed up to
-`parallel.max_resumes` times, and a lane that still does not, or cannot be resumed,
-is recorded `stalled`. Lane sessions live beside the primary checkout, so the board
+`parallel.max_resumes` times when its session can be resumed, and a lane that still
+names none, or cannot be resumed, is recorded `stalled`. A failed, denied or
+interrupted round is recorded as such, not resumed. By default lane sessions live
+beside the primary checkout (`DEVKIT_SESSIONS_DIR` overrides it), so the board
 and `pr-watch <scope>` work from any of its worktrees. Review and merge use
 the cockpit's scope-aware `dev_session.sh` commands so their evidence stays in
 the lane's state sandbox. The [parallel workflow](agentic-dev-kit/workflows/parallel.md)
@@ -258,7 +260,8 @@ all evidence dependencies from arbitrary report prose.
 Inventories and receipts bind each directory by a filesystem identity that survives
 a reboot where the platform offers one: the volume UUID on macOS, the device number
 elsewhere. An inventory bound to a device number that a reboot renumbered, with
-every recorded round and worktree already gone, is rebound through
+every recorded round gone and every recorded worktree absent and no longer
+registered with Git, is rebound through
 `session_cleanup.py reconcile`, which deletes nothing; any other identity change
 keeps the inventory unavailable.
 

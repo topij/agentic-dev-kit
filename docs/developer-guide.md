@@ -165,9 +165,11 @@ Follow the [parallel workflow's tier route](agentic-dev-kit/workflows/parallel.m
 
 A lane finishes by naming its terminal state on its last line:
 `LANE-TERMINAL: pr-ready #<n>`, `no-pr <reason>` or `blocked <reason>`. A headless
-Claude lane that exits without it is resumed up to `parallel.max_resumes` times; a
-lane that still names none, or a Codex lane, is recorded `stalled` and shows so in
-the board's `RUN` column. `launch_lane.py --ticket <n>` hands the lane its GitHub
+Claude lane whose runtime exits successfully without it is resumed up to
+`parallel.max_resumes` times when its session can be resumed. A lane that still names
+no terminal state, including a Codex lane without one, is recorded `stalled` and shows
+so in the board's `RUN` column; a failed, denied or interrupted round is recorded as
+such instead. `launch_lane.py --ticket <n>` hands the lane its GitHub
 issue so the lane does not have to fetch it. `dev_session.sh <subcommand> --help`
 prints a subcommand's usage without creating anything.
 
@@ -270,7 +272,8 @@ covers approved apply, kept paths and interrupted cleanup. App-managed Codex
 worktrees use native archive after the guards allow it, followed by another apply
 to confirm completion. A queued archive or a keep reason remains unfinished work.
 If inventories turn `unavailable` after a macOS reboot with a refusal naming
-`device (stored …, current …)`, run `reconcile <session>` on each to preview the
+`device (stored …, current …)` and every recorded round and worktree is gone (and no
+worktree is still registered with Git), run `reconcile <session>` on each to preview the
 rebinding and apply it with `--approve <token>` under authorization; it deletes
 nothing. Reaching session-start or wrap-up does not itself authorize deletion; the
 authority is the standing grant or the operator's approval.

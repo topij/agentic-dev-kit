@@ -57,7 +57,7 @@ flowchart TD
     Plan --> L3["lane C<br/>worktree + branch + sandbox"]
     L1 --> D1["terminal: pr-ready<br/>green · marked ready"]
     L2 --> D2["terminal: no-pr<br/>or blocked<br/>with reason"]
-    L3 --> D3["no terminal line<br/>resumed, else stalled"]
+    L3 --> D3["no terminal line<br/>Claude resumes;<br/>otherwise stalled"]
     D1 --> B["cockpit board<br/>list --watch: RUN · OVERLAP"]
     D2 --> B
     D3 --> B
@@ -121,10 +121,12 @@ same contract. **Marking ready is the lane's; landing it is the cockpit's.**
 The contract also asks the lane to end its final text with one terminal line:
 `LANE-TERMINAL: pr-ready #<n>`, `LANE-TERMINAL: no-pr <reason>` or
 `LANE-TERMINAL: blocked <reason>`. The headless launcher counts a lane as `completed`
-only with that line. A Claude lane that exits without it is resumed in the same
-session up to `parallel.max_resumes` times; one that still names none, or a Codex
-lane, which cannot be resumed this way, is recorded `stalled` (exit 75). The contract
-further keeps each shell call to one simple command, has the lane write commit
+only with that line. A Claude lane whose runtime exits successfully without it is
+resumed in the same session up to `parallel.max_resumes` times; a lane that still names
+no terminal state is recorded `stalled` (exit 75), as is a Codex lane without one,
+which cannot be resumed this way. The contract further requires every part of a shell
+command to be allowed (one refused part ends the run, so one simple command per call
+is the safe default), has the lane write commit
 messages and PR text to files under `<state.dirname>/lane/` and pass them with
 `git commit -F` and `gh pr create --body-file`, and undoes changes with
 `git restore`. Fetch the
@@ -143,9 +145,9 @@ a CI flip, a new commit, the DIRTY count moving, a RUN or OVERLAP change, a PR-s
 change — and surfaces a
 silently-dead lane that stops moving. `RUN` says whether a headless lane is starting or
 running, shows its terminal receipt's status (such as `completed` or `stalled`), or
-marks it `lost` when the wrapper died; `OVERLAP` names other lanes changing the same files, the
-footprint check made visible after launch. Lane sessions live beside the primary
-checkout, so the board reads the same from any of its worktrees. Use it as the cockpit's ambient board while a
+may mark it `lost` when the wrapper died (a recycled process id can hide that); `OVERLAP` names other lanes changing the same files, the
+footprint check made visible after launch. By default lane sessions live beside the
+primary checkout (`DEVKIT_SESSIONS_DIR` overrides it), so the board reads the same from any of its worktrees. Use it as the cockpit's ambient board while a
 batch runs; full behavior (piped output, `--max-iters`, per-call timeouts) is in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#live-board--parallel-list---watch-interval).
 
