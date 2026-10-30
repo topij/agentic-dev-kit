@@ -159,22 +159,18 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 ### Triage one-run cleanup
 
-**Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. A
-shape check in `model.py` stays until cs-toolkit's completed LIVE state, which carries a
-`proposal_correction` receipt, retires. As read on 2026-10-27 (sources in
-`saved_plans/adopter-upgrade-prep_2026-10-27.md`), that state has not retired. What stands, or stood, in its way:
-- a single-writer gate that outlived its owner, since cleared: the operator reports that `recover` quarantined it on
-  2026-10-27. #1276 (`70c3a7d`) showed `new` releases its gate in a linked worktree whose `state/` links to the
-  primary's, and #1269 records the survivor as left by `recover`'s held-evidence path. #1281 (`dd51941b`) stops that
-  path holding such a state (#1272); a bundle held before it has no route while its gate is present (#1282);
-- the adopter tracks a separate failure of its scheduled draft in its own tracker;
-- whether #1111's shared root ends its identity mismatch is unobserved. On 2026-10-23 the draft stopped at input
-  validation, and the finalize stopped at the gate, before the state's identity check.
+**Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. The last
+shape check in `model.py`, kept so that cs-toolkit's completed LIVE state with a
+`proposal_correction` receipt could still retire, is removed by #1305's change. The
+evidence that no state root holds the field is cs-toolkit's report of 2026-10-29, recorded
+on #1305: the state retired and the retired file was deleted with the operator's
+approval. It covers the operator's machine only. A state that still carries the field
+is now held as `operator-held`.
 
-**Owner:** [#979](https://github.com/topij/agentic-dev-kit/issues/979).
+**Owner:** [#979](https://github.com/topij/agentic-dev-kit/issues/979),
+[#1305](https://github.com/topij/agentic-dev-kit/issues/1305).
 
-▶ Next: once cs-toolkit's scheduled triage draft has retired its completed LIVE state,
-confirm no state root holds a `proposal_correction`, then remove the shim (#979).
+▶ Next: once #1305's pull request merges, the operator decides whether this workstream ends.
 
 ### Handoff workstream naming
 
@@ -310,4 +306,4 @@ contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-paralle
 installs #1301.
 **Owner:** #1116, #990, #1011, #979, #1282.
 
-▶ Next: after the scheduled draft and finalize on Fri 2026-10-30 (the operator's schedule, given 2026-10-28), confirm the completed LIVE state retired, then remove the shim (#979). Separately, upgrade cs-toolkit to a kit at or after `e68010213` (#1301: the hook's no-bot wording and the empty `review.bots` default; its config already names no bot, so the changelog's BREAKING entries need no config change there) following `upgrade.md`; Friday's run does not wait on it.
+▶ Next: cs-toolkit reported on 2026-10-29 that its completed LIVE state had retired (see *Triage one-run cleanup*), so removing the shim (#1305) owes cs-toolkit nothing more. Separately, upgrade cs-toolkit to a kit at or after `e68010213` (#1301: the hook's no-bot wording and the empty `review.bots` default; its config already names no bot, so the changelog's BREAKING entries need no config change there) following `upgrade.md`.
