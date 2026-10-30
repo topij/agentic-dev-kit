@@ -67,7 +67,7 @@ flowchart LR
     Start["Brief and choose work"] --> Work["Edit in task worktree"]
     Work --> Record["Wrap up and verify"]
     Record --> Review["Open ready PR and watch"]
-    Review --> Independent["Independent review<br/>configured bot or lens panel"]
+    Review --> Independent["Independent review<br/>lens panel, or an<br/>opted-in bot"]
     Independent --> Decision{"Gates satisfied and<br/>actor authorized?"}
     Decision -->|yes| Merge["Merge and read back"]
     Decision -->|no| Hold["Resolve blocker or hold"]
@@ -77,11 +77,13 @@ flowchart LR
 briefing. [`wrap-up`](docs/agentic-dev-kit/workflows/wrap-up.md) records only what
 the PR, commits and tracker do not already hold, before each PR's review; when nothing
 is left it commits nothing. [`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md)
-owns the review loop. Independent review is a configured bot's review of the current
-head, or a completed pass of the kit's own
-[isolated lens panel](docs/agentic-dev-kit/fallback-review-panel.md): fresh-context
+owns the review loop. By default, independent review is a completed pass of the kit's
+own [isolated lens panel](docs/agentic-dev-kit/fallback-review-panel.md) at the
+converged head: fresh-context
 reviewers chosen by the change's review class, an optional verifier that checks their
-findings, and a head-bound receipt with typed dispositions. Merge authority remains a
+findings, and a head-bound receipt with typed dispositions. A third-party review bot
+is opt-in through `review.bots`; once named, its review of the current head also
+counts, and the same pass runs when it is down. Merge authority remains a
 separate project decision. Use the
 [session recipe](docs/developer-guide.md#run-a-development-session) to start.
 

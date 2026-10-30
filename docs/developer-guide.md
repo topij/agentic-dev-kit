@@ -76,7 +76,7 @@ flowchart LR
     Wrap -->|no| Verify
     Record --> Verify["project verification"]
     Verify --> PR["open ready PR<br/>assert ready"]
-    PR --> Watch["pr-watch<br/>CI and independent review<br/>bot or lens panel"]
+    PR --> Watch["pr-watch<br/>CI and independent review<br/>lens panel by default"]
     Watch --> Authority{"merge gates and<br/>project authority?"}
     Authority -->|authorized| Merge["merge and read back"]
     Authority -->|operator decision needed| Hold["hold exact PR head"]
@@ -95,9 +95,10 @@ For the review loop and its stop conditions, use the [PR watch workflow](agentic
 | `mergeable` | The engine's merge gate is satisfied; the project's merge policy must also authorize the actor. |
 | `done` | Legacy alias for `mergeable`; do not use it to mean the watch loop ended. |
 
-When no configured bot reviews the current head, run the kit's isolated lens panel
-under the [fallback review contract](agentic-dev-kit/fallback-review-panel.md); an
-outage is not a waiver. The computed review class determines the required lenses,
+Independent review is the kit's isolated lens panel by default, run at the converged
+head under the [fallback review contract](agentic-dev-kit/fallback-review-panel.md).
+A third-party review bot is opt-in through `review.bots`; when a configured bot is
+down, the same pass runs, since an outage is not a waiver. The computed review class determines the required lenses,
 and `panel_prompt.py` assembles each lens's prompt from the contract. The optional
 verifier, whose compute is `review.fallback_panel.verifier_compute`, checks each
 finding before disposition; it does not grant merge authority. Record dispositions with the

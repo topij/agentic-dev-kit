@@ -18,8 +18,9 @@ All changes go through branches and pull requests — never commit directly to
 
 - Branch from `<vcs.protected_branch>` with a descriptive name (e.g. `feat/lifecycle-metrics`,
   `chore/update-dashboard`).
-- **Open completed work ready for review by default.** Ready status invites your review
-  bots' (`review.bots`) full pass; it does not authorize merge. Use draft only for the
+- **Open completed work ready for review by default.** Ready status invites review (any
+  `review.bots` reviewer's full pass, and the fallback review once the loop converges);
+  it does not authorize merge. Use draft only for the
   bounded exception where a material unfinished-work window must already exist on the
   remote pull request, such as required forge-hosted validation that cannot run before
   the pull request exists. The run that opens that draft owns the transition: confirm
@@ -59,8 +60,9 @@ Because review is non-trivial, split PRs by **risk**, not by size:
 Opening or pushing to a PR is not "done" — **monitoring and fixing it is part of the same
 task, not a separate request.** After you `gh pr create` / `gh pr ready`, or push a fix
 commit to a PR branch, **run the watch-and-fix loop and don't yield the turn until the PR
-is green and clean** — CI fully passing AND every configured review bot's (`review.bots`)
-finding either fixed or replied-to with a reason. Stop early only for a genuine blocker
+is green and clean** — CI fully passing AND every review finding (from a configured
+`review.bots` reviewer, or from the fallback review when none is configured, the
+shipped default) either fixed or replied-to with a reason. Stop early only for a genuine blocker
 that needs an operator decision (a finding that's a product/design call, an unrecoverable
 infra failure) — then report the specific blocker and ask.
 

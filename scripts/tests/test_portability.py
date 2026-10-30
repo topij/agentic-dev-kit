@@ -16173,8 +16173,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "(`.claude/settings.json`, `.codex/hooks.json`), "
         "along with customer-facing send paths, destructive operations, and "
         "kill/recovery paths, are governed by "
-        f"[`{doctrine}`]({doctrine}); when the configured review bot cannot review, "
-        "the substitute is the panel in "
+        f"[`{doctrine}`]({doctrine}); with no review bot configured, or when a "
+        "configured one cannot review, the independent review is the panel in "
         "[`docs/agentic-dev-kit/fallback-review-panel.md`]"
         "(docs/agentic-dev-kit/fallback-review-panel.md)."
         in template_binding_flat

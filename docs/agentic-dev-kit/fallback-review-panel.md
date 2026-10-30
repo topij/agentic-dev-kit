@@ -1,8 +1,10 @@
 # The fallback review panel
 
-What to run when your configured review bot can't. Read this whenever
-`pr_watch` reports a reviewer as unavailable, and before recording any
-`fallback:` receipt. How many isolated lenses the review takes is set by the
+The independent review every pull request gets when no third-party review bot
+is configured (`review.bots: []`, the shipped default), and what to run when a
+configured bot can't review. Read this before running a review at the converged
+head of a repo with no bot, whenever `pr_watch` reports a reviewer as
+unavailable, and before recording any `fallback:` receipt. How many isolated lenses the review takes is set by the
 pull request's class: see *How many lenses*.
 
 This file is **what executes**: the contract, the procedure, the receipt

@@ -409,8 +409,7 @@ _DEFAULT_REVIEW_UNAVAILABLE_MARKERS = (
 _DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
 
 # The configured independent review bots (`review.bots`). Distinct in PURPOSE
-# from `_DEFAULT_INFORMATIONAL_CHECK_NAMES` even though the shipped values
-# coincide: that list is a *blocking policy* ("this check never blocks"), this
+# from `_DEFAULT_INFORMATIONAL_CHECK_NAMES`, which can hold the same name: that list is a *blocking policy* ("this check never blocks"), this
 # one is an *identity* ("these checks belong to a reviewer whose state we care
 # about"). Keeping them separate is what lets a bot's check stay non-blocking
 # for `converged` while its state still informs the merge gate — the exact
@@ -419,7 +418,15 @@ _DEFAULT_INFORMATIONAL_CHECK_NAMES = ("coderabbit",)
 # is not the repo's to control). Known service aliases are enumerated below;
 # accepting prefixes would let `coderabbit-impersonator` speak for CodeRabbit.
 # Keep entries specific enough not to collide with a CI job name.
-_DEFAULT_REVIEW_BOTS = ("coderabbit",)
+#
+# EMPTY by default: a third-party reviewer is optional, and without one the
+# fallback panel (one lens, both on a safety-critical PR) is the independent
+# review. A repo that runs a bot names it in `review.bots`. The aliases below keep
+# their CodeRabbit entry because they are inert until a bot is named here. The
+# informational check names above keep theirs for the opposite reason: they act
+# with or without a named bot, so a CodeRabbit installed without being named
+# still cannot wedge the loop on its pending check.
+_DEFAULT_REVIEW_BOTS: tuple[str, ...] = ()
 
 _DEFAULT_REVIEW_BOT_AUTHOR_ALIASES = {
     "coderabbit": frozenset({"coderabbitai", "coderabbitai[bot]"}),

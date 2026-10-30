@@ -106,7 +106,7 @@ sequenceDiagram
     loop Until review and CI settle
         Agent->>Forge: pr-watch poll
         Forge-->>Agent: checks and findings
-        opt No qualifying bot review of this head
+        opt No opted-in bot reviewed this head (the default)
             Agent->>Agent: lens panel round, then retire its scratch
         end
         Agent->>Forge: push repair or answer finding
@@ -139,7 +139,7 @@ flowchart TB
     Loop -->|no| Repair["fix or disposition<br/>then poll again"]
     Repair --> Poll
     Loop -->|yes| Converged["converged<br/>settle any owed review request"]
-    Bot["qualifying configured-bot<br/>review of this head"] --> Evidence["independent review evidence"]
+    Bot["opt-in: qualifying<br/>configured-bot review<br/>of this head"] --> Evidence["independent review evidence"]
     Class["computed review class"] --> Lenses["isolated lens panel<br/>fresh-context reviewers"]
     Lenses --> Verifier["optional verifier<br/>checks each finding"]
     Verifier --> Receipt["head-bound receipt<br/>typed dispositions"]
