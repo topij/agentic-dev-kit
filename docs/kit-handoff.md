@@ -166,10 +166,11 @@ evidence that no state root holds the field is cs-toolkit's report of 2026-10-29
 on #1305: the state retired and the retired file was deleted with the operator's
 approval. It covers the operator's machine only. A state that still carries the field
 is now held as `operator-held`.
+
 **Owner:** [#979](https://github.com/topij/agentic-dev-kit/issues/979),
 [#1305](https://github.com/topij/agentic-dev-kit/issues/1305).
 
-▶ Next: once #1305's pull request merges, the operator closes this workstream.
+▶ Next: once #1305's pull request merges, the operator decides whether this workstream ends.
 
 ### Handoff workstream naming
 
@@ -302,4 +303,4 @@ reassess before an upgrade there. The earlier local assessment, `saved_plans/con
 these upgrades.
 **Owner:** #1116, #990, #1011, #979, #1282.
 
-▶ Next: cs-toolkit's completed LIVE state retired on 2026-10-29 (see *Triage one-run cleanup*), so removing the shim (#1305) owes cs-toolkit nothing more. Separately, upgrade cs-toolkit to a kit at or after `dd51941b` (#1277's round retention and #1281's recovery fix) following `upgrade.md`.
+▶ Next: cs-toolkit reported on 2026-10-29 that its completed LIVE state had retired (see *Triage one-run cleanup*), so removing the shim (#1305) owes cs-toolkit nothing more. Separately, upgrade cs-toolkit to a kit at or after `dd51941b` (#1277's round retention and #1281's recovery fix) following `upgrade.md`.

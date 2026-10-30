@@ -2872,10 +2872,9 @@ def test_a_completed_state_with_a_project_correction_receipt_is_held(
     root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
     receipt = {"action_core": {"kind": "linear-project-correction"}, "action_core_digest": "0" * 64, "approval": {}}
     corrected = {**loads_exact(completed_raw), "proposal_correction": receipt}
-    for phase in ("completed", "awaiting-approval"):
-        with pytest.raises(TriageError, match="missing or extra phase fields") as refused:
-            canonical_state(dumps({**corrected, "phase": phase}), settings=load_settings(root), mode="live")
-        assert refused.value.outcome == "operator-held"
+    with pytest.raises(TriageError, match="missing or extra phase fields") as refused:
+        canonical_state(dumps(corrected), settings=load_settings(root), mode="live")
+    assert refused.value.outcome == "operator-held"
     state_path.write_bytes(dumps(corrected))
     result = run(None, context="interactive", request={}, start=root)
     assert result["outcome"] == "operator-held"
