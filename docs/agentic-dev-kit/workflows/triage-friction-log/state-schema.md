@@ -73,11 +73,9 @@ fixes the mode and `receipt-to-reserved` cutpoint; no other phase may carry it. 
 before replacement leaves the receipt authoritative, while a crash after replacement
 resumes the reserved state. No ordinary phase
 action is allowed until current gate bytes match the persisted binding.
-A `proposal_correction` receipt, written only by the removed `correct-project` route,
-is accepted on a `completed` LIVE state alone, and only its shape is checked: exactly
-`action_core`, `action_core_digest` and `approval`, with `action_core.kind`
-`linear-project-correction`. A session-starting entry then retires that state like any
-other; nothing continues from the receipt. No other extra state fields are accepted.
+No extra state fields are accepted. That includes a `proposal_correction` receipt,
+which only the removed `correct-project` route wrote. A state that still carries one is
+held as `operator-held`, in every phase, and is not retired.
 `config_fingerprint` equals `run_identity.config_fingerprint`.
 `config_fingerprint` and `frozen_inbox_digest` are lowercase SHA-256 strings, and
 `protected_branch_head` is a lowercase full commit identifier. Reject a missing, extra,

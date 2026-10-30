@@ -2863,22 +2863,25 @@ def test_a_completed_state_retires_after_the_configuration_changed(
     assert fresh["config_fingerprint"] == load_settings(root).fingerprint
 
 
-def test_a_completed_state_with_a_project_correction_receipt_still_retires(
+def test_a_completed_state_with_a_project_correction_receipt_is_held(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The removed `correct-project` route (#975) left its receipt in one completed
-    LIVE state; retirement must still accept it, and nothing else may carry it."""
+    LIVE state, which has since been retired (#1305). The receipt is now an extra
+    field like any other: retirement refuses the state and leaves it in place."""
     root, state_path, completed_raw, retired = completed_live(tmp_path, monkeypatch)
     receipt = {"action_core": {"kind": "linear-project-correction"}, "action_core_digest": "0" * 64, "approval": {}}
     corrected = {**loads_exact(completed_raw), "proposal_correction": receipt}
-    active = {**corrected, "phase": "awaiting-approval"}
-    with pytest.raises(TriageError, match="only retired, never continued"):
-        canonical_state(dumps(active), settings=load_settings(root), mode="live")
+    for phase in ("completed", "awaiting-approval"):
+        with pytest.raises(TriageError, match="missing or extra phase fields") as refused:
+            canonical_state(dumps({**corrected, "phase": phase}), settings=load_settings(root), mode="live")
+        assert refused.value.outcome == "operator-held"
     state_path.write_bytes(dumps(corrected))
     result = run(None, context="interactive", request={}, start=root)
-    assert result["detail"].startswith(f"retired completed state to {retired} ")
-    assert retired.read_bytes() == dumps(corrected)
-    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+    assert result["outcome"] == "operator-held"
+    assert result["detail"] == "triage state has missing or extra phase fields"
+    assert state_path.read_bytes() == dumps(corrected)
+    assert not retired.exists()
 
 
 def test_resume_of_a_completed_state_stays_bound_to_the_current_configuration(
