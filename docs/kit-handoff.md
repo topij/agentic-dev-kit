@@ -116,10 +116,11 @@ probe leftovers: a `.git` file whose `gitdir:` pointer spans lines, which `_link
 no open ticket covers yet, and a `configured.git` dir (#1279).
 #1319 (`c08a3f56`) retires a round whose scratch root is gone too as `absent`, marked unverified (#1278).
 #1321 (`97b1780a`) retires a tracked task worktree nested under the primary checkout (#1307); its delta
-review's test-pinning LOWs are #1322. #1312 counts only local branches and tags as a retiring worktree's
+review's test-pinning LOWs are #1322. #1323 delivers #1312: it counts only local branches and tags as a retiring worktree's
 commit retention, not remote-tracking refs, which `git fetch --prune` can delete. #1312 proposed counting
-the refs a fetch refspec maps, which are the ones a prune deletes; the operator chose branches and tags
-only over that and over counting the unmapped ones, on 2026-10-31.
+the refs a fetch refspec maps, which are the ones a prune deletes once the remote has no ref at their
+mapped source; the operator chose branches and tags only over that and over counting the unmapped ones,
+on 2026-10-31.
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
