@@ -134,8 +134,11 @@ worktree stays kept. The registry binds the recorded head and
 directory identity; a later commit requires a new inventory. Branch names are
 recorded but branches are not deleted by this engine. A branch's forge lifecycle
 remains separate from local scratch retirement. Ordinary Git retirement requires
-the recorded commit to be reachable from a shared branch, tag or remote-tracking
-ref; preserve an unreferenced detached commit on a branch before retrying.
+the recorded commit to be reachable from a local branch or tag; preserve an
+unreferenced detached commit on one before retrying. A remote-tracking ref does not
+count: `git fetch --prune` deletes one that a fetch refspec maps once its remote
+source is gone, such as a merged PR's deleted branch or a `refs/remotes/origin/pr/<n>`
+fetched from `refs/pull/<n>/head`, so it can vanish between preview and apply.
 Checkout-local refs such as bisect/worktree/rewritten refs disappear on removal
 and cannot establish retention. Other custom ref namespaces are conservatively
 insufficient too. Codex's native archive preserves its commit snapshot instead.
