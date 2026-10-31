@@ -281,7 +281,13 @@ Items with the same content share one file, so `--include` names that file and
 retires every item holding it: it asserts the deletion condition of each one, all
 of which the preview lists. Bytes shared with a kept item stay, and so does an item
 that a kept item `requires`. Each inventory holds its
-own copy, so retiring one never touches another's. A retained path outside the
+own copy, so retiring one never touches another's. A retained file whose size or
+type changed stays kept; the plan does not hash, so a same-size change is caught
+only by the hash checks of `preview` and `apply`. A PID registered with
+`track-process` blocks retirement while any process holds that number, including a
+later process reusing it, and no engine route clears the list: wait for that process
+to end, or, when it is certainly not a writer, remove the PID from `session.json` by
+hand under operator authorization. A retained path outside the
 inventory's evidence directory refuses, and an active user of the evidence blocks
 the apply. The token binds the stored record and the plan, and is not itself
 operator consent. Apply only under operator authorization that names that

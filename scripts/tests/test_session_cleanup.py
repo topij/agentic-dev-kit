@@ -1965,7 +1965,7 @@ def test_an_interrupted_included_retirement_resumes_without_include(session, mon
     assert len(resumed["retire"]) == 2 and resumed["kept"] == []
 
 
-def test_changed_retained_bytes_are_kept(session):
+def test_a_retained_file_whose_size_changed_is_kept(session):
     registry, record, _ = session
     receipt = allocate(registry, record)
     record = retired_inventory(registry, record, receipt)
@@ -1973,7 +1973,7 @@ def test_changed_retained_bytes_are_kept(session):
     with open(target, "ab") as stream:
         stream.write(b"grown")
     _, plan = registry.retirement_plan(record["id"], [])
-    assert any(v["reason"].startswith("retained bytes changed") for v in plan["kept"])
+    assert any(v["reason"].startswith("retained file size or type changed") for v in plan["kept"])
     assert target.exists()
 
 
@@ -2086,3 +2086,36 @@ def test_requires_and_replaced_by_compare_after_normalisation(session):
         {"source": str(capture), "kind": "asset", "requires": [], "exception": EXCEPTION}],
         "retire": [{"source": str(log), "reason": "report replaces it", "replaced_by": [odd(report)]}]})
     assert sealed["retained"][0]["requires"] == [str(capture)]
+
+
+def test_a_partial_apply_tombstones_no_kept_item(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    report, draft = Path(receipt["path"]) / "report", Path(receipt["path"]) / "draft"
+    report.write_text("report")
+    draft.write_text("draft")
+    registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+        {"source": str(p), "kind": "report", "requires": [], "exception": EXCEPTION} for p in (report, draft)]})
+    record["rounds"][0]["seal"]["retained"][0].pop("exception")  # the report is default discard
+    registry.save(record)
+    assert apply_round(registry, record, receipt)["complete"]
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert [v["source"] for v in plan["retire"]] == [str(report)]
+    registry.retire_evidence(record["id"], plan["approval_token"], [])
+    items = registry.load(record["id"])["rounds"][0]["seal"]["retained"]
+    assert "retired" in items[0] and "retired" not in items[1]
+    assert registry.evidence_summary(registry.load(record["id"]))["retiring"]["items"] == 0
+    _, again = registry.retirement_plan(record["id"], [])
+    assert again["retire"] == [] and again["kept"][0]["source"] == str(draft)
+
+
+def test_an_allocated_round_whose_path_vanished_keeps_its_evidence(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    for item in record["rounds"][0]["seal"]["retained"]:
+        item.pop("exception")
+    registry.save(record)
+    shutil.rmtree(receipt["path"])  # gone without the engine retiring it
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["retire"] == [] and {v["reason"] for v in plan["kept"]} == {"its round is not retired"}

@@ -377,7 +377,7 @@ class Registry:
                 continue
             info = os.lstat(path)
             if not stat.S_ISREG(info.st_mode) or info.st_size != item["size"]:
-                reason = "retained bytes changed; inspect before retiring"
+                reason = "retained file size or type changed; inspect before retiring"
             elif item.get("retired") is not None:
                 # An approved retirement was interrupted after its tombstone.
                 # Only retire_evidence writes `retired`; a seal stores no such

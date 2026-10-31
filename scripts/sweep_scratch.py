@@ -119,8 +119,8 @@ Usage (``<engine-dir>`` is ``paths.engines``):
 
 Review-round retirement is a separate ownership-based operation, not an age sweep.
 The caller retains the allocation receipt outside the round, terminates or joins
-every reviewer and descendant process, saves the terminal reports outside it,
-and removes its registered worktrees before attesting ``--reviewers-finished``.
+every reviewer and descendant process, records the round's findings on the PR
+(reports and mutation logs are discarded with the round), and removes its registered worktrees before attesting ``--reviewers-finished``.
 The engine cannot infer process completion or verify a review receipt. It verifies
 allocation and directory identity, then exempts ONLY that round from the age gate.
 Every filesystem refusal still applies, and so does every repository-dependency

@@ -129,7 +129,7 @@ no open ticket covers yet, and a `configured.git` dir (#1279).
 and `e388daaa` with `session_cleanup.py preview --round`, and retire each one it reports eligible, with the operator's
 approval. Round `5ced121b` stays kept for its multi-line `.git` pointer until a change, not yet ticketed, releases it.
 Separately, once #1316 merges: decide with the operator whether #1256's seal byte budget and #1315's shared store are
-still wanted, and take #1278, #1307 and #1312 one PR each, in the order the operator set on 2026-10-31.
+still wanted, and take #1278, then #1307, then #1312, one PR each: the operator set that order on 2026-10-31.
 
 ### Reviewer profiles
 

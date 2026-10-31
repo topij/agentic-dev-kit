@@ -558,8 +558,8 @@ author re-reading their own diff. **Cite them by name, never by number.**
    requires a supplied lens tree inside that allocation under `scratch.roots`.
    If the runtime gives you a different tree, stop and report it rather than
    creating unmanaged copies elsewhere. Before retiring the round, the cockpit posts
-   one typed disposition line per finding on the PR (`--record-review --disposition`,
-   #900). That comment does not carry a lens's full report or its mutation and
+   one typed disposition line per finding on the PR (`--record-review --disposition`).
+   That comment does not carry a lens's full report or its mutation and
    restoration logs. Those are discarded with the round unless a named unfinished
    task needs them (#1256).
 
