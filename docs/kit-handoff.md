@@ -128,9 +128,9 @@ no open ticket covers yet, and a `configured.git` dir (#1279).
 ▶ Next: #1279 — clear `test_panel_prompt.py`'s `configured.git` keeper. Then preview rounds `01234b40`, `5ced121b`
 and `e388daaa` with `session_cleanup.py preview --round`, and retire each one it reports eligible, with the operator's
 approval. Round `5ced121b` stays kept for its multi-line `.git` pointer until a change, not yet ticketed, releases it.
-Separately, once #1316 merges: decide with the operator whether #1256's seal byte budget and #1315's shared store are
-still wanted, and take #1307, then #1312, one PR each: the operator set that order on 2026-10-31. #1278 is in the
-pull request on branch `feat/absent-round-root`.
+Separately: #1316 merged as `36ca2bae`; decide with the operator whether #1256's seal byte budget and #1315's shared
+store are still wanted, and take #1307, then #1312, one PR each: the operator set that order on 2026-10-31. #1278 is
+PR #1319.
 
 ### Reviewer profiles
 

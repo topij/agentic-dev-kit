@@ -782,11 +782,13 @@ class Registry:
         # root that is gone too, or was recreated, must not wedge the inventory
         # (#1278). Inputs of this shape, round path absent, and each one's result:
         # - root absent (removed by hand, or its volume unmounted): absent. The
-        #   round is recorded removed and nothing is deleted; a directory that
-        #   later returns is no longer managed here, as with reconcile.
+        #   round is recorded removed and nothing is deleted.
         # - root present with its identity unchanged: absent, as before.
-        # - root present with its identity changed (recreated): refuses, as
-        #   before; an empty recreated root can be removed to reach the case above.
+        # - root present with its identity changed (recreated, for example by
+        #   another session's allocate in the shared root): absent.
+        # A round recorded removed whose path later returns is not covered by
+        # the shortcut above, so it gets every check again: the same allocation
+        # is eligible for an approved removal, and a replacement refuses.
         # - root not a configured expanded root, or present but refused for any
         #   other reason (a symlink, inside a registered worktree, the system
         #   temp directory): refuses, as before.
@@ -804,6 +806,9 @@ class Registry:
                         "reason": "round and its scratch root are both gone"}
         sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
         if sweep.bound_identity(receipt["root_identity"], receipt["root"]) is None:
+            if round_gone:
+                return {"path": receipt["path"], "action": "absent",
+                        "reason": "round is gone and its scratch root was recreated"}
             legacy = sweep.valid_identity(receipt["root_identity"], legacy=True)
             current = list(sweep._identity(receipt["root"])) if legacy else sweep.stable_identity(receipt["root"])
             raise sweep.ConfigError(f"allocation root identity changed (stored {receipt['root_identity']}, "

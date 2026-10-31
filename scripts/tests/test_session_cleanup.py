@@ -179,7 +179,15 @@ def test_identity_policy_or_marker_change_refused(session, change):
                             path / cleanup.sweep.ROUND_MARKER)
     sentinel = path / "must-remain"
     sentinel.write_text("replacement data")
-    message = {"root": r"root identity changed \(stored \[", "round": "round was replaced", "round-without-marker": "round was replaced", "marker": "round marker missing"}[change]
+    if change == "root":
+        # The round is gone from its recorded path, so it reads absent (#1278).
+        # Nothing is deleted: the moved-aside original and the replacement stay.
+        result = apply(registry, record)
+        assert [p["action"] for p in result["paths"]] == ["absent"]
+        assert sentinel.read_text() == "replacement data"
+        assert (path.with_name(path.name + "-saved") / Path(receipt["path"]).name).is_dir()
+        return
+    message = {"round": "round was replaced", "round-without-marker": "round was replaced", "marker": "round marker missing"}[change]
     with pytest.raises(cleanup.sweep.ConfigError, match=message):
         apply(registry, record)
     assert sentinel.read_text() == "replacement data"
@@ -1243,15 +1251,14 @@ def test_reconciled_inventory_previews_and_applies_inventory_wide(device_session
     assert apply(registry, current)["complete"]
 
 
-def test_unremoved_absent_round_still_checks_its_root(device_session):
+def test_unremoved_absent_round_with_a_changed_root_is_absent(device_session):
     registry, record, _ = device_session
     receipt = vanished_round(registry, record)
     old = stored(registry, record)
     old["rounds"][0]["receipt"]["root_identity"][1] -= 1
     registry.save(old)
-    with pytest.raises(cleanup.sweep.ConfigError,
-                       match=r"allocation root identity changed \(stored \[.*current \["):
-        registry.preview_round(registry.load(record["id"]), receipt["id"])
+    outcome = registry.preview_round(registry.load(record["id"]), receipt["id"])["paths"][0]
+    assert (outcome["action"], outcome["reason"]) == ("absent", "round is gone and its scratch root was recreated")
 
 
 def test_plan_filters_removed_rounds_and_names_unsealed_ones(device_session, monkeypatch):
@@ -1356,15 +1363,14 @@ def test_an_inventory_seal_covers_every_round(device_session, monkeypatch):
     assert plan["rounds_without_seal"] == []
 
 
-def test_removing_absent_round_still_checks_its_root(device_session):
+def test_removing_absent_round_with_a_changed_root_is_absent(device_session):
     registry, record, _ = device_session
     vanished_round(registry, record)
     edited = stored(registry, record)
     edited["rounds"][0].update(status="removing", approval="persisted")
     edited["rounds"][0]["receipt"]["root_identity"][1] -= 1
     registry.save(edited)
-    with pytest.raises(cleanup.sweep.ConfigError, match="allocation root identity changed"):
-        registry.round_outcome(registry.load(record["id"])["rounds"][0])
+    assert registry.round_outcome(registry.load(record["id"])["rounds"][0])["action"] == "absent"
 
 
 def test_removed_round_whose_path_reappeared_keeps_its_checks(device_session):
@@ -2148,14 +2154,33 @@ def test_a_round_gone_with_its_root_retires_alone(session):
     assert registry.load(record["id"])["rounds"][0]["status"] == "removed"
 
 
-def test_a_recreated_root_still_refuses(session):
+def test_a_recreated_root_holding_another_round_does_not_wedge(session):
     registry, record, _ = session
     receipt = allocate(registry, record)
     seal(registry, record, receipt, scope=receipt["id"])
     shutil.rmtree(receipt["root"])
-    Path(receipt["root"]).mkdir()
-    with pytest.raises(cleanup.sweep.ConfigError, match="allocation root identity changed"):
-        registry.preview_round(record, receipt["id"])
+    other = registry.start()
+    live = allocate(registry, other)  # another session recreates the shared root
+    assert live["root"] == receipt["root"]
+    result = apply_round(registry, record, receipt)
+    assert result["complete"]
+    assert result["paths"][0]["reason"] == "round is gone and its scratch root was recreated"
+    assert Path(live["path"]).is_dir()
+
+
+def test_a_returning_round_directory_gets_every_check_again(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    away = root / "unmounted"
+    Path(receipt["root"]).rename(away)
+    assert apply_round(registry, record, receipt)["complete"]
+    away.rename(receipt["root"])  # the volume comes back with the round in it
+    assert registry.preview_round(registry.load(record["id"]), receipt["id"])["paths"][0]["action"] == "eligible"
+    shutil.rmtree(receipt["path"])
+    Path(receipt["path"]).mkdir()  # a different directory at that path
+    with pytest.raises(cleanup.sweep.ConfigError, match="replaced"):
+        registry.preview_round(registry.load(record["id"]), receipt["id"])
 
 
 def test_a_root_replaced_by_a_symlink_still_refuses(session):
@@ -2200,3 +2225,35 @@ def test_an_absent_root_outside_the_configured_roots_refuses(session):
     registry.save(edited)
     with pytest.raises(cleanup.sweep.ConfigError, match="not an expanded scratch.roots entry"):
         registry.round_outcome(registry.load(record["id"])["rounds"][0])
+
+
+def test_an_uninspectable_root_is_not_absent(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    shutil.rmtree(receipt["path"])
+    real = os.lstat
+
+    def denied(path, *args, **kwargs):
+        if str(path) == receipt["root"]:
+            raise PermissionError(13, "denied", str(path))
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(cleanup.os, "lstat", denied)
+    with pytest.raises(PermissionError):
+        registry.preview_round(record, receipt["id"])
+    assert registry.load(record["id"])["rounds"][0]["status"] == "allocated"
+
+
+def test_a_recreated_root_with_a_present_round_path_still_refuses(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    saved = Path(receipt["root"] + "-saved")
+    Path(receipt["root"]).rename(saved)
+    Path(receipt["path"]).mkdir(parents=True)  # a new root holding a directory at the round's path
+    sentinel = Path(receipt["path"]) / "must-remain"
+    sentinel.write_text("replacement data")
+    with pytest.raises(cleanup.sweep.ConfigError, match="allocation root identity changed"):
+        apply_round(registry, record, receipt)
+    assert sentinel.read_text() == "replacement data"
