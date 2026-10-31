@@ -819,8 +819,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    uv run <engine-dir>/sweep_scratch.py --finish-review-round <receipt-outside-round> --apply --reviewers-finished
    ```
 
-   `--reviewers-finished` is the cockpit's attestation of completed processes and
-   retained evidence; the engine cannot discover or terminate them. It exempts
+   `--reviewers-finished` is the cockpit's attestation that every round process has
+   ended and the round's findings are dispositioned on the PR; the engine cannot
+   discover or terminate those processes. It exempts
    only the identity-matched allocation from the age gate and retains filesystem
    refusals and every dependency refusal except the fixture shapes named below.
    A `kept` result or interrupted cleanup is unfinished
@@ -924,8 +925,9 @@ measured as harmful.
 
 How to run it, after step 3 has confirmed each lens reviewed the right code:
 
-1. Retain each lens's terminal report as a file outside `<round>`, as step 7 already
-   requires.
+1. Write each lens's terminal report to a file outside `<round>`, as the verifier's
+   `--lens-report` input. It is working input for this round, not retained evidence:
+   delete it once the round's dispositions are posted.
 2. Build the verifier's own detached tree in the same round:
    `git worktree add --detach <round>/verifier-<short-sha> <sha>`.
 3. Render its prompt. `--lens-report` takes `<lens>=<path>`, once per lens that ran:

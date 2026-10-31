@@ -595,8 +595,9 @@ class Registry:
             # an empty seal must say where the results went.
             raise sweep.ConfigError("an empty retain needs at least one discard entry saying "
                                     "where the results are recorded")
-        # Validate every item before copying any bytes, so a refused seal
-        # leaves no evidence file that no index names.
+        # Validate every item (and, below, hash every source) before copying
+        # any bytes, so a validation refusal copies nothing. A failure during a
+        # copy can still leave a file no index names; there is no rollback.
         planned = []
         for item in items:
             if not isinstance(item, dict):

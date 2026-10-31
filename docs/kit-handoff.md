@@ -125,10 +125,11 @@ no open ticket covers yet, and a `configured.git` dir (#1279).
 [#1279](https://github.com/topij/agentic-dev-kit/issues/1279),
 [#1280](https://github.com/topij/agentic-dev-kit/issues/1280).
 
-▶ Next: once #1316 merges, decide with the operator whether #1256's seal byte budget and
-#1315's shared store are still wanted, then take #1278, #1307 and #1312 in that order. Before that: #1279 — clear `test_panel_prompt.py`'s `configured.git` keeper. Then preview rounds `01234b40`, `5ced121b`
+▶ Next: #1279 — clear `test_panel_prompt.py`'s `configured.git` keeper. Then preview rounds `01234b40`, `5ced121b`
 and `e388daaa` with `session_cleanup.py preview --round`, and retire each one it reports eligible, with the operator's
 approval. Round `5ced121b` stays kept for its multi-line `.git` pointer until a change, not yet ticketed, releases it.
+Separately, once #1316 merges: decide with the operator whether #1256's seal byte budget and #1315's shared store are
+still wanted, and take #1278, #1307 and #1312 one PR each, in the order the operator set on 2026-10-31.
 
 ### Reviewer profiles
 

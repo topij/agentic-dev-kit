@@ -236,8 +236,9 @@ flowchart TB
     Round --> Allocate
     Allocate --> Work["track writers<br/>register final worktree heads"]
     Work --> Stop["writers and descendants ended"]
-    Stop --> Seal["seal complete evidence manifest"]
-    Seal --> Evidence["content-addressed evidence<br/>shared Git registry"]
+    Stop --> Seal["seal: discard by default<br/>retain only named exceptions"]
+    Seal --> Evidence["excepted evidence<br/>shared Git registry"]
+    Evidence --> RetireEvidence["retire-evidence preview,<br/>then approved apply, leaves tombstones"]
     Seal --> Preview["preview exact paths and keep reasons"]
     Preview --> Consent{"standing grant in AGENTS.md<br/>or operator authorization<br/>covers concrete scope?"}
     Consent -->|no| Hold["retain inventory; await decision"]
@@ -253,8 +254,11 @@ flowchart TB
 With `scratch.session_registry` configured, inventories and sealed evidence live
 under `<git-common-dir>/devkit/<scratch.session_registry>/`, shared by linked
 checkouts. This durable local record survives task-worktree removal; a fresh clone
-does not contain it. The caller declares evidence completeness, including required
-assets and dependencies, and the engine checks retained bytes. It cannot discover
+does not contain it. Completed evidence is discarded by default; a seal retains only
+items that name an unfinished task, a next action and a deletion condition, and
+`retire-evidence` deletes them later behind a tombstone. The caller declares evidence
+completeness, including required assets and dependencies, and the engine checks
+retained bytes. It cannot discover
 all evidence dependencies from arbitrary report prose.
 
 Inventories and receipts bind each directory by a filesystem identity that survives

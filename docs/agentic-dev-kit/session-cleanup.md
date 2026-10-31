@@ -237,7 +237,9 @@ may not be both retained and discarded (paths compare after normalisation), and 
 empty `retain` needs at least one `discard` entry. A discard entry is a declaration:
 the engine records it and does not check that its path exists or that its reason is
 true. Only `source`, `kind`, `requires` and `exception` are stored from a retained
-item, and every item is validated before any bytes are copied. `evidence_complete` is the caller's explicit assertion of the
+item. Every item is validated and its source hashed before any bytes are copied, so
+a validation refusal copies nothing; a failure during a copy (a source that changes
+mid-read, a full disk) can still leave a file no index names. `evidence_complete` is the caller's explicit assertion of the
 complete evidence closure; the engine cannot infer it from arbitrary prose. Missing,
 unreadable, aliased or non-regular evidence blocks sealing. Package caches,
 basetemps, build trees and whole-workspace archives are never retained. The older
@@ -294,7 +296,9 @@ whole inventory), each `list` entry and the `retire-evidence` plan report
 file once. Its states are `present`, `retiring` (a
 tombstone whose bytes are still there: an interrupted apply, which the next preview
 lists again), `retired`, and `missing` (absent with no tombstone, which nothing here
-authorized and which still blocks a preview of that seal), plus an `exceptions`
+authorized and which still blocks a preview of that seal until the operator
+restores the bytes or removes the item from `session.json` by hand: no engine
+route clears it), plus an `exceptions`
 count of items that carry a retention exception. Historical receipts can
 say what existed; they never read a retired item as available or a missing one as
 retired.
@@ -364,9 +368,9 @@ Ordinary worktrees are removed by Git without force, after identity, head, statu
 and dependency checks. Both runtimes refuse index flags that hide tracked changes
 (`assume-unchanged` or `skip-worktree`): inspect the affected paths and clear those
 flags before retrying, preserving any work they conceal. Both runtimes also refuse
-ignored content, including caches:
-retain required files through the seal, verify their retained bytes, then explicitly
-move or remove the original ignored files before retrying. A clean Git status alone
+ignored content, including caches: move or remove the ignored files explicitly
+before retrying, after retaining through the seal, as an exception, any file a named
+unfinished task still needs. A clean Git status alone
 does not establish that ignored data is disposable. App-managed worktrees return
 `archive-with-runtime` only after these checks: use Codex's native archive tool on
 that exact attachment under the same authorization. Re-run apply from the primary

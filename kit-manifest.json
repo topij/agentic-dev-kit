@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "2fb6e471078789bc70257ff2099e91c838dc4467f11f6ebfae95a9f970963f36"
+      "sha256": "78d5111b5c22827a7c95d6c556566eb7f0b2970963f392e87c03f93bc73c80d9"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "440a3e961c5d69e0b045a98c2066a7fce75625f2a324c4f1d706a5cab8979b29"
+      "sha256": "f5261c9f75b9da7d6b9b29ab2fa80e0cc97853809c1944d22f1e37fce91cfe3f"
     },
     "docs/agentic-dev-kit/skill-routing/cases.json": {
       "role": "repo-only",
@@ -603,7 +603,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "f34f230cb97cdc458e9da936356e0c3dca2af38c0c44f23b942ca7ac25db1558"
+      "sha256": "15f3780ed6df9f427b2e5755a3b93c9ba3dfac7b8e82db7cffa3e598babed120"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -627,7 +627,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "ab6aac74e467d641aacbfe5a6eac568d7ebdbfa5990ca728e703411f5d95cd3f"
+      "sha256": "b422d5a54464989069a61af304202a465fbac7f2f5627e4e28532d93dbb31b20"
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
@@ -639,7 +639,7 @@
         "scripts/session_cleanup.py"
       ],
       "role": "engine",
-      "sha256": "d32cfa04a33088f0c2e63286f707da525de7a3d3a7cb606a03e9947d6ad0fb14"
+      "sha256": "1aa4cea7d7264993bbf7db31bd7af7619fa4435b36d3741821557dcc7b73ba80"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -659,7 +659,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "2ac8f4338fe76ed492b5717cb5750e4bf6924005adcabb6565b97ed95b1c8d16"
+      "sha256": "075e7c0ddf8aa77cc94911e500b37ea6867febb848f8d5143edc9fdbe04a5474"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -783,7 +783,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "4137d2117d795d4e97d1708ae964095d23ff63f4dabcbe96dd692f7c397e553a"
+      "sha256": "fe45958e2315b751cf22cf5ee374c8d630f08953f4bc541a5e3261aa3855d722"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",

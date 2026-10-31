@@ -2042,3 +2042,47 @@ def test_a_shared_file_under_a_tombstone_is_counted_once(session):
     summary = registry.evidence_summary(record)
     assert summary["present"] == {"items": 1, "bytes": 7}
     assert summary["retiring"] == {"items": 1, "bytes": 0}
+
+
+def test_a_removed_round_whose_path_reappeared_keeps_its_evidence(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    record = retired_inventory(registry, record, receipt)
+    Path(receipt["path"]).mkdir()
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["retire"] == [] and {v["reason"] for v in plan["kept"]} == {"its round is not retired"}
+
+
+def test_a_two_hop_requires_chain_is_kept_whatever_its_order(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    leaf, middle, root = (Path(receipt["path"]) / n for n in ("leaf", "middle", "root"))
+    for path in (leaf, middle, root):
+        path.write_text(path.name)
+    registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+        {"source": str(leaf), "kind": "report", "requires": [], "exception": EXCEPTION},
+        {"source": str(middle), "kind": "report", "requires": [str(leaf)], "exception": EXCEPTION},
+        {"source": str(root), "kind": "report", "requires": [str(middle)], "exception": EXCEPTION}]})
+    for item in record["rounds"][0]["seal"]["retained"]:
+        if not item["source"].endswith("/root"):
+            item.pop("exception")  # leaf and middle are default discard; root keeps them
+    registry.save(record)
+    assert apply_round(registry, record, receipt)["complete"]
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["retire"] == []
+    assert sorted(v["reason"] for v in plan["kept"]) == [
+        "required by a kept item", "required by a kept item", "retention exception until: the task merges"]
+
+
+def test_requires_and_replaced_by_compare_after_normalisation(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    report, capture, log = (Path(receipt["path"]) / n for n in ("report", "capture", "log"))
+    for path in (report, capture, log):
+        path.write_text(path.name)
+    odd = lambda path: str(path.parent) + "/./" + path.name  # noqa: E731
+    sealed = registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+        {"source": str(report), "kind": "report", "requires": [odd(capture)], "exception": EXCEPTION},
+        {"source": str(capture), "kind": "asset", "requires": [], "exception": EXCEPTION}],
+        "retire": [{"source": str(log), "reason": "report replaces it", "replaced_by": [odd(report)]}]})
+    assert sealed["retained"][0]["requires"] == [str(capture)]
