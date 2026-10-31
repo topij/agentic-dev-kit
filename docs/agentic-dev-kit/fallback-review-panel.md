@@ -557,8 +557,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
    both use the sweeper's allocation receipt. `panel_prompt.py`
    requires a supplied lens tree inside that allocation under `scratch.roots`.
    If the runtime gives you a different tree, stop and report it rather than
-   creating unmanaged copies elsewhere. The cockpit retains terminal reports and
-   mutation evidence outside the disposable round before retiring it (#900).
+   creating unmanaged copies elsewhere. Before retiring the round, the cockpit posts
+   one typed disposition line per finding on the PR (`--record-review --disposition`).
+   That comment does not carry a lens's full report or its mutation and
+   restoration logs. Those are discarded with the round unless a named unfinished
+   task needs them (#1256).
 
    The wording above was already right and a lens still hit the refusal —
    round 2 of `#459`'s panel recorded one (the correctness lens, worked around
@@ -712,9 +715,10 @@ author re-reading their own diff. **Cite them by name, never by number.**
    [`session-cleanup.md`](session-cleanup.md)'s `start` and `allocate` commands
    instead of the standalone allocation below. They persist the same receipt
    outside disposable checkouts before a lens starts. Use that workflow's seal,
-   preview and approved apply for retirement, retaining this panel's process and
-   evidence obligations. The standalone commands remain available for installations
-   that have not opted into the registry.
+   preview and approved apply for retirement, keeping this panel's process
+   obligations. A round whose findings are on the PR seals with an empty `retain`
+   and a `discard` entry naming the PR. The standalone commands remain available
+   for installations that have not opted into the registry.
 
    ```sh
    uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
@@ -796,9 +800,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
 
    **Retire each round before starting another.** After recording its receipt (or
    recording findings and the reviewed head for a fix round), join or stop every
-   reviewer and descendant verification process. Preserve terminal reports,
-   mutation diffs, restoration evidence and relevant logs outside `<round>`;
-   do not retain entire dependency trees as evidence. Remove only this round's
+   reviewer and descendant verification process. Post the round's typed
+   dispositions on the PR. They record each finding and how it was disposed of,
+   not the lens reports or their mutation logs, which are discarded with the round.
+   Retain local bytes only as the exception that *Seal: discard by default* in
+   `session-cleanup.md` defines, and never dependency trees or whole logs. Remove only this round's
    registered lens worktrees with `git worktree remove` after checking their
    status. With `scratch.session_registry`, retire the round with `--round` as
    *Retire each round before the next* in `session-cleanup.md` describes, retaining
@@ -813,8 +819,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    uv run <engine-dir>/sweep_scratch.py --finish-review-round <receipt-outside-round> --apply --reviewers-finished
    ```
 
-   `--reviewers-finished` is the cockpit's attestation of completed processes and
-   retained evidence; the engine cannot discover or terminate them. It exempts
+   `--reviewers-finished` is the cockpit's attestation that every round process has
+   ended and the round's findings are dispositioned on the PR; the engine cannot
+   discover or terminate those processes. It exempts
    only the identity-matched allocation from the age gate and retains filesystem
    refusals and every dependency refusal except the fixture shapes named below.
    A `kept` result or interrupted cleanup is unfinished
@@ -918,8 +925,9 @@ measured as harmful.
 
 How to run it, after step 3 has confirmed each lens reviewed the right code:
 
-1. Retain each lens's terminal report as a file outside `<round>`, as step 7 already
-   requires.
+1. Write each lens's terminal report to a file outside `<round>`, as the verifier's
+   `--lens-report` input. It is working input for this round, not retained evidence:
+   delete it once the round's dispositions are posted.
 2. Build the verifier's own detached tree in the same round:
    `git worktree add --detach <round>/verifier-<short-sha> <sha>`.
 3. Render its prompt. `--lens-report` takes `<lens>=<path>`, once per lens that ran:

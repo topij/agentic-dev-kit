@@ -76,7 +76,7 @@ including generated bindings, lane state and retained evidence.
 | State paths | [`scripts/lib/state_paths/`](../scripts/lib/state_paths/) | Resolve workflow artifacts into the declared state root or lane sandbox. |
 | Review panel | [Fallback contract](agentic-dev-kit/fallback-review-panel.md), [`panel_prompt.py`](../scripts/panel_prompt.py) | Select lenses by review class, assemble isolated lens prompts, verify findings and record a head-bound receipt. |
 | Review measurement | [`review_eval.py`](../scripts/review_eval.py), [evaluation guide](agentic-dev-kit/review-eval/reviewer-eval.md) | Compare lens and optional verifier reports against cases from kit history; scores require interpretation. |
-| Session cleanup | [`session_cleanup.py`](../scripts/session_cleanup.py), [`sweep_scratch.py`](../scripts/sweep_scratch.py) | Retain declared evidence and retire authorized inventory paths while preserving dependency guards. |
+| Session cleanup | [`session_cleanup.py`](../scripts/session_cleanup.py), [`sweep_scratch.py`](../scripts/sweep_scratch.py) | Discard completed evidence by default, retain only declared exceptions, and retire authorized inventory paths and retained evidence while preserving dependency guards. |
 | Installation inspection | [`kit_doctor.py`](../scripts/kit_doctor.py), [`kit-manifest.json`](../kit-manifest.json) | Report kit-owned drift, adapter and lens-definition state, and advisory Codex reviewer model observations. |
 
 Engines beneath `paths.engines` can be vendored under another directory in an
@@ -236,8 +236,9 @@ flowchart TB
     Round --> Allocate
     Allocate --> Work["track writers<br/>register final worktree heads"]
     Work --> Stop["writers and descendants ended"]
-    Stop --> Seal["seal complete evidence manifest"]
-    Seal --> Evidence["content-addressed evidence<br/>shared Git registry"]
+    Stop --> Seal["seal: discard by default<br/>retain only named exceptions"]
+    Seal --> Evidence["excepted evidence<br/>shared Git registry"]
+    Evidence --> RetireEvidence["retire-evidence preview,<br/>then approved apply, leaves tombstones"]
     Seal --> Preview["preview exact paths and keep reasons"]
     Preview --> Consent{"standing grant in AGENTS.md<br/>or operator authorization<br/>covers concrete scope?"}
     Consent -->|no| Hold["retain inventory; await decision"]
@@ -253,8 +254,11 @@ flowchart TB
 With `scratch.session_registry` configured, inventories and sealed evidence live
 under `<git-common-dir>/devkit/<scratch.session_registry>/`, shared by linked
 checkouts. This durable local record survives task-worktree removal; a fresh clone
-does not contain it. The caller declares evidence completeness, including required
-assets and dependencies, and the engine checks retained bytes. It cannot discover
+does not contain it. Completed evidence is discarded by default; a seal retains only
+items that name an unfinished task, a next action and a deletion condition, and
+`retire-evidence` deletes them later behind a tombstone. The caller declares evidence
+completeness, including required assets and dependencies, and the engine checks
+retained bytes. It cannot discover
 all evidence dependencies from arbitrary report prose.
 
 Inventories and receipts bind each directory by a filesystem identity that survives

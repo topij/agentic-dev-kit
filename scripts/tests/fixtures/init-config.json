@@ -801,7 +801,7 @@
   "  # under an expanded root below; it persists the sweeper's ownership receipt.\n",
   "  # Without the registry, use sweep_scratch.py --create-review-round.\n",
   "  # panel_prompt.py requires a lens tree inside that round.\n",
-  "  # Keep the allocation receipt and final evidence outside the disposable round;\n",
+  "  # Keep the allocation receipt outside the disposable round and record findings on the PR;\n",
   "  # Use the registry's seal/preview/approved apply lifecycle, or standalone\n",
   "  # --finish-review-round without the registry, after all reviewer processes end.\n",
   "  # Retirement retains dependency protections while exempting that exact\n",

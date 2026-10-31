@@ -595,8 +595,8 @@ def _tree_block(
         "  here. The caller must create and inspect the checkout; independently\n"
         "  verify what you received.\n"
         "  Its parent is the allocated review round. Keep all disposable clones,\n"
-        "  environments and caches inside that parent; retain final reports outside\n"
-        "  it so the cockpit can retire the round after every process ends.\n"
+        "  environments and caches inside that parent; return your final report\n"
+        "  outside it so the cockpit can retire the round after every process ends.\n"
         if scratch is not None
         else "- **No worktree was provided.** Obtain the revision into a copy you made; "
         "do not write into any tree you were handed.\n"

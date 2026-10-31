@@ -119,8 +119,8 @@ Usage (``<engine-dir>`` is ``paths.engines``):
 
 Review-round retirement is a separate ownership-based operation, not an age sweep.
 The caller retains the allocation receipt outside the round, terminates or joins
-every reviewer and descendant process, saves the terminal reports outside it,
-and removes its registered worktrees before attesting ``--reviewers-finished``.
+every reviewer and descendant process, records the round's findings on the PR
+(reports and mutation logs are discarded with the round), and removes its registered worktrees before attesting ``--reviewers-finished``.
 The engine cannot infer process completion or verify a review receipt. It verifies
 allocation and directory identity, then exempts ONLY that round from the age gate.
 Every filesystem refusal still applies, and so does every repository-dependency
@@ -1148,7 +1148,7 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
     lists what is (#1185).
     """
     if apply and not reviewers_finished:
-        raise ConfigError("--apply retirement requires --reviewers-finished after all processes end and evidence is retained")
+        raise ConfigError("--apply retirement requires --reviewers-finished after all processes end and findings are recorded")
     # Only session_cleanup's durable, approved removal journal uses resuming.
     # Standalone receipt retirement still requires its in-round marker. Resume
     # tolerates ONLY an absent marker, never a malformed/replaced marker or an
@@ -1162,7 +1162,7 @@ def finish_review_round(record: dict, settings: Settings, repo: Path, *, apply: 
     if entry.owner != STALE:
         return Outcome(record["path"], "kept", f"{entry.owner}: {entry.reason}")
     if not apply:
-        return Outcome(record["path"], "eligible", "caller must finish processes and retain evidence before applying")
+        return Outcome(record["path"], "eligible", "caller must finish processes and record findings before applying")
     # The initial classification is only a survey. Refresh dependencies and the
     # configured roots at act time, just as age-based apply does. This narrows
     # accidental concurrent changes; it does not permit concurrent writers.
@@ -1353,7 +1353,7 @@ def main(argv: list[str] | None = None) -> int:
     modes.add_argument("--create-review-round", metavar="ROOT", help="allocate a round under an expanded configured scratch root; print its JSON receipt")
     modes.add_argument("--finish-review-round", metavar="RECEIPT", type=Path, help="report or retire the exact round named by a caller-retained allocation receipt")
     parser.add_argument("--head", help="with --create-review-round: full reviewed SHA")
-    parser.add_argument("--reviewers-finished", action="store_true", help="attest all round processes ended and review evidence is retained outside it")
+    parser.add_argument("--reviewers-finished", action="store_true", help="attest all round processes ended and the round's findings are recorded outside it")
     parser.add_argument("--disk", action="store_true", help="include available disk space for the repository and configured scratch roots")
     args = parser.parse_args(argv)
     round_mode = args.create_review_round is not None or args.finish_review_round is not None

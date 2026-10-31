@@ -156,12 +156,12 @@ scan as a gap. If an age sweep is useful, present its concrete entries and age
 for operator approval before `--apply --older-than`; a report is not approval.
 Review rounds created by this session instead follow the allocated-round
 retirement contract in `fallback-review-panel.md`, after reviewer processes end
-and evidence is retained. Report any round the engine kept; do not weaken its
+and the round's findings are dispositioned on the PR. Report any round the engine kept; do not weaken its
 guards to make a wrap-up look complete.
 
 For sessions using `scratch.session_registry`, follow
 [`session-cleanup.md`](../session-cleanup.md) to discover the persisted inventory,
-seal required evidence and preview exact paths. Reuse operator authorization that
+seal it (discarding completed evidence by default) and preview exact paths. Reuse operator authorization that
 already covers those paths, including a standing grant for this session's own paths:
 authority comes from the operator's grant or approval, never from reaching wrap-up.
 Report kept paths as incomplete cleanup and archive Codex-managed worktrees through

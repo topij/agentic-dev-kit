@@ -228,10 +228,10 @@ If a workflow stops, keep its exact branch, state, report, and PR identity. Resu
 through that workflow's documented entry point after resolving the named cause.
 Do not treat an unavailable forge or tracker as an empty result.
 
-## Retain evidence and finish session cleanup
+## Discard evidence and finish session cleanup
 
 A session deletes what it created once nothing needs it: a review round once its
-findings are recorded, a lens worktree once its report is retained, a throwaway clone
+findings are recorded, a lens worktree once its findings are dispositioned on the PR, a throwaway clone
 once its result is read, a merged lane through `dev_session.sh rm`. Ownership is the
 exact path the session recorded when it made it, never a name or an age. Without a
 standing grant, present those paths for the operator's approval. To grant it once,
@@ -244,13 +244,15 @@ When `scratch.session_registry` is configured, use the
 [completed-session cleanup lifecycle](agentic-dev-kit/session-cleanup.md).
 Start an inventory before allocating review rounds; track actual writers and
 register disposable worktrees at their final commit. Keep package caches and
-basetemps in scratch, separate from evidence you need to retain.
+basetemps in scratch.
 
-After writers and descendants end, enumerate the required reports, dispositions,
-verification, compute receipts and supporting assets in an evidence manifest.
-Seal it to retain content-addressed copies in the repository's shared Git metadata.
-That local retention survives removal of a task checkout; it is not included in a
-fresh clone or protected from deletion of the repository itself.
+After writers and descendants end, seal the inventory. Completed reports, review
+payloads and build output are discarded by default: their results belong in Git and
+the PR, and the normal manifest retains nothing and names where they were recorded.
+Retain a file only as an exception that names its unfinished task, its next action
+and when it may be deleted. A retained copy survives removal of a task checkout, is
+not in a fresh clone, and leaves through `session_cleanup.py retire-evidence` once
+the operator authorizes it.
 
 From the primary checkout, these commands discover inventories and report disk
 and scratch state without deleting anything:
