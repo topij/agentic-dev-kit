@@ -405,17 +405,27 @@ before cleanup`): nothing is left to act on, and its root may be gone or recreat
 (a wiped temp directory, or a reconciled device number). A round reconcile marked
 removed whose path has reappeared, such as on a remounted scratch volume, previews
 and applies as `kept`, and no removal is attempted: it is no longer managed here, so
-inspect and remove it by hand. A round not yet removed whose path is gone previews
-and applies as `absent`, and is recorded `removed`, also when its scratch root is
-gone too (reason `round and its scratch root are both gone`) or was recreated, for
-example by another session's `allocate` (reason `round is gone and its scratch root
-was recreated`) (#1278). Nothing is deleted, and the root must still be an expanded
-`scratch.roots` entry that is not otherwise refused (a symlink, inside a registered
-worktree, the system temp directory). Only a missing path counts as gone; any other
-error inspecting the round or its root refuses. If a directory later returns at a
-round's recorded path, the round gets every check again: the same allocation is
-eligible for an approved removal, and a replacement refuses. Every other round keeps its root and identity checks, including a
-removed round whose path has reappeared.
+inspect and remove it by hand.
+
+A round not yet removed whose path is gone previews and applies as `absent` and is
+recorded `removed`, also when its scratch root is gone too (reason `round and its
+scratch root are both gone`) or present with an identity that no longer matches, as
+when another session's `allocate` recreated it (reason `round is gone and its
+scratch root's identity no longer matches`) (#1278). Nothing is deleted. The root
+must still be an expanded `scratch.roots` entry; a present root must also pass its
+usual checks (not a symlink, not inside a registered worktree, not the system temp
+directory). For these rounds only a missing path counts as gone, which is stricter
+than before: any other error inspecting the round or its root, such as a permission
+error or an ancestor replaced by a file, refuses.
+
+In both of those cases the round's data may still exist elsewhere, on a root moved
+aside or a volume that is not mounted, so the round is also marked `unverified` with
+that reason. `retire-evidence` keeps a marked round's evidence, and a round marked
+by `reconcile`, with the reason `its round was recorded removed without a verified
+removal`, until its bytes are named with `--include` once its data is confirmed gone.
+If a directory later returns at a round's recorded path, the round gets every check
+again: the same allocation is eligible for an approved removal, and a replacement
+refuses. Every other round keeps its root and identity checks.
 
 Exit status is `0` for completed cleanup, `1` for kept/active/native-archive work,
 and `2` for refusal or unavailable prerequisites. Keep reasons mean incomplete

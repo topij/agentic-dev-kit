@@ -102,7 +102,7 @@ on 2026-10-22 and 2026-10-23 (`review-72a279dd…` among them).
 round-3 LOWs are #1259. #1261 (`87a5f18b`) names the differing bound field in an
 unavailable inventory's refusal and adds an approved `reconcile` for a changed device
 number, under the preconditions in `session-cleanup.md`. It deletes nothing. Retained evidence is discarded by default and retires through
-`session_cleanup.py retire-evidence` once #1316 merges (#1256, #1315);
+`session_cleanup.py retire-evidence` (#1316; #1256, #1315);
 the cross-inventory shared store and a seal byte budget from those tickets were left out of it as secondary. #1261's review LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
 #1256. `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) shipped #1253's binding of inventories

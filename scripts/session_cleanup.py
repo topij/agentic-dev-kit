@@ -388,6 +388,13 @@ class Registry:
             elif owner is not None and (owner["status"] != "removed"
                                         or os.path.lexists(owner["receipt"]["path"])):
                 reason = "its round is not retired"
+            elif (owner is not None and (owner.get("unverified") or owner.get("reconciled"))
+                    and item["sha256"] not in include):
+                # Recorded removed without a verified removal: its data may
+                # still exist (a moved root, an unmounted volume).
+                why = owner.get("unverified") or "marked removed by reconcile"
+                reason = (f"its round was recorded removed without a verified removal ({why}); "
+                          "name its bytes with --include once its data is confirmed gone")
             elif item.get("exception") is not None and item["sha256"] not in include:
                 reason = "retention exception until: " + item["exception"]["delete_when"]
             elif item.get("kind") == "source" and item["sha256"] not in include:
@@ -763,9 +770,10 @@ class Registry:
         # A round already recorded removed whose path is gone has nothing left
         # to act on, so its root is not re-validated: reconcile leaves the old
         # device number in root_identity, and a wiped temp root may be absent
-        # or recreated. Every other shape keeps every check below: a removed
-        # round whose path is present, and an allocated or removing round
-        # whether its path is present or absent.
+        # or recreated. Every other shape keeps every check below when its path
+        # is present: a removed round whose path returned, and an allocated or
+        # removing round. An allocated or removing round whose path is gone
+        # takes the #1278 block below.
         if entry["status"] == "removed" and not os.path.lexists(receipt["path"]):
             return {"path": receipt["path"], "action": "absent", "reason": None}
         # Reconcile marked this round removed while its path was absent, and its
@@ -778,37 +786,45 @@ class Registry:
             return {"path": receipt["path"], "action": "kept",
                     "reason": "round was marked removed by reconcile and its path reappeared; "
                               "inspect and remove it by hand"}
-        # A round whose path is gone has nothing left to delete, so a scratch
-        # root that is gone too, or was recreated, must not wedge the inventory
-        # (#1278). Inputs of this shape, round path absent, and each one's result:
-        # - root absent (removed by hand, or its volume unmounted): absent. The
-        #   round is recorded removed and nothing is deleted.
-        # - root present with its identity unchanged: absent, as before.
-        # - root present with its identity changed (recreated, for example by
-        #   another session's allocate in the shared root): absent.
-        # A round recorded removed whose path later returns is not covered by
-        # the shortcut above, so it gets every check again: the same allocation
-        # is eligible for an approved removal, and a replacement refuses.
+        # A round whose path is gone has nothing left to delete here, so a
+        # scratch root that is gone too, or whose identity no longer matches,
+        # must not wedge the inventory (#1278). Inputs of this shape (round not
+        # yet removed, round path absent) and each one's result:
+        # - root absent (removed by hand, or its volume unmounted): absent,
+        #   marked unverified.
+        # - root present, identity no longer matching (recreated, for example
+        #   by another session's allocate in the shared root, or moved aside):
+        #   absent, marked unverified.
+        # - root present with its identity unchanged: absent, as before; the
+        #   round is verifiably gone from its own root.
         # - root not a configured expanded root, or present but refused for any
         #   other reason (a symlink, inside a registered worktree, the system
         #   temp directory): refuses, as before.
         # - any error other than FileNotFoundError on the round path or the root
-        #   (permission, a parent replaced by a file): refuses, never absent.
+        #   (permission, an ancestor replaced by a file): refuses, never absent.
+        # "Unverified" means the round's data may still exist elsewhere (a moved
+        # root, an unmounted volume). Nothing is deleted; retire_round records
+        # the mark, and retirement_plan keeps such a round's evidence unless its
+        # bytes are named with --include. A round recorded removed whose path
+        # later returns gets every check again: the same allocation is eligible
+        # for an approved removal, and a replacement refuses.
         # A present round path keeps every check below, root identity included.
         round_gone = _absent(receipt["path"])
         if round_gone:
+            # The same expansion and membership check _round_root starts with;
+            # it runs here because an absent root never reaches _round_root.
             roots = [sweep.expand_root(raw, root=Path(entry["namespace"])).rstrip("/") or "/"
                      for raw in self.settings.roots]
             if receipt["root"] not in roots:
                 raise sweep.ConfigError("review round root is not an expanded scratch.roots entry")
             if _absent(receipt["root"]):
-                return {"path": receipt["path"], "action": "absent",
+                return {"path": receipt["path"], "action": "absent", "unverified": True,
                         "reason": "round and its scratch root are both gone"}
         sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
         if sweep.bound_identity(receipt["root_identity"], receipt["root"]) is None:
             if round_gone:
-                return {"path": receipt["path"], "action": "absent",
-                        "reason": "round is gone and its scratch root was recreated"}
+                return {"path": receipt["path"], "action": "absent", "unverified": True,
+                        "reason": "round is gone and its scratch root's identity no longer matches"}
             legacy = sweep.valid_identity(receipt["root_identity"], legacy=True)
             current = list(sweep._identity(receipt["root"])) if legacy else sweep.stable_identity(receipt["root"])
             raise sweep.ConfigError(f"allocation root identity changed (stored {receipt['root_identity']}, "
@@ -895,6 +911,8 @@ class Registry:
             result.update(action="kept", reason="path exists after retirement; inspect before retrying")
         if result["action"] in {"removed", "absent"}:
             entry["status"] = "removed"
+            if result.get("unverified"):
+                entry["unverified"] = result["reason"]
         self.save(record)
 
     def apply(self, record: dict, approval: str, processes_finished: bool) -> dict:
