@@ -2383,3 +2383,26 @@ def test_a_held_excepted_item_still_shows_its_deletion_condition(session):
     _, plan = registry.retirement_plan(record["id"], [])
     assert plan["kept"] and all(v["reason"].endswith("; retention exception until: the task merges")
                                 for v in plan["kept"])
+
+
+@pytest.mark.parametrize("again", ["inventory", "round"])
+def test_re_running_apply_keeps_the_mark(session, again):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    for item in record["rounds"][0]["seal"]["retained"]:
+        item.pop("exception")
+    registry.save(record)
+    shutil.rmtree(receipt["root"])
+    assert apply_round(registry, record, receipt)["complete"]
+    current = registry.load(record["id"])
+    if again == "round":
+        apply_round(registry, current, receipt)
+    else:
+        registry.seal(current, {"evidence_complete": True, "retain": [],
+                                "discard": [{"source": receipt["path"], "reason": "in the PR"}]})
+        assert apply(registry, current)["complete"]
+    entry = registry.load(record["id"])["rounds"][0]
+    assert entry["unverified"] == "round and its scratch root are both gone"
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["retire"] == [] and plan["evidence_summary"]["held"]["items"] == 2

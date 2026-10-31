@@ -317,8 +317,9 @@ class Registry:
         items with the same content share one file. Missing means absent without
         a tombstone, which nothing here authorized; it is never reported as
         retired. `exceptions` counts items that carry a retention exception.
-        `held` counts the present evidence retire-evidence keeps because a round
-        of this inventory is marked `unverified`, with the marks' reasons.
+        `held` is the present evidence of an inventory with a round marked
+        `unverified`, with the marks' reasons. Some of it may also be kept for
+        another reason; `reasons` stays until a verified removal clears a mark.
         """
         states: dict[str, dict] = {state: {"items": 0, "files": {}}
                                    for state in ("present", "retiring", "retired", "missing")}
@@ -824,8 +825,9 @@ class Registry:
         # the mark, and retirement_plan keeps such a round's evidence unless its
         # bytes are named with --include, inventory-wide. A round recorded
         # removed by apply whose path later returns gets every check again: the
-        # same allocation is eligible for an approved removal (which clears the
-        # mark), and a replacement refuses. Reconcile-marked rounds instead
+        # same allocation is eligible for an approved removal, whose sweeper
+        # removal clears the mark; a replacement refuses. Re-running apply on
+        # a round whose path is still gone never clears it. Reconcile-marked rounds instead
         # read kept, above.
         # A present round path keeps every check below, root identity included.
         round_gone = _absent(receipt["path"])
@@ -932,9 +934,11 @@ class Registry:
             entry["status"] = "removed"
             if result.get("unverified"):
                 entry["unverified"] = result["reason"]
-            else:
-                # Removed by the sweeper, or absent from its own unchanged
-                # root: a later verified outcome clears an earlier mark.
+            elif result["action"] == "removed":
+                # Only the sweeper's own removal, after every check, verifies
+                # that the round's data is gone. An `absent` never clears the
+                # mark: for a round already removed it is a no-op re-observation
+                # of the same missing path, not a verification.
                 entry.pop("unverified", None)
         self.save(record)
 
