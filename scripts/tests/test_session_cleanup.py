@@ -2119,3 +2119,84 @@ def test_an_allocated_round_whose_path_vanished_keeps_its_evidence(session):
     shutil.rmtree(receipt["path"])  # gone without the engine retiring it
     _, plan = registry.retirement_plan(record["id"], [])
     assert plan["retire"] == [] and {v["reason"] for v in plan["kept"]} == {"its round is not retired"}
+
+
+# A round whose scratch root is gone too (#1278).
+
+def test_a_round_and_root_both_gone_complete_the_inventory(session):
+    registry, record, _ = session
+    first = allocate(registry, record)
+    seal(registry, record, first, scope=first["id"])
+    assert apply_round(registry, record, first)["complete"]
+    kept = allocate(registry, record)
+    seal(registry, record, kept)  # the inventory seal; this round was kept
+    shutil.rmtree(kept["path"])
+    os.rmdir(kept["root"])  # the now-empty scratch root, removed by hand
+    preview = registry.preview(record)
+    assert [(p["action"], p["reason"]) for p in preview["paths"]] == [
+        ("absent", None), ("absent", "round and its scratch root are both gone")]
+    assert apply(registry, record)["complete"]
+    assert all(r["status"] == "removed" for r in registry.load(record["id"])["rounds"])
+
+
+def test_a_round_gone_with_its_root_retires_alone(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    shutil.rmtree(receipt["root"])
+    assert apply_round(registry, record, receipt)["complete"]
+    assert registry.load(record["id"])["rounds"][0]["status"] == "removed"
+
+
+def test_a_recreated_root_still_refuses(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    shutil.rmtree(receipt["root"])
+    Path(receipt["root"]).mkdir()
+    with pytest.raises(cleanup.sweep.ConfigError, match="allocation root identity changed"):
+        registry.preview_round(record, receipt["id"])
+
+
+def test_a_root_replaced_by_a_symlink_still_refuses(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    shutil.rmtree(receipt["root"])
+    elsewhere = root / "elsewhere"
+    elsewhere.mkdir()
+    Path(receipt["root"]).symlink_to(elsewhere)
+    with pytest.raises(cleanup.sweep.ConfigError, match="review round root unavailable"):
+        registry.preview_round(record, receipt["id"])
+    assert elsewhere.is_dir()
+
+
+def test_an_uninspectable_round_path_is_not_absent(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    shutil.rmtree(receipt["root"])
+    real = os.lstat
+
+    def denied(path, *args, **kwargs):
+        if str(path) == receipt["path"]:
+            raise PermissionError(13, "denied", str(path))
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(cleanup.os, "lstat", denied)
+    with pytest.raises(PermissionError):
+        registry.preview_round(record, receipt["id"])
+    assert registry.load(record["id"])["rounds"][0]["status"] == "allocated"
+
+
+def test_an_absent_root_outside_the_configured_roots_refuses(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    shutil.rmtree(receipt["root"])
+    edited = registry.load(record["id"])
+    edited["rounds"][0]["receipt"]["root"] = str(root / "not-a-root")
+    edited["rounds"][0]["receipt"]["path"] = str(root / "not-a-root" / "round")
+    registry.save(edited)
+    with pytest.raises(cleanup.sweep.ConfigError, match="not an expanded scratch.roots entry"):
+        registry.round_outcome(registry.load(record["id"])["rounds"][0])

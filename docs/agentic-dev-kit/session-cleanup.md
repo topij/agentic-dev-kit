@@ -405,8 +405,15 @@ before cleanup`): nothing is left to act on, and its root may be gone or recreat
 (a wiped temp directory, or a reconciled device number). A round reconcile marked
 removed whose path has reappeared, such as on a remounted scratch volume, previews
 and applies as `kept`, and no removal is attempted: it is no longer managed here, so
-inspect and remove it by hand. Every other round keeps its root and identity checks,
-including a removed round whose path has reappeared.
+inspect and remove it by hand. A round not yet removed whose path and scratch root
+are both gone previews and applies as `absent`, with the reason `round and its scratch
+root are both gone`, and is recorded `removed`: nothing is deleted, the root must
+still be an expanded `scratch.roots` entry, and a directory that later returns at
+that path is no longer managed here (#1278). Only a missing path counts as gone; any
+other error inspecting the round or its root refuses. A recreated root still refuses
+with `allocation root identity changed`; when it is empty, removing it reaches the
+case above. Every other round keeps its root and identity checks, including a
+removed round whose path has reappeared.
 
 Exit status is `0` for completed cleanup, `1` for kept/active/native-archive work,
 and `2` for refusal or unavailable prerequisites. Keep reasons mean incomplete

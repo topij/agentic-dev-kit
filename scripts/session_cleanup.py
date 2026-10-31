@@ -778,6 +778,30 @@ class Registry:
             return {"path": receipt["path"], "action": "kept",
                     "reason": "round was marked removed by reconcile and its path reappeared; "
                               "inspect and remove it by hand"}
+        # A round whose path is gone has nothing left to delete, so a scratch
+        # root that is gone too, or was recreated, must not wedge the inventory
+        # (#1278). Inputs of this shape, round path absent, and each one's result:
+        # - root absent (removed by hand, or its volume unmounted): absent. The
+        #   round is recorded removed and nothing is deleted; a directory that
+        #   later returns is no longer managed here, as with reconcile.
+        # - root present with its identity unchanged: absent, as before.
+        # - root present with its identity changed (recreated): refuses, as
+        #   before; an empty recreated root can be removed to reach the case above.
+        # - root not a configured expanded root, or present but refused for any
+        #   other reason (a symlink, inside a registered worktree, the system
+        #   temp directory): refuses, as before.
+        # - any error other than FileNotFoundError on the round path or the root
+        #   (permission, a parent replaced by a file): refuses, never absent.
+        # A present round path keeps every check below, root identity included.
+        round_gone = _absent(receipt["path"])
+        if round_gone:
+            roots = [sweep.expand_root(raw, root=Path(entry["namespace"])).rstrip("/") or "/"
+                     for raw in self.settings.roots]
+            if receipt["root"] not in roots:
+                raise sweep.ConfigError("review round root is not an expanded scratch.roots entry")
+            if _absent(receipt["root"]):
+                return {"path": receipt["path"], "action": "absent",
+                        "reason": "round and its scratch root are both gone"}
         sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
         if sweep.bound_identity(receipt["root_identity"], receipt["root"]) is None:
             legacy = sweep.valid_identity(receipt["root_identity"], legacy=True)
@@ -912,6 +936,15 @@ class Registry:
         record["last_result"] = {**preview, "complete": record["complete"]}
         self.save(record)
         return record["last_result"]
+
+
+def _absent(path: str) -> bool:
+    """True only when the path does not exist; any other inspection error raises."""
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return True
+    return False
 
 
 def measure(outcomes: list[dict], owner: str) -> None:
