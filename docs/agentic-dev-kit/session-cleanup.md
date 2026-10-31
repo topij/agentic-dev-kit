@@ -126,7 +126,11 @@ uv run <engine-dir>/session_cleanup.py track-worktree <session> <absolute-path> 
 ```
 
 Use `codex` only for app-managed worktrees and `git` for ordinary Git worktrees.
-The primary checkout is never eligible. The registry binds the recorded head and
+The primary checkout is never eligible. A task worktree nested inside it, such as
+`<primary>/.claude/worktrees/<name>`, is eligible on the same checks: the primary
+checkout is exempt only as its ancestor, and only when the primary's index tracks
+nothing at the worktree's path. A worktree under or holding another registered
+worktree stays kept. The registry binds the recorded head and
 directory identity; a later commit requires a new inventory. Branch names are
 recorded but branches are not deleted by this engine. A branch's forge lifecycle
 remains separate from local scratch retirement. Ordinary Git retirement requires

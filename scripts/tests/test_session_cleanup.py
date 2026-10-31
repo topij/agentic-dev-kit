@@ -237,6 +237,86 @@ def test_dirty_worktree_kept_and_primary_refused(session):
     assert (task / "user-work").read_text() == "keep"
 
 
+def nested_tree(registry, name):
+    task = registry.repo / ".claude" / "worktrees" / name
+    task.parent.mkdir(parents=True, exist_ok=True)
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(task), "HEAD")
+    return task
+
+
+def test_task_worktree_nested_under_the_primary_checkout_retires(session):
+    # #1307: where Claude Code's worktree tool puts a task worktree.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    task = nested_tree(registry, "task")
+    unregistered = registry.repo / ".claude" / "worktrees" / "plain"
+    unregistered.mkdir()
+    (unregistered / "user-work").write_text("keep")
+    with pytest.raises(cleanup.sweep.ConfigError, match="not registered"):
+        registry.track_worktree(record, unregistered, "git")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    outcome = registry.preview(record)["paths"][0]
+    assert (outcome["path"], outcome["action"], outcome["reason"]) == (str(task), "remove-worktree", None)
+    assert apply(registry, record)["complete"]
+    assert not task.exists()
+    assert (unregistered / "user-work").read_text() == "keep"
+    assert cleanup.git(registry.repo, "rev-parse", "--show-toplevel") == str(registry.repo)
+
+
+def test_nested_worktree_at_a_path_the_primary_checkout_tracks_is_kept(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    tracked = registry.repo / ".claude" / "worktrees" / "task" / "file"
+    tracked.parent.mkdir(parents=True)
+    tracked.write_text("primary content\n")
+    cleanup.git(registry.repo, "add", str(tracked))
+    cleanup.git(registry.repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-qm", "track a file where a worktree goes")
+    shutil.rmtree(tracked.parent)
+    # A detached checkout of the first commit, which predates that file.
+    task = registry.repo / ".claude" / "worktrees" / "task"
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(task), "HEAD~1")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == "kept"
+    assert result["paths"][0]["reason"] == "the primary checkout tracks content at the worktree's path"
+    assert task.exists()
+
+
+@pytest.mark.parametrize("tracked", ["inner", "outer"])
+def test_nested_worktree_overlapping_another_registration_is_kept(session, tracked):
+    # Only the primary checkout is dropped from the overlap list: a nested
+    # worktree under, or holding, another registered worktree stays kept.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    outer = nested_tree(registry, "outer")
+    inner = outer / "inner"
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(inner), "HEAD")
+    task, other = (inner, outer) if tracked == "inner" else (outer, inner)
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == "kept"
+    assert result["paths"][0]["reason"] == f"registered worktree {other}"
+    assert task.exists() and other.exists()
+
+
+def test_nested_worktree_whose_primary_overlap_cannot_be_told_is_kept(session, monkeypatch):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    task = nested_tree(registry, "task")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    holds = cleanup.sweep._holds
+    monkeypatch.setattr(cleanup.sweep, "_holds", lambda outer, inner: None
+                        if (outer, inner) == (str(task), str(registry.repo)) else holds(outer, inner))
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == "kept"
+    assert task.exists()
+
+
 def test_process_blocker_preserves_approved_inventory(session, monkeypatch):
     registry, record, _ = session
     receipt = allocate(registry, record)
