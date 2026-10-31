@@ -317,6 +317,9 @@ class Registry:
         items with the same content share one file. Missing means absent without
         a tombstone, which nothing here authorized; it is never reported as
         retired. `exceptions` counts items that carry a retention exception.
+        `held` is the present evidence of an inventory with a round marked
+        `unverified`, with the marks' reasons. Some of it may also be kept for
+        another reason; `reasons` stays until a verified removal clears a mark.
         """
         states: dict[str, dict] = {state: {"items": 0, "files": {}}
                                    for state in ("present", "retiring", "retired", "missing")}
@@ -337,7 +340,15 @@ class Registry:
         summary = {state: {"items": value["items"], "bytes": sum(value["files"].values())}
                    for state, value in states.items()}
         summary["exceptions"] = exceptions
+        marks = self.unverified_marks(record)
+        summary["held"] = {**(summary["present"] if marks else {"items": 0, "bytes": 0}),
+                           "reasons": marks}
         return summary
+
+    @staticmethod
+    def unverified_marks(record: dict) -> list[str]:
+        """Reasons of rounds recorded removed without a verified removal (#1278)."""
+        return [f"{r['receipt']['id']}: {r['unverified']}" for r in record["rounds"] if r.get("unverified")]
 
     def retirement_plan(self, token: str, include: list[str]) -> tuple[dict, dict]:
         """Preview deleting retained evidence that no unfinished task needs (#1256, #1315).
@@ -348,8 +359,11 @@ class Registry:
         sealed before exceptions existed (it may be the only copy of
         uncommitted work), stays kept unless its bytes are named by sha256 in
         `include`, the caller's assertion that the deletion condition of every
-        item holding those bytes holds. Bytes shared with a kept item, and an
-        item a kept item requires, stay. Tombstones keep hash, size, kind,
+        item holding those bytes holds. While any round of the inventory is
+        marked `unverified` (recorded removed while its data may still exist
+        elsewhere), every item of the inventory, whichever seal holds it, is
+        kept the same way. Bytes shared with a kept item, and an item a kept
+        item requires, stay. Tombstones keep hash, size, kind,
         source and exception, so retired reads differently from missing.
         Evidence in other inventories is a separate copy and is untouched.
         """
@@ -361,6 +375,12 @@ class Registry:
         if unknown:
             raise sweep.ConfigError("--include names no retained item: " + ", ".join(sorted(unknown)))
         retire, kept, missing = [], [], []
+        # Inventory-wide, because an item's source need not lie under the round
+        # it came from, and the inventory seal holds items from every round.
+        marks = self.unverified_marks(record)
+        held = (f"a round of this inventory was recorded removed without a verified removal "
+                f"({'; '.join(marks)}); name its bytes with --include once that round's data is "
+                "confirmed gone") if marks else None
         for owner, item in self.evidence_items(record):
             view = {k: item.get(k) for k in ("sha256", "size", "kind", "source", "requires",
                                              "retained", "exception")}
@@ -388,6 +408,10 @@ class Registry:
             elif owner is not None and (owner["status"] != "removed"
                                         or os.path.lexists(owner["receipt"]["path"])):
                 reason = "its round is not retired"
+            elif held and item["sha256"] not in include:
+                reason = held
+                if item.get("exception") is not None:
+                    reason += "; retention exception until: " + item["exception"]["delete_when"]
             elif item.get("exception") is not None and item["sha256"] not in include:
                 reason = "retention exception until: " + item["exception"]["delete_when"]
             elif item.get("kind") == "source" and item["sha256"] not in include:
@@ -763,9 +787,10 @@ class Registry:
         # A round already recorded removed whose path is gone has nothing left
         # to act on, so its root is not re-validated: reconcile leaves the old
         # device number in root_identity, and a wiped temp root may be absent
-        # or recreated. Every other shape keeps every check below: a removed
-        # round whose path is present, and an allocated or removing round
-        # whether its path is present or absent.
+        # or recreated. Every other shape keeps every check below when its path
+        # is present: a removed round whose path returned, and an allocated or
+        # removing round. An allocated or removing round whose path is gone
+        # takes the #1278 block below.
         if entry["status"] == "removed" and not os.path.lexists(receipt["path"]):
             return {"path": receipt["path"], "action": "absent", "reason": None}
         # Reconcile marked this round removed while its path was absent, and its
@@ -778,8 +803,49 @@ class Registry:
             return {"path": receipt["path"], "action": "kept",
                     "reason": "round was marked removed by reconcile and its path reappeared; "
                               "inspect and remove it by hand"}
+        # A round whose path is gone has nothing left to delete here, so a
+        # scratch root that is gone too, or whose identity no longer matches,
+        # must not wedge the inventory (#1278). Inputs of this shape (round not
+        # yet removed, round path absent) and each one's result:
+        # - root absent (removed by hand, or its volume unmounted): absent,
+        #   marked unverified.
+        # - root present, identity no longer matching (recreated, for example
+        #   by another session's allocate in the shared root, or moved aside):
+        #   absent, marked unverified.
+        # - root present with its identity unchanged: absent, as before, with no
+        #   mark (a round moved aside inside that root also reads so, as at the
+        #   base).
+        # - root not a configured expanded root, or present but refused for any
+        #   other reason (a symlink, inside a registered worktree, the system
+        #   temp directory): refuses, as before.
+        # - any error other than FileNotFoundError on the round path or the root
+        #   (permission, an ancestor replaced by a file): refuses, never absent.
+        # "Unverified" means the round's data may still exist elsewhere (a moved
+        # root, an unmounted volume). Nothing is deleted; retire_round records
+        # the mark, and retirement_plan keeps such a round's evidence unless its
+        # bytes are named with --include, inventory-wide. A round recorded
+        # removed by apply whose path later returns gets every check again: the
+        # same allocation is eligible for an approved removal, whose sweeper
+        # removal clears the mark; a replacement refuses. Re-running apply on
+        # a round whose path is still gone never clears it. Reconcile-marked rounds instead
+        # read kept, above.
+        # A present round path keeps every check below, root identity included.
+        round_gone = _absent(receipt["path"])
+        if round_gone:
+            # The same expansion and membership check _round_root starts with;
+            # it runs here because an absent root never reaches _round_root.
+            roots = [sweep.expand_root(raw, root=Path(entry["namespace"])).rstrip("/") or "/"
+                     for raw in self.settings.roots]
+            if receipt["root"] not in roots:
+                raise sweep.ConfigError("review round root is not an expanded scratch.roots entry")
+            if _absent(receipt["root"]):
+                return {"path": receipt["path"], "action": "absent", "unverified": True,
+                        "reason": "round and its scratch root are both gone"}
         sweep._round_root(receipt["root"], self.settings, Path(entry["namespace"]))
         if sweep.bound_identity(receipt["root_identity"], receipt["root"]) is None:
+            if round_gone:
+                return {"path": receipt["path"], "action": "absent", "unverified": True,
+                        "reason": "round is gone and its scratch root's identity no longer matches"}
             legacy = sweep.valid_identity(receipt["root_identity"], legacy=True)
             current = list(sweep._identity(receipt["root"])) if legacy else sweep.stable_identity(receipt["root"])
             raise sweep.ConfigError(f"allocation root identity changed (stored {receipt['root_identity']}, "
@@ -866,6 +932,14 @@ class Registry:
             result.update(action="kept", reason="path exists after retirement; inspect before retrying")
         if result["action"] in {"removed", "absent"}:
             entry["status"] = "removed"
+            if result.get("unverified"):
+                entry["unverified"] = result["reason"]
+            elif result["action"] == "removed":
+                # Only the sweeper's own removal, after every check, verifies
+                # that the round's data is gone. An `absent` never clears the
+                # mark: for a round already removed it is a no-op re-observation
+                # of the same missing path, not a verification.
+                entry.pop("unverified", None)
         self.save(record)
 
     def apply(self, record: dict, approval: str, processes_finished: bool) -> dict:
@@ -912,6 +986,15 @@ class Registry:
         record["last_result"] = {**preview, "complete": record["complete"]}
         self.save(record)
         return record["last_result"]
+
+
+def _absent(path: str) -> bool:
+    """True only when the path does not exist; any other inspection error raises."""
+    try:
+        os.lstat(path)
+    except FileNotFoundError:
+        return True
+    return False
 
 
 def measure(outcomes: list[dict], owner: str) -> None:

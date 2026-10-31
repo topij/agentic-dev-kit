@@ -275,7 +275,14 @@ stay kept unless their bytes are named with `--include <sha256>`:
 
 - an item with an `exception`; the preview shows its `delete_when`;
 - a `source` item sealed without an exception, which may be the only copy of
-  uncommitted work.
+  uncommitted work;
+- every item of an inventory with a round marked `unverified` (see *Preview,
+  approve the concrete scope, apply*), whichever seal holds it: that round was
+  recorded removed while its data may still exist elsewhere, so confirm the data is
+  gone before including its bytes. An excepted item's reason still shows its
+  `delete_when`. Only the engine's own removal of that round, after its path
+  returns and passes every check, clears the mark; re-running `apply` while the
+  path is still gone does not.
 
 Items with the same content share one file, so `--include` names that file and
 retires every item holding it: it asserts the deletion condition of each one, all
@@ -305,7 +312,10 @@ lists again), `retired`, and `missing` (absent with no tombstone, which nothing 
 authorized and which still blocks a preview of that seal until the operator
 restores the bytes or removes the item from `session.json` by hand: no engine
 route clears it), plus an `exceptions`
-count of items that carry a retention exception. Historical receipts can
+count of items that carry a retention exception and `held`: the present items and
+bytes of an inventory with a round marked `unverified` (some may also be kept for
+another reason), with each mark's `reasons`. Session-start reports an inventory
+whose `held.reasons` is non-empty, so the hold is not forgotten. Historical receipts can
 say what existed; they never read a retired item as available or a missing one as
 retired.
 
@@ -405,8 +415,30 @@ before cleanup`): nothing is left to act on, and its root may be gone or recreat
 (a wiped temp directory, or a reconciled device number). A round reconcile marked
 removed whose path has reappeared, such as on a remounted scratch volume, previews
 and applies as `kept`, and no removal is attempted: it is no longer managed here, so
-inspect and remove it by hand. Every other round keeps its root and identity checks,
-including a removed round whose path has reappeared.
+inspect and remove it by hand.
+
+A round not yet removed whose path is gone previews and applies as `absent` and is
+recorded `removed`, also when its scratch root is gone too (reason `round and its
+scratch root are both gone`) or present with an identity that no longer matches, as
+when another session's `allocate` recreated it (reason `round is gone and its
+scratch root's identity no longer matches`) (#1278). Nothing is deleted. The root
+must still be an expanded `scratch.roots` entry; a present root must also pass its
+usual checks (not a symlink, not inside a registered worktree, not the system temp
+directory). For these rounds only a missing path counts as gone, which is stricter
+than before: any other error inspecting the round or its root, such as a permission
+error or an ancestor replaced by a file, refuses.
+
+In both of those cases the round's data may still exist elsewhere, on a root moved
+aside or a volume that is not mounted, so the round is also marked `unverified` with
+that reason, and `retire-evidence` holds every item of its inventory until its bytes
+are named with `--include` (*Retire retained evidence*). A round whose path is gone
+from its own unchanged root reads `absent` with no mark, as before; that includes a
+round moved aside inside that root. A round recorded removed by `apply` whose path
+later returns gets every check again: the same allocation is eligible for an
+approved removal, whose removal clears the mark, and a replacement refuses. A round
+`reconcile` marked removed reads `kept` instead, as above, and holds no evidence:
+reconcile already found every recorded path absent. Every other round keeps its root
+and identity checks.
 
 Exit status is `0` for completed cleanup, `1` for kept/active/native-archive work,
 and `2` for refusal or unavailable prerequisites. Keep reasons mean incomplete

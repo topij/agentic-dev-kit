@@ -109,7 +109,8 @@ source that failed on the retry.
 When `scratch.session_registry` is configured, also read
 `<engine-dir>/session_cleanup.py list` from the repository root. Its shared Git
 registry discovers session-owned rounds even after their task checkout disappears.
-Report incomplete inventories and their last keep reasons; do not apply cleanup
+Report incomplete inventories and their last keep reasons, and any inventory whose
+`evidence_summary.held.reasons` is non-empty, with those reasons; do not apply cleanup
 during session-start. The recovery contract is [session-cleanup.md](../session-cleanup.md).
 
 ### 0 · Gather (run in parallel)
