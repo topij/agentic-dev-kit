@@ -76,7 +76,7 @@ including generated bindings, lane state and retained evidence.
 | State paths | [`scripts/lib/state_paths/`](../scripts/lib/state_paths/) | Resolve workflow artifacts into the declared state root or lane sandbox. |
 | Review panel | [Fallback contract](agentic-dev-kit/fallback-review-panel.md), [`panel_prompt.py`](../scripts/panel_prompt.py) | Select lenses by review class, assemble isolated lens prompts, verify findings and record a head-bound receipt. |
 | Review measurement | [`review_eval.py`](../scripts/review_eval.py), [evaluation guide](agentic-dev-kit/review-eval/reviewer-eval.md) | Compare lens and optional verifier reports against cases from kit history; scores require interpretation. |
-| Session cleanup | [`session_cleanup.py`](../scripts/session_cleanup.py), [`sweep_scratch.py`](../scripts/sweep_scratch.py) | Retain declared evidence and retire authorized inventory paths while preserving dependency guards. |
+| Session cleanup | [`session_cleanup.py`](../scripts/session_cleanup.py), [`sweep_scratch.py`](../scripts/sweep_scratch.py) | Discard completed evidence by default, retain only declared exceptions, and retire authorized inventory paths and retained evidence while preserving dependency guards. |
 | Installation inspection | [`kit_doctor.py`](../scripts/kit_doctor.py), [`kit-manifest.json`](../kit-manifest.json) | Report kit-owned drift, adapter and lens-definition state, and advisory Codex reviewer model observations. |
 
 Engines beneath `paths.engines` can be vendored under another directory in an

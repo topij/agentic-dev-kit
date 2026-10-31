@@ -27,7 +27,7 @@ see whatever is missed.
 
 | What the session created | When it is no longer needed | How to remove it |
 |---|---|---|
-| A review round | its receipt or findings are recorded and evidence is retained outside it | the round retirement in `fallback-review-panel.md`, or the registry lifecycle below |
+| A review round | its receipt or findings are recorded on the PR | the round retirement in `fallback-review-panel.md`, or the registry lifecycle below |
 | A lens or verifier worktree | its report is retained | `git worktree remove <path>` without `--force`, after checking its status and that its `HEAD` is reachable from a pushed ref |
 | A throwaway clone, extracted archive, eval output or build tree | its result has been read and anything worth keeping copied out | delete that exact recorded path |
 | A killed or abandoned test run's basetemp | the run it belonged to is over | delete that exact recorded path |
@@ -45,8 +45,9 @@ and holds no commit that exists nowhere else.
 
 **Never delete**, whatever a rule above seems to allow: anything this session did not
 create; the primary checkout; the kit's `state/` sandboxes and anything the
-configuration names as state; the registry under `<git-common-dir>/devkit/`; retained
-evidence and an allocation receipt whose retirement has not completed; the handoff and
+configuration names as state; the registry under `<git-common-dir>/devkit/` by hand
+(retained evidence leaves only through `retire-evidence` below); an allocation receipt
+whose retirement has not completed; the handoff and
 friction-log files; shared caches such as the package manager's; or a tree with
 uncommitted or unpushed work. An engine refusal or `kept` result stays kept: report
 it, and never weaken a guard, reset timestamps or broaden a root to clear it.
@@ -191,48 +192,102 @@ recorded identities, which reconcile cannot re-verify. The same holds for a
 receipt: `--finish-review-round` refuses a device-bound round that survived a
 renumbering as replaced.
 
-## Retain required evidence, then seal
+## Seal: discard by default, retain only by exception
 
-Stop or join every reviewer, verifier and descendant first. Write a JSON manifest
-at an absolute path outside the disposable inventory. Enumerate final terminal
-reports, unresolved findings and dispositions, reviewed-head and compute receipts,
-concise verification/mutation/restoration proof, and merge/ticket readbacks when
-they exist. Include authoritative live-validation bytes, screenshot source and
-finished assets, capture receipts, policy snapshots and any required source input.
-Package caches and basetemps belong in allocated scratch, never in retained evidence.
+Completed review, build and evidence payloads are discarded. Their results belong in
+Git and the pull request (the review dispositions `pr_watch.py --record-review`
+records, the PR body, the merged commit); a local copy kept "in case we investigate
+later" is not a reason to retain. Copying evidence is never needed to seal and clean
+up a session.
+
+Stop or join every reviewer, verifier and descendant first. Write a JSON manifest at
+an absolute path outside the disposable inventory. The normal manifest retains
+nothing and says where the results went:
+
+```json
+{
+  "evidence_complete": true,
+  "retain": [],
+  "discard": [
+    {"source": "/absolute/round", "reason": "findings and dispositions recorded on PR #123"}
+  ]
+}
+```
+
+Retain an item only as an exception: when a named unfinished task needs these exact
+local bytes, such as a current recovery package or unique authored drafts not yet in
+Git. Each retained item states that task, the next action and the condition under
+which it may be deleted, and the engine refuses one without all three:
 
 ```json
 {
   "evidence_complete": true,
   "retain": [
-    {"source": "/absolute/round/report.md", "kind": "report", "requires": ["/absolute/round/capture.png"]},
-    {"source": "/absolute/round/capture.png", "kind": "asset", "requires": []}
+    {"source": "/absolute/round/draft.md", "kind": "source", "requires": [],
+     "exception": {"task": "CUS-123 article rewrite", "next_action": "commit the draft to the article branch",
+                   "delete_when": "the article branch carries the draft"}}
   ],
-  "retire": [
-    {"source": "/absolute/round/verbose.log", "reason": "Terminal report preserves the result", "replaced_by": ["/absolute/round/report.md"]}
-  ]
+  "discard": [{"source": "/absolute/round/report.md", "reason": "recorded on PR #123"}]
 }
 ```
 
 Supported kinds are `report`, `finding`, `verification`, `compute`, `source`,
-`asset` and `receipt`. Each `requires` path must also appear in `retain`.
-`evidence_complete` is the caller's explicit assertion of the complete evidence
-closure, including links and manifests; the engine cannot infer that closure from
-arbitrary prose. Missing, unreadable, aliased or non-regular evidence blocks sealing.
-Content-addressed copies preserve original bytes and are hash-checked before cleanup.
+`asset` and `receipt`. Each `requires` path must also appear in `retain`. A source
+may not be both retained and discarded, and an empty `retain` needs at least one
+`discard` entry. `evidence_complete` is the caller's explicit assertion of the
+complete evidence closure; the engine cannot infer it from arbitrary prose. Missing,
+unreadable, aliased or non-regular evidence blocks sealing. Package caches,
+basetemps, build trees and whole-workspace archives are never retained. The older
+`retire` list (a superseded log with a reason and a retained replacement) is still
+accepted.
 
 ```sh
 uv run <engine-dir>/session_cleanup.py seal <session> <absolute-manifest>
 ```
 
-The sealed `session.json` is the retention index: it maps original source paths to
-retained bytes, their hashes, dependencies and intentionally retired diagnostics.
-Historical documents are preserved byte-for-byte, not rewritten; resolve their old
-paths through this index. Enumerate superseded logs in `retire` with a reason and
-retained replacement. Unlisted scratch is covered only by the caller's evidence
-closure assertion, never by filename or age heuristics. Sealing freezes the inventory;
-new work uses a new session. Back up this local evidence with the repository's Git
-metadata; a fresh clone does not contain it, and deleting the repository deletes it.
+Retained bytes are copied, content-addressed, into the inventory and hash-checked
+before cleanup. The seal reports `bytes.retained` (what its items name) and
+`bytes.copied` (what it newly wrote; bytes already in this inventory add none).
+Sealing freezes the inventory; new work uses a new session. Retained bytes are
+local: a fresh clone does not contain them.
+
+## Retire retained evidence
+
+Once an exception's deletion condition holds, or for evidence sealed before
+exceptions existed, retire it through a preview and an approved apply:
+
+```sh
+uv run <engine-dir>/session_cleanup.py retire-evidence <session> [--include <sha256> ...]
+uv run <engine-dir>/session_cleanup.py retire-evidence <session> [--include <sha256> ...] --approve <approval-token>
+```
+
+The preview writes nothing. It lists `retire`, `kept` with a reason, `missing`,
+active users, and `bytes` (`present_before`, `removed`, `present_after`,
+`net_change`). An item is eligible once the round that sealed it is removed and its
+path gone, or, for the inventory's own seal, once the inventory is complete. These
+stay kept unless named with `--include`, which asserts that the item's deletion
+condition holds:
+
+- an item with an `exception`; the preview shows its `delete_when`;
+- a `source` item sealed without an exception, which may be the only copy of
+  uncommitted work.
+
+Bytes shared with a kept item in the same inventory stay. Each inventory holds its
+own copy, so retiring one never touches another's. A retained path outside the
+inventory's evidence directory refuses, and an active user of the evidence blocks
+the apply. The token binds the stored record and the plan, and is not itself
+operator consent: apply under authorization that covers that inventory's evidence.
+A standing grant under *Clean up what this session created* covers evidence this
+session retained.
+
+Apply writes a tombstone on each item (`retired` with the approval) before deleting
+its bytes, and keeps the hash, size, kind, source and exception. Every
+`preview`, `list` and plan reports `evidence_summary`: `present`, `retiring` (a
+tombstone whose bytes are still there: an interrupted apply, which the next preview
+lists again), `retired`, and `missing` (absent with no tombstone, which nothing here
+authorized and which still blocks a preview of that seal). Historical receipts can
+say what existed; they never read a retired item as available or a missing one as
+retired.
 
 ## Retire each round before the next
 
@@ -247,8 +302,9 @@ uv run <engine-dir>/session_cleanup.py preview <session> --round <receipt-id>
 uv run <engine-dir>/session_cleanup.py apply <session> --round <receipt-id> --approve <approval-token> --processes-finished
 ```
 
-The manifest has the shape described in *Retain required evidence, then seal* above,
-scoped to that round, and each round is sealed once. The preview's token binds that
+The manifest has the shape described in *Seal: discard by default, retain only by
+exception* above, scoped to that round, and each round is sealed once. A round whose
+findings are on the PR retains nothing. The preview's token binds that
 round's receipt and seal and the inventory's registered writers. The authorization
 rules and every guard of *Preview, approve the concrete scope, apply* below apply
 unchanged. A retired round records `removed`. The round's approval is persisted only
