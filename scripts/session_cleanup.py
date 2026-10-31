@@ -311,22 +311,32 @@ class Registry:
         return found
 
     def evidence_summary(self, record: dict) -> dict:
-        """Availability of retained bytes: present, retired by approval, or missing.
+        """Availability of retained evidence: present, retiring, retired or missing.
 
-        Missing means absent without a tombstone, which nothing here authorized;
-        it is never reported as retired.
+        `items` counts index entries; `bytes` counts each stored file once, since
+        items with the same content share one file. Missing means absent without
+        a tombstone, which nothing here authorized; it is never reported as
+        retired. `exceptions` counts items that carry a retention exception.
         """
-        summary = {state: {"items": 0, "bytes": 0} for state in ("present", "retiring", "retired", "missing")}
-        summary["exceptions"] = 0
+        states: dict[str, dict] = {state: {"items": 0, "files": {}}
+                                   for state in ("present", "retiring", "retired", "missing")}
+        exceptions = 0
         for _, item in self.evidence_items(record):
             present = os.path.lexists(item["retained"])
             if item.get("retired") is not None:
                 state = "retiring" if present else "retired"
             else:
                 state = "present" if present else "missing"
-            summary[state]["items"] += 1
-            summary[state]["bytes"] += item["size"]
-            summary["exceptions"] += item.get("exception") is not None
+            states[state]["items"] += 1
+            states[state]["files"][item["sha256"]] = item["size"]
+            exceptions += item.get("exception") is not None
+        # A file still on disk is counted under present; a tombstone that
+        # shares it is reported as retiring without counting its bytes twice.
+        states["retiring"]["files"] = {k: v for k, v in states["retiring"]["files"].items()
+                                       if k not in states["present"]["files"]}
+        summary = {state: {"items": value["items"], "bytes": sum(value["files"].values())}
+                   for state, value in states.items()}
+        summary["exceptions"] = exceptions
         return summary
 
     def retirement_plan(self, token: str, include: list[str]) -> tuple[dict, dict]:
@@ -336,10 +346,11 @@ class Registry:
         the round that sealed it is removed, or, for the inventory seal, once the
         inventory is complete. An item with an exception, and a `source` item
         sealed before exceptions existed (it may be the only copy of
-        uncommitted work), stays kept unless named by sha256 in `include`, which
-        is the caller's assertion that its deletion condition holds. Bytes shared
-        with a kept item in this inventory stay. Tombstones keep hash, size,
-        kind, source and exception, so retired reads differently from missing.
+        uncommitted work), stays kept unless its bytes are named by sha256 in
+        `include`, the caller's assertion that the deletion condition of every
+        item holding those bytes holds. Bytes shared with a kept item, and an
+        item a kept item requires, stay. Tombstones keep hash, size, kind,
+        source and exception, so retired reads differently from missing.
         Evidence in other inventories is a separate copy and is untouched.
         """
         record = self.load(token)
@@ -351,11 +362,9 @@ class Registry:
             raise sweep.ConfigError("--include names no retained item: " + ", ".join(sorted(unknown)))
         retire, kept, missing = [], [], []
         for owner, item in self.evidence_items(record):
-            view = {k: item.get(k) for k in ("sha256", "size", "kind", "source", "retained", "exception")}
-            if owner is None:
-                view["sealed_by"] = "inventory"
-            else:
-                view["sealed_by"] = owner["receipt"]["id"]
+            view = {k: item.get(k) for k in ("sha256", "size", "kind", "source", "requires",
+                                             "retained", "exception")}
+            view["sealed_by"] = "inventory" if owner is None else owner["receipt"]["id"]
             path = canonical(Path(item["retained"]))
             if path != evidence / item["sha256"]:
                 raise sweep.ConfigError("retained evidence path escaped its session")
@@ -370,7 +379,10 @@ class Registry:
             if not stat.S_ISREG(info.st_mode) or info.st_size != item["size"]:
                 reason = "retained bytes changed; inspect before retiring"
             elif item.get("retired") is not None:
-                pass  # an approved retirement was interrupted after its tombstone: resume it
+                # An approved retirement was interrupted after its tombstone.
+                # Only retire_evidence writes `retired`; a seal stores no such
+                # key from a manifest.
+                pass
             elif owner is None and not record["complete"]:
                 reason = "inventory is not complete; retire its paths first"
             elif owner is not None and (owner["status"] != "removed"
@@ -383,17 +395,29 @@ class Registry:
                           "uncommitted work; check it, then name it with --include")
             (kept if reason else retire).append({**view, "reason": reason} if reason else view)
         # One evidence directory serves the inventory seal and every round seal,
-        # so the same bytes can back two items. Delete them only when no kept item
-        # still needs them.
-        needed = {item["sha256"] for item in kept}
-        for view in [v for v in retire if v["sha256"] in needed]:
-            retire.remove(view)
-            kept.append({**view, "reason": "shares retained bytes with a kept item"})
+        # so the same bytes can back two items, and a kept item's `requires`
+        # names items in its own seal. Keep both, until nothing more moves.
+        moved = True
+        while moved:
+            moved = False
+            needed = {v["sha256"] for v in kept}
+            required = {(v["sealed_by"], r) for v in kept for r in v.get("requires") or []}
+            for view in list(retire):
+                if view["sha256"] in needed:
+                    reason = "shares retained bytes with a kept item"
+                elif (view["sealed_by"], view["source"]) in required:
+                    reason = "required by a kept item"
+                else:
+                    continue
+                retire.remove(view)
+                kept.append({**view, "reason": reason})
+                moved = True
         files = {v["sha256"]: v["size"] for v in retire}
         summary = self.evidence_summary(record)
         before = summary["present"]["bytes"] + summary["retiring"]["bytes"]
         plan = {"session": token, "retire": retire, "kept": kept, "missing": missing,
                 "active_users": active_users([str(evidence / sha) for sha in files], record["pids"]),
+                "evidence_summary": summary,
                 "bytes": {"present_before": before, "removed": sum(files.values()),
                           "present_after": before - sum(files.values()),
                           "net_change": -sum(files.values())}}
@@ -411,6 +435,8 @@ class Registry:
             key = ("inventory" if owner is None else owner["receipt"]["id"], item["sha256"], item["source"])
             if key in chosen:
                 item["retired"] = {"approval": approval}
+        if not plan["retire"]:
+            return {**plan, "applied": True}  # nothing to delete: nothing written
         self.save(record)  # tombstones first: an interruption leaves "retiring", never "missing"
         evidence = self.location(token) / "evidence"
         for sha in sorted({v["sha256"] for v in plan["retire"]}):
@@ -421,7 +447,6 @@ class Registry:
             os.fsync(directory)
         finally:
             os.close(directory)
-        self.load(token)
         return {**plan, "applied": True, "evidence_summary": self.evidence_summary(self.load(token))}
 
     def inventories(self) -> list[dict]:
@@ -548,31 +573,36 @@ class Registry:
         discarded = manifest.get("discard", [])
         if not isinstance(discarded, list):
             raise sweep.ConfigError("discard must be a list")
+
+        def normal(value: object) -> str:
+            # Paths are compared after normalisation, so `a/./b` or a trailing
+            # slash cannot slip one path past a uniqueness or overlap check.
+            if not isinstance(value, str):
+                raise sweep.ConfigError("evidence paths must be absolute path strings")
+            return str(canonical(Path(value)))
+
+        # A discard entry is a declaration: the engine records it and does not
+        # check that the path exists or that the reason is true.
+        discards = []
         for item in discarded:
             if (not isinstance(item, dict) or not isinstance(item.get("reason"), str)
                     or not item["reason"].strip() or not isinstance(item.get("source"), str)):
                 raise sweep.ConfigError("each discard entry needs a source and a reason, "
                                         "such as where its result is recorded")
-            canonical(Path(item["source"]))
-        if not items and not discarded:
+            discards.append({"source": normal(item["source"]), "reason": item["reason"]})
+        if not items and not discards:
             # Discard is the normal completion path, but it is still declared:
             # an empty seal must say where the results went.
             raise sweep.ConfigError("an empty retain needs at least one discard entry saying "
                                     "where the results are recorded")
-        sources = {item.get("source") for item in items if isinstance(item, dict)}
-        if len(sources) != len(items):
-            raise sweep.ConfigError("evidence sources must be unique")
-        if sources & {item["source"] for item in discarded}:
-            raise sweep.ConfigError("a source cannot be both retained and discarded")
-        target = self.location(record["id"]) / "evidence"
-        target.mkdir(mode=0o700, exist_ok=True)
-        canonical(target)
-        retained, copied = [], 0
+        # Validate every item before copying any bytes, so a refused seal
+        # leaves no evidence file that no index names.
+        planned = []
         for item in items:
+            if not isinstance(item, dict):
+                raise sweep.ConfigError("each evidence item must be an object")
             if item.get("kind") not in KINDS or not isinstance(item.get("requires"), list):
                 raise sweep.ConfigError("each evidence item needs a supported kind and requires list")
-            if any(required not in sources for required in item["requires"]):
-                raise sweep.ConfigError("required evidence dependency is missing from retain")
             exception = item.get("exception")
             if (not isinstance(exception, dict) or set(exception) != set(EXCEPTION_FIELDS)
                     or any(not isinstance(exception[k], str) or not exception[k].strip()
@@ -580,29 +610,49 @@ class Registry:
                 raise sweep.ConfigError("retained evidence needs an exception naming its unfinished task, "
                                         "next action and deletion condition (task, next_action, "
                                         "delete_when); discard it otherwise")
-            source = canonical(Path(item["source"]))
-            # Streaming preserves large authoritative assets without trusting
-            # their filenames. Non-regular files, aliases and unreadable inputs
-            # are refused; there is no generic recursive evidence copy.
-            data_hash, size, wrote = copy_evidence(source, target)
-            copied += size if wrote else 0
-            retained.append({**item, "sha256": data_hash, "size": size,
-                             "retained": str(target / data_hash)})
+            # Only these keys are stored from the manifest. Engine state such
+            # as a `retired` tombstone can never arrive through a manifest.
+            planned.append({"source": normal(item.get("source")), "kind": item["kind"],
+                            "requires": [normal(r) for r in item["requires"]],
+                            "exception": {k: exception[k] for k in EXCEPTION_FIELDS}})
+        sources = {item["source"] for item in planned}
+        if len(sources) != len(planned):
+            raise sweep.ConfigError("evidence sources must be unique")
+        if any(required not in sources for item in planned for required in item["requires"]):
+            raise sweep.ConfigError("required evidence dependency is missing from retain")
+        if sources & {item["source"] for item in discards}:
+            raise sweep.ConfigError("a source cannot be both retained and discarded")
         retired = manifest.get("retire", [])
         if not isinstance(retired, list):
             raise sweep.ConfigError("retire must enumerate diagnostics")
         for item in retired:
             if (not isinstance(item, dict) or not isinstance(item.get("reason"), str)
-                    or not item["reason"].strip() or not item.get("replaced_by")
-                    or any(p not in sources for p in item["replaced_by"])):
+                    or not item["reason"].strip() or not isinstance(item.get("replaced_by"), list)
+                    or not item["replaced_by"]
+                    or any(normal(p) not in sources for p in item["replaced_by"])):
                 raise sweep.ConfigError("retired diagnostics need a reason and retained replacements")
-            path = canonical(Path(item["source"]))
+            path = canonical(Path(normal(item.get("source"))))
             if str(path) in sources or not any(path.is_relative_to(r["receipt"]["path"]) for r in rounds):
                 raise sweep.ConfigError("retired diagnostics must be unretained files in an owned round")
-        return {"retained": retained, "retired": retired, "discarded": discarded,
+        for item in planned:
+            hash_file(Path(item["source"]))  # every source readable before any copy
+        retained, copied = [], 0
+        if planned:
+            target = self.location(record["id"]) / "evidence"
+            target.mkdir(mode=0o700, exist_ok=True)
+            canonical(target)
+            for item in planned:
+                # Streaming preserves large authoritative assets without trusting
+                # their filenames. Non-regular files, aliases and unreadable inputs
+                # are refused; there is no generic recursive evidence copy.
+                data_hash, size, wrote = copy_evidence(Path(item["source"]), target)
+                copied += size if wrote else 0
+                retained.append({**item, "sha256": data_hash, "size": size,
+                                 "retained": str(target / data_hash)})
+        return {"retained": retained, "retired": retired, "discarded": discards,
                 "evidence_complete": True,
-                # Bytes named by the retained items, and bytes this seal newly
-                # wrote; a source already copied into this inventory adds none.
+                # Bytes the retained items name (shared content counted per
+                # item), and bytes this seal newly wrote to disk.
                 "bytes": {"retained": sum(r["size"] for r in retained), "copied": copied}}
 
     def verify_evidence(self, record: dict) -> None:
@@ -625,6 +675,8 @@ class Registry:
             # missing and refuses.
             if item.get("retired") is not None and not os.path.lexists(path):
                 continue
+            if not os.path.lexists(path):
+                raise sweep.ConfigError(f"retained evidence is missing and has no retirement tombstone: {path}")
             if hash_file(path) != (item["sha256"], item["size"]):
                 raise sweep.ConfigError(f"retained evidence changed: {path}")
 
@@ -1000,7 +1052,8 @@ def main(argv: list[str] | None = None) -> int:
             command.add_argument("--approve", metavar="APPROVAL_TOKEN",
                                  help="delete the previewed evidence; without it, only preview")
             command.add_argument("--include", metavar="SHA256", action="append", default=[],
-                                 help="also retire this excepted or source item: its deletion condition holds")
+                                 help="also retire these bytes when an exception or the source rule keeps "
+                                      "them; asserts the deletion condition of every item holding them")
         if action in ("seal", "preview", "apply"):
             command.add_argument("--round", metavar="RECEIPT_ID",
                                  help="act on one allocated round without sealing the inventory")

@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "e0ba61a4729e10673a6227ad01df8d8911c482f1dc94624e4e065f6db2c165a8"
+      "sha256": "2fb6e471078789bc70257ff2099e91c838dc4467f11f6ebfae95a9f970963f36"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "a505e1a2a980cedea7fc29b8d45494d07ddaf8088fc92e673a750ed1be6bc1bd"
+      "sha256": "440a3e961c5d69e0b045a98c2066a7fce75625f2a324c4f1d706a5cab8979b29"
     },
     "docs/agentic-dev-kit/skill-routing/cases.json": {
       "role": "repo-only",
@@ -135,7 +135,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "03622addd3ffd0fc1571706f1cc154347216507bef0a4bf86f770be07af9e3b2"
+      "sha256": "82e4a92e116706a5dff41bd07f1a0aa342a8cd8d822ef2bb580950c1b4754fe1"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -627,7 +627,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "a720798689c2bcfdc8d5df4d2cec42d8ebac671ce7e6390cae8ecbccdc6b90a2"
+      "sha256": "ab6aac74e467d641aacbfe5a6eac568d7ebdbfa5990ca728e703411f5d95cd3f"
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
@@ -783,7 +783,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "d40b73d3ac1a1aae6cac352a7c12c62ead4f177d0053d170548b0420b3df1cf3"
+      "sha256": "4137d2117d795d4e97d1708ae964095d23ff63f4dabcbe96dd692f7c397e553a"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",

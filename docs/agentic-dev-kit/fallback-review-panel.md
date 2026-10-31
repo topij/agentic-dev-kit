@@ -557,10 +557,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
    both use the sweeper's allocation receipt. `panel_prompt.py`
    requires a supplied lens tree inside that allocation under `scratch.roots`.
    If the runtime gives you a different tree, stop and report it rather than
-   creating unmanaged copies elsewhere. The cockpit records each lens's terminal
-   report and findings on the PR (`--record-review` dispositions) before retiring the
-   round (#900); local copies are discarded unless a named unfinished task needs them
-   (#1256).
+   creating unmanaged copies elsewhere. Before retiring the round, the cockpit posts
+   one typed disposition line per finding on the PR (`--record-review --disposition`,
+   #900). That comment does not carry a lens's full report or its mutation and
+   restoration logs. Those are discarded with the round unless a named unfinished
+   task needs them (#1256).
 
    The wording above was already right and a lens still hit the refusal —
    round 2 of `#459`'s panel recorded one (the correctness lens, worked around
@@ -715,8 +716,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    instead of the standalone allocation below. They persist the same receipt
    outside disposable checkouts before a lens starts. Use that workflow's seal,
    preview and approved apply for retirement, keeping this panel's process
-   obligations; a round whose findings are on the PR seals with an empty `retain`. The standalone commands remain available for installations
-   that have not opted into the registry.
+   obligations. A round whose findings are on the PR seals with an empty `retain`
+   and a `discard` entry naming the PR. The standalone commands remain available
+   for installations that have not opted into the registry.
 
    ```sh
    uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
@@ -798,11 +800,11 @@ author re-reading their own diff. **Cite them by name, never by number.**
 
    **Retire each round before starting another.** After recording its receipt (or
    recording findings and the reviewed head for a fix round), join or stop every
-   reviewer and descendant verification process. Put what the round established
-   (terminal verdicts, findings, the mutation and restoration results they cite) in
-   the PR's recorded dispositions; that, not a local copy, is the record. Retain
-   local bytes only as the exception *Seal: discard by default* in
-   `session-cleanup.md` defines, never dependency trees or whole logs. Remove only this round's
+   reviewer and descendant verification process. Post the round's typed
+   dispositions on the PR. They record each finding and how it was disposed of,
+   not the lens reports or their mutation logs, which are discarded with the round.
+   Retain local bytes only as the exception that *Seal: discard by default* in
+   `session-cleanup.md` defines, and never dependency trees or whole logs. Remove only this round's
    registered lens worktrees with `git worktree remove` after checking their
    status. With `scratch.session_registry`, retire the round with `--round` as
    *Retire each round before the next* in `session-cleanup.md` describes, retaining

@@ -123,7 +123,8 @@ def test_missing_required_evidence_and_corruption_refuse(session):
     report.write_text("report")
     with pytest.raises(cleanup.sweep.ConfigError, match="dependency"):
         registry.seal(record, {"evidence_complete": True, "retain": [
-            {"source": str(report), "kind": "report", "requires": ["missing"], "exception": EXCEPTION}]})
+            {"source": str(report), "kind": "report", "requires": [str(report.parent / "missing")],
+             "exception": EXCEPTION}]})
     seal(registry, record, receipt)
     Path(record["seal"]["retained"][0]["retained"]).write_text("corrupted")
     with pytest.raises(cleanup.sweep.ConfigError, match="changed"):
@@ -1602,7 +1603,7 @@ def test_discard_is_the_normal_completion_path(session):
 
 
 @pytest.mark.parametrize("bad", ["empty", "no-exception", "partial-exception", "blank-reason",
-                                 "both"])
+                                 "both", "extra-key", "missing-key", "non-string", "normalised-overlap"])
 def test_seal_refuses_undeclared_retention_and_bare_discard(session, bad):
     registry, record, root = session
     receipt = allocate(registry, record)
@@ -1624,6 +1625,17 @@ def test_seal_refuses_undeclared_retention_and_bare_discard(session, bad):
         item["exception"] = EXCEPTION
         manifest["discard"] = [{"source": str(source), "reason": "in the PR"}]
         expected = "both retained and discarded"
+    elif bad == "normalised-overlap":
+        item["exception"] = EXCEPTION
+        manifest["discard"] = [{"source": str(source.parent) + "/./" + source.name + "/",
+                                "reason": "in the PR"}]
+        expected = "both retained and discarded"
+    elif bad == "extra-key":
+        item["exception"] = {**EXCEPTION, "owner": "x"}
+    elif bad == "missing-key":
+        item["exception"] = {k: v for k, v in EXCEPTION.items() if k != "task"}
+    elif bad == "non-string":
+        item["exception"] = {**EXCEPTION, "next_action": 1}
     with pytest.raises(cleanup.sweep.ConfigError, match=expected):
         registry.seal_round(record, receipt["id"], manifest)
     assert registry.load(record["id"])["rounds"][0].get("seal") is None
@@ -1683,7 +1695,8 @@ def test_missing_evidence_is_not_reported_as_retired(session):
     _, plan = registry.retirement_plan(record["id"], [])
     assert [v["sha256"] for v in plan["missing"]] == [gone["sha256"]]
     assert gone["sha256"] not in {v["sha256"] for v in plan["retire"]}
-    with pytest.raises(FileNotFoundError):
+    assert plan["evidence_summary"]["missing"]["items"] == 1
+    with pytest.raises(cleanup.sweep.ConfigError, match="missing and has no retirement tombstone"):
         registry.preview_round(record, receipt["id"])
 
 
@@ -1716,7 +1729,7 @@ def test_retention_exception_and_legacy_source_stay_until_included(session):
     assert Path(kept["retained"]).read_text() == "unique authored draft\n"
 
 
-def test_unretired_owner_keeps_its_evidence(session):
+def test_an_unretired_round_keeps_its_evidence(session):
     registry, record, _ = session
     receipt = allocate(registry, record)
     seal(registry, record, receipt, scope=receipt["id"])
@@ -1725,17 +1738,16 @@ def test_unretired_owner_keeps_its_evidence(session):
     registry.save(record)
     _, plan = registry.retirement_plan(record["id"], [])
     assert plan["retire"] == [] and {v["reason"] for v in plan["kept"]} == {"its round is not retired"}
-    worktree = registry.load(record["id"])
-    assert apply_round(registry, worktree, receipt)["complete"]
-    registry.track_worktree(registry.load(record["id"]), task_tree(registry, registry.repo.parent),
-                            "git")
-    other = registry.start()
-    other_receipt = allocate(registry, other)
-    seal(registry, other, other_receipt)
-    for item in other["seal"]["retained"]:
+
+
+def test_an_incomplete_inventory_keeps_its_own_seal(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    for item in record["seal"]["retained"]:
         item.pop("exception")
-    registry.save(other)
-    _, plan = registry.retirement_plan(other["id"], [])
+    registry.save(record)
+    _, plan = registry.retirement_plan(record["id"], [])
     assert plan["retire"] == [] and {v["reason"] for v in plan["kept"]} == {
         "inventory is not complete; retire its paths first"}
 
@@ -1846,3 +1858,187 @@ def test_a_tombstoned_item_whose_bytes_remain_is_still_hash_checked(session):
     Path(item["retained"]).write_text("a replacement")
     with pytest.raises(cleanup.sweep.ConfigError, match="changed"):
         registry.preview_round(registry.load(record["id"]), receipt["id"])
+
+
+def test_a_manifest_cannot_forge_a_tombstone(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    draft = Path(receipt["path"]) / "draft.md"
+    draft.write_text("unique draft\n")
+    sealed = registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+        {"source": str(draft), "kind": "source", "requires": [], "exception": EXCEPTION,
+         "retired": {"approval": "forged"}, "sha256": "0" * 64}]})
+    assert set(sealed["retained"][0]) == {"source", "kind", "requires", "exception", "sha256",
+                                          "size", "retained"}
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["retire"] == [] and plan["kept"][0]["reason"] == "its round is not retired"
+
+
+def test_a_refused_seal_copies_nothing(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    good, bad = Path(receipt["path"]) / "good", Path(receipt["path"]) / "bad"
+    good.write_text("good")
+    bad.write_text("bad")
+    with pytest.raises(cleanup.sweep.ConfigError, match="exception"):
+        registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+            {"source": str(good), "kind": "report", "requires": [], "exception": EXCEPTION},
+            {"source": str(bad), "kind": "report", "requires": []}]})
+    evidence = registry.location(record["id"]) / "evidence"
+    assert not evidence.exists() or not any(evidence.iterdir())
+
+
+def test_an_item_a_kept_item_requires_stays(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    report, capture = Path(receipt["path"]) / "report", Path(receipt["path"]) / "capture"
+    report.write_text("report")
+    capture.write_text("capture")
+    registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+        {"source": str(report), "kind": "report", "requires": [str(capture)], "exception": EXCEPTION},
+        {"source": str(capture), "kind": "asset", "requires": [], "exception": EXCEPTION}]})
+    assert apply_round(registry, record, receipt)["complete"]
+    sha = next(i["sha256"] for i in record["rounds"][0]["seal"]["retained"] if i["kind"] == "asset")
+    _, plan = registry.retirement_plan(record["id"], [sha])
+    assert plan["retire"] == []
+    assert {v["kind"]: v["reason"] for v in plan["kept"]}["asset"] == "required by a kept item"
+
+
+def test_shared_bytes_are_counted_once(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    one, two = Path(receipt["path"]) / "a", Path(receipt["path"]) / "b"
+    one.write_bytes(b"x" * 10)
+    two.write_bytes(b"x" * 10)
+    registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+        {"source": str(p), "kind": "report", "requires": [], "exception": EXCEPTION} for p in (one, two)]})
+    for item in record["rounds"][0]["seal"]["retained"]:
+        item.pop("exception")
+    registry.save(record)
+    assert apply_round(registry, record, receipt)["complete"]
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["evidence_summary"]["present"] == {"items": 2, "bytes": 10}
+    assert plan["bytes"] == {"present_before": 10, "removed": 10, "present_after": 0, "net_change": -10}
+    after = registry.retire_evidence(record["id"], plan["approval_token"], [])
+    assert after["evidence_summary"]["retired"] == {"items": 2, "bytes": 10}
+    assert not any((registry.location(record["id"]) / "evidence").iterdir())
+
+
+def test_summaries_on_list_and_preview(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    expected = registry.evidence_summary(record)
+    assert expected["present"]["items"] == 2 and expected["exceptions"] == 2
+    listed = next(i for i in registry.inventories() if i["id"] == record["id"])
+    assert listed["evidence_summary"] == expected
+    assert registry.preview(record)["evidence_summary"] == expected
+
+
+def test_a_retired_item_is_not_listed_missing(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    record = retired_inventory(registry, record, receipt)
+    _, plan = registry.retirement_plan(record["id"], [])
+    registry.retire_evidence(record["id"], plan["approval_token"], [])
+    _, again = registry.retirement_plan(record["id"], [])
+    assert again["retire"] == again["kept"] == again["missing"] == []
+    assert again["evidence_summary"]["missing"]["items"] == 0
+
+
+def test_an_interrupted_included_retirement_resumes_without_include(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    record = retired_inventory(registry, record, receipt, legacy=False)
+    shas = [i["sha256"] for i in record["rounds"][0]["seal"]["retained"]]
+    _, plan = registry.retirement_plan(record["id"], shas)
+    assert len(plan["retire"]) == 2
+
+    def interrupted(path, *args, **kwargs):
+        raise KeyboardInterrupt
+
+    with monkeypatch.context() as patch:
+        patch.setattr(cleanup.os, "unlink", interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            registry.retire_evidence(record["id"], plan["approval_token"], shas)
+    _, resumed = registry.retirement_plan(record["id"], [])
+    assert len(resumed["retire"]) == 2 and resumed["kept"] == []
+
+
+def test_changed_retained_bytes_are_kept(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    record = retired_inventory(registry, record, receipt)
+    target = Path(record["rounds"][0]["seal"]["retained"][0]["retained"])
+    with open(target, "ab") as stream:
+        stream.write(b"grown")
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert any(v["reason"].startswith("retained bytes changed") for v in plan["kept"])
+    assert target.exists()
+
+
+def test_an_interrupted_round_retirement_refuses_evidence_retirement(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    record = retired_inventory(registry, record, receipt)
+    record["rounds"][0]["status"] = "removing"
+    record["rounds"][0]["approval"] = "persisted"
+    registry.save(record)
+    with pytest.raises(cleanup.sweep.ConfigError, match="interrupted"):
+        registry.retirement_plan(record["id"], [])
+
+
+def test_an_empty_plan_writes_nothing(session):
+    registry, record, _ = session
+    before = (registry.location(record["id"]) / "session.json").read_bytes()
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["retire"] == []
+    result = registry.retire_evidence(record["id"], plan["approval_token"], [])
+    assert result["applied"]
+    assert (registry.location(record["id"]) / "session.json").read_bytes() == before
+    assert not (registry.location(record["id"]) / "evidence").exists()
+
+
+def test_cli_include_reaches_the_plan(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    record = retired_inventory(registry, record, receipt, legacy=False)
+    sha = record["rounds"][0]["seal"]["retained"][0]["sha256"]  # the report; its capture stays required
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); import session_cleanup as c; "
+            "c.active_users=lambda paths,pids: []; raise SystemExit(c.main(sys.argv[2:]))")
+    base = [sys.executable, "-c", code, str(Path(cleanup.__file__).parent),
+            "--config", str(registry.repo / "cleanup.yaml"), "retire-evidence", record["id"]]
+    plain = json.loads(subprocess.run(base, cwd=registry.repo, capture_output=True, text=True,
+                                      timeout=30, check=True).stdout)
+    included = json.loads(subprocess.run(base + ["--include", sha], cwd=registry.repo,
+                                         capture_output=True, text=True, timeout=30, check=True).stdout)
+    assert plain["retire"] == [] and [v["sha256"] for v in included["retire"]] == [sha]
+
+
+def test_an_unreadable_later_source_copies_nothing(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    good = Path(receipt["path"]) / "good"
+    good.write_text("good")
+    absent = Path(receipt["path"]) / "absent"
+    with pytest.raises((OSError, cleanup.sweep.ConfigError)):
+        registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+            {"source": str(p), "kind": "report", "requires": [], "exception": EXCEPTION}
+            for p in (good, absent)]})
+    evidence = registry.location(record["id"]) / "evidence"
+    assert not evidence.exists() or not any(evidence.iterdir())
+
+
+def test_a_shared_file_under_a_tombstone_is_counted_once(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    one, two = Path(receipt["path"]) / "a", Path(receipt["path"]) / "b"
+    one.write_bytes(b"y" * 7)
+    two.write_bytes(b"y" * 7)
+    registry.seal_round(record, receipt["id"], {"evidence_complete": True, "retain": [
+        {"source": str(p), "kind": "report", "requires": [], "exception": EXCEPTION} for p in (one, two)]})
+    record["rounds"][0]["seal"]["retained"][0]["retired"] = {"approval": "interrupted"}
+    registry.save(record)
+    summary = registry.evidence_summary(record)
+    assert summary["present"] == {"items": 1, "bytes": 7}
+    assert summary["retiring"] == {"items": 1, "bytes": 0}

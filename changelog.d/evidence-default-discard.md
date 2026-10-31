@@ -13,14 +13,21 @@ seals without copying anything. A source cannot be both retained and discarded.
 
 ADDED: `session_cleanup.py retire-evidence <session> [--include <sha256>]` previews
 deleting retained evidence that no unfinished task needs, and `--approve <token>`
-applies it. Items keep a tombstone (`retired`) with their hash, size, kind, source
+applies it under operator authorization naming that inventory; a standing cleanup
+grant does not cover it. Items keep a tombstone (`retired`) with their hash, size, kind, source
 and exception. Items with an exception, and `source` items sealed before this
 change, stay kept unless named with `--include`.
 
 ADDED: the seal reports `bytes.retained` and `bytes.copied`. `preview`,
-`preview --round` and each `list` entry report `evidence_summary` with `present`,
-`retiring`, `retired` and `missing` item counts and bytes. A consumer that compares
-these outputs exactly will see the new keys.
+`preview --round` (whole inventory), each `list` entry and the `retire-evidence` plan
+report `evidence_summary`: `present`, `retiring`, `retired` and `missing`, each with
+`items` (index entries) and `bytes` (each stored file once), plus an `exceptions`
+count. A consumer that compares these outputs exactly will see the new keys.
+
+CHANGED: a seal stores only `source`, `kind`, `requires` and `exception` from each
+retained manifest item, with paths normalised, and validates every item before it
+copies any bytes. A preview of a seal whose retained bytes are absent without a
+tombstone now refuses with a named error rather than a raw file-not-found.
 
 To reclaim space held by inventories sealed before this change, run
 `retire-evidence` on each complete inventory under the operator's authorization;

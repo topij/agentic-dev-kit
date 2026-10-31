@@ -232,10 +232,10 @@ session whose PRs passed the handoff test does not need one; clean up what the
 session created as you go either way.
 
 For disposable review rounds and task checkouts, follow the
-[evidence retention and cleanup guide](developer-guide.md#retain-evidence-and-finish-session-cleanup).
+[evidence and cleanup guide](developer-guide.md#discard-evidence-and-finish-session-cleanup).
 A session deletes the paths it created and recorded once nothing needs them, and
-the full `wrap-up` reports what it removed and what it kept. Keep required evidence before
-retiring scratch, and obtain authorization for the concrete deletion scope: either
+the full `wrap-up` reports what it removed and what it kept. Completed evidence is discarded by default, so
+retiring scratch needs no copy of it. Obtain authorization for the concrete deletion scope: either
 the operator's approval, or a standing grant you copy into `AGENTS.md` from the
 *Session cleanup* section of [`AGENTS-sections.md`](AGENTS-sections.md). A wrap-up
 invocation alone does not provide it.

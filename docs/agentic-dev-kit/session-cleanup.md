@@ -28,7 +28,7 @@ see whatever is missed.
 | What the session created | When it is no longer needed | How to remove it |
 |---|---|---|
 | A review round | its receipt or findings are recorded on the PR | the round retirement in `fallback-review-panel.md`, or the registry lifecycle below |
-| A lens or verifier worktree | its report is retained | `git worktree remove <path>` without `--force`, after checking its status and that its `HEAD` is reachable from a pushed ref |
+| A lens or verifier worktree | its findings are dispositioned on the PR | `git worktree remove <path>` without `--force`, after checking its status and that its `HEAD` is reachable from a pushed ref |
 | A throwaway clone, extracted archive, eval output or build tree | its result has been read and anything worth keeping copied out | delete that exact recorded path |
 | A killed or abandoned test run's basetemp | the run it belonged to is over | delete that exact recorded path |
 | A parallel lane this session launched and recorded | its PR merged and its PR body carries the lane's handoff | `<engine-dir>/dev_session.sh rm <scope>`, which owns the lane's sandbox removal; never delete a lane's `state/` sandbox by hand |
@@ -45,9 +45,9 @@ and holds no commit that exists nowhere else.
 
 **Never delete**, whatever a rule above seems to allow: anything this session did not
 create; the primary checkout; the kit's `state/` sandboxes and anything the
-configuration names as state; the registry under `<git-common-dir>/devkit/` by hand
-(retained evidence leaves only through `retire-evidence` below); an allocation receipt
-whose retirement has not completed; the handoff and
+configuration names as state; the registry under `<git-common-dir>/devkit/`, retained
+evidence included (it leaves only through `retire-evidence` below, under operator
+authorization); an allocation receipt whose retirement has not completed; the handoff and
 friction-log files; shared caches such as the package manager's; or a tree with
 uncommitted or unpushed work. An engine refusal or `kept` result stays kept: report
 it, and never weaken a guard, reset timestamps or broaden a root to clear it.
@@ -233,8 +233,11 @@ which it may be deleted, and the engine refuses one without all three:
 
 Supported kinds are `report`, `finding`, `verification`, `compute`, `source`,
 `asset` and `receipt`. Each `requires` path must also appear in `retain`. A source
-may not be both retained and discarded, and an empty `retain` needs at least one
-`discard` entry. `evidence_complete` is the caller's explicit assertion of the
+may not be both retained and discarded (paths compare after normalisation), and an
+empty `retain` needs at least one `discard` entry. A discard entry is a declaration:
+the engine records it and does not check that its path exists or that its reason is
+true. Only `source`, `kind`, `requires` and `exception` are stored from a retained
+item, and every item is validated before any bytes are copied. `evidence_complete` is the caller's explicit assertion of the
 complete evidence closure; the engine cannot infer it from arbitrary prose. Missing,
 unreadable, aliased or non-regular evidence blocks sealing. Package caches,
 basetemps, build trees and whole-workspace archives are never retained. The older
@@ -247,7 +250,8 @@ uv run <engine-dir>/session_cleanup.py seal <session> <absolute-manifest>
 
 Retained bytes are copied, content-addressed, into the inventory and hash-checked
 before cleanup. The seal reports `bytes.retained` (what its items name) and
-`bytes.copied` (what it newly wrote; bytes already in this inventory add none).
+`bytes.copied` (what it newly wrote; bytes already in this inventory add none, and
+items with the same content share one file).
 Sealing freezes the inventory; new work uses a new session. Retained bytes are
 local: a fresh clone does not contain them.
 
@@ -265,27 +269,33 @@ The preview writes nothing. It lists `retire`, `kept` with a reason, `missing`,
 active users, and `bytes` (`present_before`, `removed`, `present_after`,
 `net_change`). An item is eligible once the round that sealed it is removed and its
 path gone, or, for the inventory's own seal, once the inventory is complete. These
-stay kept unless named with `--include`, which asserts that the item's deletion
-condition holds:
+stay kept unless their bytes are named with `--include <sha256>`:
 
 - an item with an `exception`; the preview shows its `delete_when`;
 - a `source` item sealed without an exception, which may be the only copy of
   uncommitted work.
 
-Bytes shared with a kept item in the same inventory stay. Each inventory holds its
+Items with the same content share one file, so `--include` names that file and
+retires every item holding it: it asserts the deletion condition of each one, all
+of which the preview lists. Bytes shared with a kept item stay, and so does an item
+that a kept item `requires`. Each inventory holds its
 own copy, so retiring one never touches another's. A retained path outside the
 inventory's evidence directory refuses, and an active user of the evidence blocks
 the apply. The token binds the stored record and the plan, and is not itself
-operator consent: apply under authorization that covers that inventory's evidence.
-A standing grant under *Clean up what this session created* covers evidence this
-session retained.
+operator consent. Apply only under operator authorization that names that
+inventory's evidence. A standing grant under *Clean up what this session created*
+does not cover it.
 
 Apply writes a tombstone on each item (`retired` with the approval) before deleting
-its bytes, and keeps the hash, size, kind, source and exception. Every
-`preview`, `list` and plan reports `evidence_summary`: `present`, `retiring` (a
+its bytes, and keeps the hash, size, kind, source and exception. A plan with
+nothing to retire writes nothing. `preview`, `preview --round` (which summarises the
+whole inventory), each `list` entry and the `retire-evidence` plan report
+`evidence_summary`. Its `items` count index entries and its `bytes` count each stored
+file once. Its states are `present`, `retiring` (a
 tombstone whose bytes are still there: an interrupted apply, which the next preview
 lists again), `retired`, and `missing` (absent with no tombstone, which nothing here
-authorized and which still blocks a preview of that seal). Historical receipts can
+authorized and which still blocks a preview of that seal), plus an `exceptions`
+count of items that carry a retention exception. Historical receipts can
 say what existed; they never read a retired item as available or a missing one as
 retired.
 

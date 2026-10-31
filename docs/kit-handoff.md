@@ -102,7 +102,7 @@ on 2026-10-22 and 2026-10-23 (`review-72a279dd…` among them).
 round-3 LOWs are #1259. #1261 (`87a5f18b`) names the differing bound field in an
 unavailable inventory's refusal and adds an approved `reconcile` for a changed device
 number, under the preconditions in `session-cleanup.md`. It deletes nothing. Retained evidence is discarded by default and retires through
-`session_cleanup.py retire-evidence` since the pull request on branch `feat/evidence-default-discard` (#1256, #1315);
+`session_cleanup.py retire-evidence` once #1316 merges (#1256, #1315);
 the cross-inventory shared store and a seal byte budget from those tickets were left out of it as secondary. #1261's review LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
 #1256. `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) shipped #1253's binding of inventories
@@ -125,7 +125,7 @@ no open ticket covers yet, and a `configured.git` dir (#1279).
 [#1279](https://github.com/topij/agentic-dev-kit/issues/1279),
 [#1280](https://github.com/topij/agentic-dev-kit/issues/1280).
 
-▶ Next: once `feat/evidence-default-discard` merges, decide with the operator whether #1256's seal byte budget and
+▶ Next: once #1316 merges, decide with the operator whether #1256's seal byte budget and
 #1315's shared store are still wanted, then take #1278, #1307 and #1312 in that order. Before that: #1279 — clear `test_panel_prompt.py`'s `configured.git` keeper. Then preview rounds `01234b40`, `5ced121b`
 and `e388daaa` with `session_cleanup.py preview --round`, and retire each one it reports eligible, with the operator's
 approval. Round `5ced121b` stays kept for its multi-line `.git` pointer until a change, not yet ticketed, releases it.
