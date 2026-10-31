@@ -28,11 +28,11 @@ see whatever is missed.
 | What the session created | When it is no longer needed | How to remove it |
 |---|---|---|
 | A review round | its receipt or findings are recorded on the PR | the round retirement in `fallback-review-panel.md`, or the registry lifecycle below |
-| A lens or verifier worktree | its findings are dispositioned on the PR | `git worktree remove <path>` without `--force`, after checking its status and that its `HEAD` is reachable from a pushed ref |
+| A lens or verifier worktree | its findings are dispositioned on the PR | `git worktree remove <path>` without `--force`, after checking its status and that its `HEAD` is reachable from a local branch or tag (a remote-tracking ref can be pruned) |
 | A throwaway clone, extracted archive, eval output or build tree | its result has been read and anything worth keeping copied out | delete that exact recorded path |
 | A killed or abandoned test run's basetemp | the run it belonged to is over | delete that exact recorded path |
 | A parallel lane this session launched and recorded | its PR merged and its PR body carries the lane's handoff | `<engine-dir>/dev_session.sh rm <scope>`, which owns the lane's sandbox removal; never delete a lane's `state/` sandbox by hand |
-| The session's own linked task worktree | its PR merged, or closed with its head pushed | from the primary checkout, with the shell outside the worktree: `git worktree remove <path>` without `--force`, after checking its `HEAD` is reachable from a pushed ref; a Codex app-managed worktree goes through the native archive |
+| The session's own linked task worktree | its PR merged, or closed with its head pushed | from the primary checkout, with the shell outside the worktree: `git worktree remove <path>` without `--force`, after checking its `HEAD` is reachable from a local branch or tag (a remote-tracking ref can be pruned); a Codex app-managed worktree goes through the native archive |
 
 With `scratch.session_registry` configured, a worktree the session registered with
 `track-worktree` retires through the sealed-inventory lifecycle below, not through a
@@ -136,9 +136,14 @@ recorded but branches are not deleted by this engine. A branch's forge lifecycle
 remains separate from local scratch retirement. Ordinary Git retirement requires
 the recorded commit to be reachable from a local branch or tag; preserve an
 unreferenced detached commit on one before retrying. A remote-tracking ref does not
-count: `git fetch --prune` deletes one that a fetch refspec maps once its remote
-source is gone, such as a merged PR's deleted branch or a `refs/remotes/origin/pr/<n>`
-fetched from `refs/pull/<n>/head`, so it can vanish between preview and apply.
+count: `git fetch --prune` deletes one under a fetch refspec's destination pattern
+when the remote has no ref at the source that pattern maps it back to, so it can
+vanish between preview and apply. That covers a merged PR's deleted branch, and a
+`refs/remotes/origin/pr/<n>` fetched from `refs/pull/<n>/head`: the default
+`+refs/heads/*:refs/remotes/origin/*` maps it to a `refs/heads/pr/<n>` that does not
+exist, even while the pull ref does. A local branch or tag is durable only while no
+fetch refspec maps into `refs/heads` or `refs/tags` (a mirror refspec, or
+`--prune-tags`); with one, a prune can delete it too, and the check assumes none.
 Checkout-local refs such as bisect/worktree/rewritten refs disappear on removal
 and cannot establish retention. Other custom ref namespaces are conservatively
 insufficient too. Codex's native archive preserves its commit snapshot instead.

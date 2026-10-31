@@ -492,8 +492,10 @@ def test_ignored_data_requires_preservation_before_retirement(session, runtime):
     assert result["paths"][0]["action"] == ("removed" if runtime == "git" else "archive-with-runtime")
 
 
-# A remote-tracking ref does not retain: a prune deletes a mapped one whose
-# remote source is gone, as refs/remotes/origin/pr/<n> was in #1312.
+# A remote-tracking ref does not retain: a prune deletes one under a fetch
+# refspec's destination pattern when the remote has no matching source, as
+# refs/remotes/origin/pr/<n> was in #1312 (mapped to a refs/heads/pr/<n>
+# that does not exist).
 @pytest.mark.parametrize("unretaining_ref", [None, "refs/bisect/good", "refs/worktree/keep", "refs/rewritten/keep",
                                              "refs/remotes/origin/pr/5", "refs/remotes/origin/feat/x"])
 @pytest.mark.parametrize("preserve", ["branch", "tag"])
@@ -508,9 +510,11 @@ def test_unreferenced_detached_commit_preserved(session, unretaining_ref, preser
     registry.track_worktree(record, task, "git")
     receipt = allocate(registry, record)
     seal(registry, record, receipt)
+    reason = ("worktree head has no containing local branch or tag; "
+              "preserve the commit with one before retirement")
+    assert registry.preview(record)["paths"][0]["reason"] == reason
     result = apply(registry, record)
-    assert result["paths"][0]["reason"] == ("worktree head has no containing local branch or tag; "
-                                            "preserve the commit with one before retirement")
+    assert result["paths"][0]["reason"] == reason
     assert cleanup.git(task, "rev-parse", "HEAD") == head
     cleanup.git(registry.repo, preserve, "retained", head)
     assert apply(registry, record)["complete"]

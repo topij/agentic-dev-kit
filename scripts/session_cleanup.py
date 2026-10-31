@@ -786,11 +786,16 @@ class Registry:
             return "worktree has ignored content; retain or move it before retirement"
         # Only local branches and tags establish retention.
         # refs/bisect, refs/worktree and refs/rewritten can belong to this checkout
-        # and disappear with it. A remote-tracking ref is not durable either: a
-        # `git fetch --prune` deletes one that a fetch refspec maps once its
-        # source is gone from the remote (a merged PR's deleted branch, or
-        # refs/remotes/origin/pr/<n> fetched from refs/pull/<n>/head), so preview
-        # and apply could disagree on it (#1312). Other namespaces (including
+        # and disappear with it. A remote-tracking ref is not durable either:
+        # `git fetch --prune` deletes one under a fetch refspec's destination
+        # pattern when the remote has no ref at the source that pattern maps it
+        # back to. That covers a merged PR's deleted branch, and also
+        # refs/remotes/origin/pr/<n> fetched from refs/pull/<n>/head, which the
+        # default +refs/heads/*:refs/remotes/origin/* maps to a refs/heads/pr/<n>
+        # that does not exist while the pull ref does. So preview and apply could
+        # disagree on it (#1312). A local branch or tag is durable only while no
+        # fetch refspec maps into refs/heads or refs/tags (a mirror refspec, or
+        # --prune-tags); this check assumes none does. Other namespaces (including
         # shared stash/notes and custom refs) are conservatively insufficient;
         # create a branch/tag.
         if worktree["runtime"] == "git" and not git(path, "for-each-ref", "--contains", worktree["head"], "--format=%(refname)", "refs/heads", "refs/tags"):
