@@ -492,22 +492,31 @@ def test_ignored_data_requires_preservation_before_retirement(session, runtime):
     assert result["paths"][0]["action"] == ("removed" if runtime == "git" else "archive-with-runtime")
 
 
-@pytest.mark.parametrize("local_ref", [None, "refs/bisect/good", "refs/worktree/keep", "refs/rewritten/keep"])
-def test_unreferenced_detached_commit_preserved(session, local_ref):
+# A remote-tracking ref does not retain: a prune deletes one under a fetch
+# refspec's destination pattern when the remote has no matching source, as
+# refs/remotes/origin/pr/<n> was in #1312 (mapped to a refs/heads/pr/<n>
+# that does not exist).
+@pytest.mark.parametrize("unretaining_ref", [None, "refs/bisect/good", "refs/worktree/keep", "refs/rewritten/keep",
+                                             "refs/remotes/origin/pr/5", "refs/remotes/origin/feat/x"])
+@pytest.mark.parametrize("preserve", ["branch", "tag"])
+def test_unreferenced_detached_commit_preserved(session, unretaining_ref, preserve):
     registry, record, root = session
     task = task_tree(registry, root)
     (task / ".gitignore").write_text("cache/\n")
     commit(task)
     head = cleanup.git(task, "rev-parse", "HEAD")
-    if local_ref:
-        cleanup.git(task, "update-ref", local_ref, head)
+    if unretaining_ref:
+        cleanup.git(task, "update-ref", unretaining_ref, head)
     registry.track_worktree(record, task, "git")
     receipt = allocate(registry, record)
     seal(registry, record, receipt)
+    reason = ("worktree head has no containing local branch or tag; "
+              "preserve the commit with one before retirement")
+    assert registry.preview(record)["paths"][0]["reason"] == reason
     result = apply(registry, record)
-    assert "no containing shared branch" in result["paths"][0]["reason"]
+    assert result["paths"][0]["reason"] == reason
     assert cleanup.git(task, "rev-parse", "HEAD") == head
-    cleanup.git(registry.repo, "branch", "retained", head)
+    cleanup.git(registry.repo, preserve, "retained", head)
     assert apply(registry, record)["complete"]
     assert cleanup.git(registry.repo, "rev-parse", "retained") == head
 

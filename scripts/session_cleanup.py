@@ -784,12 +784,22 @@ class Registry:
         # seal assertion alone does not distinguish a cache from unique data.
         if git(path, "ls-files", "--others", "--ignored", "--exclude-standard", "--directory", "-z"):
             return "worktree has ignored content; retain or move it before retirement"
-        # Only shared branches, tags and remote-tracking refs establish retention.
+        # Only local branches and tags establish retention.
         # refs/bisect, refs/worktree and refs/rewritten can belong to this checkout
-        # and disappear with it. Other namespaces (including shared stash/notes
-        # and custom refs) are conservatively insufficient; create a branch/tag.
-        if worktree["runtime"] == "git" and not git(path, "for-each-ref", "--contains", worktree["head"], "--format=%(refname)", "refs/heads", "refs/tags", "refs/remotes"):
-            return "worktree head has no containing shared branch, tag or remote ref; preserve the commit before retirement"
+        # and disappear with it. A remote-tracking ref is not durable either:
+        # `git fetch --prune` deletes one under a fetch refspec's destination
+        # pattern when the remote has no ref at the source that pattern maps it
+        # back to. That covers a merged PR's deleted branch, and also
+        # refs/remotes/origin/pr/<n> fetched from refs/pull/<n>/head, which the
+        # default +refs/heads/*:refs/remotes/origin/* maps to a refs/heads/pr/<n>
+        # that does not exist while the pull ref does. So preview and apply could
+        # disagree on it (#1312). A local branch or tag is durable only while no
+        # fetch refspec maps into refs/heads or refs/tags (a mirror refspec, or
+        # --prune-tags); this check assumes none does. Other namespaces (including
+        # shared stash/notes and custom refs) are conservatively insufficient;
+        # create a branch/tag.
+        if worktree["runtime"] == "git" and not git(path, "for-each-ref", "--contains", worktree["head"], "--format=%(refname)", "refs/heads", "refs/tags"):
+            return "worktree head has no containing local branch or tag; preserve the commit with one before retirement"
         if Path.cwd().resolve().is_relative_to(path):
             return "invoke cleanup from outside the worktree"
         return None

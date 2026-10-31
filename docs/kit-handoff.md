@@ -114,6 +114,13 @@ fixture (#1265). #1277 (`e372ba36`) released that record's keep, and `configured
 round (#1279). #1277's review rounds `5ced121b` and `e388daaa` are also kept on disk, in inventory `a5b9c398`, by lens
 probe leftovers: a `.git` file whose `gitdir:` pointer spans lines, which `_linked_gitdir_reason` keeps on purpose and
 no open ticket covers yet, and a `configured.git` dir (#1279).
+#1319 (`c08a3f56`) retires a round whose scratch root is gone too as `absent`, marked unverified (#1278).
+#1321 (`97b1780a`) retires a tracked task worktree nested under the primary checkout (#1307); its delta
+review's test-pinning LOWs are #1322. #1323 delivers #1312: it counts only local branches and tags as a retiring worktree's
+commit retention, not remote-tracking refs, which `git fetch --prune` can delete. #1312 proposed counting
+the refs a fetch refspec maps, which are the ones a prune deletes once the remote has no ref at their
+mapped source; the operator chose branches and tags only over that and over counting the unmapped ones,
+on 2026-10-31.
 **Owner:** [#997](https://github.com/topij/agentic-dev-kit/issues/997),
 [#996](https://github.com/topij/agentic-dev-kit/issues/996),
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
@@ -123,14 +130,13 @@ no open ticket covers yet, and a `configured.git` dir (#1279).
 [#1259](https://github.com/topij/agentic-dev-kit/issues/1259),
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1279](https://github.com/topij/agentic-dev-kit/issues/1279),
-[#1280](https://github.com/topij/agentic-dev-kit/issues/1280).
+[#1280](https://github.com/topij/agentic-dev-kit/issues/1280),
+[#1322](https://github.com/topij/agentic-dev-kit/issues/1322).
 
 ▶ Next: #1279 — clear `test_panel_prompt.py`'s `configured.git` keeper. Then preview rounds `01234b40`, `5ced121b`
 and `e388daaa` with `session_cleanup.py preview --round`, and retire each one it reports eligible, with the operator's
 approval. Round `5ced121b` stays kept for its multi-line `.git` pointer until a change, not yet ticketed, releases it.
-Separately: #1316 merged as `36ca2bae`; decide with the operator whether #1256's seal byte budget and #1315's shared
-store are still wanted, and take #1307, then #1312, one PR each: the operator set that order on 2026-10-31. #1278 is
-PR #1319.
+Separately: decide with the operator whether #1256's seal byte budget and #1315's shared store are still wanted.
 
 ### Reviewer profiles
 
