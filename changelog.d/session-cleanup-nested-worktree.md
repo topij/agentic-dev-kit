@@ -1,6 +1,6 @@
 ## session_cleanup retires a task worktree nested under the primary checkout
 
-`session_cleanup.py preview` and `apply` no longer keep a tracked task worktree for the
+CHANGED: `session_cleanup.py preview` and `apply` no longer keep a tracked task worktree for the
 reason `registered worktree <primary checkout>` when the worktree sits inside the primary
 checkout, such as `<primary>/.claude/worktrees/<name>` (#1307). It now takes the same
 identity, head, status, ignored-content, dependency and retention checks as a worktree
