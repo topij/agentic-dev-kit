@@ -317,6 +317,8 @@ class Registry:
         items with the same content share one file. Missing means absent without
         a tombstone, which nothing here authorized; it is never reported as
         retired. `exceptions` counts items that carry a retention exception.
+        `held` counts the present evidence retire-evidence keeps because a round
+        of this inventory is marked `unverified`, with the marks' reasons.
         """
         states: dict[str, dict] = {state: {"items": 0, "files": {}}
                                    for state in ("present", "retiring", "retired", "missing")}
@@ -337,7 +339,15 @@ class Registry:
         summary = {state: {"items": value["items"], "bytes": sum(value["files"].values())}
                    for state, value in states.items()}
         summary["exceptions"] = exceptions
+        marks = self.unverified_marks(record)
+        summary["held"] = {**(summary["present"] if marks else {"items": 0, "bytes": 0}),
+                           "reasons": marks}
         return summary
+
+    @staticmethod
+    def unverified_marks(record: dict) -> list[str]:
+        """Reasons of rounds recorded removed without a verified removal (#1278)."""
+        return [f"{r['receipt']['id']}: {r['unverified']}" for r in record["rounds"] if r.get("unverified")]
 
     def retirement_plan(self, token: str, include: list[str]) -> tuple[dict, dict]:
         """Preview deleting retained evidence that no unfinished task needs (#1256, #1315).
@@ -348,8 +358,11 @@ class Registry:
         sealed before exceptions existed (it may be the only copy of
         uncommitted work), stays kept unless its bytes are named by sha256 in
         `include`, the caller's assertion that the deletion condition of every
-        item holding those bytes holds. Bytes shared with a kept item, and an
-        item a kept item requires, stay. Tombstones keep hash, size, kind,
+        item holding those bytes holds. While any round of the inventory is
+        marked `unverified` (recorded removed while its data may still exist
+        elsewhere), every item of the inventory, whichever seal holds it, is
+        kept the same way. Bytes shared with a kept item, and an item a kept
+        item requires, stay. Tombstones keep hash, size, kind,
         source and exception, so retired reads differently from missing.
         Evidence in other inventories is a separate copy and is untouched.
         """
@@ -361,6 +374,12 @@ class Registry:
         if unknown:
             raise sweep.ConfigError("--include names no retained item: " + ", ".join(sorted(unknown)))
         retire, kept, missing = [], [], []
+        # Inventory-wide, because an item's source need not lie under the round
+        # it came from, and the inventory seal holds items from every round.
+        marks = self.unverified_marks(record)
+        held = (f"a round of this inventory was recorded removed without a verified removal "
+                f"({'; '.join(marks)}); name its bytes with --include once that round's data is "
+                "confirmed gone") if marks else None
         for owner, item in self.evidence_items(record):
             view = {k: item.get(k) for k in ("sha256", "size", "kind", "source", "requires",
                                              "retained", "exception")}
@@ -388,13 +407,10 @@ class Registry:
             elif owner is not None and (owner["status"] != "removed"
                                         or os.path.lexists(owner["receipt"]["path"])):
                 reason = "its round is not retired"
-            elif (owner is not None and (owner.get("unverified") or owner.get("reconciled"))
-                    and item["sha256"] not in include):
-                # Recorded removed without a verified removal: its data may
-                # still exist (a moved root, an unmounted volume).
-                why = owner.get("unverified") or "marked removed by reconcile"
-                reason = (f"its round was recorded removed without a verified removal ({why}); "
-                          "name its bytes with --include once its data is confirmed gone")
+            elif held and item["sha256"] not in include:
+                reason = held
+                if item.get("exception") is not None:
+                    reason += "; retention exception until: " + item["exception"]["delete_when"]
             elif item.get("exception") is not None and item["sha256"] not in include:
                 reason = "retention exception until: " + item["exception"]["delete_when"]
             elif item.get("kind") == "source" and item["sha256"] not in include:
@@ -795,8 +811,9 @@ class Registry:
         # - root present, identity no longer matching (recreated, for example
         #   by another session's allocate in the shared root, or moved aside):
         #   absent, marked unverified.
-        # - root present with its identity unchanged: absent, as before; the
-        #   round is verifiably gone from its own root.
+        # - root present with its identity unchanged: absent, as before, with no
+        #   mark (a round moved aside inside that root also reads so, as at the
+        #   base).
         # - root not a configured expanded root, or present but refused for any
         #   other reason (a symlink, inside a registered worktree, the system
         #   temp directory): refuses, as before.
@@ -805,9 +822,11 @@ class Registry:
         # "Unverified" means the round's data may still exist elsewhere (a moved
         # root, an unmounted volume). Nothing is deleted; retire_round records
         # the mark, and retirement_plan keeps such a round's evidence unless its
-        # bytes are named with --include. A round recorded removed whose path
-        # later returns gets every check again: the same allocation is eligible
-        # for an approved removal, and a replacement refuses.
+        # bytes are named with --include, inventory-wide. A round recorded
+        # removed by apply whose path later returns gets every check again: the
+        # same allocation is eligible for an approved removal (which clears the
+        # mark), and a replacement refuses. Reconcile-marked rounds instead
+        # read kept, above.
         # A present round path keeps every check below, root identity included.
         round_gone = _absent(receipt["path"])
         if round_gone:
@@ -913,6 +932,10 @@ class Registry:
             entry["status"] = "removed"
             if result.get("unverified"):
                 entry["unverified"] = result["reason"]
+            else:
+                # Removed by the sweeper, or absent from its own unchanged
+                # root: a later verified outcome clears an earlier mark.
+                entry.pop("unverified", None)
         self.save(record)
 
     def apply(self, record: dict, approval: str, processes_finished: bool) -> dict:

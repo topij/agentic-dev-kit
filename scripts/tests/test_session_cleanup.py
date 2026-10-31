@@ -2271,7 +2271,7 @@ def test_a_moved_aside_root_reads_absent_and_keeps_evidence_and_data(session):
     _, plan = registry.retirement_plan(record["id"], [])
     assert plan["retire"] == []
     assert {v["reason"].split(" (")[0] for v in plan["kept"]} == {
-        "its round was recorded removed without a verified removal"}
+        "a round of this inventory was recorded removed without a verified removal"}
     shas = [v["sha256"] for v in plan["kept"]]
     _, included = registry.retirement_plan(record["id"], shas)
     assert sorted(v["sha256"] for v in included["retire"]) == sorted(shas)
@@ -2305,7 +2305,9 @@ def test_a_verifiably_gone_round_is_not_marked_and_its_evidence_retires(session)
     assert len(plan["retire"]) == 2
 
 
-def test_a_reconciled_round_keeps_its_evidence_until_included(session):
+def test_a_reconciled_round_is_default_discard(session):
+    # Reconcile verified every recorded path absent before rebinding, so its
+    # rounds hold nothing; only an `unverified` mark holds evidence.
     registry, record, _ = session
     receipt = allocate(registry, record)
     seal(registry, record, receipt, scope=receipt["id"])
@@ -2316,7 +2318,8 @@ def test_a_reconciled_round_keeps_its_evidence_until_included(session):
     record["complete"] = True
     registry.save(record)
     _, plan = registry.retirement_plan(record["id"], [])
-    assert plan["retire"] == [] and all("marked removed by reconcile" in v["reason"] for v in plan["kept"])
+    assert len(plan["retire"]) == 2 and plan["kept"] == []
+    assert plan["evidence_summary"]["held"] == {"items": 0, "bytes": 0, "reasons": []}
 
 
 def test_an_ancestor_of_the_root_replaced_by_a_file_is_not_absent(session):
@@ -2329,3 +2332,54 @@ def test_an_ancestor_of_the_root_replaced_by_a_file_is_not_absent(session):
     with pytest.raises(NotADirectoryError):
         registry.preview_round(record, receipt["id"])
     assert registry.load(record["id"])["rounds"][0]["status"] == "allocated"
+
+
+def test_an_unverified_round_holds_the_inventory_seals_evidence_too(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)  # the inventory seal
+    for item in record["seal"]["retained"]:
+        item.pop("exception")
+    registry.save(record)
+    shutil.rmtree(receipt["root"])
+    assert apply(registry, record)["complete"]
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["retire"] == [] and len(plan["kept"]) == 2
+    assert all(v["reason"].startswith("a round of this inventory was recorded removed") for v in plan["kept"])
+    held = plan["evidence_summary"]["held"]
+    assert held["items"] == 2 and held["bytes"] == plan["bytes"]["present_before"]
+    assert held["reasons"] == [f"{receipt['id']}: round and its scratch root are both gone"]
+    shas = [v["sha256"] for v in plan["kept"]]
+    assert len(registry.retirement_plan(record["id"], shas)[1]["retire"]) == 2
+
+
+def test_a_verified_removal_clears_the_mark(session):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    for item in record["rounds"][0]["seal"]["retained"]:
+        item.pop("exception")
+    registry.save(record)
+    away = root / "unmounted"
+    Path(receipt["root"]).rename(away)
+    assert apply_round(registry, record, receipt)["complete"]
+    assert "unverified" in registry.load(record["id"])["rounds"][0]
+    away.rename(receipt["root"])  # the volume returns with the round in it
+    current = registry.load(record["id"])
+    result = apply_round(registry, current, receipt)
+    assert result["paths"][0]["action"] == "removed"
+    entry = registry.load(record["id"])["rounds"][0]
+    assert "unverified" not in entry and entry["status"] == "removed"
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert len(plan["retire"]) == 2 and plan["evidence_summary"]["held"]["items"] == 0
+
+
+def test_a_held_excepted_item_still_shows_its_deletion_condition(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    shutil.rmtree(receipt["root"])
+    assert apply_round(registry, record, receipt)["complete"]
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert plan["kept"] and all(v["reason"].endswith("; retention exception until: the task merges")
+                                for v in plan["kept"])

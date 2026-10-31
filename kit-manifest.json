@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "d54a4fd6f67cca4c8b50f1dffce05cca7ccd1831bc6ded57b305525a5644d78a"
+      "sha256": "4fc401507f6b8d2270afaca2035176bea50166c8c776445993836e36388519f9"
     },
     "docs/agentic-dev-kit/skill-routing/cases.json": {
       "role": "repo-only",
@@ -95,7 +95,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "13feceb533e2a2f65c0ddf5979aa80c9cb1f16dcf4a55fb38bfc1a333d19ce70"
+      "sha256": "3b99f89254741af36a511d4a31d1a494a17d2afbb5ab192e987d68d43f13f212"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -627,7 +627,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "7d12d297e35789162ac01a57dd1d7470a44b8c8fff1a6fade882a0af05a89c6d"
+      "sha256": "6427f70cc9fe48848e13448743c36a454901ffa5416dc09c8cf70c3780a1b6e3"
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
@@ -783,7 +783,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "0f842983815aeb5a8653d990831888a1263510f0697756fd8247b5a3c4abd56c"
+      "sha256": "9fa94cf8076a0290956d0706046ef026810e1c61b25f882c437e362d50e1e72c"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",

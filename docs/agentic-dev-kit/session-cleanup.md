@@ -275,7 +275,12 @@ stay kept unless their bytes are named with `--include <sha256>`:
 
 - an item with an `exception`; the preview shows its `delete_when`;
 - a `source` item sealed without an exception, which may be the only copy of
-  uncommitted work.
+  uncommitted work;
+- every item of an inventory with a round marked `unverified` (see *Preview,
+  approve the concrete scope, apply*), whichever seal holds it: that round was
+  recorded removed while its data may still exist elsewhere, so confirm the data is
+  gone before including its bytes. An excepted item's reason still shows its
+  `delete_when`. A later approved, verified removal of that round clears the mark.
 
 Items with the same content share one file, so `--include` names that file and
 retires every item holding it: it asserts the deletion condition of each one, all
@@ -305,7 +310,9 @@ lists again), `retired`, and `missing` (absent with no tombstone, which nothing 
 authorized and which still blocks a preview of that seal until the operator
 restores the bytes or removes the item from `session.json` by hand: no engine
 route clears it), plus an `exceptions`
-count of items that carry a retention exception. Historical receipts can
+count of items that carry a retention exception and `held`: the present items and
+bytes that an `unverified` mark is holding, with each mark's reason. Session-start
+reports a non-zero `held` so the hold is not forgotten. Historical receipts can
 say what existed; they never read a retired item as available or a missing one as
 retired.
 
@@ -420,12 +427,15 @@ error or an ancestor replaced by a file, refuses.
 
 In both of those cases the round's data may still exist elsewhere, on a root moved
 aside or a volume that is not mounted, so the round is also marked `unverified` with
-that reason. `retire-evidence` keeps a marked round's evidence, and a round marked
-by `reconcile`, with the reason `its round was recorded removed without a verified
-removal`, until its bytes are named with `--include` once its data is confirmed gone.
-If a directory later returns at a round's recorded path, the round gets every check
-again: the same allocation is eligible for an approved removal, and a replacement
-refuses. Every other round keeps its root and identity checks.
+that reason, and `retire-evidence` holds every item of its inventory until its bytes
+are named with `--include` (*Retire retained evidence*). A round whose path is gone
+from its own unchanged root reads `absent` with no mark, as before; that includes a
+round moved aside inside that root. A round recorded removed by `apply` whose path
+later returns gets every check again: the same allocation is eligible for an
+approved removal, which clears the mark, and a replacement refuses. A round
+`reconcile` marked removed reads `kept` instead, as above, and holds no evidence:
+reconcile already found every recorded path absent. Every other round keeps its root
+and identity checks.
 
 Exit status is `0` for completed cleanup, `1` for kept/active/native-archive work,
 and `2` for refusal or unavailable prerequisites. Keep reasons mean incomplete
