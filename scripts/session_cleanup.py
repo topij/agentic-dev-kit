@@ -738,16 +738,24 @@ class Registry:
         # - a submodule checkout: its common dir differs, refused above.
         # - a registered worktree of this repository that this inventory did not
         #   track: never examined; only tracked worktrees reach this method.
-        # - a path the primary checkout's index tracks (its files, or a gitlink
-        #   for an embedded repository): kept below.
+        # - a path the primary checkout's index tracks (its files in any case, or
+        #   a gitlink at the path): kept below; an unreadable index keeps it too.
+        # - a path beneath a gitlink the primary tracks (inside a submodule's
+        #   directory), or one HEAD tracks but the index no longer does:
+        #   eligible. The index names nothing at the path, and removal deletes
+        #   only the worktree's own directory after the checks below.
+        # - a path inside the primary's git dir: kept by the store check below.
         # - a worktree nested under another registered worktree that is itself
         #   under the primary, or one holding a registered worktree: kept, since
         #   only the primary is dropped from the overlap list.
         # - a path held by the primary only by filesystem identity, not by its
         #   string (a case variant, an alias): kept, since no relative path into
         #   the primary's index can be trusted for it.
-        # - a worktree under another configured repository's primary: refused
-        #   above for its common dir; that primary is never dropped.
+        # - a sibling sharing the primary's path prefix (<primary>-wt): not under
+        #   it, so no exemption is needed and none applies.
+        # - a path under another configured repository's primary: a worktree of
+        #   that repository is refused above for its common dir; one of this
+        #   repository is kept, since that primary is never dropped.
         primary = str(self.primary)
         if str(path).startswith(primary + os.sep) and sweep._holds(str(path), primary) is False:
             relative = os.path.relpath(path, primary)
