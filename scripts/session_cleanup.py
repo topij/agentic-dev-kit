@@ -718,11 +718,54 @@ class Registry:
             return "worktree is not registered"
         # Read stores BEFORE excluding the retiring checkout from self-protection.
         # Only this exact registered, identity/head/common-dir matched checkout
-        # is exempt. Parent/child/sibling registrations, other repositories and
-        # bare configured repositories remain; missing/unreadable metadata still
+        # is exempt. Parent registrations other than the primary checkout (see
+        # below), child/sibling registrations, other repositories and bare
+        # configured repositories remain; missing/unreadable metadata still
         # fails closed in repository_stores. No fixture exemption is used here.
         stores = sweep.repository_stores(worktrees)
         others = [p for p in worktrees if p != str(path)]
+        # A task worktree nested under the primary checkout, where Claude Code's
+        # worktree tool puts it (<primary>/.claude/worktrees/<name>), is not kept
+        # merely because the primary checkout holds it (#1307). Removing it
+        # deletes only its own directory, and the primary checkout is exempt only
+        # as its ancestor: a path that is or holds the primary still overlaps it.
+        # Inputs sharing this exemption's shape (a path under the primary
+        # checkout) and each one's result:
+        # - a registered linked worktree of this repository tracked by this
+        #   inventory: eligible, subject to every other check here.
+        # - an untracked or ignored plain directory: never reaches here;
+        #   track_worktree and the registration check above refuse it.
+        # - a submodule checkout: its common dir differs, refused above.
+        # - a registered worktree of this repository that this inventory did not
+        #   track: never examined; only tracked worktrees reach this method.
+        # - a path the primary checkout's index tracks (its files in any case, or
+        #   a gitlink at the path): kept below; an unreadable index keeps it too.
+        # - a path beneath a gitlink the primary tracks (inside a submodule's
+        #   directory), or one HEAD tracks but the index no longer does:
+        #   eligible. The index names nothing at the path, and removal deletes
+        #   only the worktree's own directory after the checks below.
+        # - a path inside the primary's git dir: kept by the store check below.
+        # - a worktree nested under another registered worktree that is itself
+        #   under the primary, or one holding a registered worktree: kept, since
+        #   only the primary is dropped from the overlap list.
+        # - a path held by the primary only by filesystem identity, not by its
+        #   string (a case variant, an alias): kept, since no relative path into
+        #   the primary's index can be trusted for it.
+        # - a sibling sharing the primary's path prefix (<primary>-wt): not under
+        #   it, so no exemption is needed and none applies.
+        # - a path under another configured repository's primary: a worktree of
+        #   that repository is refused above for its common dir; one of this
+        #   repository is kept, since that primary is never dropped.
+        primary = str(self.primary)
+        if str(path).startswith(primary + os.sep) and sweep._holds(str(path), primary) is False:
+            relative = os.path.relpath(path, primary)
+            try:
+                tracked = git(self.primary, "ls-files", "-z", "--", f":(literal,icase){relative}")
+            except sweep.ConfigError as exc:
+                return f"cannot read what the primary checkout tracks at the worktree's path: {exc}"
+            if tracked:
+                return "the primary checkout tracks content at the worktree's path"
+            others = [p for p in others if p != primary]
         roots = [sweep.expand_root(raw, root=namespace)
                  for raw in self.settings.roots
                  for namespace in {self.primary, self.repo, path}]

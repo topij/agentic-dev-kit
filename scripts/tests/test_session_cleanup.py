@@ -237,6 +237,147 @@ def test_dirty_worktree_kept_and_primary_refused(session):
     assert (task / "user-work").read_text() == "keep"
 
 
+def nested_tree(registry, name):
+    task = registry.repo / ".claude" / "worktrees" / name
+    task.parent.mkdir(parents=True, exist_ok=True)
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(task), "HEAD")
+    return task
+
+
+def test_task_worktree_nested_under_the_primary_checkout_retires(session):
+    # #1307: where Claude Code's worktree tool puts a task worktree.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    task = nested_tree(registry, "task")
+    unregistered = registry.repo / ".claude" / "worktrees" / "plain"
+    unregistered.mkdir()
+    (unregistered / "user-work").write_text("keep")
+    with pytest.raises(cleanup.sweep.ConfigError, match="not registered"):
+        registry.track_worktree(record, unregistered, "git")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    outcome = registry.preview(record)["paths"][0]
+    assert (outcome["path"], outcome["action"], outcome["reason"]) == (str(task), "remove-worktree", None)
+    assert apply(registry, record)["complete"]
+    assert not task.exists()
+    assert (unregistered / "user-work").read_text() == "keep"
+    assert cleanup.git(registry.repo, "rev-parse", "--show-toplevel") == str(registry.repo)
+
+
+def stage_where_a_worktree_goes(registry, name, commit_it=True):
+    """Have the primary's index track a file at <primary>/.claude/worktrees/<name>, then
+    clear the directory so that a worktree can be added there."""
+    content = registry.repo / ".claude" / "worktrees" / name / "file"
+    content.parent.mkdir(parents=True)
+    content.write_text("primary content\n")
+    cleanup.git(registry.repo, "add", str(content))
+    if commit_it:
+        cleanup.git(registry.repo, "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                    "commit", "-qm", "track a file where a worktree goes")
+    shutil.rmtree(content.parent)
+
+
+@pytest.mark.parametrize("indexed", ["task", "TASK"])
+def test_nested_worktree_at_a_path_the_primary_checkout_tracks_is_kept(session, indexed):
+    # "TASK": the index names the path in another case, which is the same
+    # directory on a case-insensitive filesystem; the icase pathspec catches it.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    stage_where_a_worktree_goes(registry, indexed)
+    # A detached checkout of the first commit, which predates that file.
+    task = registry.repo / ".claude" / "worktrees" / "task"
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(task), "HEAD~1")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == "kept"
+    assert result["paths"][0]["reason"] == "the primary checkout tracks content at the worktree's path"
+    assert task.exists()
+
+
+def test_tracked_content_is_read_from_the_primary_index_not_the_invoking_checkout(session):
+    # Cleanup may run from a linked checkout; what matters is the primary's index.
+    registry, record, root = session
+    stage_where_a_worktree_goes(registry, "task", commit_it=False)
+    task = nested_tree(registry, "task")
+    linked = root / "linked"
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(linked), "HEAD")
+    elsewhere = cleanup.Registry(linked, registry.repo / "cleanup.yaml")
+    assert elsewhere.primary == registry.repo
+    inventory = elsewhere.start()
+    elsewhere.track_worktree(inventory, task, "git")
+    assert (elsewhere.worktree_reason(inventory["worktrees"][0])
+            == "the primary checkout tracks content at the worktree's path")
+
+
+def test_nested_worktree_whose_primary_index_cannot_be_read_is_kept(session, monkeypatch):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    task = nested_tree(registry, "task")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    real = cleanup.git
+
+    def failing(repo, *args, **kwargs):
+        if args[:1] == ("ls-files",) and args[-1].startswith(":(literal,icase)"):
+            raise cleanup.sweep.ConfigError("Git identity unavailable: index file corrupt")
+        return real(repo, *args, **kwargs)
+
+    monkeypatch.setattr(cleanup, "git", failing)
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == "kept"
+    assert result["paths"][0]["reason"] == ("cannot read what the primary checkout tracks at the "
+                                            "worktree's path: Git identity unavailable: index file corrupt")
+    assert task.exists()
+
+
+def test_sibling_worktree_sharing_the_primary_path_prefix_retires(session):
+    # <primary>-wt starts with the primary's path string but is not under it.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    task = Path(f"{registry.repo}-wt")
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(task), "HEAD")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    outcome = registry.preview(record)["paths"][0]
+    assert (outcome["action"], outcome["reason"]) == ("remove-worktree", None)
+    assert apply(registry, record)["complete"]
+
+
+@pytest.mark.parametrize("retiring", ["inner", "outer"])
+def test_nested_worktree_overlapping_another_registration_is_kept(session, retiring):
+    # Only the primary checkout is dropped from the overlap list: a nested
+    # worktree under, or holding, another registered worktree stays kept.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    outer = nested_tree(registry, "outer")
+    inner = outer / "inner"
+    cleanup.git(registry.repo, "worktree", "add", "--detach", str(inner), "HEAD")
+    task, other = (inner, outer) if retiring == "inner" else (outer, inner)
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    result = apply(registry, record)
+    assert result["paths"][0]["action"] == "kept"
+    assert result["paths"][0]["reason"] == f"registered worktree {other}"
+    assert task.exists() and other.exists()
+
+
+def test_nested_worktree_whose_primary_overlap_cannot_be_told_is_kept(session, monkeypatch):
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    task = nested_tree(registry, "task")
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    holds = cleanup.sweep._holds
+    monkeypatch.setattr(cleanup.sweep, "_holds", lambda outer, inner: None
+                        if (outer, inner) == (str(task), str(registry.repo)) else holds(outer, inner))
+    result = apply(registry, record)
+    # The primary stays in the overlap list, and it holds the worktree.
+    assert result["paths"][0]["action"] == "kept"
+    assert result["paths"][0]["reason"] == f"registered worktree {registry.repo}"
+    assert task.exists()
+
+
 def test_process_blocker_preserves_approved_inventory(session, monkeypatch):
     registry, record, _ = session
     receipt = allocate(registry, record)
