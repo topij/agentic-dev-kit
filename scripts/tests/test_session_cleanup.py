@@ -2579,26 +2579,36 @@ def test_apply_after_retire_evidence_on_a_complete_inventory(session):
     assert registry.load(record["id"])["approval"] == token
     # A seal changed in anything but item tombstones still changes the token:
     # every stored item field, and the seal-level `retired` diagnostics (#1330).
+    # Each change is made on every retained item in turn, and on each exception
+    # subfield, so binding only some items or subfields fails too.
     item_fields = {"kind", "sha256", "size", "source", "requires", "exception", "retained", "retired"}
-    assert set(retired["seal"]["retained"][0]) == item_fields
-    for change in ("kind", "sha256", "size", "source", "requires", "exception", "retained", "diagnostics"):
+    count = len(retired["seal"]["retained"])
+    assert count == 2
+    assert all(set(i) == item_fields for i in retired["seal"]["retained"])
+    assert all(set(i["exception"]) == set(cleanup.EXCEPTION_FIELDS) for i in retired["seal"]["retained"])
+    changes = ["kind", "sha256", "size", "source", "requires", "retained",
+               *(f"exception.{f}" for f in cleanup.EXCEPTION_FIELDS)]
+    cases = [(index, change) for index in range(count) for change in changes] + [(None, "diagnostics")]
+    for index, change in cases:
         changed = registry.load(record["id"])
-        item = changed["seal"]["retained"][0]
-        if change == "kind":
-            item["kind"] = "asset" if item["kind"] != "asset" else "report"
-        elif change == "sha256":
-            item["sha256"] = "0" * 64
-        elif change == "size":
-            item["size"] += 1
-        elif change in ("source", "retained"):
-            item[change] += ".other"
-        elif change == "requires":
-            item["requires"] = [*item["requires"], "/other"]
-        elif change == "exception":
-            item["exception"] = {**item["exception"], "task": "another task"}
-        else:
+        if index is None:
             changed["seal"]["retired"] = []
-        assert registry.inventory_token(changed, registry.approved_seal(changed["seal"])) != token, change
+        else:
+            item = changed["seal"]["retained"][index]
+            if change == "kind":
+                item["kind"] = "asset" if item["kind"] != "asset" else "report"
+            elif change == "sha256":
+                item["sha256"] = "0" * 64
+            elif change == "size":
+                item["size"] += 1
+            elif change in ("source", "retained"):
+                item[change] += ".other"
+            elif change == "requires":
+                item["requires"] = [*item["requires"], "/other"]
+            else:
+                field = change.split(".", 1)[1]
+                item["exception"] = {**item["exception"], field: item["exception"][field] + " (changed)"}
+        assert registry.inventory_token(changed, registry.approved_seal(changed["seal"])) != token, (index, change)
 
 
 def test_an_approval_persisted_over_tombstones_still_applies(session):
