@@ -56,7 +56,7 @@
     },
     "docs/agentic-dev-kit/session-cleanup.md": {
       "role": "doctrine",
-      "sha256": "04c8a2eb06a84ee3d9504bb73fe32012580a18eb2c9fb1d431f6d4fce58ff439"
+      "sha256": "a62f6936567dd43205399f3f457c106b73a4705056a13b975e8fb02e94a54ade"
     },
     "docs/agentic-dev-kit/skill-routing/cases.json": {
       "role": "repo-only",
