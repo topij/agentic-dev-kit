@@ -172,6 +172,7 @@ class Registry:
             raise sweep.ConfigError("session repository identity or cleanup policy changed: "
                                     + "; ".join(changed) + hint)
         self.check_journal(record)
+        self.check_seals(record)
         return record
 
     def differences(self, record: dict, token: str) -> list[str]:
@@ -217,6 +218,43 @@ class Registry:
                for r in record["rounds"]):
             raise sweep.ConfigError("interrupted removal lacks its durable approval")
 
+    @staticmethod
+    def check_seals(record: dict) -> None:
+        """Refuse a recorded seal that is not an object holding a list of objects (#1328).
+
+        Only a hand-edited or foreign-written session.json has one. Refusing it
+        at load makes `list` report that one inventory unavailable and every
+        other command exit 2, rather than a traceback that also hid every other
+        inventory from `list`. Runs after check_journal, which has already
+        indexed every round as a mapping.
+        """
+        seals = [("inventory seal", record["seal"])]
+        seals += [(f"seal of round {n}", r.get("seal")) for n, r in enumerate(record["rounds"], 1)]
+        for name, seal in seals:
+            if seal is None:
+                continue
+            if not isinstance(seal, dict):
+                raise sweep.ConfigError(f"recorded {name} must be an object or null")
+            retained = seal.get("retained", [])
+            if not isinstance(retained, list) or not all(isinstance(item, dict) for item in retained):
+                raise sweep.ConfigError(f"recorded {name} must hold a list of retained-item objects")
+
+    @staticmethod
+    def approved_seal(seal: dict | None) -> dict | None:
+        """The seal as an apply approval token binds it: without item tombstones (#1324).
+
+        retire_evidence writes a `retired` tombstone into each item it deletes,
+        after apply may already have persisted the inventory approval; binding
+        tombstones would leave no token able to match it again. Every other
+        field stays bound, the seal-level `retired` diagnostics list included.
+        A tombstone's own authority is the retirement plan's token, which
+        digests the whole record.
+        """
+        if seal is None or "retained" not in seal:
+            return seal
+        return {**seal, "retained": [{k: v for k, v in item.items() if k != "retired"}
+                                     for item in seal["retained"]]}
+
     def reconcile_plan(self, token: str) -> tuple[dict, dict]:
         """Preview rebinding an inventory whose only changed binding is its device number.
 
@@ -241,6 +279,7 @@ class Registry:
                                     "fields differ: " + "; ".join(changed))
         # Only once every bound field but the device is trusted (#1263).
         self.check_journal(record)
+        self.check_seals(record)
         if not changed:
             raise sweep.ConfigError("inventory loads unchanged; there is nothing to reconcile")
         present = []
@@ -479,7 +518,9 @@ class Registry:
             try:
                 loaded = self.load(path.parent.name)
                 result.append({**loaded, "evidence_summary": self.evidence_summary(loaded)})
-            except (OSError, ValueError, KeyError, TypeError, sweep.ConfigError) as exc:
+            # AttributeError too: one record of a shape no check names must not
+            # hide every other inventory (#1328).
+            except (OSError, ValueError, KeyError, TypeError, AttributeError, sweep.ConfigError) as exc:
                 result.append({"id": path.parent.name, "path": str(path),
                                "unavailable": str(exc)})
         return result
@@ -833,7 +874,8 @@ class Registry:
                 "approval_token": digest({"policy": record["policy"],
                     "rounds": [{"receipt": r["receipt"], "namespace": r["namespace"]}
                                for r in record["rounds"]],
-                    "worktrees": record["worktrees"], "pids": record["pids"], "seal": record["seal"]})}
+                    "worktrees": record["worktrees"], "pids": record["pids"],
+                    "seal": self.approved_seal(record["seal"])})}
 
     def round_outcome(self, entry: dict) -> dict:
         receipt = entry["receipt"]
@@ -925,13 +967,13 @@ class Registry:
         active = active_users([entry["receipt"]["path"]], record["pids"])
         outcomes = [self.round_outcome(entry)]
         measure(outcomes, record["id"])
-        # The token binds this round's receipt and seal plus the inventory's
+        # The token binds this round's receipt and seal (less tombstones) plus the inventory's
         # registered writers, never the other rounds, which stay unaffected.
         return {"session": record["id"], "round": round_id, "paths": outcomes,
                 "active_users": active, "evidence": entry["seal"], "evidence_summary": self.evidence_summary(record),
                 "approval_token": digest({"policy": record["policy"], "round": {
                     "receipt": entry["receipt"], "namespace": entry["namespace"]},
-                    "pids": record["pids"], "seal": entry["seal"]})}
+                    "pids": record["pids"], "seal": self.approved_seal(entry["seal"])})}
 
     def apply_round(self, record: dict, round_id: str, approval: str, processes_finished: bool) -> dict:
         if not processes_finished:

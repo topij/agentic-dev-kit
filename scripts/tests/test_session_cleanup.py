@@ -2556,3 +2556,76 @@ def test_re_running_apply_keeps_the_mark(session, again):
     assert entry["unverified"] == "round and its scratch root are both gone"
     _, plan = registry.retirement_plan(record["id"], [])
     assert plan["retire"] == [] and plan["evidence_summary"]["held"]["items"] == 2
+
+
+def test_apply_after_retire_evidence_on_a_complete_inventory(session):
+    # #1324: retire-evidence's tombstones went into the inventory token, so the
+    # persisted approval could never match again.
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    token = registry.preview(record)["approval_token"]
+    assert registry.apply(record, token, True)["complete"]
+    shas = sorted({i["sha256"] for i in registry.load(record["id"])["seal"]["retained"]})
+    _, plan = registry.retirement_plan(record["id"], shas)
+    assert len(plan["retire"]) == 2
+    registry.retire_evidence(record["id"], plan["approval_token"], shas)
+    retired = registry.load(record["id"])
+    assert all(i.get("retired") for i in retired["seal"]["retained"])
+    # The approval digest is unchanged by tombstones, so a fresh preview token
+    # is the persisted approval and apply stays idempotent.
+    assert registry.preview(retired)["approval_token"] == token
+    assert apply(registry, registry.load(record["id"]))["complete"]
+    assert registry.load(record["id"])["approval"] == token
+    # A seal changed in anything but tombstones still changes the token.
+    changed = registry.load(record["id"])
+    changed["seal"]["retained"][0]["kind"] = "asset" if changed["seal"]["retained"][0]["kind"] != "asset" else "report"
+    assert registry.preview(changed)["approval_token"] != token
+
+
+def test_round_apply_after_retire_evidence_stays_idempotent(session):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    token = registry.preview_round(record, receipt["id"])["approval_token"]
+    assert apply_round(registry, record, receipt)["complete"]
+    shas = sorted({i["sha256"] for i in record["rounds"][0]["seal"]["retained"]})
+    _, plan = registry.retirement_plan(record["id"], shas)
+    registry.retire_evidence(record["id"], plan["approval_token"], shas)
+    retired = registry.load(record["id"])
+    assert registry.preview_round(retired, receipt["id"])["approval_token"] == token
+    assert apply_round(registry, retired, receipt)["complete"]
+
+
+@pytest.mark.parametrize("value", ["x", [1], 5, {"retained": "x"}, {"retained": [1]}, {"retained": ["x"]}])
+@pytest.mark.parametrize("where", ["inventory", "round"])
+def test_a_malformed_seal_is_isolated_and_refused(session, where, value):
+    # #1328: a seal (or a retained item) that is not an object aborted `list`
+    # for every inventory, and preview / retire-evidence with a traceback.
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=None if where == "inventory" else receipt["id"])
+    if where == "inventory":
+        record["seal"] = value
+    else:
+        record["rounds"][0]["seal"] = value
+    registry.save(record)
+    fresh = registry.start()
+    config = str(registry.repo / "cleanup.yaml")
+
+    def run(*argv):
+        return subprocess.run([sys.executable, cleanup.__file__, "--config", config, *argv],
+                              cwd=registry.repo, capture_output=True, text=True, timeout=30)
+
+    listed = run("list")
+    assert listed.returncode == 0, listed.stderr
+    by_id = {item["id"]: item for item in json.loads(listed.stdout)}
+    assert "seal" in by_id[record["id"]]["unavailable"]
+    assert "unavailable" not in by_id[fresh["id"]]
+    for argv in (["preview", record["id"]], ["retire-evidence", record["id"]]):
+        result = run(*argv)
+        assert result.returncode == 2, result.stderr
+        assert "Traceback" not in result.stderr and "seal" in result.stderr
+    with pytest.raises(cleanup.sweep.ConfigError, match="seal"):
+        registry.load(record["id"])
+    assert Path(receipt["path"]).exists()
