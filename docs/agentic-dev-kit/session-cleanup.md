@@ -104,13 +104,13 @@ ownership. Do not change protection roots, dependency repositories or the regist
 during this lifecycle. Such changes keep the old inventory unavailable until its
 original policy is restored; there is no migration override. `list` reports an
 unavailable record with its path and reason while still listing other inventories.
-A record whose inventory or round seal is not an object whose `retained` is a list
-of objects is reported the same way, and every other command refuses it
-with exit 2.
 The reason names each bound field that differs (`volume`, `device`, `inode`,
 `identity kind`, `schema`, `id` or `policy <key>`) with its stored and current values; a key present on one side
 only shows `absent` on the other, and a malformed stored value is named as
-`common identity` or `policy (stored value is not a mapping)`. Changing only
+`common identity` or `policy (stored value is not a mapping)`. A record whose
+inventory or round seal is neither null nor an object whose `retained` is a list of
+objects is also reported unavailable, with a reason naming that seal, and every
+other command refuses it with exit 2. Changing only
 `scratch.grace_window` does not invalidate recorded retirement: this lifecycle
 already bypasses age through explicit ownership.
 

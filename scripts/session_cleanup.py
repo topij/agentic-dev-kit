@@ -220,7 +220,7 @@ class Registry:
 
     @staticmethod
     def check_seals(record: dict) -> None:
-        """Refuse a recorded seal that is not an object whose `retained` is a list of objects (#1328).
+        """Refuse a seal that is neither null nor an object whose `retained` is a list of objects (#1328).
 
         Only a hand-edited or foreign-written session.json has one. Refusing it
         at load makes `list` report that one inventory unavailable and every
