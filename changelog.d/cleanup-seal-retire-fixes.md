@@ -1,7 +1,8 @@
 ## session_cleanup.py: apply works again after retire-evidence; a malformed seal no longer breaks `list`
 
 CHANGED (gate semantics): after `retire-evidence` deleted items from an inventory's
-seal, every later `apply` of that inventory refused with `session has a different
+seal, every later `apply` of an inventory whose approval had already been persisted
+refused with `session has a different
 persisted approval`, and the only way out was hand-editing `session.json`. The
 `apply` and `apply --round` approval tokens now leave out the `retired` tombstones
 that `retire-evidence` adds to items. A token for a seal with no tombstones is

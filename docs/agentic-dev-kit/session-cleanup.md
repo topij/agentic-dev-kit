@@ -251,7 +251,10 @@ Supported kinds are `report`, `finding`, `verification`, `compute`, `source`,
 may not be both retained and discarded (paths compare after normalisation), and an
 empty `retain` needs at least one `discard` entry. A discard entry is a declaration:
 the engine records it and does not check that its path exists or that its reason is
-true. Only `source`, `kind`, `requires` and `exception` are stored from a retained
+true. It does check the path's form, as for a retained source: it must be absolute
+and, once `.` segments and repeated or trailing slashes are dropped, equal to its own
+`os.path.realpath` (so no symlink alias, such as `/tmp/…` for `/private/tmp/…` on
+macOS, and no `..` component), with no control character or backslash, so `{"source": "PR #123"}` is refused. Only `source`, `kind`, `requires` and `exception` are stored from a retained
 item. Every item is validated and its source hashed before any bytes are copied, so
 a validation refusal copies nothing; a failure during a copy (a source that changes
 mid-read, a full disk) can still leave a file no index names. `evidence_complete` is the caller's explicit assertion of the
@@ -353,7 +356,8 @@ uv run <engine-dir>/session_cleanup.py apply <session> --round <receipt-id> --ap
 The manifest has the shape described in *Seal: discard by default, retain only by
 exception* above, scoped to that round, and each round is sealed once. A round whose
 findings are on the PR retains nothing. The preview's token binds that
-round's receipt and seal and the inventory's registered writers. The authorization
+round's receipt and seal (without retire-evidence's tombstones) and the inventory's
+registered writers. The authorization
 rules and every guard of *Preview, approve the concrete scope, apply* below apply
 unchanged. A retired round records `removed`. The round's approval is persisted only
 when its removal is journalled: an interrupted round stays `removing` under that
