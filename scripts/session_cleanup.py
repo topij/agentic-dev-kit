@@ -247,8 +247,11 @@ class Registry:
         after apply may already have persisted the inventory approval; binding
         tombstones would leave no token able to match it again. Every other
         field stays bound, the seal-level `retired` diagnostics list included.
-        A tombstone's own authority is the retirement plan's token, which
-        digests the whole record.
+        So a tombstone, once written, is bound by no apply token: nothing
+        re-checks its `approval`, and verify_seal skips a tombstoned item whose
+        bytes are gone. The registry is no boundary against same-user writes
+        (see verify_seal); the retirement plan's token binds the record that
+        retire_evidence writes the tombstones into.
         """
         if seal is None or "retained" not in seal:
             return seal
@@ -871,11 +874,14 @@ class Registry:
         measure(outcomes, record["id"])
         return {"session": record["id"], "paths": outcomes, "active_users": active,
                 "evidence": record["seal"], "evidence_summary": self.evidence_summary(record),
-                "approval_token": digest({"policy": record["policy"],
-                    "rounds": [{"receipt": r["receipt"], "namespace": r["namespace"]}
-                               for r in record["rounds"]],
-                    "worktrees": record["worktrees"], "pids": record["pids"],
-                    "seal": self.approved_seal(record["seal"])})}
+                "approval_token": self.inventory_token(record, self.approved_seal(record["seal"]))}
+
+    @staticmethod
+    def inventory_token(record: dict, seal: dict | None) -> str:
+        return digest({"policy": record["policy"],
+                       "rounds": [{"receipt": r["receipt"], "namespace": r["namespace"]}
+                                  for r in record["rounds"]],
+                       "worktrees": record["worktrees"], "pids": record["pids"], "seal": seal})
 
     def round_outcome(self, entry: dict) -> dict:
         receipt = entry["receipt"]
@@ -1043,7 +1049,13 @@ class Registry:
         preview = self.preview(record)
         if approval != preview["approval_token"]:
             raise sweep.ConfigError("approval does not match this exact inventory and evidence seal")
-        if record["approval"] not in (None, approval):
+        # Before #1324 the token bound tombstones. An inventory whose rounds
+        # completed it before its first inventory apply could take tombstones
+        # first and then persist that form, so the one digest of this exact
+        # record over its seal as stored is accepted too, then replaced. It
+        # equals `approval` while the seal holds no tombstone.
+        legacy = self.inventory_token(record, record["seal"])
+        if record["approval"] not in (None, approval, legacy):
             raise sweep.ConfigError("session has a different persisted approval")
         record["approval"] = approval
         self.save(record)

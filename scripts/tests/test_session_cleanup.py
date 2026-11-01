@@ -2577,10 +2577,53 @@ def test_apply_after_retire_evidence_on_a_complete_inventory(session):
     assert registry.preview(retired)["approval_token"] == token
     assert apply(registry, registry.load(record["id"]))["complete"]
     assert registry.load(record["id"])["approval"] == token
-    # A seal changed in anything but tombstones still changes the token.
-    changed = registry.load(record["id"])
-    changed["seal"]["retained"][0]["kind"] = "asset" if changed["seal"]["retained"][0]["kind"] != "asset" else "report"
-    assert registry.preview(changed)["approval_token"] != token
+    # A seal changed in anything but item tombstones still changes the token.
+    for change in ("kind", "sha256", "size", "diagnostics"):
+        changed = registry.load(record["id"])
+        item = changed["seal"]["retained"][0]
+        if change == "kind":
+            item["kind"] = "asset" if item["kind"] != "asset" else "report"
+        elif change == "sha256":
+            item["sha256"] = "0" * 64
+        elif change == "size":
+            item["size"] += 1
+        else:
+            changed["seal"]["retired"] = []
+        assert registry.inventory_token(changed, registry.approved_seal(changed["seal"])) != token, change
+
+
+def test_an_approval_persisted_over_tombstones_still_applies(session):
+    # Adversarial F1 on #1329: rounds complete the inventory before its first
+    # inventory apply, retire-evidence tombstones inventory items, and that
+    # apply (before #1324's change) persisted a token binding the tombstones.
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"])
+    seal(registry, record, receipt)
+    assert apply_round(registry, record, receipt)["complete"]
+    record = registry.load(record["id"])
+    assert record["complete"] and record["approval"] is None
+    shas = sorted({i["sha256"] for i in record["seal"]["retained"]})
+    _, plan = registry.retirement_plan(record["id"], shas)
+    registry.retire_evidence(record["id"], plan["approval_token"], shas)
+    record = registry.load(record["id"])
+    assert any(i.get("retired") for i in record["seal"]["retained"])
+    # The token the base computed: the seal digested as stored.
+    persisted = cleanup.digest({"policy": record["policy"],
+        "rounds": [{"receipt": r["receipt"], "namespace": r["namespace"]} for r in record["rounds"]],
+        "worktrees": record["worktrees"], "pids": record["pids"], "seal": record["seal"]})
+    record["approval"] = persisted
+    registry.save(record)
+    token = registry.preview(registry.load(record["id"]))["approval_token"]
+    assert token != persisted
+    assert registry.apply(registry.load(record["id"]), token, True)["complete"]
+    assert registry.load(record["id"])["approval"] == token
+    # Any other persisted approval still refuses.
+    record = registry.load(record["id"])
+    record["approval"] = "0" * 64
+    registry.save(record)
+    with pytest.raises(cleanup.sweep.ConfigError, match="different persisted approval"):
+        registry.apply(registry.load(record["id"]), token, True)
 
 
 def test_round_apply_after_retire_evidence_stays_idempotent(session):
@@ -2600,8 +2643,9 @@ def test_round_apply_after_retire_evidence_stays_idempotent(session):
 @pytest.mark.parametrize("value", ["x", [1], 5, {"retained": "x"}, {"retained": [1]}, {"retained": ["x"]}])
 @pytest.mark.parametrize("where", ["inventory", "round"])
 def test_a_malformed_seal_is_isolated_and_refused(session, where, value):
-    # #1328: a seal (or a retained item) that is not an object aborted `list`
-    # for every inventory, and preview / retire-evidence with a traceback.
+    # #1328: a seal that is not an object aborted `list` for every inventory.
+    # A bad `retained` value or item was already isolated, with a TypeError
+    # message; check_seals now refuses every one of these shapes by name.
     registry, record, _ = session
     receipt = allocate(registry, record)
     seal(registry, record, receipt, scope=None if where == "inventory" else receipt["id"])
@@ -2622,10 +2666,36 @@ def test_a_malformed_seal_is_isolated_and_refused(session, where, value):
     by_id = {item["id"]: item for item in json.loads(listed.stdout)}
     assert "seal" in by_id[record["id"]]["unavailable"]
     assert "unavailable" not in by_id[fresh["id"]]
-    for argv in (["preview", record["id"]], ["retire-evidence", record["id"]]):
+    for argv in (["preview", record["id"]], ["retire-evidence", record["id"]],
+                 ["apply", record["id"], "--approve", "0" * 64, "--processes-finished"]):
         result = run(*argv)
         assert result.returncode == 2, result.stderr
         assert "Traceback" not in result.stderr and "seal" in result.stderr
     with pytest.raises(cleanup.sweep.ConfigError, match="seal"):
         registry.load(record["id"])
     assert Path(receipt["path"]).exists()
+
+
+def test_list_isolates_an_attribute_error_no_check_names(session, monkeypatch):
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    record["seal"] = "x"
+    registry.save(record)
+    fresh = registry.start()
+    monkeypatch.setattr(cleanup.Registry, "check_seals", staticmethod(lambda record: None))
+    listed = {item["id"]: item for item in registry.inventories()}
+    assert "has no attribute" in listed[record["id"]]["unavailable"]
+    assert "unavailable" not in listed[fresh["id"]]
+
+
+def test_reconcile_refuses_a_malformed_seal_and_writes_nothing(device_session, monkeypatch):
+    registry, record, _ = device_session
+    vanished_round(registry, record)
+    record["rounds"][0]["seal"] = "x"
+    registry.save(record)
+    before = stored(registry, record)
+    renumber(monkeypatch)
+    with pytest.raises(cleanup.sweep.ConfigError, match="seal of round 1"):
+        registry.reconcile_plan(record["id"])
+    assert stored(registry, record) == before

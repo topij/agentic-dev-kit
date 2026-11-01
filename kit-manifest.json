@@ -627,7 +627,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "d59d130264b52daec19a45b8a190a8fe593c16ff1a9248e706dc58f04920a042"
+      "sha256": "e82235b5086978a06a62462dbe4ea6fcd03ce433aff363b7d5be464cd846f626"
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
@@ -783,7 +783,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "807c310b689d2579735cf57cc247dd60a1cc22ce1a9f33ad3800cb6dc11b6095"
+      "sha256": "c7ceec393a8ecdea4e683f0b1febeebd399415574822810b2a99f64c12f23fb4"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",
