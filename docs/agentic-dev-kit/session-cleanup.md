@@ -107,7 +107,10 @@ unavailable record with its path and reason while still listing other inventorie
 The reason names each bound field that differs (`volume`, `device`, `inode`,
 `identity kind`, `schema`, `id` or `policy <key>`) with its stored and current values; a key present on one side
 only shows `absent` on the other, and a malformed stored value is named as
-`common identity` or `policy (stored value is not a mapping)`. Changing only
+`common identity` or `policy (stored value is not a mapping)`. A record whose
+inventory or round seal is neither null nor an object whose `retained` is a list of
+objects is also reported unavailable, with a reason naming that seal, and every
+other command refuses it with exit 2. Changing only
 `scratch.grace_window` does not invalidate recorded retirement: this lifecycle
 already bypasses age through explicit ownership.
 
@@ -315,7 +318,10 @@ does not cover it.
 
 Apply writes a tombstone on each item (`retired` with the approval) before deleting
 its bytes, and keeps the hash, size, kind, source and exception. A plan with
-nothing to retire writes nothing. `preview`, `preview --round` (which summarises the
+nothing to retire writes nothing. Tombstones are left out of the seal that an
+`apply` or `apply --round` token binds, so a fresh preview after a retirement gives
+the token the inventory or round already persisted, and re-running apply stays
+idempotent. `preview`, `preview --round` (which summarises the
 whole inventory), each `list` entry and the `retire-evidence` plan report
 `evidence_summary`. Its `items` count index entries and its `bytes` count each stored
 file once. Its states are `present`, `retiring` (a
@@ -375,7 +381,8 @@ evidence, active users and keep reasons. Ordinary wrap-up and session-start do n
 authorize deletion. Obtain operator authorization covering these concrete paths,
 or reuse explicit authorization already covering them, including a standing grant
 under *Clean up what this session created* above for paths this session created. The preview's
-`approval_token` binds the inventory and seal; it is not itself operator consent.
+`approval_token` binds the inventory and seal (without retire-evidence's
+tombstones); it is not itself operator consent.
 Do not generate an apply invocation from a vague or unattended request.
 
 After every writer and descendant has ended, run:
