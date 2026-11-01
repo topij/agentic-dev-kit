@@ -2640,7 +2640,8 @@ def test_round_apply_after_retire_evidence_stays_idempotent(session):
     assert apply_round(registry, retired, receipt)["complete"]
 
 
-@pytest.mark.parametrize("value", ["x", [1], 5, {"retained": "x"}, {"retained": [1]}, {"retained": ["x"]}])
+@pytest.mark.parametrize("value", ["x", [1], 5, {"retained": "x"}, {"retained": [1]}, {"retained": ["x"]},
+                                   {"retired": []}])
 @pytest.mark.parametrize("where", ["inventory", "round"])
 def test_a_malformed_seal_is_isolated_and_refused(session, where, value):
     # #1328: a seal that is not an object aborted `list` for every inventory.

@@ -12,7 +12,7 @@ inventories is stuck this way, run `preview` again and apply with the token it g
 No `session.json` edit is needed.
 
 CHANGED: a seal, inventory or round, that is not an object, or whose `retained` is
-not a list of objects, is now refused when the inventory loads, with an `error:`
+missing or not a list of objects, is now refused when the inventory loads, with an `error:`
 naming that seal. `list` reports that inventory as `unavailable` and keeps listing
 the rest; before, a seal that was not an object aborted `list` for every inventory.
 `preview`, `apply`, `retire-evidence` and `reconcile` exit 2 on it. Deeper malformed

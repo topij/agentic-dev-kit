@@ -220,7 +220,7 @@ class Registry:
 
     @staticmethod
     def check_seals(record: dict) -> None:
-        """Refuse a recorded seal that is not an object holding a list of objects (#1328).
+        """Refuse a recorded seal that is not an object whose `retained` is a list of objects (#1328).
 
         Only a hand-edited or foreign-written session.json has one. Refusing it
         at load makes `list` report that one inventory unavailable and every
@@ -235,7 +235,8 @@ class Registry:
                 continue
             if not isinstance(seal, dict):
                 raise sweep.ConfigError(f"recorded {name} must be an object or null")
-            retained = seal.get("retained", [])
+            # Every seal the engine has written carries `retained`, empty or not.
+            retained = seal.get("retained")
             if not isinstance(retained, list) or not all(isinstance(item, dict) for item in retained):
                 raise sweep.ConfigError(f"recorded {name} must hold a list of retained-item objects")
 
