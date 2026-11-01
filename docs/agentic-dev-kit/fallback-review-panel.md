@@ -429,7 +429,9 @@ be rerun, use retained comparable evidence and state the gap. Reuse completed,
 applicable comparisons rather than repeat them merely to document the procedure:
 [#1206](https://github.com/topij/agentic-dev-kit/pull/1206) retains the Sol upgrade
 assessment and its limits; [#1209](https://github.com/topij/agentic-dev-kit/pull/1209)
-describes retaining evidence through session cleanup. Neither establishes an
+added evidence retention to session cleanup, which
+[#1316](https://github.com/topij/agentic-dev-kit/pull/1316) made an exception to
+discard by default. Neither establishes an
 unmeasured Claude comparison.
 
 ## The contract every lens gets
@@ -766,8 +768,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    **before** the receipt is written wherever the runtime can resume it; record
    the gap only when it cannot. A lens that amends its report after the receipt
    takes *When a lens amends its report after the receipt* below (`#719`). For
-   mutation claims, check the retained target diff and restoration evidence as
-   well as the test result.
+   mutation claims, check the target diff and restoration evidence the lens
+   reports as well as the test result. They are working input for this round, read
+   before the receipt, and are discarded with the round under step 7.
 4. Triage every finding against the *current* code — some go stale across
    rounds. Before triage you may run the verifier over the round's findings
    (*Verifying findings* below); it is optional until it is measured.
@@ -807,7 +810,7 @@ author re-reading their own diff. **Cite them by name, never by number.**
    `session-cleanup.md` defines, and never dependency trees or whole logs. Remove only this round's
    registered lens worktrees with `git worktree remove` after checking their
    status. With `scratch.session_registry`, retire the round with `--round` as
-   *Retire each round before the next* in `session-cleanup.md` describes, retaining
+   *Retire each round before the next* in `session-cleanup.md` describes, under
    operator authorization for the concrete paths (a standing grant under its
    *Clean up what this session created* covers this session's own round). The
    engine refuses the next `allocate` until the round is retired or kept with a

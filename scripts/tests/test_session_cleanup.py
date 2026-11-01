@@ -2577,8 +2577,11 @@ def test_apply_after_retire_evidence_on_a_complete_inventory(session):
     assert registry.preview(retired)["approval_token"] == token
     assert apply(registry, registry.load(record["id"]))["complete"]
     assert registry.load(record["id"])["approval"] == token
-    # A seal changed in anything but item tombstones still changes the token.
-    for change in ("kind", "sha256", "size", "diagnostics"):
+    # A seal changed in anything but item tombstones still changes the token:
+    # every stored item field, and the seal-level `retired` diagnostics (#1330).
+    item_fields = {"kind", "sha256", "size", "source", "requires", "exception", "retained", "retired"}
+    assert set(retired["seal"]["retained"][0]) == item_fields
+    for change in ("kind", "sha256", "size", "source", "requires", "exception", "retained", "diagnostics"):
         changed = registry.load(record["id"])
         item = changed["seal"]["retained"][0]
         if change == "kind":
@@ -2587,6 +2590,12 @@ def test_apply_after_retire_evidence_on_a_complete_inventory(session):
             item["sha256"] = "0" * 64
         elif change == "size":
             item["size"] += 1
+        elif change in ("source", "retained"):
+            item[change] += ".other"
+        elif change == "requires":
+            item["requires"] = [*item["requires"], "/other"]
+        elif change == "exception":
+            item["exception"] = {**item["exception"], "task": "another task"}
         else:
             changed["seal"]["retired"] = []
         assert registry.inventory_token(changed, registry.approved_seal(changed["seal"])) != token, change
