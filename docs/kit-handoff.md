@@ -137,7 +137,7 @@ on 2026-10-31.
 and a seal that retains an item refuses, before copying, unless `session.json` can take the seal, the copy an apply
 stores and every item's retirement tombstone. An apply's path bookkeeping is not reserved. Item 2 was #1331's.
 
-▶ Next: decide with the operator whether #1327 closes, and whether #1256's seal byte budget and #1315's shared
+▶ Next: decide with the operator whether #1327 is finished, and whether #1256's seal byte budget and #1315's shared
 store are still wanted.
 
 ### Reviewer profiles
