@@ -107,13 +107,13 @@ the cross-inventory shared store and a seal byte budget from those tickets were 
 `~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
 #1256. `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) shipped #1253's binding of inventories
 and receipts to a boot-stable identity. On 2026-10-28, from the primary checkout and with the operator's approval,
-every device-renumbered inventory in this repository was reconciled. Inventory `8cf42b14` stayed incomplete: it
-holds round `01234b40` (round 3 of #1262's review), which `session_cleanup.py preview --round` kept on
-2026-10-27 for a worktree record whose path holds a newline, written inside the round by a `test_panel_prompt.py`
-fixture (#1265). #1277 (`e372ba36`) released that record's keep, and `configured.git` fixture dirs still keep the
-round (#1279). #1277's review rounds `5ced121b` and `e388daaa` are also kept on disk, in inventory `a5b9c398`, by lens
-probe leftovers: a `.git` file whose `gitdir:` pointer spans lines, which `_linked_gitdir_reason` keeps on purpose and
-no open ticket covers yet, and a `configured.git` dir (#1279).
+every device-renumbered inventory in this repository was reconciled. Rounds `01234b40` (inventory `8cf42b14`) and
+`5ced121b` and `e388daaa` (inventory `a5b9c398`) were kept then by `test_panel_prompt.py` fixture leftovers (#1265,
+#1279) and, in `5ced121b`, by a lens probe's `.git` file whose `gitdir:` pointer spans lines, which
+`_linked_gitdir_reason` keeps on purpose and no open ticket covers. #1279's PR removes the `configured.git` fixture
+at teardown. On 2026-11-02 all three rounds were already gone from disk; `session_cleanup.py preview --round`
+reported each `absent`, marked unverified (its scratch root's identity no longer matched), and `apply --round`, with
+the operator's approval, returned `complete: true` for each.
 #1319 (`c08a3f56`) retires a round whose scratch root is gone too as `absent`, marked unverified (#1278).
 #1321 (`97b1780a`) retires a tracked task worktree nested under the primary checkout (#1307); its delta
 review's test-pinning LOWs are #1322. #1323 delivers #1312: it counts only local branches and tags as a retiring worktree's
@@ -133,10 +133,9 @@ on 2026-10-31.
 [#1280](https://github.com/topij/agentic-dev-kit/issues/1280),
 [#1322](https://github.com/topij/agentic-dev-kit/issues/1322).
 
-▶ Next: #1279 — clear `test_panel_prompt.py`'s `configured.git` keeper. Then preview rounds `01234b40`, `5ced121b`
-and `e388daaa` with `session_cleanup.py preview --round`, and retire each one it reports eligible, with the operator's
-approval. Round `5ced121b` stays kept for its multi-line `.git` pointer until a change, not yet ticketed, releases it.
-Separately: decide with the operator whether #1256's seal byte budget and #1315's shared store are still wanted.
+▶ Next: #1327 items 1 and 3 (`rounds_without_seal`'s meaning, and a size check before copying into
+`session.json`), a safety-critical `session_cleanup.py` change that owes the two-lens panel. Separately: decide with
+the operator whether #1256's seal byte budget and #1315's shared store are still wanted.
 
 ### Reviewer profiles
 
