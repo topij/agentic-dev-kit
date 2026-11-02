@@ -734,10 +734,10 @@ class Registry:
         # - a manifest with neither retain nor discard: refused above.
         # - a manifest with `retire` diagnostics: needs retained replacements, so
         #   its `retain` is not empty and it is checked.
-        # The bytes a skipped seal adds (its discards, whose list has no bound,
-        # and its copy in an apply's `last_result`) are not reserved, and they use
-        # the headroom earlier seals' checks counted on; publish refuses a save
-        # over LIMIT.
+        # The bytes a skipped seal adds (its discards, bounded only by the 1 MiB
+        # manifest read limit, and its copy in an apply's `last_result`) are not
+        # reserved, and they use the headroom earlier seals' checks counted on;
+        # publish refuses a save over LIMIT.
         if planned:
             self.check_seal_size(record, owner, {
                 "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
@@ -779,18 +779,20 @@ class Registry:
 
         This is a partial reservation, not a guarantee that the evidence can be
         retired. Not reserved, each using the same budget:
-        - the apply copies of other sealed rounds not yet applied, each a full
-          copy of that round's seal;
-        - a discard-only seal, which is not checked, and its discard list, which
-          has no bound;
+        - the apply copy of every other seal not yet applied (another round's,
+          or the inventory seal's), each a full copy of that seal;
+        - a discard-only seal, which is not checked, and its discard list, bounded
+          per seal only by the 1 MiB manifest read limit and not budgeted;
         - the tombstones a re-apply after retire_evidence copies into its
           `last_result`;
         - the rest of what an apply records (path outcomes, the evidence summary,
           approvals and statuses) and anything recorded later, such as another
           round's receipt.
         publish still refuses a save over LIMIT, so a seal that passes here can
-        meet that refusal later. It deletes nothing; the apply or retirement
-        that meets it cannot finish.
+        meet that refusal later. Retained evidence survives it: retire_evidence
+        saves its tombstones before deleting anything. An apply does not: it
+        removes its rounds' and worktrees' paths before its final save, so that
+        save can refuse after the removal and leave the inventory incomplete.
 
         The projection uses the hashes and sizes read just before the copy. A
         source rewritten between that read and the copy is stored as copied, so

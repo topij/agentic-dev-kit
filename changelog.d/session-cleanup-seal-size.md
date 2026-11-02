@@ -12,7 +12,9 @@ retain fewer items, or seal them in a new inventory. A seal with an empty `retai
 not checked. An inventory already over the projected size keeps working as before,
 except that its next seal retaining an item refuses.
 
-The reservation is partial. It does not cover other sealed rounds' apply copies, a
-discard-only seal's discard list, the tombstones a re-apply after `retire-evidence`
-copies, or an apply's other bookkeeping and later receipts. So a write over the bound
-can still refuse afterwards, as before; it deletes nothing.
+The reservation is partial. It does not cover the apply copies of other seals not yet
+applied, a discard-only seal's discard list, the tombstones a re-apply after
+`retire-evidence` copies, or an apply's other bookkeeping and later receipts. So a
+write over the bound can still refuse afterwards, as before. Retained evidence
+survives that refusal; an `apply` that meets it has already removed its paths and
+leaves the inventory incomplete.

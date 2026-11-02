@@ -139,7 +139,7 @@ on 2026-10-31.
 and a seal that retains an item refuses, before copying, unless `session.json` can take the seal, its own first
 apply's copy and every item's retirement tombstone. That reservation is partial: its docstring in `session_cleanup.py`
 lists what it leaves out, and #1335 proposes storing `last_result` without the seal copy so that it covers every write
-that grows with the evidence. #1336 pins the refusal's count. Item 2 was #1331's.
+that grows with the evidence. #1336 asks for a test of the refusal's count. Item 2 was #1331's.
 
 ▶ Next: decide with the operator whether #1327 is finished, and whether #1256's seal byte budget and #1315's shared
 store are still wanted.

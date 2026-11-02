@@ -280,16 +280,20 @@ evidence to strand.
 This is a partial reservation, not a guarantee that the evidence can be retired. It
 does not reserve:
 
-- the apply copies of other sealed rounds not yet applied, each a full copy of that
-  round's seal;
-- a discard-only seal's discard list, which has no bound;
+- the apply copy of every other seal not yet applied (another round's, or the
+  inventory seal's), each a full copy of that seal;
+- a discard-only seal's discard list, bounded per seal only by the 1 MiB manifest
+  read limit and not budgeted;
 - the tombstones that an apply run again after `retire-evidence` copies into its
   `last_result`;
 - the rest of what an apply records (path outcomes, the evidence summary, approvals
   and statuses) and anything recorded later, such as another round's receipt.
 
-Those use the same budget. A write that would cross the limit still refuses and
-deletes nothing, and the apply or retirement that meets it cannot finish. Package caches,
+Those use the same budget, and a write that would cross the limit still refuses.
+Retained evidence survives that refusal, because `retire-evidence` saves its
+tombstones before it deletes anything. An `apply` does not stop before deleting: it
+removes its rounds' and worktrees' paths before its final save, so that save can
+refuse after the removal and leave the inventory incomplete. Package caches,
 basetemps, build trees and whole-workspace archives are never retained. The older
 `retire` list (a superseded log with a reason and a retained replacement) is still
 accepted.
