@@ -2719,3 +2719,95 @@ def test_reconcile_refuses_a_malformed_seal_and_writes_nothing(device_session, m
     with pytest.raises(cleanup.sweep.ConfigError, match="seal of round 1"):
         registry.reconcile_plan(record["id"])
     assert stored(registry, record) == before
+
+
+def reserved_size(path, scope):
+    """session.json's size as a seal must reserve it, encoded as publish does.
+
+    The just-sealed record, plus the copy of the newest seal an apply stores in
+    `last_result`, plus a retirement tombstone on every retained item.
+    """
+    record = json.loads(path.read_text())
+    holder = record if scope == "inventory" else record["rounds"][-1]
+    holder["last_result"] = {"evidence": json.loads(json.dumps(holder["seal"]))}
+    seals = [record["seal"], *(r.get("seal") for r in record["rounds"])]
+    for item in (i for s in seals if s for i in s["retained"]):
+        item.setdefault("retired", {"approval": "f" * 64})
+    return len((json.dumps(record, sort_keys=True, indent=2) + "\n").encode())
+
+
+@pytest.mark.parametrize("earlier", [False, True], ids=["first-seal", "after-a-sealed-round"])
+@pytest.mark.parametrize("scope", ["round", "inventory"])
+def test_a_seal_reserves_its_applied_copy_and_every_tombstone(session, monkeypatch, scope, earlier):
+    # #1327: the reservation arithmetic. A seal that fits session.json's limit
+    # but leaves no room for the seal copy an apply stores and the tombstones
+    # retire_evidence writes would strand evidence. This checks the projected
+    # size at its boundary; it does not run apply or retire-evidence, whose
+    # path bookkeeping the projection does not reserve.
+    registry, record, _ = session
+    if earlier:
+        first = allocate(registry, record)
+        seal(registry, record, first, scope=first["id"])
+    receipt = allocate(registry, record, keep_previous="probe" if earlier else None)
+    path = registry.location(record["id"]) / "session.json"
+    evidence = registry.location(record["id"]) / "evidence"
+    before, held = path.read_bytes(), set(os.listdir(evidence)) if evidence.exists() else set()
+
+    def sealing():
+        return seal(registry, registry.load(record["id"]),
+                    receipt, scope=receipt["id"] if scope == "round" else None)
+
+    sealing()  # measure the sealed record, then put the inventory back
+    sealed, reserved = len(path.read_bytes()), reserved_size(path, scope)
+    assert sealed < reserved
+    path.write_bytes(before)
+    for name in set(os.listdir(evidence)) - held:
+        os.unlink(evidence / name)
+
+    # The seal alone would fit: only the tombstone reservation refuses it.
+    monkeypatch.setattr(cleanup, "LIMIT", reserved - 1)
+    with pytest.raises(cleanup.sweep.ConfigError, match="no room to retire its evidence"):
+        sealing()
+    assert path.read_bytes() == before
+    assert set(os.listdir(evidence)) == held if evidence.exists() else not held
+
+    monkeypatch.setattr(cleanup, "LIMIT", reserved)
+    sealing()
+    assert len(path.read_bytes()) == sealed
+
+
+def test_a_round_sealed_by_discard_alone_is_not_without_seal(device_session, monkeypatch):
+    # #1327: since #1316 a sealed round may retain nothing. It still declared
+    # where its results went, so only a round with no seal is listed.
+    registry, record, _ = device_session
+    discarded = allocate(registry, record)
+    registry.seal_round(record, discarded["id"], {"evidence_complete": True, "retain": [],
+                        "discard": [{"source": str(Path(discarded["path"]) / "report.md"),
+                                     "reason": "recorded on PR #123"}]})
+    shutil.rmtree(discarded["path"])
+    unsealed = allocate(registry, record, keep_previous="probe")
+    shutil.rmtree(unsealed["path"])
+    renumber(monkeypatch)
+    plan = registry.reconcile_plan(record["id"])[1]
+    assert plan["rounds_marked_removed"] == [discarded["id"], unsealed["id"]]
+    assert plan["rounds_without_seal"] == [unsealed["id"]]
+
+
+def test_a_discard_only_seal_is_not_refused_for_earlier_seals_budget(session, monkeypatch):
+    # #1327: a seal that retains nothing strands nothing, so the budget earlier
+    # seals used does not refuse it; one that retains an item names their share.
+    registry, record, _ = session
+    first = allocate(registry, record)
+    seal(registry, record, first, scope=first["id"])
+    path = registry.location(record["id"]) / "session.json"
+    monkeypatch.setattr(cleanup, "LIMIT", len(path.read_bytes()) + 2048)
+    second = allocate(registry, record, keep_previous="probe")
+    report = Path(second["path"]) / "report.md"
+    report.write_text("x" * 4096)
+    with pytest.raises(cleanup.sweep.ConfigError,
+                       match=r"each of its 1 retained items and the 2 unretired items earlier seals hold"):
+        registry.seal_round(registry.load(record["id"]), second["id"], {"evidence_complete": True, "retain": [
+            {"source": str(report), "kind": "report", "requires": [], "exception": EXCEPTION}]})
+    registry.seal_round(registry.load(record["id"]), second["id"], {"evidence_complete": True, "retain": [],
+                        "discard": [{"source": str(report), "reason": "recorded on PR #123"}]})
+    assert registry.load(record["id"])["rounds"][1]["seal"]["retained"] == []

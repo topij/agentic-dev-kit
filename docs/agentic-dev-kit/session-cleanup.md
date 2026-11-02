@@ -195,8 +195,11 @@ still be registered with Git; an error inspecting a path other than its absence
 refuses reconcile. It also refuses an unapproved interrupted removal, checked once
 every other bound field is trusted. The preview writes nothing and lists the
 differences, the stored and current schema and identity, the rounds it will mark
-removed, which of those retained no evidence (`rounds_without_seal`) and the absent
-worktrees. Its token binds the stored record and that plan, including the current
+removed, which of those have no seal (`rounds_without_seal`) and the absent
+worktrees. A round with no seal recorded no disposition for its evidence: nothing
+retained and no discard declared. A round sealed with an empty `retain` and a
+`discard` list also retains nothing, but is not listed, since its seal says where its
+results went. An inventory seal covers every round, so none is listed once it exists. Its token binds the stored record and that plan, including the current
 identity, and it is not itself operator consent: apply only under authorization
 covering that inventory. Apply rebinds the common directory to the new identity and
 schema 2, marks the listed rounds removed, records the change under `reconciled`
@@ -259,7 +262,38 @@ item. Every item is validated and its source hashed before any bytes are copied,
 a validation refusal copies nothing; a failure during a copy (a source that changes
 mid-read, a full disk) can still leave a file no index names. `evidence_complete` is the caller's explicit assertion of the
 complete evidence closure; the engine cannot infer it from arbitrary prose. Missing,
-unreadable, aliased or non-regular evidence blocks sealing. Package caches,
+unreadable, aliased or non-regular evidence blocks sealing.
+
+The inventory's `session.json` is bounded at 1 MiB (`LIMIT` in the engine): a write
+over it refuses, and so does a read. Two later writes grow with the evidence a seal
+retains. An `apply` (inventory or `--round`) stores its preview, which carries a full
+copy of the seal, as `last_result`. `retire-evidence` writes a `retired` tombstone into
+every item it deletes, before deleting anything. If either write refuses, some or all
+of the evidence cannot be retired. So, also before copying, a seal that retains at
+least one item projects `session.json` with the seal in place, the copy this seal's
+own first apply stores, and a tombstone on every retained item (those earlier seals
+hold included), and refuses if that exceeds the limit. The refusal says how many of
+the items are unretired items that earlier seals hold. Retain fewer items, or seal
+them in a new inventory. A seal with an empty `retain` is not checked: it adds no
+evidence to strand.
+
+This is a partial reservation, not a guarantee that the evidence can be retired. It
+does not reserve:
+
+- the apply copy of every other seal not yet applied (another round's, or the
+  inventory seal's), each a full copy of that seal;
+- a discard-only seal's discard list, bounded per seal only by the 1 MiB manifest
+  read limit and not budgeted;
+- the tombstones that an apply run again after `retire-evidence` copies into its
+  `last_result`;
+- the rest of what an apply records (path outcomes, the evidence summary, approvals
+  and statuses) and anything recorded later, such as another round's receipt.
+
+Those use the same budget, and a write that would cross the limit still refuses.
+Retained evidence survives that refusal, because `retire-evidence` saves its
+tombstones before it deletes anything. An `apply` does not stop before deleting: it
+removes its rounds' and worktrees' paths before its final save, so that save can
+refuse after the removal and leave the inventory incomplete. Package caches,
 basetemps, build trees and whole-workspace archives are never retained. The older
 `retire` list (a superseded log with a reason and a retained replacement) is still
 accepted.

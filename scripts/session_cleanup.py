@@ -91,9 +91,14 @@ def read_json(path: Path) -> dict:
     return value
 
 
+def encode(value: dict) -> str:
+    """A registry record as publish writes it; its byte length is what LIMIT bounds."""
+    return json.dumps(value, sort_keys=True, indent=2) + "\n"
+
+
 def publish(path: Path, value: dict) -> None:
     canonical(path.parent)
-    encoded = json.dumps(value, sort_keys=True, indent=2) + "\n"
+    encoded = encode(value)
     if len(encoded.encode()) > LIMIT:
         raise sweep.ConfigError("registry record exceeds its bounded read size")
     if os.path.lexists(path):
@@ -306,7 +311,10 @@ class Registry:
                                     "current": sweep.stable_identity(str(self.common))},
                 "rounds_marked_removed": [r["receipt"]["id"] for r in record["rounds"]
                                           if r["status"] != "removed"],
-                # An unsealed round retained no evidence; the approver sees which.
+                # A round with no seal recorded no disposition for its evidence:
+                # nothing retained and no discard declared. A sealed round may
+                # also retain nothing (`retain: []` with `discard`, #1316); it is
+                # not listed, because it said where its results went (#1327).
                 "rounds_without_seal": [r["receipt"]["id"] for r in record["rounds"]
                                         if r["status"] != "removed" and r.get("seal") is None
                                         and record["seal"] is None],
@@ -618,7 +626,7 @@ class Registry:
 
     def seal(self, record: dict, manifest: dict) -> dict:
         self.require_open(record)
-        record["seal"] = self.retain(record, manifest, record["rounds"])
+        record["seal"] = self.retain(record, manifest, record["rounds"], None)
         self.save(record)
         return record["seal"]
 
@@ -629,11 +637,16 @@ class Registry:
         entry = self.round_entry(record, round_id)
         if entry["status"] != "allocated" or entry.get("seal") is not None:
             raise sweep.ConfigError("round is already sealed or retiring")
-        entry["seal"] = self.retain(record, manifest, [entry])
+        entry["seal"] = self.retain(record, manifest, [entry], entry)
         self.save(record)
         return entry["seal"]
 
-    def retain(self, record: dict, manifest: dict, rounds: list[dict]) -> dict:
+    def retain(self, record: dict, manifest: dict, rounds: list[dict], owner: dict | None) -> dict:
+        """Validate a manifest and copy its retained evidence; return the seal.
+
+        `owner` is the round entry the seal is for, or None for the inventory
+        seal. It places the seal in the size projection checked before any copy.
+        """
         if manifest.get("evidence_complete") is not True:
             raise sweep.ConfigError("manifest must attest the complete required evidence closure")
         items = manifest.get("retain")
@@ -704,11 +717,37 @@ class Registry:
             path = canonical(Path(normal(item.get("source"))))
             if str(path) in sources or not any(path.is_relative_to(r["receipt"]["path"]) for r in rounds):
                 raise sweep.ConfigError("retired diagnostics must be unretained files in an owned round")
-        for item in planned:
-            hash_file(Path(item["source"]))  # every source readable before any copy
+        # Every source readable before any copy, and its hash and size known,
+        # so the size check below can project the seal.
+        hashes = [hash_file(Path(item["source"])) for item in planned]
+        target = self.location(record["id"]) / "evidence"
+        # Bytes the copy below will write, counted as copy_evidence counts them:
+        # once per content not already stored.
+        unique = dict(hashes)
+        # Only a seal that retains something is checked. Inputs that share that
+        # skip's shape (an empty `retain`) and each one's result:
+        # - a discard-only round seal, the normal completion path: skipped. It adds
+        #   no retained item, so it strands nothing, even when earlier seals have
+        #   already used the budget, and refusing it would leave its round with no
+        #   way to retire.
+        # - a discard-only inventory seal: skipped, for the same reason.
+        # - a manifest with neither retain nor discard: refused above.
+        # - a manifest with `retire` diagnostics: needs retained replacements, so
+        #   its `retain` is not empty and it is checked.
+        # The bytes a skipped seal adds (its discards, bounded only by the 1 MiB
+        # manifest read limit, and its copy in an apply's `last_result`) are not
+        # reserved, and they use the headroom earlier seals' checks counted on;
+        # publish refuses a save over LIMIT.
+        if planned:
+            self.check_seal_size(record, owner, {
+                "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
+                             for item, (sha, size) in zip(planned, hashes, strict=True)],
+                "retired": retired, "discarded": discards, "evidence_complete": True,
+                "bytes": {"retained": sum(size for _, size in hashes),
+                          "copied": sum(size for sha, size in unique.items()
+                                        if not os.path.lexists(target / sha))}})
         retained, copied = [], 0
         if planned:
-            target = self.location(record["id"]) / "evidence"
             target.mkdir(mode=0o700, exist_ok=True)
             canonical(target)
             for item in planned:
@@ -724,6 +763,67 @@ class Registry:
                 # Bytes the retained items name (shared content counted per
                 # item), and bytes this seal newly wrote to disk.
                 "bytes": {"retained": sum(r["size"] for r in retained), "copied": copied}}
+
+    def check_seal_size(self, record: dict, owner: dict | None, seal: dict) -> None:
+        """Refuse a seal that leaves session.json no room for its own later writes (#1327).
+
+        session.json is read back under LIMIT, and publish refuses to write a
+        record over it. Two later writes grow with the evidence a seal retains:
+        an apply (inventory or `--round`) stores its preview, which embeds a full
+        copy of the seal, as `last_result`; and retire_evidence writes a
+        `retired` tombstone into every item it deletes, before deleting anything.
+        If either write refuses, some or all of the evidence cannot be retired.
+        So the record is projected with this seal in place, the copy this seal's
+        own first apply stores, and a tombstone on every retained item (those
+        earlier seals hold included), and refused here, before any byte is copied.
+
+        This is a partial reservation, not a guarantee that the evidence can be
+        retired. Not reserved, each using the same budget:
+        - the apply copy of every other seal not yet applied (another round's,
+          or the inventory seal's), each a full copy of that seal;
+        - a discard-only seal, which is not checked, and its discard list, bounded
+          per seal only by the 1 MiB manifest read limit and not budgeted;
+        - the tombstones a re-apply after retire_evidence copies into its
+          `last_result`;
+        - the rest of what an apply records (path outcomes, the evidence summary,
+          approvals and statuses) and anything recorded later, such as another
+          round's receipt.
+        publish still refuses a save over LIMIT, so a seal that passes here can
+        meet that refusal later. Retained evidence survives it: retire_evidence
+        saves its tombstones before deleting anything. An apply does not: it
+        removes its rounds' and worktrees' paths before its final save, so that
+        save can refuse after the removal and leave the inventory incomplete.
+
+        The projection uses the hashes and sizes read just before the copy. A
+        source rewritten between that read and the copy is stored as copied, so
+        the seal can differ from the projection by its size digits.
+        """
+        projected = json.loads(json.dumps(record))
+        holder = projected if owner is None else projected["rounds"][
+            next(i for i, entry in enumerate(record["rounds"]) if entry is owner)]
+        # Copies, so the projection never writes into the caller's seal. The
+        # reserved apply copy is the first apply's, taken before any retirement,
+        # so it carries no tombstones, and evidence_items below does not reach
+        # it. A re-apply after retire_evidence copies tombstones into its
+        # `last_result`; those are not reserved (see above).
+        holder["seal"] = json.loads(json.dumps(seal))
+        holder["last_result"] = {**holder.get("last_result", {}),
+                                 "evidence": json.loads(json.dumps(seal))}
+        # The approval a tombstone carries is a digest: 64 hexadecimal characters.
+        tombstone = {"approval": "0" * 64}
+        unretired = 0
+        for _, item in self.evidence_items(projected):
+            unretired += item.get("retired") is None
+            item.setdefault("retired", tombstone)
+        earlier = unretired - len(seal["retained"])
+        size = len(encode(projected).encode())
+        if size > LIMIT:
+            raise sweep.ConfigError(
+                f"sealing this would leave no room to retire its evidence: session.json with this "
+                f"seal, the copy of it an apply records, and a retirement tombstone on each of its "
+                f"{len(seal['retained'])} retained items and the {earlier} unretired items earlier "
+                f"seals hold would be {size} bytes, over its {LIMIT}-byte limit; retain fewer "
+                f"items, or seal them in a new inventory")
 
     def verify_evidence(self, record: dict) -> None:
         self.verify_seal(record, record["seal"])
