@@ -726,7 +726,7 @@ class Registry:
         unique = dict(hashes)
         self.check_seal_size(record, owner, {
             "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
-                         for item, (sha, size) in zip(planned, hashes)],
+                         for item, (sha, size) in zip(planned, hashes, strict=True)],
             "retired": retired, "discarded": discards, "evidence_complete": True,
             "bytes": {"retained": sum(size for _, size in hashes),
                       "copied": sum(size for sha, size in unique.items()
