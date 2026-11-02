@@ -112,8 +112,8 @@ every device-renumbered inventory in this repository was reconciled. Rounds `012
 #1279) and, in `5ced121b`, by a lens probe's `.git` file whose `gitdir:` pointer spans lines, which
 `_linked_gitdir_reason` keeps on purpose. That keeper has no ticket, and this paragraph is its only record.
 #1333 removes the `configured.git` fixture at teardown. On 2026-11-02 all three rounds were already gone from
-disk; `session_cleanup.py preview --round` reported each `absent`, marked unverified (its scratch root's identity no longer matched), and `apply --round`, with
-the operator's approval, returned `complete: true` for each.
+disk; `session_cleanup.py preview --round` reported each `absent`, marked unverified (its scratch root's identity
+no longer matched), and `apply --round`, with the operator's approval, returned `complete: true` for each.
 #1319 (`c08a3f56`) retires a round whose scratch root is gone too as `absent`, marked unverified (#1278).
 #1321 (`97b1780a`) retires a tracked task worktree nested under the primary checkout (#1307); its delta
 review's test-pinning LOWs are #1322. #1323 delivers #1312: it counts only local branches and tags as a retiring worktree's
