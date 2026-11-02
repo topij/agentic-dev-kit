@@ -10,8 +10,8 @@ names:
 
 - a worktree inside the entry that exists no longer keeps it, so that record no longer
   keeps a round a lens ran that suite in. Every other keeper still applies: a round
-  that also holds a git dir not beside its own work tree, such as the `configured.git`
-  that `test_panel_prompt.py`'s object-database test leaves, is still kept;
+  that also holds a git dir not beside its own work tree, such as a non-bare
+  `configured.git` whose `core.worktree` is inside itself, is still kept;
 - a worktree outside the entry that exists still keeps it, now with the reason
   `repository whose worktree ... lives outside this entry`;
 - a record holding a line break whose path does not exist, or cannot be statted, is
