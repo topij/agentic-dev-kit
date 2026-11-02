@@ -1,15 +1,15 @@
-## session_cleanup.py: a seal refuses when `session.json` could not take its retirement tombstones
+## session_cleanup.py: a seal refuses when `session.json` could not take its apply and retirement writes
 
 CHANGED (gate semantics): `seal` and `seal --round` now refuse, before copying any
-evidence, when the inventory's `session.json`, with the new seal in place and a
-`retired` tombstone reserved on every retained item (those already sealed in the
-inventory included), would exceed its 1 MiB bound. Until now such a seal could
-succeed and leave `retire-evidence` unable to write its tombstones, so the evidence
+evidence, when the seal retains at least one item and the inventory's `session.json`
+would exceed its 1 MiB bound with three things added: the new seal, the copy of it an
+`apply` stores in `last_result`, and a `retired` tombstone on every retained item
+(those earlier seals hold included). Until now such a seal could succeed and leave
+`apply` or `retire-evidence` unable to write, so that some or all of the evidence
 could not be retired. The refusal reads `sealing this would leave no room to retire
-its evidence`. If you hit it, retain fewer items, or seal them in a new inventory.
-An inventory that is already over the projected size keeps working as before
-until its next seal.
-
-`reconcile`'s `rounds_without_seal` is unchanged, but is now documented as rounds
-that recorded no disposition for their evidence. A round sealed with an empty
-`retain` and a `discard` list also retains nothing, and is not listed in it.
+its evidence` and counts the items earlier seals hold. If you hit it, retain fewer
+items, or seal them in a new inventory. A seal with an empty `retain` is not checked.
+An inventory already over the projected size keeps working as before, except that its
+next seal retaining an item refuses. The check does not reserve an apply's other
+bookkeeping or later rounds' receipts, so a write over the bound can still refuse
+afterwards, as before.

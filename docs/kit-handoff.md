@@ -133,9 +133,12 @@ on 2026-10-31.
 [#1280](https://github.com/topij/agentic-dev-kit/issues/1280),
 [#1322](https://github.com/topij/agentic-dev-kit/issues/1322).
 
-▶ Next: #1327 items 1 and 3 (`rounds_without_seal`'s meaning, and a size check before copying into
-`session.json`), a safety-critical `session_cleanup.py` change that owes the two-lens panel. Separately: decide with
-the operator whether #1256's seal byte budget and #1315's shared store are still wanted.
+#1334 delivers #1327's items 1 and 3: `rounds_without_seal` is documented as rounds that recorded no disposition,
+and a seal that retains an item refuses, before copying, unless `session.json` can take the seal, the copy an apply
+stores and every item's retirement tombstone. An apply's path bookkeeping is not reserved. Item 2 was #1331's.
+
+▶ Next: decide with the operator whether #1327 closes, and whether #1256's seal byte budget and #1315's shared
+store are still wanted.
 
 ### Reviewer profiles
 

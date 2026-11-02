@@ -265,14 +265,20 @@ complete evidence closure; the engine cannot infer it from arbitrary prose. Miss
 unreadable, aliased or non-regular evidence blocks sealing.
 
 The inventory's `session.json` is bounded at 1 MiB (`LIMIT` in the engine): a write
-over it refuses, and so does a read. Each retained item adds its index entry, and
-`retire-evidence` later writes a `retired` tombstone into every item it deletes,
-before deleting anything. So, also before copying, a seal projects `session.json`
-with this seal in place and a tombstone on every retained item, those already sealed
-in the inventory included, and refuses if that exceeds the limit. Retain fewer items,
-or seal them in a new inventory. The reservation covers tombstones only: anything
-recorded after the seal, such as a later round's receipt or an apply's approval, uses
-the same budget, and a write that would cross the limit still refuses. Package caches,
+over it refuses, and so does a read. Two later writes grow with the evidence a seal
+retains. An `apply` (inventory or `--round`) stores its preview, which carries a full
+copy of the seal, as `last_result`. `retire-evidence` writes a `retired` tombstone into
+every item it deletes, before deleting anything. If either write refuses, some or all
+of the evidence cannot be retired. So, also before copying, a seal that retains at
+least one item projects `session.json` with the seal in place, the copy an apply
+stores, and a tombstone on every retained item (those earlier seals hold included),
+and refuses if that exceeds the limit. The refusal names how many of the items are
+earlier seals'. Retain fewer items, or seal them in a new inventory. A seal with an
+empty `retain` is not checked: it adds no evidence to strand. What the projection does
+not reserve is sized by the inventory's paths, not its evidence: the rest of what an
+apply records (path outcomes, the evidence summary, approvals and statuses) and
+anything recorded later, such as another round's receipt. Those use the same budget,
+and a write that would cross the limit still refuses. Package caches,
 basetemps, build trees and whole-workspace archives are never retained. The older
 `retire` list (a superseded log with a reason and a retained replacement) is still
 accepted.

@@ -724,13 +724,26 @@ class Registry:
         # Bytes the copy below will write, counted as copy_evidence counts them:
         # once per content not already stored.
         unique = dict(hashes)
-        self.check_seal_size(record, owner, {
-            "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
-                         for item, (sha, size) in zip(planned, hashes, strict=True)],
-            "retired": retired, "discarded": discards, "evidence_complete": True,
-            "bytes": {"retained": sum(size for _, size in hashes),
-                      "copied": sum(size for sha, size in unique.items()
-                                    if not os.path.lexists(target / sha))}})
+        # Only a seal that retains something is checked. Inputs that share that
+        # skip's shape (an empty `retain`) and each one's result:
+        # - a discard-only round seal, the normal completion path: skipped. It adds
+        #   no retained item, so it strands nothing, even when earlier seals have
+        #   already used the budget, and refusing it would leave its round with no
+        #   way to retire.
+        # - a discard-only inventory seal: skipped, for the same reason.
+        # - a manifest with neither retain nor discard: refused above.
+        # - a manifest with `retire` diagnostics: needs retained replacements, so
+        #   its `retain` is not empty and it is checked.
+        # The bytes a skipped seal adds (its discards, and its copy in an apply's
+        # `last_result`) are not evidence-sized; publish refuses a save over LIMIT.
+        if planned:
+            self.check_seal_size(record, owner, {
+                "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
+                             for item, (sha, size) in zip(planned, hashes, strict=True)],
+                "retired": retired, "discarded": discards, "evidence_complete": True,
+                "bytes": {"retained": sum(size for _, size in hashes),
+                          "copied": sum(size for sha, size in unique.items()
+                                        if not os.path.lexists(target / sha))}})
         retained, copied = [], 0
         if planned:
             target.mkdir(mode=0o700, exist_ok=True)
@@ -750,40 +763,52 @@ class Registry:
                 "bytes": {"retained": sum(r["size"] for r in retained), "copied": copied}}
 
     def check_seal_size(self, record: dict, owner: dict | None, seal: dict) -> None:
-        """Refuse a seal that would leave session.json unable to take its tombstones (#1327).
+        """Refuse a seal whose evidence-sized writes would not fit session.json (#1327).
 
         session.json is read back under LIMIT, and publish refuses to write a
-        record over it. A seal that fits now can still strand its evidence:
-        retire_evidence writes a `retired` tombstone into every item it deletes
-        before deleting anything, and a refused tombstone write leaves the
-        evidence with no approved way out. So the record is projected with this
-        seal in place and a tombstone on every retained item, already sealed
-        ones included, and refused here, before any byte is copied.
+        record over it. Two later writes grow with the evidence a seal retains:
+        an apply (inventory or `--round`) stores its preview, which embeds a full
+        copy of the seal, as `last_result`; and retire_evidence writes a
+        `retired` tombstone into every item it deletes, before deleting anything.
+        If either write refuses, some or all of the evidence cannot be retired.
+        So the record is projected with this seal in place, the copy an apply
+        stores, and a tombstone on every retained item (those already sealed
+        included), and refused here, before any byte is copied.
+
+        Not reserved: the rest of what an apply records (path outcomes, the
+        evidence summary, approvals and statuses, sized by the inventory's paths,
+        not its evidence) and anything recorded later, such as another round's
+        receipt. Those use the same budget, and publish still refuses a save
+        over LIMIT, so a seal that passes here can still meet that refusal.
 
         The projection uses the hashes and sizes read just before the copy. A
         source rewritten between that read and the copy is stored as copied, so
-        the seal can differ from the projection by its size digits; publish's own
-        check still refuses a record over LIMIT. The projection reserves room
-        only for tombstones: whatever is recorded after this seal
-        (a later round's receipt, an apply's approval) uses the same budget, and
-        a save over LIMIT still refuses.
+        the seal can differ from the projection by its size digits.
         """
         projected = json.loads(json.dumps(record))
-        if owner is None:
-            projected["seal"] = seal
-        else:
-            index = next(i for i, entry in enumerate(record["rounds"]) if entry is owner)
-            projected["rounds"][index]["seal"] = seal
+        holder = projected if owner is None else projected["rounds"][
+            next(i for i, entry in enumerate(record["rounds"]) if entry is owner)]
+        # Copies, so the projection never writes into the caller's seal. The copy
+        # an apply stores is taken before any retirement, so it carries no
+        # tombstones, and evidence_items below does not reach it.
+        holder["seal"] = json.loads(json.dumps(seal))
+        holder["last_result"] = {**holder.get("last_result", {}),
+                                 "evidence": json.loads(json.dumps(seal))}
         # The approval a tombstone carries is a digest: 64 hexadecimal characters.
         tombstone = {"approval": "0" * 64}
+        unretired = 0
         for _, item in self.evidence_items(projected):
+            unretired += item.get("retired") is None
             item.setdefault("retired", tombstone)
+        earlier = unretired - len(seal["retained"])
         size = len(encode(projected).encode())
         if size > LIMIT:
             raise sweep.ConfigError(
-                f"sealing this would leave no room to retire its evidence: session.json with a "
-                f"retirement tombstone on every retained item would be {size} bytes, over its "
-                f"{LIMIT}-byte limit; retain fewer items, or seal them in a new inventory")
+                f"sealing this would leave no room to retire its evidence: session.json with this "
+                f"seal, the copy of it an apply records, and a retirement tombstone on each of its "
+                f"{len(seal['retained'])} retained items and the {earlier} unretired items earlier "
+                f"seals hold would be {size} bytes, over its {LIMIT}-byte limit; retain fewer "
+                f"items, or seal them in a new inventory")
 
     def verify_evidence(self, record: dict) -> None:
         self.verify_seal(record, record["seal"])
