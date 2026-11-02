@@ -195,8 +195,11 @@ still be registered with Git; an error inspecting a path other than its absence
 refuses reconcile. It also refuses an unapproved interrupted removal, checked once
 every other bound field is trusted. The preview writes nothing and lists the
 differences, the stored and current schema and identity, the rounds it will mark
-removed, which of those retained no evidence (`rounds_without_seal`) and the absent
-worktrees. Its token binds the stored record and that plan, including the current
+removed, which of those have no seal (`rounds_without_seal`) and the absent
+worktrees. A round with no seal recorded no disposition for its evidence: nothing
+retained and no discard declared. A round sealed with an empty `retain` and a
+`discard` list also retains nothing, but is not listed, since its seal says where its
+results went. An inventory seal covers every round, so none is listed once it exists. Its token binds the stored record and that plan, including the current
 identity, and it is not itself operator consent: apply only under authorization
 covering that inventory. Apply rebinds the common directory to the new identity and
 schema 2, marks the listed rounds removed, records the change under `reconciled`
@@ -259,7 +262,17 @@ item. Every item is validated and its source hashed before any bytes are copied,
 a validation refusal copies nothing; a failure during a copy (a source that changes
 mid-read, a full disk) can still leave a file no index names. `evidence_complete` is the caller's explicit assertion of the
 complete evidence closure; the engine cannot infer it from arbitrary prose. Missing,
-unreadable, aliased or non-regular evidence blocks sealing. Package caches,
+unreadable, aliased or non-regular evidence blocks sealing.
+
+The inventory's `session.json` is bounded at 1 MiB (`LIMIT` in the engine): a write
+over it refuses, and so does a read. Each retained item adds its index entry, and
+`retire-evidence` later writes a `retired` tombstone into every item it deletes,
+before deleting anything. So, also before copying, a seal projects `session.json`
+with this seal in place and a tombstone on every retained item, those already sealed
+in the inventory included, and refuses if that exceeds the limit. Retain fewer items,
+or seal them in a new inventory. The reservation covers tombstones only: anything
+recorded after the seal, such as a later round's receipt or an apply's approval, uses
+the same budget, and a write that would cross the limit still refuses. Package caches,
 basetemps, build trees and whole-workspace archives are never retained. The older
 `retire` list (a superseded log with a reason and a retained replacement) is still
 accepted.
