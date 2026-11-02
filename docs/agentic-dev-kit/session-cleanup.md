@@ -270,15 +270,26 @@ retains. An `apply` (inventory or `--round`) stores its preview, which carries a
 copy of the seal, as `last_result`. `retire-evidence` writes a `retired` tombstone into
 every item it deletes, before deleting anything. If either write refuses, some or all
 of the evidence cannot be retired. So, also before copying, a seal that retains at
-least one item projects `session.json` with the seal in place, the copy an apply
-stores, and a tombstone on every retained item (those earlier seals hold included),
-and refuses if that exceeds the limit. The refusal names how many of the items are
-earlier seals'. Retain fewer items, or seal them in a new inventory. A seal with an
-empty `retain` is not checked: it adds no evidence to strand. What the projection does
-not reserve is sized by the inventory's paths, not its evidence: the rest of what an
-apply records (path outcomes, the evidence summary, approvals and statuses) and
-anything recorded later, such as another round's receipt. Those use the same budget,
-and a write that would cross the limit still refuses. Package caches,
+least one item projects `session.json` with the seal in place, the copy this seal's
+own first apply stores, and a tombstone on every retained item (those earlier seals
+hold included), and refuses if that exceeds the limit. The refusal says how many of
+the items are unretired items that earlier seals hold. Retain fewer items, or seal
+them in a new inventory. A seal with an empty `retain` is not checked: it adds no
+evidence to strand.
+
+This is a partial reservation, not a guarantee that the evidence can be retired. It
+does not reserve:
+
+- the apply copies of other sealed rounds not yet applied, each a full copy of that
+  round's seal;
+- a discard-only seal's discard list, which has no bound;
+- the tombstones that an apply run again after `retire-evidence` copies into its
+  `last_result`;
+- the rest of what an apply records (path outcomes, the evidence summary, approvals
+  and statuses) and anything recorded later, such as another round's receipt.
+
+Those use the same budget. A write that would cross the limit still refuses and
+deletes nothing, and the apply or retirement that meets it cannot finish. Package caches,
 basetemps, build trees and whole-workspace archives are never retained. The older
 `retire` list (a superseded log with a reason and a retained replacement) is still
 accepted.

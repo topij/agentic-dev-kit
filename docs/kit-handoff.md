@@ -131,11 +131,15 @@ on 2026-10-31.
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1279](https://github.com/topij/agentic-dev-kit/issues/1279),
 [#1280](https://github.com/topij/agentic-dev-kit/issues/1280),
-[#1322](https://github.com/topij/agentic-dev-kit/issues/1322).
+[#1322](https://github.com/topij/agentic-dev-kit/issues/1322),
+[#1335](https://github.com/topij/agentic-dev-kit/issues/1335),
+[#1336](https://github.com/topij/agentic-dev-kit/issues/1336).
 
 #1334 delivers #1327's items 1 and 3: `rounds_without_seal` is documented as rounds that recorded no disposition,
-and a seal that retains an item refuses, before copying, unless `session.json` can take the seal, the copy an apply
-stores and every item's retirement tombstone. An apply's path bookkeeping is not reserved. Item 2 was #1331's.
+and a seal that retains an item refuses, before copying, unless `session.json` can take the seal, its own first
+apply's copy and every item's retirement tombstone. That reservation is partial: its docstring in `session_cleanup.py`
+lists what it leaves out, and #1335 proposes storing `last_result` without the seal copy so that it covers every write
+that grows with the evidence. #1336 pins the refusal's count. Item 2 was #1331's.
 
 ▶ Next: decide with the operator whether #1327 is finished, and whether #1256's seal byte budget and #1315's shared
 store are still wanted.

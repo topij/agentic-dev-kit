@@ -734,8 +734,10 @@ class Registry:
         # - a manifest with neither retain nor discard: refused above.
         # - a manifest with `retire` diagnostics: needs retained replacements, so
         #   its `retain` is not empty and it is checked.
-        # The bytes a skipped seal adds (its discards, and its copy in an apply's
-        # `last_result`) are not evidence-sized; publish refuses a save over LIMIT.
+        # The bytes a skipped seal adds (its discards, whose list has no bound,
+        # and its copy in an apply's `last_result`) are not reserved, and they use
+        # the headroom earlier seals' checks counted on; publish refuses a save
+        # over LIMIT.
         if planned:
             self.check_seal_size(record, owner, {
                 "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
@@ -763,7 +765,7 @@ class Registry:
                 "bytes": {"retained": sum(r["size"] for r in retained), "copied": copied}}
 
     def check_seal_size(self, record: dict, owner: dict | None, seal: dict) -> None:
-        """Refuse a seal whose evidence-sized writes would not fit session.json (#1327).
+        """Refuse a seal that leaves session.json no room for its own later writes (#1327).
 
         session.json is read back under LIMIT, and publish refuses to write a
         record over it. Two later writes grow with the evidence a seal retains:
@@ -771,15 +773,24 @@ class Registry:
         copy of the seal, as `last_result`; and retire_evidence writes a
         `retired` tombstone into every item it deletes, before deleting anything.
         If either write refuses, some or all of the evidence cannot be retired.
-        So the record is projected with this seal in place, the copy an apply
-        stores, and a tombstone on every retained item (those already sealed
-        included), and refused here, before any byte is copied.
+        So the record is projected with this seal in place, the copy this seal's
+        own first apply stores, and a tombstone on every retained item (those
+        earlier seals hold included), and refused here, before any byte is copied.
 
-        Not reserved: the rest of what an apply records (path outcomes, the
-        evidence summary, approvals and statuses, sized by the inventory's paths,
-        not its evidence) and anything recorded later, such as another round's
-        receipt. Those use the same budget, and publish still refuses a save
-        over LIMIT, so a seal that passes here can still meet that refusal.
+        This is a partial reservation, not a guarantee that the evidence can be
+        retired. Not reserved, each using the same budget:
+        - the apply copies of other sealed rounds not yet applied, each a full
+          copy of that round's seal;
+        - a discard-only seal, which is not checked, and its discard list, which
+          has no bound;
+        - the tombstones a re-apply after retire_evidence copies into its
+          `last_result`;
+        - the rest of what an apply records (path outcomes, the evidence summary,
+          approvals and statuses) and anything recorded later, such as another
+          round's receipt.
+        publish still refuses a save over LIMIT, so a seal that passes here can
+        meet that refusal later. It deletes nothing; the apply or retirement
+        that meets it cannot finish.
 
         The projection uses the hashes and sizes read just before the copy. A
         source rewritten between that read and the copy is stored as copied, so
@@ -788,9 +799,11 @@ class Registry:
         projected = json.loads(json.dumps(record))
         holder = projected if owner is None else projected["rounds"][
             next(i for i, entry in enumerate(record["rounds"]) if entry is owner)]
-        # Copies, so the projection never writes into the caller's seal. The copy
-        # an apply stores is taken before any retirement, so it carries no
-        # tombstones, and evidence_items below does not reach it.
+        # Copies, so the projection never writes into the caller's seal. The
+        # reserved apply copy is the first apply's, taken before any retirement,
+        # so it carries no tombstones, and evidence_items below does not reach
+        # it. A re-apply after retire_evidence copies tombstones into its
+        # `last_result`; those are not reserved (see above).
         holder["seal"] = json.loads(json.dumps(seal))
         holder["last_result"] = {**holder.get("last_result", {}),
                                  "evidence": json.loads(json.dumps(seal))}
