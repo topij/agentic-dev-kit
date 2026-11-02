@@ -110,7 +110,7 @@ and receipts to a boot-stable identity. On 2026-10-28, from the primary checkout
 every device-renumbered inventory in this repository was reconciled. Rounds `01234b40` (inventory `8cf42b14`) and
 `5ced121b` and `e388daaa` (inventory `a5b9c398`) were kept then by `test_panel_prompt.py` fixture leftovers (#1265,
 #1279) and, in `5ced121b`, by a lens probe's `.git` file whose `gitdir:` pointer spans lines, which
-`_linked_gitdir_reason` keeps on purpose. That keeper has no ticket, and this paragraph is its only record.
+`_linked_gitdir_reason` keeps on purpose (its comment in `sweep_scratch.py` says why; no open ticket covers it).
 #1333 removes the `configured.git` fixture at teardown. On 2026-11-02 all three rounds were already gone from
 disk; `session_cleanup.py preview --round` reported each `absent`, marked unverified (its scratch root's identity
 no longer matched), and `apply --round`, with the operator's approval, returned `complete: true` for each.
