@@ -1591,21 +1591,29 @@ def test_an_unconfirmed_working_tree_probe_refuses_the_full_prompt(
 def test_configuring_a_worktree_inside_the_object_database_does_not_supply_one(
     repo, tmp_path, kind,
 ):
+    """The fixture is removed at teardown, pass or fail (#1279). A non-bare git dir
+    with no ``.git`` pointer beside it is what ``sweep_scratch`` keeps as a
+    possible ``--separate-git-dir`` target, so a review round whose lens ran this
+    module could not be retired while it stayed in the basetemp."""
     _, head = _revs(repo)
     database = tmp_path / "configured.git"
-    _git(repo, "clone", "-q", "--bare", str(repo), str(database))
-    _git(database, "update-ref", "--no-deref", "HEAD", head)
-    scratch = database if kind == "root" else database / "workspace"
-    if kind == "child":
-        scratch.mkdir()
-    _git(database, "config", "core.bare", "false")
-    _git(database, "config", "core.worktree", str(scratch))
-    assert _git(scratch, "rev-parse", "HEAD") == head
-    assert _git(scratch, "rev-parse", "--is-inside-work-tree") == "true"
-    assert Path(_git(scratch, "rev-parse", "--show-toplevel")).samefile(scratch)
-    assert Path(_git(scratch, "rev-parse", "--absolute-git-dir")).samefile(database)
-    out = _scratch_refusal(repo, str(scratch))
-    assert "root must be outside its Git metadata directory" in out.stderr
+    try:
+        _git(repo, "clone", "-q", "--bare", str(repo), str(database))
+        _git(database, "update-ref", "--no-deref", "HEAD", head)
+        scratch = database if kind == "root" else database / "workspace"
+        if kind == "child":
+            scratch.mkdir()
+        _git(database, "config", "core.bare", "false")
+        _git(database, "config", "core.worktree", str(scratch))
+        assert _git(scratch, "rev-parse", "HEAD") == head
+        assert _git(scratch, "rev-parse", "--is-inside-work-tree") == "true"
+        assert Path(_git(scratch, "rev-parse", "--show-toplevel")).samefile(scratch)
+        assert Path(_git(scratch, "rev-parse", "--absolute-git-dir")).samefile(database)
+        out = _scratch_refusal(repo, str(scratch))
+        assert "root must be outside its Git metadata directory" in out.stderr
+    finally:
+        shutil.rmtree(database, ignore_errors=True)
+    assert not os.path.lexists(database), f"fixture survived teardown: {database}"
 
 
 def test_a_nested_directory_is_not_a_review_worktree_root(repo, tmp_path):
