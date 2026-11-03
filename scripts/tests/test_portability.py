@@ -19853,7 +19853,7 @@ _KIT_CLONE_LINES = frozenset({
     'echo "KIT=$KIT"',
     'echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"',
 })
-# Any expansion of KIT that is not the fail-closed `${KIT:?` form.
+# Any expansion of KIT that is not the `${KIT:?` form, which stops on an unset KIT.
 _UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?)")
 
 
@@ -19878,7 +19878,7 @@ def _kit_command_spans(doc: str) -> list[str]:
 def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) -> None:
     """Outside the clone block's own lines and the named prose spans, every
     expansion of KIT in a fence that may hold a command, labelled or not, and in
-    every inline code span is the fail-closed `${KIT:?` form, and no command names
+    every inline code span is the `${KIT:?` form that stops on an unset KIT, and no command names
     the shared path. A literal path reads whatever tree sits there, and any other
     expansion of an unset KIT is no better: `git -C ""` reads the current repository
     (#576, PR 1340 rounds 1 and 2). The two flags that choose which kit is compared
