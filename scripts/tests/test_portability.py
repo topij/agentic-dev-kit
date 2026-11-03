@@ -19802,21 +19802,47 @@ def test_the_kit_clone_lands_in_a_fresh_directory_every_run(
     assert all(Path(p).resolve().parent == tmp.resolve() for p in printed)
 
 
+# Inline code spans that name the kit without being a command to run: the bare
+# name and the bare form the guard replaces, the hazard example (`cd "$KIT"`), the
+# "not equivalent" remarks about running the kit's own init.sh, the documented
+# `--from-kit ""` failure, and the shared path the clone step warns against.
+_KIT_PROSE_SPANS = frozenset(
+    {'$KIT', '"$KIT"', 'cd "$KIT"', "$KIT/init.sh", '--from-kit ""', "/tmp/agentic-dev-kit"}
+)
+
+
+def _kit_command_spans(doc: str) -> list[str]:
+    """Every shell-fence line, trailing comment dropped, and every inline code span
+    outside fences: the two places a reader takes a command from."""
+    lines = [
+        re.sub(r"\s+#\s.*$", "", line)  # a trailing comment runs nothing
+        for block in _shell_blocks(doc)
+        for line in block.splitlines()
+    ]
+    prose = re.sub(r"^[ \t]*```.*?^[ \t]*```", "", doc, flags=re.MULTILINE | re.DOTALL)
+    spans = [" ".join(s.split()) for s in re.findall(r"`([^`]+)`", prose)]
+    return lines + [s for s in spans if s not in _KIT_PROSE_SPANS]
+
+
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
 def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) -> None:
-    """After Step 0, a command reaches the kit only as `"${KIT:?...}"` (or the clone
-    block's own `"$KIT"`), never as a literal path: a literal path reads whatever
-    tree sits there, and the baseline `--from-kit` records stamps that tree's commit
-    (#576). Prose may name the shared path to warn against it."""
+    """After Step 0, a command reaches the kit only as `"${KIT:?...}"`, in a shell
+    block or inline: a literal path reads whatever tree sits there, and an unset bare
+    `$KIT` is no better, since `git -C ""` reads the current repository (#576, PR
+    1340 round 1). The clone and binding lines are the only exceptions. The two
+    flags that choose which kit is compared with or recorded take nothing else."""
     require_kit_paths(workflow)
     offenders = []
-    for block in _shell_blocks((REPO_ROOT / workflow).read_text(encoding="utf-8")):
-        for raw in block.splitlines():
-            line = re.sub(r"\s+#\s.*$", "", raw)  # a trailing comment runs nothing
-            if "/tmp/agentic-dev-kit" in line:
-                offenders.append(line.strip())
-            if re.search(r"\$KIT\b", line) and "git clone" not in line and not line.startswith(("echo", "KIT=")):
-                offenders.append(line.strip())
+    for span in _kit_command_spans((REPO_ROOT / workflow).read_text(encoding="utf-8")):
+        if span.lstrip().startswith(("git clone", "echo", "KIT=")):
+            continue
+        if "/tmp/agentic-dev-kit" in span:
+            offenders.append(span.strip())
+        if re.search(r"\$KIT\b", span):
+            offenders.append(span.strip())
+        for arg in re.findall(r"--(?:from-kit|manifest)\s+(\S+)", span):
+            if not arg.startswith('"${KIT:?'):
+                offenders.append(span.strip())
     assert offenders == []
 
 

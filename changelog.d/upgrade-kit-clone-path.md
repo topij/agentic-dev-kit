@@ -2,21 +2,26 @@
 
 CHANGED: Step 0 of both workflows used to clone the kit to one shared path
 `/tmp/agentic-dev-kit`. That clone failed whenever an earlier upgrade's or another
-session's clone was already there, and several later commands, among them Step 4's
-`--record-install --from-kit`, named that path directly. So a clone made anywhere else
-had to be substituted by hand into each of them, and a missed one recorded a baseline
-from a different kit. Step 0 now runs:
+session's clone was already there. `upgrade.md` also named that path directly in Step 1's
+`kit_doctor --manifest` and its fallback, Step 4's `--record-install --from-kit`, and
+Step 5's `kit_doctor --manifest` and baseline `rev-parse`. So a clone made anywhere else
+had to be substituted by hand into each of them, and a missed `--from-kit` recorded a
+baseline from a different kit. Step 0 now runs:
 
 ```bash
 KIT="$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-kit.XXXXXX")" || exit 1
 git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1
 ```
 
-Every later command names the kit as `"${KIT:?KIT is not set — re-run Step 0}"`, so a
-command run without `KIT` set stops instead of reading another tree.
+Every later command that reads the kit, in a shell block or inline, names it as
+`"${KIT:?KIT is not set — re-run Step 0}"`, so a command run without `KIT` set stops
+instead of reading another tree.
 
-What to do: your next upgrade starts from the `upgrade.md` you have installed now, whose
-Step 0 still clones to `/tmp/agentic-dev-kit`. Use the block above for that clone
-instead, and set `KIT` to the path it prints. From Step 2 on, the adapter has you
-follow the new clone's copy, which uses `$KIT` throughout. Delete the clone once the
-upgrade has landed.
+What to do, in the upgrade that installs this: you read this in Step 1, after Step 0 has
+run from your installed `upgrade.md`, whose binding block sets `KIT=/tmp/agentic-dev-kit`.
+Before Step 2, set `KIT` to the directory your clone is actually in, `/tmp/agentic-dev-kit`
+if that is where the installed Step 0 put it. From Step 2 on, the adapter has you follow
+the clone's `upgrade.md`, and its commands stop if `KIT` is unset. If you read this before
+starting, clone with the block above and use the path it prints wherever the installed
+Steps 0 and 1 name `/tmp/agentic-dev-kit`. Upgrades after this one run the new Step 0.
+Delete the clone once the upgrade has landed.

@@ -459,14 +459,14 @@ There is no range to compute, so:
   can show otherwise. It takes longer than a ranged read, but it is still reading, not
   the debugging session `#430` describes. For the fragments, run the block above with
   its own `BASELINE=` line replaced by `BASELINE` set to the kit's root commit,
-  `git -C "$KIT" rev-list --max-parents=0 HEAD`. For the frozen entries, read
-  `$KIT/CHANGELOG.md` once from the top, and skip the `## #NNN` entries the block
+  `git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list --max-parents=0 HEAD`. For the frozen entries, read
+  `"${KIT:?KIT is not set — re-run Step 0}/CHANGELOG.md"` once from the top, and skip the `## #NNN` entries the block
   printed after its fragments: each one is in that file too.
 - If you know roughly when this repo last upgraded, bound it by date instead: run the
   block with its `BASELINE=` line replaced the same way, by
-  `git -C "$KIT" rev-list -1 --before=<date> HEAD`. If that prints nothing, the date is
+  `git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list -1 --before=<date> HEAD`. If that prints nothing, the date is
   older than the kit's first commit: use the root commit as in the bullet above.
-- Either way, **Step 4's `--record-install --from-kit "$KIT"` is what stops the next
+- Either way, **Step 4's `--record-install --from-kit "${KIT:?KIT is not set — re-run Step 0}"` is what stops the next
   upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
   / `LOCALLY EDITED` split above already depends on.
 
