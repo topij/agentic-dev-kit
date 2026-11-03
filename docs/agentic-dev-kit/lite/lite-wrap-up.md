@@ -1,0 +1,162 @@
+# Wrap up (lite)
+
+Decide whether the session left anything to hand over, record only that in the living
+plan, route the friction it found, review the change, and commit. For a repository on
+the kit's **lite profile**: one operator and an agent, commits on the branch the
+repository works on, and no pull requests, engines or tracker integration.
+
+The full profile's version is the kit's `wrap-up` workflow, which a lite install does
+not carry. The clauses between `lite:begin` and `lite:end` markers are shared with it
+word for word, and a kit test keeps them so; change one in the full doc and the lite
+doc together.
+
+**A session can end with nothing to hand over.** A commit message already records what
+changed, and the next `session-start` reads it first-hand. A copy in the plan is one
+more thing to go stale. When the test below leaves nothing and no friction is owed, say
+so and make no record edit.
+
+## Read the configuration
+
+Read `config/dev-model.yaml` directly, as the lite `session-start` does: `profile`
+must be `lite`; `<handoff>` is `paths.handoff`, `<friction-log>` is
+`paths.friction_log`, and `<down-route>` is `friction.down_route` when set. A missing
+file, key or unreadable document is a hard stop before any edit.
+
+## Steps
+
+1. **Read `<handoff>` and `<friction-log>`.**
+
+1. **Review what changed this session** — `git status --short`, `git diff HEAD`, and
+   `git log` since this session began, not since the plan's newest line.
+
+1. **Decide whether there is anything to hand over.** Ask of each thing the session
+   did or learned whether a commit message, an existing plan line or a friction entry
+   already records it. What is left is the plan's content, and it is short:
+
+   <!-- lite:begin handoff-content -->
+   - a **decision** with no other home — a choice between options, a scope cut, an
+     operator ruling that no pull request or issue carries;
+   - an **abandoned approach**, and why, when nothing else says it was tried;
+   - **half-finished state** — an unpushed branch, a running job, a temporary tree,
+     a review round still on disk — that the next session would otherwise trip over;
+   - a **next step with no ticket**, or a change to a workstream's `▶ Next:` because
+     the session finished, moved or replaced the one there;
+   - a **new line of work**, or a workstream the operator closed.
+   <!-- lite:end handoff-content -->
+
+1. **Update `<handoff>`** with only what the test left.
+
+   - **If `<handoff>` has a `## Workstreams` section**, keep one `### <name>` entry per
+     line of work, named for its subject: a one-line status and its own `▶ Next:`.
+     Update only the entries this session worked on, confirmed with the operator in
+     one line.
+   - **Otherwise `<handoff>` is the repository's own plan** (for example a plan another
+     tool maintains). Edit its existing status and next-step lines in place, in its
+     own format. Do not add sections or restructure it without asking.
+   - Closing a line of work is the operator's call; ask, never infer it.
+
+   Write claims that stay true:
+
+   <!-- lite:begin record-prose -->
+   - **A verification claim names its command and the directory it ran in.**
+     "Verified" with neither is the claim a later review round exists to find.
+   - **A "why this is safe" sentence cites a test that would fail if it were
+     false** — or is deleted.
+   - **Point, don't restate.** The tracker issue is the record; the handoff
+     carries a pointer. Every restatement is a fresh copy to go stale.
+   <!-- lite:end record-prose -->
+   - **If a command prints it, do not write it.** Counts and statuses go stale; name the
+     command, or drop the claim.
+
+1. **Route this session's friction**, each finding when it is found. A finding that
+   has all three of a **reproduction**, a **named mechanism** and a **proposed fix** is
+   already actionable: take it down `<down-route>` (fix it now, or record it where that
+   route says). With no `<down-route>` configured, ask the operator where it goes. A
+   write outside this repository needs the operator's go-ahead on the exact content.
+
+   **Park it in `<friction-log>`** instead — a short entry under a dated
+   `## YYYY-MM-DD` heading with the observed issue, a severity (**H**/**M**/**L**) and
+   whichever of the three parts you have — when either of these is true:
+
+   <!-- lite:begin park-conditions -->
+   - **Any of the three is missing.** A real **H** you cannot yet explain —
+     *"something about the panel felt wrong and I cannot say what"* — belongs here
+     precisely *because* it has no mechanism. The inbox is where a finding waits to
+     become explicable, not where a complete one waits for a sweep.
+   - **The point is accumulation.** A single instance of a shape that is only worth
+     acting on if it recurs needs somewhere to pile up. Principle #2 routes a
+     **pattern** up into a rule, and a pattern is only visible once its instances
+     share a home; the tracker is not that home.
+   <!-- lite:end park-conditions -->
+
+   When entries in the inbox share a shape, propose the rule they add up to; adding
+   it to the repository's instructions is the operator's call.
+
+1. **Review the change before committing it.** Run the lite review,
+   [`lite-review.md`](lite-review.md), over everything this commit will carry, the record edits
+   included. Fix each finding or route it as above before going on.
+
+1. **Validate what the commit will contain.**
+
+   - `git diff HEAD --check`, then read the complete `git diff HEAD` for churn,
+     duplicated blocks, secrets and edits unrelated to the session.
+   <!-- lite:begin stage-by-name -->
+   - **Then account for every untracked file, and stage by name.** No diff of any
+     kind shows the *contents* of an untracked file, so everything above can pass
+     while a new file goes unreviewed into the commit:
+
+     ```sh
+     git ls-files --others --exclude-standard
+     ```
+
+     **Classify each path before opening it — do not read the list unconditionally.**
+     A wrap-up runs in repos that hold contact exports, generated reports, raw CRM
+     or customer data, and `.env`-shaped files, and `--exclude-standard` only omits
+     what `.gitignore` already covers, so restricted data reaches this list exactly
+     when someone forgot to ignore it. Reading such a file to decide whether to
+     stage it pulls it into the agent's context, a transcript, and possibly a tool
+     call — an exposure that staging discipline does not undo. **For anything whose
+     path indicates protected content, do not open it:** treat it as not-for-this-
+     commit, leave it unstaged, and say you skipped it and why. Ask the operator if
+     it genuinely needs to be in the wrap-up.
+
+     Everything else is either part of this wrap-up — read it and stage it
+     deliberately — or somebody's work-in-progress that a wildcard add would sweep
+     in. **So never stage with `git add -A` or `git add .` here.** Name the paths.
+     This workflow knows exactly which files it touched; a wildcard is how it
+     acquires ones it did not. Note the asymmetry: *listing* the paths is always
+     safe and is what the staging discipline needs, while *reading* is the step
+     that carries the risk — which is why the two are separated here.
+
+     Seeing the file is not enough on its own. On this rule's first live use the
+     untracked file *was* listed, was read as "pre-existing, not mine", and was
+     then swept in by a wildcard add anyway — 228 lines of someone's design note
+     into a commit about something else, carried through review and merge. The
+     check that works is mechanical: list them, then stage by name.
+   <!-- lite:end stage-by-name -->
+
+   <!-- lite:begin completion-inference -->
+   **Never infer completion from a branch name, a commit message, a process exit
+   code, or a ticket reference alone.** Each of those reports that something was
+   *attempted*, and a wrap-up's job is to record what is *true*.
+   <!-- lite:end completion-inference -->
+
+1. **Commit.** Put the record edits in the session's last commit, or in their own
+   `chore: update plan — <one line>` commit, on the branch the repository works on.
+   If the repository protects that branch and works through pull requests, it has
+   outgrown the lite profile: say so to the operator.
+
+1. **Report** what was recorded and where, what was routed, the review's result, and
+   the next step for each line of work it touched — or that there was nothing to hand
+   over, and which commits already say it all.
+
+## Rules
+
+<!-- lite:begin no-working-detail -->
+- Do NOT add session working detail (debugging steps, conversation context) — that
+  belongs in session-scoped scratch notes or memory, not the living handoff. A
+  decision the session took is not working detail: when no pull request or issue
+  records it, the entry of the workstream it bears on does
+<!-- lite:end no-working-detail -->
+- Do NOT change the plan's structure without asking.
+- If the session changed nothing and the test left nothing, say so and make no commit.

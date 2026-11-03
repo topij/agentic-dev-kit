@@ -234,6 +234,7 @@ failure makes the overall outcome `incomplete-resumable`.
    a copy that can go stale. What is left is the handoff's content, and it is
    short:
 
+   <!-- lite:begin handoff-content -->
    - a **decision** with no other home — a choice between options, a scope cut, an
      operator ruling that no pull request or issue carries;
    - an **abandoned approach**, and why, when nothing else says it was tried;
@@ -242,6 +243,7 @@ failure makes the overall outcome `incomplete-resumable`.
    - a **next step with no ticket**, or a change to a workstream's `▶ Next:` because
      the session finished, moved or replaced the one there;
    - a **new line of work**, or a workstream the operator closed.
+   <!-- lite:end handoff-content -->
 
    If nothing is left, the handoff is not edited. Continue with *Route this
    session's friction*, which can still owe a `<friction-log>` entry or a tracker
@@ -380,12 +382,14 @@ failure makes the overall outcome `incomplete-resumable`.
      what happened and is worth keeping; "three issues filed" is a count, and a
      count beside a list is the thing recounts keep finding wrong. Write the
      enumeration, never a number next to it.
+     <!-- lite:begin record-prose -->
    - **A verification claim names its command and the directory it ran in.**
      "Verified" with neither is the claim a later review round exists to find.
    - **A "why this is safe" sentence cites a test that would fail if it were
      false** — or is deleted.
    - **Point, don't restate.** The tracker issue is the record; the handoff
      carries a pointer. Every restatement is a fresh copy to go stale.
+     <!-- lite:end record-prose -->
    - **Shorten, don't correct.** A claim that has needed repair twice gets cut
      to what you can stand behind (`fallback-review-panel.md`, "Keep the
      record small").
@@ -508,6 +512,7 @@ failure makes the overall outcome `incomplete-resumable`.
    heading carrying the observed issue, a severity (**H**/**M**/**L**), and whichever
    of the three you do have — when either of these is true:
 
+   <!-- lite:begin park-conditions -->
    - **Any of the three is missing.** A real **H** you cannot yet explain —
      *"something about the panel felt wrong and I cannot say what"* — belongs here
      precisely *because* it has no mechanism. The inbox is where a finding waits to
@@ -516,6 +521,7 @@ failure makes the overall outcome `incomplete-resumable`.
      acting on if it recurs needs somewhere to pile up. Principle #2 routes a
      **pattern** up into a rule, and a pattern is only visible once its instances
      share a home; the tracker is not that home.
+     <!-- lite:end park-conditions -->
 
    **Severity is not the test for whether a finding is issue-shaped.** It is the most
    tempting one and it is the wrong one for *that* question: an **M** carrying all
@@ -654,6 +660,7 @@ failure makes the overall outcome `incomplete-resumable`.
    - Read the complete final diff — `git diff HEAD`, same reason — for churn,
      duplicated blocks, secrets or personal data quoted from a real artifact, and
      edits unrelated to the wrap-up.
+     <!-- lite:begin stage-by-name -->
    - **Then account for every untracked file, and stage by name.** No diff of any
      kind shows the *contents* of an untracked file, so everything above can pass
      while a new file goes unreviewed into the commit:
@@ -686,10 +693,13 @@ failure makes the overall outcome `incomplete-resumable`.
      then swept in by a wildcard add anyway — 228 lines of someone's design note
      into a commit about something else, carried through review and merge. The
      check that works is mechanical: list them, then stage by name.
+     <!-- lite:end stage-by-name -->
 
+   <!-- lite:begin completion-inference -->
    **Never infer completion from a branch name, a commit message, a process exit
    code, or a ticket reference alone.** Each of those reports that something was
    *attempted*, and a wrap-up's job is to record what is *true*.
+   <!-- lite:end completion-inference -->
 
 1. **Commit + PR the handoff update — never commit to your protected branch
    directly.** Commit as `chore: update handoff — [one-line summary of session work]`
@@ -760,10 +770,12 @@ failure makes the overall outcome `incomplete-resumable`.
 
 ## Rules
 
+<!-- lite:begin no-working-detail -->
 - Do NOT add session working detail (debugging steps, conversation context) — that
   belongs in session-scoped scratch notes or memory, not the living handoff. A
   decision the session took is not working detail: when no pull request or issue
   records it, the entry of the workstream it bears on does
+  <!-- lite:end no-working-detail -->
 - Do NOT change the handoff's structure or add new sections without asking — but the
   `archive_plan_sessions.py` sweep (moving old session blocks to `<handoff-history>`),
   the entry for each workstream it

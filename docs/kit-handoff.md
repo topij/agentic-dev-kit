@@ -327,3 +327,13 @@ contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-paralle
 takes the kit's copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment),
 and lands #1329's change before any `retire-evidence` reclaim of its sealed evidence. #576 (Step 0's `/tmp` clone) is
 still open.
+
+### Lite install profile
+
+**Status:** the operator's decisions and the phase 1 probe are #1320's comments of 2026-11-03. Phase 2 added the
+lite workflow docs in `docs/agentic-dev-kit/lite/`, registered repo-only until the profile can be installed.
+**Owner:** #1320.
+
+▶ Next: #1320 phase 3 — a `profiles` map in the kit manifest and `profile: lite` in the adopter baseline, profile
+wording in `kit_doctor`'s report and `--adapter-report` (with #1342), adapter bindings for `lite-*.md`, and the lite
+option in `adopt`.

@@ -127,12 +127,14 @@ keeps (a nonempty `.git` file that does not start with `gitdir:`, or a git dir
 something outside the entry depends on). The report's reason names which.
 Do not expand roots or delete anything as part of this briefing.
 
+<!-- lite:begin source-failure -->
 **A source that fails is reported as unavailable, never as its empty value.** A
 non-zero exit, a missing binary, or an absent credential returns nothing — and
 nothing is indistinguishable from a genuine zero: no open PRs, no failing jobs, no
 drift. Rendering the empty value turns a command that never ran into an all-clear,
 which is worse than a visible gap because nothing on the briefing says to look
 again.
+<!-- lite:end source-failure -->
 
 This governs every source whose failure can pass for a benign zero. The PR list,
 your cron/CI health command and your config-drift check each have a slot in
@@ -425,8 +427,10 @@ job name. Every workstream's `▶ Next:` is a candidate under its own
 - **Dedup.** An item that appears in more than one source (a friction-log entry that's
   also a tracker ticket, say) is listed **once**, with the most authoritative pointer
   (tracker > handoff > inbox) and any others noted inline.
+  <!-- lite:begin dont-invent-work -->
 - **Don't invent work.** Only surface candidates traceable to one of the sources
   above. If a source is empty or clean, say so — a quiet bucket is a real result.
+  <!-- lite:end dont-invent-work -->
 - Keep each line to one sentence of *what* + the tags + the pointer. No essays.
 - **Composing an autonomous/overnight self-merge batch:** also tag each lane with its
   predicted merge class (self-merge / operator-merge — see `parallel`'s per-lane
