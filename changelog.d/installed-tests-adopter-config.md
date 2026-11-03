@@ -24,4 +24,5 @@ them (the kit's `scripts/hooks/**` in a `scripts/devkit` layout, say, or the opt
 FIXED: `upgrade.md` Step 0's fetch now braces its variables. Under zsh,
 `"$UPGRADE_BASE:refs/..."` read as the `:r` modifier and fetched
 `refs/heads/mainefs/...`. A new installed test refuses an unbraced `$NAME:` followed by
-a letter in any shell block under `docs/agentic-dev-kit/`.
+a letter in fences labelled `bash`, `sh`, `zsh` or `shell` under `docs/agentic-dev-kit/`;
+unlabelled fences are not scanned.
