@@ -19853,7 +19853,6 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
 
 
 def _tamper(kit: Path, how: str) -> None:
-    git = lambda *a: subprocess.run(["git", "--git-dir", str(kit / ".git"), "--work-tree", str(kit), *a], check=True, capture_output=True)
     if how == "not-a-clone":
         shutil.rmtree(kit / ".git")
         (kit / "leftover").write_text("x")
@@ -19864,7 +19863,10 @@ def _tamper(kit: Path, how: str) -> None:
     elif how == "deleted":
         (kit / "kit-manifest.json").unlink()
     elif how == "other-origin":
-        git("remote", "set-url", "origin", "https://example.invalid/other.git")
+        subprocess.run(
+            ["git", "--git-dir", str(kit / ".git"), "remote", "set-url", "origin", "https://example.invalid/other.git"],
+            check=True, capture_output=True,
+        )
 
 
 @pytest.mark.parametrize("how", ["not-a-clone", "modified", "added", "deleted", "other-origin"])
