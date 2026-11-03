@@ -131,7 +131,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "fe2f833bf9b50ac9916c24e666ef0158de7490264b614e852d1350d00d3f0da5"
+      "sha256": "484e9fb791d0f8c736f00735ac3605a15ed693fd56de290020a4d31dbfe25f01"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -743,15 +743,15 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "7668d5fa602de99cbf0fe05d2e217b33216bbe0e234a0e93d6a6dccd36dc04e9"
+      "sha256": "522c9884d411e4f646dcad327f5b48b4bc0e15be4dfc494e7aab87b24a9969b9"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
-      "sha256": "9a67356befd487d64802e1de257a55e1e994f84f1d9060ed99abdce625bf4af7"
+      "sha256": "f473eb05d9acc522399f4cfde2e22b2622c860a2f7d9930304bc4bfecf0c0c7f"
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "d03309203201c2989c28f395c997699b521f0ca6f29bd722a89e6004b25d19d3"
+      "sha256": "eaa6192cca5339a95dfd68ae17c25517d73fe4da33f403ae82a451640fa3b69a"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
@@ -803,7 +803,7 @@
     },
     "scripts/tests/test_systemize_config.py": {
       "role": "test",
-      "sha256": "f18d78a304a451d283c47ae183b91cfb31d8d11024e0b803a7402c662c1c5e8f"
+      "sha256": "e89573396a47254a45797c3c52de249fd077e0e0e9af740fc521185017e07044"
     },
     "scripts/tests/test_systemize_digest.py": {
       "role": "test",

@@ -20,6 +20,7 @@ from types import ModuleType
 
 import pytest
 import yaml
+from conftest import require_kit_source
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 HOOK_PATH = ENGINE_DIR / "hooks" / "pr_followup_hook.py"
@@ -1065,7 +1066,10 @@ def test_shipped_config_pins_the_selected_reviewer_compute():
     Nothing else in the suite would notice `lens_compute` disappearing from the
     shipped config, and the hook fails soft by design — so the panel would
     quietly go back to inheriting the cockpit's compute with no signal.
+
+    Kit source only: an adopter's `lens_compute` is its own choice (#1304's class).
     """
+    require_kit_source()
     shipped = yaml.safe_load((REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8"))
     compute = shipped["review"]["fallback_panel"]["lens_compute"]
 

@@ -73,7 +73,7 @@ upgrade. Set those variables explicitly, then run this creation block:
 : "${UPGRADE_WORKTREE:?choose an absolute task-worktree path}"
 case "$UPGRADE_WORKTREE" in /*) ;; *) exit 1 ;; esac
 git -C "$REPO" fetch "$UPGRADE_REMOTE" \
-  "refs/heads/$UPGRADE_BASE:refs/remotes/$UPGRADE_REMOTE/$UPGRADE_BASE" || exit 1
+  "refs/heads/${UPGRADE_BASE}:refs/remotes/${UPGRADE_REMOTE}/${UPGRADE_BASE}" || exit 1
 UPGRADE_START="$(git -C "$REPO" rev-parse --verify \
   "refs/remotes/$UPGRADE_REMOTE/$UPGRADE_BASE^{commit}")" || exit 1
 git -C "$REPO" worktree add --no-track -b "$UPGRADE_BRANCH" \

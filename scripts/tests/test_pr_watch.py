@@ -18,7 +18,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import find_repo_root  # noqa: E402
-from conftest import read_workflow  # noqa: E402
+from conftest import read_workflow, require_kit_source  # noqa: E402
 
 ENGINE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = find_repo_root(ENGINE_DIR)
@@ -11955,6 +11955,10 @@ def test_a_case_variant_path_matches_a_declared_pattern(path: str, pattern: str)
     ],
 )
 def test_the_shipped_list_classes_check_switches_as_safety_critical(path: str) -> None:
+    # The kit's shipped list, not an adopter's (#1304): `kit_repo_only` only
+    # asks whether the config exists, and every adopter has one of its own,
+    # whose list names its own layout (`scripts/devkit/hooks`, not `scripts/hooks`).
+    require_kit_source()
     import yaml
 
     config = yaml.safe_load(
