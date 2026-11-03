@@ -19755,11 +19755,44 @@ def test_upgrade_verification_stops_at_the_failed_command(
 
 _KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/upgrade.md", "docs/agentic-dev-kit/workflows/adopt.md")
 
+# Fence labels that hold no command to run: transcripts and data. Every other fence,
+# an unlabelled one included, is read as shell.
+_NON_SHELL_FENCES = frozenset({"text", "console", "json", "yaml", "toml", "markdown", "diff", "python"})
 
-def _shell_blocks(doc: str) -> list[str]:
-    return re.findall(
-        r"^[ \t]*```(?:bash|sh|zsh|shell)[ \t]*\n(.*?)^[ \t]*```", doc, re.MULTILINE | re.DOTALL
+
+def _fences(doc: str) -> list[tuple[str, str]]:
+    """Each fenced block as (label, body), however it is labelled."""
+    return [
+        (label.strip(), body)
+        for label, body in re.findall(
+            r"^[ \t]*```([^\n`]*)\n(.*?)^[ \t]*```", doc, re.MULTILINE | re.DOTALL
+        )
+    ]
+
+
+def _clone_block(workflow: str) -> str:
+    blocks = [b for label, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "git clone" in b]
+    assert len(blocks) == 1, blocks
+    return blocks[0]
+
+
+def _run_clone_block(tmp_path: Path, shell: str, block: str, tmpdir: str, cwd: Path) -> tuple[subprocess.CompletedProcess, Path]:
+    bins = tmp_path / "bin"
+    bins.mkdir(exist_ok=True)
+    calls = tmp_path / "calls"
+    stub = bins / "git"
+    # Records the clone's destination: whether it already existed as a directory
+    # when handed over (`mktemp -u` only names one), and whether it was empty.
+    stub.write_text(
+        '#!/bin/sh\n'
+        'for last; do :; done\n'
+        'if [ ! -d "$last" ]; then state=absent; elif [ -z "$(ls -A "$last")" ]; then state=empty; else state=nonempty; fi\n'
+        'echo "$last $state" >> "$CALLS"\n'
     )
+    stub.chmod(0o755)
+    env = dict(os.environ, PATH=f"{bins}{os.pathsep}{os.environ['PATH']}", TMPDIR=tmpdir, CALLS=str(calls))
+    env.pop("KIT", None)
+    return subprocess.run([shell, "-c", block], env=env, cwd=cwd, capture_output=True, text=True), calls
 
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
@@ -19767,32 +19800,19 @@ def _shell_blocks(doc: str) -> list[str]:
 def test_the_kit_clone_lands_in_a_fresh_directory_every_run(
     tmp_path: Path, workflow: str, shell: str
 ) -> None:
-    """A shared clone path is a trap: an earlier upgrade's clone, another session's, or
-    a reaped skeleton already sits there, so the clone fails or a stale kit is read
+    """A shared clone path is a trap: an earlier upgrade's clone, another session's,
+    or a reaped skeleton already sits there, so the clone fails or a stale kit is read
     (#576). Run each workflow's own clone block twice and require two new, empty,
-    distinct directories under $TMPDIR, each the one the clone was handed."""
+    distinct directories under $TMPDIR, each existing when the clone was handed it."""
     if shutil.which(shell) is None:
         pytest.skip(f"{shell} is not installed")
     require_kit_paths(workflow)
-    blocks = [b for b in _shell_blocks((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "git clone" in b]
-    assert len(blocks) == 1, blocks
-    bins, tmp, calls = tmp_path / "bin", tmp_path / "tmp", tmp_path / "calls"
-    bins.mkdir()
+    block = _clone_block(workflow)
+    tmp = tmp_path / "tmp"
     tmp.mkdir()
-    stub = bins / "git"
-    # Records the clone's destination and whether it was empty when handed over.
-    stub.write_text(
-        '#!/bin/sh\n'
-        'for last; do :; done\n'
-        'if [ -z "$(ls -A "$last")" ]; then state=empty; else state=nonempty; fi\n'
-        'echo "$last $state" >> "$CALLS"\n'
-    )
-    stub.chmod(0o755)
-    env = dict(os.environ, PATH=f"{bins}{os.pathsep}{os.environ['PATH']}", TMPDIR=str(tmp), CALLS=str(calls))
-    env.pop("KIT", None)
     printed = []
     for _ in range(2):
-        result = subprocess.run([shell, "-c", blocks[0]], env=env, capture_output=True, text=True)
+        result, calls = _run_clone_block(tmp_path, shell, block, str(tmp), tmp_path)
         assert result.returncode == 0, result.stderr
         printed.append(result.stdout.strip().removeprefix("KIT="))
     cloned = [line.split() for line in calls.read_text().splitlines()]
@@ -19802,6 +19822,21 @@ def test_the_kit_clone_lands_in_a_fresh_directory_every_run(
     assert all(Path(p).resolve().parent == tmp.resolve() for p in printed)
 
 
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_a_relative_tmpdir_stops_the_clone(tmp_path: Path, workflow: str, shell: str) -> None:
+    """A relative $TMPDIR gives a relative KIT, which names a directory inside the
+    repo once a later step runs `cd "$REPO"` (PR 1340 round 2). The block stops
+    before cloning instead."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    require_kit_paths(workflow)
+    (tmp_path / "rel").mkdir()
+    result, calls = _run_clone_block(tmp_path, shell, _clone_block(workflow), "rel", tmp_path)
+    assert result.returncode != 0
+    assert not calls.exists()
+
+
 # Inline code spans that name the kit without being a command to run: the bare
 # name and the bare form the guard replaces, the hazard example (`cd "$KIT"`), the
 # "not equivalent" remarks about running the kit's own init.sh, the documented
@@ -19809,40 +19844,54 @@ def test_the_kit_clone_lands_in_a_fresh_directory_every_run(
 _KIT_PROSE_SPANS = frozenset(
     {'$KIT', '"$KIT"', 'cd "$KIT"', "$KIT/init.sh", '--from-kit ""', "/tmp/agentic-dev-kit"}
 )
+# The only shell lines that may expand KIT unguarded: the clone block's, where it is
+# set, and the binding block's print, which follows its guarded assignment.
+_KIT_CLONE_LINES = frozenset({
+    'KIT="$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-kit.XXXXXX")" || exit 1',
+    'case "$KIT" in /*) ;; *) echo "KIT is not an absolute path: $KIT" >&2; exit 1 ;; esac',
+    'git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1',
+    'echo "KIT=$KIT"',
+    'echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"',
+})
+# Any expansion of KIT that is not the fail-closed `${KIT:?` form.
+_UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?)")
 
 
 def _kit_command_spans(doc: str) -> list[str]:
-    """Every shell-fence line, trailing comment dropped, and every inline code span
-    outside fences: the two places a reader takes a command from."""
+    """Every line of a fence that may hold a command, trailing comment dropped, and
+    every inline code span outside fences: the two places a reader takes a command
+    from."""
     lines = [
-        re.sub(r"\s+#\s.*$", "", line)  # a trailing comment runs nothing
-        for block in _shell_blocks(doc)
+        re.sub(r"\s+#\s.*$", "", line).strip()  # a trailing comment runs nothing
+        for label, block in _fences(doc)
+        if label not in _NON_SHELL_FENCES
         for line in block.splitlines()
     ]
     prose = re.sub(r"^[ \t]*```.*?^[ \t]*```", "", doc, flags=re.MULTILINE | re.DOTALL)
     spans = [" ".join(s.split()) for s in re.findall(r"`([^`]+)`", prose)]
-    return lines + [s for s in spans if s not in _KIT_PROSE_SPANS]
+    return [line for line in lines if line not in _KIT_CLONE_LINES] + [
+        s for s in spans if s not in _KIT_PROSE_SPANS
+    ]
 
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
 def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) -> None:
-    """After Step 0, a command reaches the kit only as `"${KIT:?...}"`, in a shell
-    block or inline: a literal path reads whatever tree sits there, and an unset bare
-    `$KIT` is no better, since `git -C ""` reads the current repository (#576, PR
-    1340 round 1). The clone and binding lines are the only exceptions. The two
-    flags that choose which kit is compared with or recorded take nothing else."""
+    """Outside the clone block's own lines and the named prose spans, every
+    expansion of KIT in a fence that may hold a command, labelled or not, and in
+    every inline code span is the fail-closed `${KIT:?` form, and no command names
+    the shared path. A literal path reads whatever tree sits there, and any other
+    expansion of an unset KIT is no better: `git -C ""` reads the current repository
+    (#576, PR 1340 rounds 1 and 2). The two flags that choose which kit is compared
+    with or recorded take nothing but `"${KIT:?`. Fences labelled as transcripts or
+    data are not read."""
     require_kit_paths(workflow)
     offenders = []
     for span in _kit_command_spans((REPO_ROOT / workflow).read_text(encoding="utf-8")):
-        if span.lstrip().startswith(("git clone", "echo", "KIT=")):
-            continue
-        if "/tmp/agentic-dev-kit" in span:
-            offenders.append(span.strip())
-        if re.search(r"\$KIT\b", span):
-            offenders.append(span.strip())
+        if "/tmp/agentic-dev-kit" in span or _UNGUARDED_KIT.search(span):
+            offenders.append(span)
         for arg in re.findall(r"--(?:from-kit|manifest)\s+(\S+)", span):
             if not arg.startswith('"${KIT:?'):
-                offenders.append(span.strip())
+                offenders.append(span)
     assert offenders == []
 
 

@@ -10,11 +10,12 @@ baseline from a different kit. Step 0 now runs:
 
 ```bash
 KIT="$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-kit.XXXXXX")" || exit 1
+case "$KIT" in /*) ;; *) echo "KIT is not an absolute path: $KIT" >&2; exit 1 ;; esac
 git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1
 ```
 
 Every later command that reads the kit, in a shell block or inline, names it as
-`"${KIT:?KIT is not set — re-run Step 0}"`, so a command run without `KIT` set stops
+`"${KIT:?KIT is not set — set it to the path Step 0 printed; do not clone again}"`, so a command run without `KIT` set stops
 instead of reading another tree.
 
 What to do, in the upgrade that installs this: you read this in Step 1, after Step 0 has

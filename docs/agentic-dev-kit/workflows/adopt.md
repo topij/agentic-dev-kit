@@ -20,6 +20,7 @@ directory every time:
 
 ```bash
 KIT="$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-kit.XXXXXX")" || exit 1
+case "$KIT" in /*) ;; *) echo "KIT is not an absolute path: $KIT" >&2; exit 1 ;; esac
 git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1
 echo "KIT=$KIT"
 ```
@@ -62,7 +63,7 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/skills/`, `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters. A same-named `.claude/commands/<name>.md` counts as an existing workflow: Claude Code runs a skill in preference to a command of the same name, so installing the kit's skill beside it would silently replace the adopter's command.
-- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* — read `seed_doc`'s call sites for the list (four for the narrative paths, two for the entry points) rather than a line number; the two ranges cited here were stale within a release of being written. Read them at the absolute path `"${KIT:?KIT is not set — re-run Step 0}/init.sh"`. **Do not `cd "$KIT"` to get there** — Step 0 above names the hazard of a `cd` into the kit checkout outliving the command that made it; this file read is exactly the kind of "just quickly look" step that invites it. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
+- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* — read `seed_doc`'s call sites for the list (four for the narrative paths, two for the entry points) rather than a line number; the two ranges cited here were stale within a release of being written. Read them at the absolute path `"${KIT:?KIT is not set — set it to the path Step 0 printed; do not clone again}/init.sh"`. **Do not `cd "$KIT"` to get there** — Step 0 above names the hazard of a `cd` into the kit checkout outliving the command that made it; this file read is exactly the kind of "just quickly look" step that invites it. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
 
   **Read line 1 of each of the six yourself and report the state.** Do not run a shell
   snippet for this — the predicate belongs to `init.sh` (`_seedable`), and every attempt to
@@ -264,7 +265,7 @@ It does not run `init.sh` or advance the operator initialization boundary.
 before the Step 3c handoff:**
 
 ```bash
-uv run <engines-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run Step 0}"
+uv run <engines-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — set it to the path Step 0 printed; do not clone again}"
 ```
 
 **`${KIT:?...}`, not bare `"$KIT"`, and this is not decoration — though the unguarded
@@ -286,8 +287,9 @@ both ways, reproduced end to end each time. `${KIT:?msg}` fails the parameter ex
 itself, before `uv run` is even invoked, so an empty or unset `$KIT` fails **closed** in
 both branches, instead of failing confusingly in one and silently wrong in the other.
 This step is exactly the "different session, different day" case the variable is most
-likely to have gone missing in, since it runs after every copy in Step 3 — bind `$KIT`
-again from Step 0 if this fails.
+likely to have gone missing in, since it runs after every copy in Step 3 — if this fails,
+set `KIT` again to the path Step 0 printed. Do not clone again: a new clone can be a newer
+kit than the one Step 3 copied from, and this command would record it.
 
 Order matters for every manifest-tracked path: `docs/templates/` **and `init.sh`** (tracked
 since `#362`) must be copied *before* this runs, or the baseline records them as not
@@ -511,7 +513,7 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
 - `kit_doctor`: run it **against `$KIT`'s manifest**, not bare:
 
   ```sh
-  uv run <engines-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json"
+  uv run <engines-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — set it to the path Step 0 printed; do not clone again}/kit-manifest.json"
   ```
 
   Guarded the same way as Step 3b's `--from-kit`, for the same reason and for
@@ -549,7 +551,7 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
   earlier attempt prints a real-looking line naming the wrong commit:
 
   ```sh
-  git -C "${KIT:?KIT is not set — re-run Step 0}" rev-parse HEAD    # the baseline: line shows its first 12 chars
+  git -C "${KIT:?KIT is not set — set it to the path Step 0 printed; do not clone again}" rev-parse HEAD    # the baseline: line shows its first 12 chars
   ```
 
   Guarded for the same reason as the two commands above: `git -C ""` is not an error —
