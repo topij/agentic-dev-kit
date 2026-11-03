@@ -12,6 +12,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _repo_layout import engine_dir  # noqa: E402
+from conftest import require_kit_source  # noqa: E402
 
 sys.path.insert(0, str(engine_dir(Path(__file__)) / "lib"))
 import test_systemize_support as support  # noqa: E402
@@ -46,7 +47,12 @@ def test_shipped_config_loads_engine_backed_once_an_operator_is_named(tmp_path: 
     """The shipped config names no trusted review source: no review bot (a bot is
     opt-in) and no operator login (a template copy must never trust a foreign
     identity). So it fails closed, naming the fix, until init.sh's operator
-    prompt fills `operator_logins`; with that one key set it loads as shipped."""
+    prompt fills `operator_logins`; with that one key set it loads as shipped.
+
+    Kit source only (#1313): in an adopter `config/dev-model.yaml` is the
+    adopter's own, and the operator prompt this docstring names fills it, so the
+    template-default assertions would report the adopter having adopted."""
+    require_kit_source()
     text = (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
     shipped = loads(text)
     assert shipped["review"]["bots"] == []

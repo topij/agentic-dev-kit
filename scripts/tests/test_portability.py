@@ -15433,7 +15433,6 @@ def _assert_post_merge_semantics(workflow: str) -> None:
 
 
 @pytest.mark.kit_repo_only(
-    "config/dev-model.yaml",
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
     ".claude/skills/post-merge-systemize/SKILL.md",
     ".agents/skills/post-merge-systemize",
@@ -15468,7 +15467,21 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
     assert len(codex.splitlines()) <= 16
     assert interface["display_name"] == "Post-Merge Systemize"
     assert "$post-merge-systemize" in interface["default_prompt"]
+    _assert_post_merge_semantics(shared)
 
+
+@pytest.mark.kit_repo_only(
+    "config/dev-model.yaml",
+    "docs/agentic-dev-kit/workflows/post-merge-systemize.md",
+)
+def test_the_shipped_systemize_config_is_complete_and_named_by_the_workflow() -> None:
+    # The kit's shipped `systemize:` block, not an adopter's (#1304): the
+    # optional keys are optional there, and `init.sh --no-clobber` does not add
+    # them to an existing block, so an exact key set fails a correct adopter.
+    require_kit_source()
+    shared = (
+        REPO_ROOT / "docs/agentic-dev-kit/workflows/post-merge-systemize.md"
+    ).read_text(encoding="utf-8")
     config = yaml.safe_load(
         (REPO_ROOT / "config" / "dev-model.yaml").read_text(encoding="utf-8")
     )
@@ -15566,7 +15579,6 @@ def test_post_merge_systemize_is_shared_thin_and_config_owned() -> None:
         assert f"systemize.{key}" in shared, (
             f"systemize.{key} is configured but the shared workflow never names it"
         )
-    _assert_post_merge_semantics(shared)
 
 
 @pytest.mark.kit_repo_only(
@@ -19740,7 +19752,14 @@ def test_upgrade_verification_stops_at_the_failed_command(
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
-def test_upgrade_creation_uses_remote_base_and_leaves_primary_untouched(tmp_path: Path) -> None:
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_upgrade_creation_uses_remote_base_and_leaves_primary_untouched(
+    tmp_path: Path, shell: str
+) -> None:
+    # zsh because adopters' agents run the block there: an unbraced
+    # `$UPGRADE_BASE:refs` reads as zsh's `:r` modifier (#1297).
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
     remote, primary, task = (tmp_path / name for name in ("remote", "primary", "task tree"))
     remote.mkdir()
     _git(remote, "init", "-b", "trunk")
@@ -19763,7 +19782,7 @@ def test_upgrade_creation_uses_remote_base_and_leaves_primary_untouched(tmp_path
     env = dict(os.environ, REPO=str(primary), UPGRADE_REMOTE="origin",
                UPGRADE_BASE="trunk", UPGRADE_BRANCH="chore/upgrade-test",
                UPGRADE_WORKTREE=str(task))
-    result = subprocess.run(["bash", "-c", block], cwd=primary, env=env,
+    result = subprocess.run([shell, "-c", block], cwd=primary, env=env,
                             capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert _git(task, "rev-parse", "HEAD").stdout.strip() == base
@@ -19776,7 +19795,7 @@ def test_upgrade_creation_uses_remote_base_and_leaves_primary_untouched(tmp_path
     assert _git(primary, "rev-parse", "HEAD").stdout.strip() == original_head
     assert _git(primary, "status", "--porcelain").stdout == original_status
     # Repeating the creation must stop at the collision without removing either tree.
-    again = subprocess.run(["bash", "-c", block], cwd=primary, env=env,
+    again = subprocess.run([shell, "-c", block], cwd=primary, env=env,
                            capture_output=True, text=True)
     assert again.returncode != 0
     assert (primary / "local-note").read_text() == "keep me"
@@ -19784,10 +19803,31 @@ def test_upgrade_creation_uses_remote_base_and_leaves_primary_untouched(tmp_path
     env["UPGRADE_WORKTREE"] = str(tmp_path / "must-not-exist")
     env["UPGRADE_BRANCH"] = "chore/must-not-exist"
     env["UPGRADE_BASE"] = "missing-base"
-    refused = subprocess.run(["bash", "-c", block], cwd=primary, env=env,
+    refused = subprocess.run([shell, "-c", block], cwd=primary, env=env,
                              capture_output=True, text=True)
     assert refused.returncode != 0
     assert not Path(env["UPGRADE_WORKTREE"]).exists()
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit")
+def test_shell_blocks_in_shared_docs_brace_a_variable_before_a_colon() -> None:
+    """zsh reads `$NAME:x` as a history modifier on NAME (`:r`, `:h`, `:t`, ...),
+    so `"$UPGRADE_BASE:refs/..."` fetched `mainefs/...` under zsh (#1297). Agents
+    run these blocks in whatever shell the operator has; `${NAME}:x` means the
+    same in bash and zsh. Checked statically because CI may have no zsh."""
+    unbraced = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*:[A-Za-z]")
+    fence = re.compile(
+        r"^[ \t]*```(?:bash|sh|zsh|shell)[ \t]*\n(.*?)^[ \t]*```", re.MULTILINE | re.DOTALL
+    )
+    offenders = []
+    for doc in sorted((REPO_ROOT / "docs" / "agentic-dev-kit").rglob("*.md")):
+        for block in fence.findall(doc.read_text(encoding="utf-8")):
+            offenders += [
+                f"{doc.relative_to(REPO_ROOT)}: {line.strip()}"
+                for line in block.splitlines()
+                if unbraced.search(line)
+            ]
+    assert offenders == []
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
