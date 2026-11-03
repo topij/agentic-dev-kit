@@ -17,17 +17,25 @@ so and make no record edit.
 
 ## Read the configuration
 
-Read `config/dev-model.yaml` directly, as the lite `session-start` does: `profile`
-must be `lite`; `<handoff>` is `paths.handoff`, `<friction-log>` is
-`paths.friction_log`, and `<down-route>` is `friction.down_route` when set. A missing
-file, key or unreadable document is a hard stop before any edit.
+Read `config/dev-model.yaml` directly, as the lite `session-start` does: `<handoff>`
+is `paths.handoff`, `<friction-log>` is `paths.friction_log`, and `<down-route>` is
+`friction.down_route` when set. Each of these is a hard stop before any edit; say which
+to the operator:
+
+- a missing config file, a missing `paths` key, or an unreadable document;
+- a `profile` other than `lite`, or none: this is not a lite repository, and this
+  workflow does not apply to it;
+- a working branch that is protected and takes changes through pull requests: the
+  repository has outgrown the lite profile, whose commit step would be refused.
 
 ## Steps
 
 1. **Read `<handoff>` and `<friction-log>`.**
 
-1. **Review what changed this session** — `git status --short`, `git diff HEAD`, and
-   `git log` since this session began, not since the plan's newest line.
+1. **Review what changed this session** — `git status --short`, `git diff "$base"`, and
+   `git log` since this session began, not since the plan's newest line. `base` is `HEAD`,
+   or the empty tree in a repository with no commit yet, where `HEAD` does not resolve:
+   `base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)`.
 
 1. **Decide whether there is anything to hand over.** Ask of each thing the session
    did or learned whether a commit message, an existing plan line or a friction entry
@@ -95,7 +103,7 @@ file, key or unreadable document is a hard stop before any edit.
 1. **Validate and stage what the commit will contain.** Do this before the review below,
    so the review reads only paths that have been classified and staged.
 
-   - `git diff HEAD --check`, then read the complete `git diff HEAD` for churn,
+   - `git diff "$base" --check`, then read the complete `git diff "$base"` for churn,
      duplicated blocks, secrets and edits unrelated to the session.
    <!-- lite:begin stage-by-name -->
    - **Then account for every untracked file, and stage by name.** No diff of any
@@ -131,6 +139,8 @@ file, key or unreadable document is a hard stop before any edit.
      into a commit about something else, carried through review and merge. The
      check that works is mechanical: list them, then stage by name.
    <!-- lite:end stage-by-name -->
+   - Then `git diff --cached --check` over what is now staged, which the check above
+     ran before the new files were added. Fix what it reports before going on.
 
    <!-- lite:begin completion-inference -->
    **Never infer completion from a branch name, a commit message, a process exit
@@ -140,13 +150,12 @@ file, key or unreadable document is a hard stop before any edit.
 
 1. **Review the staged change before committing it.** Run the lite review,
    [`lite-review.md`](lite-review.md), over what the step above staged (`git diff --cached`),
-   the record edits included. Fix each finding or route it as above before going on;
-   stage a fix by name, and the review re-reads it.
+   the record edits included. Fix each finding or route it as above before going on.
+   A fix, and the friction-log or down-route edit a routed finding writes, is staged by
+   name, and the review re-reads it.
 
 1. **Commit.** Put the record edits in the session's last commit, or in their own
    `chore: update plan — <one line>` commit, on the branch the repository works on.
-   If the repository protects that branch and works through pull requests, it has
-   outgrown the lite profile: say so to the operator.
 
 1. **Report** what was recorded and where, what was routed, the review's result, and
    the next step for each line of work it touched — or that there was nothing to hand

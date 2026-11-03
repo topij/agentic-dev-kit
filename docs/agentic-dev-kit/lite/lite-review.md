@@ -16,9 +16,13 @@ set of fresh-context reviewers; this is not that.
 Take the change from the repository, not from your memory of making it:
 
 ```sh
-git diff HEAD
+base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)
+git diff "$base"
 git ls-files --others --exclude-standard
 ```
+
+`base` is the empty tree in a repository with no commit yet, where `HEAD` does not
+resolve.
 
 When the lite `wrap-up` runs this review, the change is what it staged: read
 `git diff --cached` instead, since its staging step has already classified every path.
@@ -67,7 +71,9 @@ Each finding is either
 - **fixed** before the commit — then re-read the hunk you changed, because a fix is a
   new change; or
 - **routed**, by the lite `wrap-up`'s friction step: down `friction.down_route` when it
-  is fully explained, otherwise parked in the friction inbox.
+  is fully explained, otherwise parked in the friction inbox. An edit the route writes
+  in this repository is part of the commit: stage it by name, and read it as you read
+  the change.
 
 Never commit over a finding that is neither.
 

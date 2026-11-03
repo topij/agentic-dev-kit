@@ -15,7 +15,7 @@ doc together.
 Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
 
 - `profile` — `lite`. Any other value, or no value, means this is not a lite
-  repository: stop and use the full workflow instead.
+  repository and this workflow does not apply: stop and say so to the operator.
 - `paths.handoff` — the living plan, `<handoff>`. It may be a file the repository
   already kept before the kit, such as `docs/plan.md`.
 - `paths.friction_log` — the friction inbox, `<friction-log>`.
