@@ -325,5 +325,5 @@ contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-paralle
 ▶ Next: cs-toolkit installed kit `69f30eb6` (in-parallel-oy/cs-toolkit#3047, merged 2026-10-31), which is past
 #1301, keeping `test_systemize_config.py` as a local patch until #1313 ships. Its next upgrade, following `upgrade.md`,
 takes the kit's copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment),
-and lands #1329's fix before any `retire-evidence` reclaim of its sealed evidence. #576 (Step 0's `/tmp` clone) is
+and lands #1329's change before any `retire-evidence` reclaim of its sealed evidence. #576 (Step 0's `/tmp` clone) is
 still open.
