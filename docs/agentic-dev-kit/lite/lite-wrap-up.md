@@ -92,11 +92,8 @@ file, key or unreadable document is a hard stop before any edit.
    When entries in the inbox share a shape, propose the rule they add up to; adding
    it to the repository's instructions is the operator's call.
 
-1. **Review the change before committing it.** Run the lite review,
-   [`lite-review.md`](lite-review.md), over everything this commit will carry, the record edits
-   included. Fix each finding or route it as above before going on.
-
-1. **Validate what the commit will contain.**
+1. **Validate and stage what the commit will contain.** Do this before the review below,
+   so the review reads only paths that have been classified and staged.
 
    - `git diff HEAD --check`, then read the complete `git diff HEAD` for churn,
      duplicated blocks, secrets and edits unrelated to the session.
@@ -140,6 +137,11 @@ file, key or unreadable document is a hard stop before any edit.
    code, or a ticket reference alone.** Each of those reports that something was
    *attempted*, and a wrap-up's job is to record what is *true*.
    <!-- lite:end completion-inference -->
+
+1. **Review the staged change before committing it.** Run the lite review,
+   [`lite-review.md`](lite-review.md), over what the step above staged (`git diff --cached`),
+   the record edits included. Fix each finding or route it as above before going on;
+   stage a fix by name, and the review re-reads it.
 
 1. **Commit.** Put the record edits in the session's last commit, or in their own
    `chore: update plan — <one line>` commit, on the branch the repository works on.

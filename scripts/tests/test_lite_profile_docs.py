@@ -25,14 +25,31 @@ REPO_ROOT = find_repo_root(engine_dir(Path(__file__)))
 WORKFLOWS = REPO_ROOT / "docs/agentic-dev-kit/workflows"
 LITE = REPO_ROOT / "docs/agentic-dev-kit/lite"
 
-# Each lite doc and the full doc whose marked clauses it must carry.
+# Each lite doc, the full doc whose marked clauses it must carry, and the ids both
+# must mark. The ids are pinned here, not read from the docs, so removing a marker
+# pair from both files fails rather than quietly shrinking what is guarded.
 PAIRS = {
-    "lite-session-start.md": "session-start.md",
-    "lite-wrap-up.md": "wrap-up.md",
+    "lite-session-start.md": ("session-start.md", {"source-failure", "dont-invent-work"}),
+    "lite-wrap-up.md": (
+        "wrap-up.md",
+        {
+            "handoff-content",
+            "record-prose",
+            "park-conditions",
+            "stage-by-name",
+            "completion-inference",
+            "no-working-detail",
+        },
+    ),
 }
 LITE_DOCS = ("lite-session-start.md", "lite-wrap-up.md", "lite-review.md")
 
 MARKER = re.compile(r"<!-- lite:(begin|end) ([a-z0-9-]+) -->")
+INLINE_LINK = re.compile(r"\]\(\s*<?([^)>\s]+)")
+REFERENCE_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)", re.M)
+# What a lite repository does not have: the engines, their runner, the config
+# loader, and the full kit's test command.
+ENGINE_NEEDLES = ("<engine-dir>", "uv run", "kitconfig", "load_config", "scripts/", "make test", "pr_watch")
 
 
 def _blocks(path: Path) -> dict[str, str]:
@@ -59,25 +76,37 @@ def _normalise(text: str) -> str:
     return " ".join(text.split())
 
 
+def _compare(full_path: Path, lite_path: Path, expected: set[str]) -> None:
+    """Fail unless both docs mark exactly `expected` and every marked clause matches."""
+    full = _blocks(full_path)
+    lite = _blocks(lite_path)
+    assert set(full) == expected, f"{full_path.name} marks {sorted(full)}, expected {sorted(expected)}"
+    assert set(lite) == expected, f"{lite_path.name} marks {sorted(lite)}, expected {sorted(expected)}"
+    for block_id in sorted(expected):
+        assert _normalise(lite[block_id]) == _normalise(full[block_id]), (
+            f"{lite_path.name}: clause {block_id!r} differs from {full_path.name}"
+        )
+
+
+def _link_targets(text: str) -> list[str]:
+    return INLINE_LINK.findall(text) + REFERENCE_DEFINITION.findall(text)
+
+
+def _engine_mentions(text: str) -> list[str]:
+    return [needle for needle in ENGINE_NEEDLES if needle in text]
+
+
 @pytest.mark.parametrize("lite_name", sorted(PAIRS))
 def test_lite_doc_carries_every_marked_full_clause_unchanged(lite_name: str) -> None:
-    full = _blocks(WORKFLOWS / PAIRS[lite_name])
-    lite = _blocks(LITE / lite_name)
-    assert full, f"{PAIRS[lite_name]} marks no shared clause"
-    assert sorted(lite) == sorted(full), (
-        f"marked clauses differ: only in the full doc {sorted(set(full) - set(lite))}, "
-        f"only in the lite doc {sorted(set(lite) - set(full))}"
-    )
-    for block_id, text in full.items():
-        assert _normalise(lite[block_id]) == _normalise(text), (
-            f"{lite_name}: clause {block_id!r} differs from {PAIRS[lite_name]}"
-        )
+    full_name, expected = PAIRS[lite_name]
+    _compare(WORKFLOWS / full_name, LITE / lite_name, expected)
 
 
 def test_lite_review_carries_the_configured_correctness_focus() -> None:
     config = yaml.safe_load((REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8"))
     lenses = config["review"]["fallback_panel"]["lenses"]
     (focus,) = [lens["focus"] for lens in lenses if lens["name"] == "correctness"]
+    assert set(_blocks(LITE / "lite-review.md")) == {"correctness-focus"}
     assert _normalise(_blocks(LITE / "lite-review.md")["correctness-focus"]) == _normalise(focus)
 
 
@@ -85,37 +114,73 @@ def test_lite_review_carries_the_configured_correctness_focus() -> None:
 def test_lite_doc_names_no_engine_or_loader(lite_name: str) -> None:
     # A lite repository has no engines directory and no config loader; a lite doc
     # that sends the reader to one gives an instruction that cannot be carried out.
-    text = (LITE / lite_name).read_text(encoding="utf-8")
-    for needle in ("<engine-dir>", "uv run", "kitconfig", "load_config"):
-        assert needle not in text, f"{lite_name} names {needle!r}"
+    assert _engine_mentions((LITE / lite_name).read_text(encoding="utf-8")) == []
 
 
 @pytest.mark.parametrize("lite_name", LITE_DOCS)
 def test_lite_doc_links_stay_inside_the_lite_docs(lite_name: str) -> None:
     # A lite install carries the lite docs and none of the full workflows, so a
     # link out of this directory would break in the adopter.
-    text = (LITE / lite_name).read_text(encoding="utf-8")
-    for target in re.findall(r"\]\(([^)#\s]+)", text):
+    for target in _link_targets((LITE / lite_name).read_text(encoding="utf-8")):
         if "://" in target:
             continue
-        resolved = (LITE / target).resolve()
+        resolved = (LITE / target.split("#", 1)[0]).resolve()
         assert resolved.is_file(), f"{lite_name}: link {target!r} resolves to nothing"
         assert resolved.parent == LITE, f"{lite_name}: link {target!r} leaves the lite docs"
 
 
-def test_markers_reject_a_clause_that_differs(tmp_path: Path) -> None:
-    # Positive control: the comparison above must be able to fail.
-    a = tmp_path / "a.md"
-    b = tmp_path / "b.md"
-    a.write_text("<!-- lite:begin x -->\nkeep this\n<!-- lite:end x -->\n", encoding="utf-8")
-    b.write_text("<!-- lite:begin x -->\n  keep   that\n<!-- lite:end x -->\n", encoding="utf-8")
-    assert _normalise(_blocks(a)["x"]) != _normalise(_blocks(b)["x"])
-    b.write_text("<!-- lite:begin x -->\n  keep\n   this\n<!-- lite:end x -->\n", encoding="utf-8")
-    assert _normalise(_blocks(a)["x"]) == _normalise(_blocks(b)["x"])
+# The guard's own branches, against fixtures, so each refusal is shown to fire.
 
 
-def test_markers_reject_an_unclosed_clause(tmp_path: Path) -> None:
-    a = tmp_path / "a.md"
-    a.write_text("<!-- lite:begin x -->\ntext\n", encoding="utf-8")
-    with pytest.raises(AssertionError, match="never closed"):
-        _blocks(a)
+def _write(path: Path, text: str) -> Path:
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_compare_rejects_a_clause_that_differs(tmp_path: Path) -> None:
+    full = _write(tmp_path / "full.md", "<!-- lite:begin x -->\nkeep this\n<!-- lite:end x -->\n")
+    lite = _write(tmp_path / "lite.md", "<!-- lite:begin x -->\n  keep   that\n<!-- lite:end x -->\n")
+    with pytest.raises(AssertionError, match="clause 'x' differs"):
+        _compare(full, lite, {"x"})
+    _write(lite, "<!-- lite:begin x -->\n  keep\n   this\n<!-- lite:end x -->\n")
+    _compare(full, lite, {"x"})
+
+
+def test_compare_rejects_a_marker_pair_removed_from_both_docs(tmp_path: Path) -> None:
+    both = "<!-- lite:begin x -->\nkeep\n<!-- lite:end x -->\n"
+    full = _write(tmp_path / "full.md", both)
+    lite = _write(tmp_path / "lite.md", both)
+    with pytest.raises(AssertionError, match="expected"):
+        _compare(full, lite, {"x", "y"})
+
+
+def test_compare_rejects_a_clause_marked_in_one_doc_only(tmp_path: Path) -> None:
+    full = _write(tmp_path / "full.md", "<!-- lite:begin x -->\nkeep\n<!-- lite:end x -->\n")
+    lite = _write(tmp_path / "lite.md", "keep\n")
+    with pytest.raises(AssertionError, match="lite.md marks"):
+        _compare(full, lite, {"x"})
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("<!-- lite:begin x -->\ntext\n", "never closed"),
+        ("<!-- lite:begin x -->\n<!-- lite:begin y -->\n", "begins inside"),
+        ("<!-- lite:begin x -->\na\n<!-- lite:end x -->\n<!-- lite:begin x -->\nb\n<!-- lite:end x -->\n", "marked twice"),
+        ("<!-- lite:begin x -->\ntext\n<!-- lite:end y -->\n", "does not close"),
+        ("<!-- lite:end x -->\n", "does not close"),
+    ],
+)
+def test_blocks_rejects_malformed_markers(tmp_path: Path, text: str, message: str) -> None:
+    with pytest.raises(AssertionError, match=message):
+        _blocks(_write(tmp_path / "a.md", text))
+
+
+def test_link_targets_include_reference_style_definitions() -> None:
+    text = "See [full][f] and [here](lite-review.md#top).\n\n[f]: ../workflows/wrap-up.md\n"
+    assert _link_targets(text) == ["lite-review.md#top", "../workflows/wrap-up.md"]
+
+
+@pytest.mark.parametrize("needle", ENGINE_NEEDLES)
+def test_engine_mentions_catch_every_needle(needle: str) -> None:
+    assert _engine_mentions(f"Run {needle} here.") == [needle]

@@ -20,8 +20,18 @@ git diff HEAD
 git ls-files --others --exclude-standard
 ```
 
-Read every changed hunk in full, and every new file that belongs to the change. A
-hunk you skip because you "know what it says" is the hunk this step exists to read.
+When the lite `wrap-up` runs this review, the change is what it staged: read
+`git diff --cached` instead, since its staging step has already classified every path.
+
+**Classify each untracked path before opening it.** A path that indicates protected
+content (contact exports, raw customer or CRM data, generated reports, `.env`-shaped
+files) is not opened and is not part of the change: say you skipped it and why, and ask
+the operator if it genuinely belongs. Listing paths is safe; reading one is what exposes
+it.
+
+Then read every changed hunk in full, and every other new file that belongs to the
+change. A hunk you skip because you "know what it says" is the hunk this step exists to
+read.
 
 ## 2 · Ask what it says
 
