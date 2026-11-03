@@ -10,11 +10,13 @@ baseline from a different kit.
 
 Step 0 now has a **kit block** that clones into the checkout's own git directory:
 `upgrade.md` uses `<git dir>/agentic-dev-kit/<task branch>`, and `adopt.md` uses
-`<git dir>/agentic-dev-kit`. The block clones only when nothing is there yet and refuses a
-directory that is not a clone, so re-running it from any shell or session finds the same
-clone again. Every later command that reads the kit, in a shell block or inline, names it
-as `"${KIT:?KIT is not set — re-run the kit block in Step 0}"`. Removing an upgrade's task
-worktree removes its clone too.
+`<git dir>/agentic-dev-kit`. The block clones only when nothing is there yet, so
+re-running it from any shell or session finds the same clone again. A clone it finds must
+be a clean clone of `KIT_URL` (no changed, added or deleted file, the same `origin`), or the
+block stops. After Step 0, every shell block and inline code span that reads the kit names
+it as `"${KIT:?KIT is not set — re-run the kit block in Step 0}"`. Removing an upgrade's
+task worktree removes its clone too. The block writes into the git directory, so a sandbox
+that allows writes only inside the working tree needs to allow it.
 
 What to do, in the upgrade that installs this: you read this in Step 1, after Step 0 has
 run from your installed `upgrade.md`, whose binding block sets `KIT=/tmp/agentic-dev-kit`.

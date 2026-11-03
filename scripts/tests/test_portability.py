@@ -19777,8 +19777,9 @@ def _kit_block(workflow: str) -> str:
 
 
 def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
-    """A PATH whose `git clone` makes a one-commit repository at its destination and
-    logs it, and whose every other git call is the real git."""
+    """A PATH whose `git clone <url> <dest>` makes a clean one-commit repository at
+    <dest>, with `origin` set to <url>, and logs <dest>; every other git call, fetch
+    included, is the real git, and a fetch is logged too."""
     real = shutil.which("git")
     assert real
     bins = tmp_path / "bin"
@@ -19788,11 +19789,14 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
     stub.write_text(
         '#!/bin/sh\n'
         'if [ "$1" = clone ]; then\n'
-        '  for last; do :; done\n'
+        '  url=; for last; do url="$prev"; prev="$last"; done\n'
         '  echo "$last" >> "$CLONES"\n'
-        '  "$REAL_GIT" init -q "$last" && "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q --allow-empty -m kit\n'
+        '  "$REAL_GIT" init -q "$last" && "$REAL_GIT" -C "$last" remote add origin "$url" &&\n'
+        '    echo "{}" > "$last/kit-manifest.json" && "$REAL_GIT" -C "$last" add kit-manifest.json &&\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -m kit\n'
         '  exit $?\n'
         'fi\n'
+        'case " $* " in *" fetch "*) echo "fetch $*" >> "$CLONES.fetch" ;; esac\n'
         'exec "$REAL_GIT" "$@"\n'
     )
     stub.chmod(0o755)
@@ -19848,11 +19852,29 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
     assert _git(task_a, "status", "--porcelain").stdout == ""
 
 
+def _tamper(kit: Path, how: str) -> None:
+    git = lambda *a: subprocess.run(["git", "--git-dir", str(kit / ".git"), "--work-tree", str(kit), *a], check=True, capture_output=True)
+    if how == "not-a-clone":
+        shutil.rmtree(kit / ".git")
+        (kit / "leftover").write_text("x")
+    elif how == "modified":
+        (kit / "kit-manifest.json").write_text('{"tampered": true}')
+    elif how == "added":
+        (kit / "init.sh").write_text("echo stray\n")
+    elif how == "deleted":
+        (kit / "kit-manifest.json").unlink()
+    elif how == "other-origin":
+        git("remote", "set-url", "origin", "https://example.invalid/other.git")
+
+
+@pytest.mark.parametrize("how", ["not-a-clone", "modified", "added", "deleted", "other-origin"])
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
-def test_the_kit_block_refuses_a_directory_that_is_not_a_clone(tmp_path: Path, workflow: str) -> None:
-    """A half-written or reaped directory at the path must stop the block, not be read
-    as the kit. Its check names the clone's own git directory, because a plain
-    `git -C` inside the checkout's git directory finds the outer repository."""
+def test_the_kit_block_refuses_a_clone_that_is_no_longer_the_kit(tmp_path: Path, workflow: str, how: str) -> None:
+    """A clone the block finds again is only the kit its commit names while it is a
+    clean clone of KIT_URL: a stray `cp` or `./init.sh` into it, a deleted file or
+    another origin would otherwise be copied from and recorded by --from-kit (PR 1340
+    round 4). Its checks name the clone's own git directory, because a plain `git -C`
+    inside the checkout's git directory finds the outer repository."""
     require_kit_paths(workflow)
     block = _kit_block(workflow)
     env, clones = _kit_world(tmp_path)
@@ -19860,12 +19882,46 @@ def test_the_kit_block_refuses_a_directory_that_is_not_a_clone(tmp_path: Path, w
     first = _run_kit_block("sh", block, env, task)
     assert first.returncode == 0, first.stderr
     kit = Path(first.stdout.strip().removeprefix("KIT=").split(" at ")[0])
-    shutil.rmtree(kit / ".git")
-    (kit / "leftover").write_text("x")
+    _tamper(kit, how)
     again = _run_kit_block("sh", block, env, task)
     assert again.returncode != 0
-    assert "is not a kit clone" in again.stderr
+    assert "is not a clean clone of" in again.stderr
     assert clones.read_text().splitlines() == [str(kit)]
+
+
+def test_the_upgrade_kit_block_explains_a_detached_head(tmp_path: Path) -> None:
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    _git(task, "checkout", "-q", "--detach")
+    result = _run_kit_block("sh", _kit_block(workflow), env, task)
+    assert result.returncode != 0
+    assert "needs this task's branch checked out" in result.stderr
+
+
+@pytest.mark.parametrize("shallow", [True, False])
+def test_the_history_fetch_deepens_only_a_shallow_kit(tmp_path: Path, shallow: bool) -> None:
+    """Re-running Step 2 on a clone a first run already deepened must not fetch:
+    `--unshallow` fails there and `--depth=1000` would cut its history back (PR 1340
+    round 4)."""
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    blocks = [b for _, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "fetch --unshallow" in b]
+    assert len(blocks) == 1, blocks
+    env, clones = _kit_world(tmp_path)
+    source = tmp_path / "source"
+    _git(tmp_path, "init", "-q", "-b", "main", str(source))
+    for n in range(3):
+        _git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", f"c{n}")
+    kit = tmp_path / "kit"
+    depth = ["--depth", "1"] if shallow else []
+    _git(tmp_path, "clone", "-q", *depth, f"file://{source}", str(kit))
+    result = subprocess.run(["sh", "-c", blocks[0]], env=dict(env, KIT=str(kit)), capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    fetched = Path(f"{clones}.fetch")
+    assert fetched.exists() is shallow
+    assert _git(kit, "rev-list", "--count", "HEAD").stdout.strip() == "3"
 
 
 @pytest.mark.parametrize("unbound", ["detached", "no-repo"])

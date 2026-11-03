@@ -97,16 +97,23 @@ directory instead, under the task branch's name. Run this **kit block**:
 
 ```bash
 KIT_HOME="$(git -C "${REPO:?REPO is not set — re-run the config check}" rev-parse --absolute-git-dir)" || exit 1
-KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || exit 1
+KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || { echo "the kit block needs this task's branch checked out in $REPO" >&2; exit 1; }
 KIT="$KIT_HOME/agentic-dev-kit/$KIT_TASK"
-if [ ! -e "$KIT" ]; then git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1; fi
-git --git-dir="$KIT/.git" rev-parse --verify --quiet HEAD >/dev/null || { echo "$KIT is not a kit clone: delete it and re-run this block" >&2; exit 1; }
+KIT_URL=https://github.com/topij/agentic-dev-kit
+if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
+[ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] &&
+  [ -z "$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain)" ] ||
+  { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 ```
 
 The path depends only on this checkout and its task branch, so the block is safe to re-run
 from any shell or session: it finds this task's clone again instead of making another,
-which matters once Step 3 has copied from it. That is also what a command's `${KIT:?…}`
+which matters once Step 3 has copied from it. A clone it finds must still be a clean clone
+of `KIT_URL`: a changed, added or deleted file there, or a different `origin`, means the
+tree is no longer the kit that commit names, and the block stops rather than let Step 4
+record it. It writes into the git directory, so a sandbox that allows writes only inside
+the working tree needs to allow this one. That is also what a command's `${KIT:?…}`
 guard tells you to do when `KIT` is unset. No other task's checkout or branch reaches the
 path, and removing the task worktree removes the clone with it. In a long-lived checkout,
 such as the primary one, delete `$KIT` once the upgrade has landed.
@@ -329,9 +336,14 @@ was never in this history, so it routes you to the degraded path and you read a 
 answer as a complete one:
 
 ```bash
-git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --unshallow 2>/dev/null ||
-  git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --depth=1000
+if [ "$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse --is-shallow-repository)" = true ]; then
+  git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --unshallow 2>/dev/null ||
+    git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --depth=1000
+fi
 ```
+
+Only a shallow clone is deepened: on a clone a re-run already deepened, `--unshallow`
+fails and the fallback would cut its history back to 1000 commits.
 
 Then resolve the baseline and read the entries that landed after it. **Entries live in two
 places, split at a cutover**, and the block below reads both:

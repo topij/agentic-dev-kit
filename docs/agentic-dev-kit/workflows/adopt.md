@@ -21,17 +21,24 @@ Run this **kit block** from inside the repo being adopted into:
 ```bash
 KIT_HOME="$(git rev-parse --absolute-git-dir)" || exit 1
 KIT="$KIT_HOME/agentic-dev-kit"
-if [ ! -e "$KIT" ]; then git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1; fi
-git --git-dir="$KIT/.git" rev-parse --verify --quiet HEAD >/dev/null || { echo "$KIT is not a kit clone: delete it and re-run this block" >&2; exit 1; }
+KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
+if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
+[ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] &&
+  [ -z "$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain)" ] ||
+  { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 ```
 
 The path depends only on this checkout, so the block is safe to re-run from any shell or
 session: it finds the same clone again instead of making another, which matters once
 Step 3 has copied from it. That is also what a command's `${KIT:?…}` guard tells you to
-do when `KIT` is unset. An existing clone there is from an earlier adoption attempt in
-this checkout: the line it prints names its commit, and if that is not the kit you mean
-to adopt, delete `$KIT` and re-run the block. Delete it once the adoption has landed.
+do when `KIT` is unset. A clone it finds must still be a clean clone of `KIT_URL`: a
+changed, added or deleted file there, or a different `origin`, stops the block rather
+than let Step 3b record it. An existing clone is from an earlier adoption attempt in this
+checkout: the line the block prints names its commit, and if that is not the kit you mean
+to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
+sandbox that allows writes only inside the working tree needs to allow this one. Delete
+the clone once the adoption has landed.
 
 Everything below copies **from** that checkout **into** the current repo (the adopter) —
 **two trees, and from here every write must name which one.** Bind both roots now,
