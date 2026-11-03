@@ -25,17 +25,30 @@ to the operator:
 - a missing config file, a missing `paths` key, or an unreadable document;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
-- a working branch that is protected and takes changes through pull requests: the
-  repository has outgrown the lite profile, whose commit step would be refused.
+- no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
+  commit would land on a detached HEAD that no branch keeps;
+- a branch that takes changes only through pull requests. Nothing local records that,
+  so ask the operator, naming the branch the command above printed, before the first
+  edit. If it does, the repository has outgrown the lite profile, whose commit step
+  commits straight to the branch.
 
 ## Steps
 
 1. **Read `<handoff>` and `<friction-log>`.**
 
-1. **Review what changed this session** — `git status --short`, `git diff "$base"`, and
-   `git log` since this session began, not since the plan's newest line. `base` is `HEAD`,
-   or the empty tree in a repository with no commit yet, where `HEAD` does not resolve:
-   `base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)`.
+1. **Review what changed this session**, since this session began, not since the plan's
+   newest line:
+
+   ```sh
+   base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)
+   git status --short
+   git diff "$base"
+   git rev-parse --verify -q HEAD >/dev/null && git log --oneline -20 || echo "no commits yet"
+   ```
+
+   `base` is `HEAD`, or the empty tree in a repository with no commit yet, where `HEAD`
+   does not resolve and `git log` fails. Each block that uses `base` assigns it itself,
+   because a runtime may run every block in a fresh shell.
 
 1. **Decide whether there is anything to hand over.** Ask of each thing the session
    did or learned whether a commit message, an existing plan line or a friction entry
@@ -103,8 +116,19 @@ to the operator:
 1. **Validate and stage what the commit will contain.** Do this before the review below,
    so the review reads only paths that have been classified and staged.
 
-   - `git diff "$base" --check`, then read the complete `git diff "$base"` for churn,
-     duplicated blocks, secrets and edits unrelated to the session.
+   - Check and read the tracked changes:
+
+     ```sh
+     base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)
+     git diff "$base" --check
+     git diff "$base"
+     ```
+
+     Read the whole diff for churn, duplicated blocks, secrets and edits unrelated to
+     the session.
+   - Stage each tracked file the session changed by name, the `<handoff>` and
+     `<friction-log>` edits included (`git add -- <path>`). `git status --short` shows
+     a changed but unstaged file as ` M`; the commit leaves it behind.
    <!-- lite:begin stage-by-name -->
    - **Then account for every untracked file, and stage by name.** No diff of any
      kind shows the *contents* of an untracked file, so everything above can pass

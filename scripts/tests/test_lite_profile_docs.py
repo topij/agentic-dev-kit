@@ -45,16 +45,23 @@ PAIRS = {
 LITE_DOCS = ("lite-session-start.md", "lite-wrap-up.md", "lite-review.md")
 
 MARKER = re.compile(r"<!-- lite:(begin|end) ([a-z0-9-]+) -->")
-INLINE_LINK = re.compile(r"\]\(\s*<?([^)>\s]+)")
-REFERENCE_DEFINITION = re.compile(r"^ {0,3}\[[^\]]+\]:\s*<?([^\s>]+)", re.M)
-HTML_HREF = re.compile(r"""href\s*=\s*["']([^"']+)["']""", re.I)
-# Code is not a link: fenced blocks and inline code spans are removed before scanning.
-FENCED_BLOCK = re.compile(r"^ {0,3}(`{3,}|~{3,}).*?^ {0,3}\1", re.M | re.S)
-CODE_SPAN = re.compile(r"(`+)(?!`).+?(?<!`)\1", re.S)
+# Every link-shaped target in a lite doc, found in the raw text with no attempt to
+# tell code from prose: an allowlist that is fail-closed. A link-shaped string that
+# is only an example in code is still refused, which costs a rewording and never a
+# missed link. Inline and reference-style Markdown links, at any indent, and
+# `href=` / `src=` attributes, quoted or not.
+LINK_TARGET = re.compile(
+    r"\]\(\s*<?([^)>\s]+)"
+    r"|^[ \t]*\[[^\]]+\]:[ \t]*<?([^\s>]+)"
+    r"""|\b(?:href|src)\s*=\s*["']?([^"'\s>]+)""",
+    re.I | re.M,
+)
 URI_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*:", re.I)
-# What a lite repository does not have: the engines and their runner, the config
-# loader, the full kit's test command, and the full-kit workflows and engines a
-# reader might be sent to by name.
+LITE_DOC_NAME = re.compile(r"lite-[a-z0-9-]+\.md")
+# What a lite repository does not have, matched case-insensitively against text whose
+# whitespace runs are collapsed, so a name wrapped across a line is still found: the
+# engines and their runner, the config loader, the full kit's test command, and the
+# full-kit workflows and engines a reader might be sent to by name.
 ENGINE_NEEDLES = (
     "<engine-dir>",
     "uv run",
@@ -67,6 +74,10 @@ ENGINE_NEEDLES = (
     "check_record_prose",
     "session_cleanup",
     "panel_prompt",
+    "kit_doctor",
+    "dev_session",
+    "launch_lane",
+    "sweep_scratch",
 )
 
 
@@ -107,22 +118,22 @@ def _compare(full_path: Path, lite_path: Path, expected: set[str]) -> None:
 
 
 def _link_targets(text: str) -> list[str]:
-    prose = CODE_SPAN.sub("", FENCED_BLOCK.sub("", text))
-    return INLINE_LINK.findall(prose) + REFERENCE_DEFINITION.findall(prose) + HTML_HREF.findall(prose)
+    return [next(group for group in m.groups() if group) for m in LINK_TARGET.finditer(text)]
 
 
 def _check_links(doc: Path, lite_dir: Path) -> None:
-    """Fail unless every local link in `doc` names an existing file directly in `lite_dir`."""
+    """Fail unless every link-shaped target in `doc` is an anchor, a URL, or a lite doc in `lite_dir`."""
     for target in _link_targets(doc.read_text(encoding="utf-8")):
         if target.startswith("#") or URI_SCHEME.match(target):
             continue  # an in-page anchor, or a URL / mailto: neither is a file in the install
-        resolved = (doc.parent / target.split("#", 1)[0]).resolve()
-        assert resolved.is_file(), f"{doc.name}: link {target!r} resolves to nothing"
-        assert resolved.parent == lite_dir.resolve(), f"{doc.name}: link {target!r} leaves the lite docs"
+        name = target.split("#", 1)[0]
+        assert LITE_DOC_NAME.fullmatch(name), f"{doc.name}: link {target!r} leaves the lite docs"
+        assert (lite_dir / name).is_file(), f"{doc.name}: link {target!r} resolves to nothing"
 
 
 def _engine_mentions(text: str) -> list[str]:
-    return [needle for needle in ENGINE_NEEDLES if needle in text]
+    flat = " ".join(text.split()).lower()
+    return [needle for needle in ENGINE_NEEDLES if needle in flat]
 
 
 @pytest.mark.parametrize("lite_name", sorted(PAIRS))
@@ -210,9 +221,13 @@ def test_blocks_rejects_malformed_markers(tmp_path: Path, text: str, message: st
         _blocks(_write(tmp_path / "a.md", text))
 
 
-def test_link_targets_include_reference_style_definitions() -> None:
-    text = "See [full][f] and [here](lite-review.md#top).\n\n[f]: ../workflows/wrap-up.md\n"
-    assert _link_targets(text) == ["lite-review.md#top", "../workflows/wrap-up.md"]
+def test_engine_needles_are_pinned() -> None:
+    # Pinned here so that dropping a needle fails, rather than dropping its test too.
+    assert set(ENGINE_NEEDLES) == {
+        "<engine-dir>", "uv run", "kitconfig", "load_config", "scripts/", "make test",
+        "pr_watch", "pr-watch", "check_record_prose", "session_cleanup", "panel_prompt",
+        "kit_doctor", "dev_session", "launch_lane", "sweep_scratch",
+    }
 
 
 @pytest.mark.parametrize("needle", ENGINE_NEEDLES)
@@ -220,11 +235,16 @@ def test_engine_mentions_catch_every_needle(needle: str) -> None:
     assert _engine_mentions(f"Run {needle} here.") == [needle]
 
 
+@pytest.mark.parametrize("text", ["Run uv\nrun here.", "Use Pr-Watch.", "then MAKE  TEST"])
+def test_engine_mentions_ignore_case_and_wrapping(text: str) -> None:
+    assert _engine_mentions(text) != []
+
+
 @pytest.fixture
 def lite_dir(tmp_path: Path) -> Path:
     d = tmp_path / "lite"
     d.mkdir()
-    _write(d / "other.md", "# Other\n")
+    _write(d / "lite-other.md", "# Other\n")
     _write(tmp_path / "outside.md", "# Outside\n")
     return d
 
@@ -232,29 +252,36 @@ def lite_dir(tmp_path: Path) -> Path:
 @pytest.mark.parametrize(
     "line",
     [
-        "[ok](other.md)",
-        "[ok](other.md#a-section)",
+        "[ok](lite-other.md)",
+        "[ok](lite-other.md#a-section)",
+        "[ok][r]\n\n[r]: lite-other.md",
         "[anchor](#report)",
         "[mail](mailto:a@example.com)",
         "[web](https://example.com/x.md)",
-        "Code `[x](nothing.md)` is not a link.",
-        "```text\n[x](nothing.md)\n```",
+        '<a href="lite-other.md">x</a>',
+        "No link here at all.",
     ],
 )
 def test_check_links_accepts_links_a_lite_install_resolves(lite_dir: Path, line: str) -> None:
-    _check_links(_write(lite_dir / "doc.md", line + "\n"), lite_dir)
+    _check_links(_write(lite_dir / "lite-doc.md", line + "\n"), lite_dir)
 
 
 @pytest.mark.parametrize(
     ("line", "message"),
     [
-        ("[x](nothing.md)", "resolves to nothing"),
+        ("[x](lite-missing.md)", "resolves to nothing"),
         ("[x](../outside.md)", "leaves the lite docs"),
+        ("[x](other.md)", "leaves the lite docs"),
         ("[x][r]\n\n[r]: ../outside.md", "leaves the lite docs"),
+        ("- item\n\n     [r]: ../outside.md", "leaves the lite docs"),
         ('<a href="../outside.md">x</a>', "leaves the lite docs"),
+        ("<a href=../outside.md>x</a>", "leaves the lite docs"),
+        ('<img src="../outside.md">', "leaves the lite docs"),
+        ("Code `[x](../outside.md)` is still refused.", "leaves the lite docs"),
+        ("Use a ` tick\n\n[x](../outside.md)\n\n``code``", "leaves the lite docs"),
+        ("~~~\n[x](../outside.md)\n~~~", "leaves the lite docs"),
     ],
 )
 def test_check_links_rejects_links_a_lite_install_cannot_resolve(lite_dir: Path, line: str, message: str) -> None:
     with pytest.raises(AssertionError, match=message):
-        _check_links(_write(lite_dir / "doc.md", line + "\n"), lite_dir)
-
+        _check_links(_write(lite_dir / "lite-doc.md", line + "\n"), lite_dir)
