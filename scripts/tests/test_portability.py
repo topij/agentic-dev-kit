@@ -19770,71 +19770,154 @@ def _fences(doc: str) -> list[tuple[str, str]]:
     ]
 
 
-def _clone_block(workflow: str) -> str:
+def _kit_block(workflow: str) -> str:
     blocks = [b for label, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "git clone" in b]
     assert len(blocks) == 1, blocks
     return blocks[0]
 
 
-def _run_clone_block(tmp_path: Path, shell: str, block: str, tmpdir: str, cwd: Path) -> tuple[subprocess.CompletedProcess, Path]:
+def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
+    """A PATH whose `git clone` makes a one-commit repository at its destination and
+    logs it, and whose every other git call is the real git."""
+    real = shutil.which("git")
+    assert real
     bins = tmp_path / "bin"
-    bins.mkdir(exist_ok=True)
-    calls = tmp_path / "calls"
+    bins.mkdir()
+    calls = tmp_path / "clones"
     stub = bins / "git"
-    # Records the clone's destination: whether it already existed as a directory
-    # when handed over (`mktemp -u` only names one), and whether it was empty.
     stub.write_text(
         '#!/bin/sh\n'
-        'for last; do :; done\n'
-        'if [ ! -d "$last" ]; then state=absent; elif [ -z "$(ls -A "$last")" ]; then state=empty; else state=nonempty; fi\n'
-        'echo "$last $state" >> "$CALLS"\n'
+        'if [ "$1" = clone ]; then\n'
+        '  for last; do :; done\n'
+        '  echo "$last" >> "$CLONES"\n'
+        '  "$REAL_GIT" init -q "$last" && "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q --allow-empty -m kit\n'
+        '  exit $?\n'
+        'fi\n'
+        'exec "$REAL_GIT" "$@"\n'
     )
     stub.chmod(0o755)
-    env = dict(os.environ, PATH=f"{bins}{os.pathsep}{os.environ['PATH']}", TMPDIR=tmpdir, CALLS=str(calls))
+    env = dict(os.environ, PATH=f"{bins}{os.pathsep}{os.environ['PATH']}", REAL_GIT=real, CLONES=str(calls))
     env.pop("KIT", None)
-    return subprocess.run([shell, "-c", block], env=env, cwd=cwd, capture_output=True, text=True), calls
+    return env, calls
+
+
+def _repo_with_task(tmp_path: Path, name: str) -> tuple[Path, Path]:
+    """A primary checkout and a linked task worktree on its own branch."""
+    main = tmp_path / f"{name}-main"
+    _git(tmp_path, "init", "-q", "-b", "main", str(main))
+    _git(main, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+    task = tmp_path / f"{name}-task"
+    _git(main, "worktree", "add", "-q", "-b", f"chore/{name}", str(task))
+    return main, task
+
+
+def _run_kit_block(shell: str, block: str, env: dict, repo: Path) -> subprocess.CompletedProcess:
+    # upgrade.md's block reads $REPO; adopt.md's runs from inside the repo.
+    return subprocess.run([shell, "-c", block], env=dict(env, REPO=str(repo)), cwd=repo, capture_output=True, text=True)
+
+
+def _git_dir(path: Path) -> Path:
+    return Path(_git(path, "rev-parse", "--absolute-git-dir").stdout.strip())
 
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
-def test_the_kit_clone_lands_in_a_fresh_directory_every_run(
+def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
     tmp_path: Path, workflow: str, shell: str
 ) -> None:
     """A shared clone path is a trap: an earlier upgrade's clone, another session's,
-    or a reaped skeleton already sits there, so the clone fails or a stale kit is read
-    (#576). Run each workflow's own clone block twice and require two new, empty,
-    distinct directories under $TMPDIR, each existing when the clone was handed it."""
+    or a reaped skeleton already sits there (#576). The kit block clones into the
+    checkout's own git directory, so a re-run, from any shell, finds the same clone
+    and makes no second one, and a different task's checkout gets its own."""
     if shutil.which(shell) is None:
         pytest.skip(f"{shell} is not installed")
     require_kit_paths(workflow)
-    block = _clone_block(workflow)
-    tmp = tmp_path / "tmp"
-    tmp.mkdir()
-    printed = []
-    for _ in range(2):
-        result, calls = _run_clone_block(tmp_path, shell, block, str(tmp), tmp_path)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task_a = _repo_with_task(tmp_path, "a")
+    _, task_b = _repo_with_task(tmp_path, "b")
+    kits = []
+    for task in (task_a, task_a, task_b):
+        result = _run_kit_block(shell, block, env, task)
         assert result.returncode == 0, result.stderr
-        printed.append(result.stdout.strip().removeprefix("KIT="))
-    cloned = [line.split() for line in calls.read_text().splitlines()]
-    assert [path for path, _ in cloned] == printed
-    assert all(state == "empty" for _, state in cloned)
-    assert printed[0] != printed[1]
-    assert all(Path(p).resolve().parent == tmp.resolve() for p in printed)
+        kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    assert kits[0] == kits[1] != kits[2]
+    assert clones.read_text().splitlines() == [kits[0], kits[2]]
+    assert Path(kits[0]).is_relative_to(_git_dir(task_a))
+    assert Path(kits[2]).is_relative_to(_git_dir(task_b))
+    assert _git(task_a, "status", "--porcelain").stdout == ""
 
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_refuses_a_directory_that_is_not_a_clone(tmp_path: Path, workflow: str) -> None:
+    """A half-written or reaped directory at the path must stop the block, not be read
+    as the kit. Its check names the clone's own git directory, because a plain
+    `git -C` inside the checkout's git directory finds the outer repository."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    first = _run_kit_block("sh", block, env, task)
+    assert first.returncode == 0, first.stderr
+    kit = Path(first.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    shutil.rmtree(kit / ".git")
+    (kit / "leftover").write_text("x")
+    again = _run_kit_block("sh", block, env, task)
+    assert again.returncode != 0
+    assert "is not a kit clone" in again.stderr
+    assert clones.read_text().splitlines() == [str(kit)]
+
+
+@pytest.mark.parametrize("unbound", ["detached", "no-repo"])
+def test_the_upgrade_kit_block_stops_without_a_task_branch_or_repo(tmp_path: Path, unbound: str) -> None:
+    """The upgrade path is keyed on the task branch, so a detached HEAD has no path
+    and an unset REPO has no checkout: both stop before cloning."""
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    if unbound == "detached":
+        _git(task, "checkout", "-q", "--detach")
+        result = _run_kit_block("sh", _kit_block(workflow), env, task)
+    else:
+        result = subprocess.run(["sh", "-c", _kit_block(workflow)], env=env, cwd=task, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert not clones.exists()
+
+
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
-def test_a_relative_tmpdir_stops_the_clone(tmp_path: Path, workflow: str, shell: str) -> None:
-    """A relative $TMPDIR gives a relative KIT, which names a directory inside the
-    repo once a later step runs `cd "$REPO"` (PR 1340 round 2). The block stops
-    before cloning instead."""
+def test_the_upgrade_kit_block_keys_on_the_task_branch(tmp_path: Path, shell: str) -> None:
+    """An upgrade run in a long-lived checkout, such as the primary one, must not
+    find the clone an earlier upgrade left there: the path carries the task branch,
+    and each upgrade's task branch is new."""
     if shutil.which(shell) is None:
         pytest.skip(f"{shell} is not installed")
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
     require_kit_paths(workflow)
-    (tmp_path / "rel").mkdir()
-    result, calls = _run_clone_block(tmp_path, shell, _clone_block(workflow), "rel", tmp_path)
-    assert result.returncode != 0
-    assert not calls.exists()
+    env, clones = _kit_world(tmp_path)
+    main, _ = _repo_with_task(tmp_path, "a")
+    kits = []
+    for branch in ("chore/upgrade-1", "chore/upgrade-2"):
+        _git(main, "switch", "-q", "-c", branch)
+        result = _run_kit_block(shell, _kit_block(workflow), env, main)
+        assert result.returncode == 0, result.stderr
+        kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    assert kits[0] != kits[1]
+    assert clones.read_text().splitlines() == kits
+
+
+def test_removing_the_task_worktree_removes_its_kit_clone(tmp_path: Path) -> None:
+    """The cleanup the workflow relies on instead of telling you to delete the clone."""
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    env, _ = _kit_world(tmp_path)
+    main, task = _repo_with_task(tmp_path, "a")
+    result = _run_kit_block("sh", _kit_block(workflow), env, task)
+    assert result.returncode == 0, result.stderr
+    kit = Path(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    assert kit.is_dir()
+    _git(main, "worktree", "remove", str(task))
+    assert not kit.exists()
 
 
 # Inline code spans that name the kit without being a command to run: the bare
@@ -19844,14 +19927,17 @@ def test_a_relative_tmpdir_stops_the_clone(tmp_path: Path, workflow: str, shell:
 _KIT_PROSE_SPANS = frozenset(
     {'$KIT', '"$KIT"', 'cd "$KIT"', "$KIT/init.sh", '--from-kit ""', "/tmp/agentic-dev-kit"}
 )
-# The only shell lines that may expand KIT unguarded: the clone block's, where it is
-# set, and the binding block's print, which follows its guarded assignment.
-_KIT_CLONE_LINES = frozenset({
-    'KIT="$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-kit.XXXXXX")" || exit 1',
-    'case "$KIT" in /*) ;; *) echo "KIT is not an absolute path: $KIT" >&2; exit 1 ;; esac',
-    'git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1',
-    'echo "KIT=$KIT"',
-    'echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"',
+# The binding block's print, which follows its guarded assignment. The kit block,
+# where KIT is set, is exempt as a whole and pinned by the tests above instead.
+_KIT_CLONE_LINES = frozenset({'echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"'})
+# The only things a KIT guard may tell the reader: every command after Step 0 sends
+# them back to the kit block, which finds this checkout's clone again, and the
+# binding block, which runs right after it, to the block above. Prose that names
+# the guard's form uses a placeholder.
+_KIT_GUARD_MESSAGES = frozenset({
+    "KIT is not set — re-run the kit block in Step 0",
+    "KIT is not set — run the kit block above",
+    "…", "...", "msg",
 })
 # Any expansion of KIT that is not the `${KIT:?` form, which stops on an unset KIT.
 _UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?)")
@@ -19864,7 +19950,7 @@ def _kit_command_spans(doc: str) -> list[str]:
     lines = [
         re.sub(r"\s+#\s.*$", "", line).strip()  # a trailing comment runs nothing
         for label, block in _fences(doc)
-        if label not in _NON_SHELL_FENCES
+        if label not in _NON_SHELL_FENCES and "git clone" not in block
         for line in block.splitlines()
     ]
     prose = re.sub(r"^[ \t]*```.*?^[ \t]*```", "", doc, flags=re.MULTILINE | re.DOTALL)
@@ -19876,7 +19962,7 @@ def _kit_command_spans(doc: str) -> list[str]:
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
 def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) -> None:
-    """Outside the clone block's own lines and the named prose spans, every
+    """Outside the kit block and the named prose spans, every
     expansion of KIT in a fence that may hold a command, labelled or not, and in
     every inline code span is the `${KIT:?` form that stops on an unset KIT, and no command names
     the shared path. A literal path reads whatever tree sits there, and any other
@@ -19891,6 +19977,11 @@ def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) ->
             offenders.append(span)
         for arg in re.findall(r"--(?:from-kit|manifest)\s+(\S+)", span):
             if not arg.startswith('"${KIT:?'):
+                offenders.append(span)
+        # What a guard tells the reader is part of the guard: under a per-run path
+        # "re-run Step 0" made a second clone (PR 1340 rounds 2 and 3).
+        for message in re.findall(r"\$\{KIT:\?([^}]*)\}", span):
+            if message not in _KIT_GUARD_MESSAGES:
                 offenders.append(span)
     assert offenders == []
 
