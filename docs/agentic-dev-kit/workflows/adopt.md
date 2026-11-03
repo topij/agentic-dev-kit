@@ -12,12 +12,21 @@ non-destructively on a branch; the operator confirms the plan before anything is
 
 ## Step 0 — Fetch the kit
 
-If the kit isn't already checked out locally, shallow-clone it to a temp dir (use your
-own fork's URL if you maintain one):
+Shallow-clone the kit into a directory made for this run (use your own fork's URL if you
+maintain one). Never clone to or reuse a shared path such as `/tmp/agentic-dev-kit`:
+another session's clone or a leftover skeleton can already be there, and a tree you did
+not just clone is a kit of unknown revision (`#576`). `mktemp -d` makes a new, empty
+directory every time:
 
 ```bash
-git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit
+KIT="$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-kit.XXXXXX")" || exit 1
+git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1
+echo "KIT=$KIT"
 ```
+
+Every later step names the kit as `$KIT`. A shell that does not keep variables between
+commands needs `KIT` set again to the path that line printed. The clone is this
+session's own: delete it once the adoption has landed.
 
 Everything below copies **from** that checkout **into** the current repo (the adopter) —
 **two trees, and from here every write must name which one.** Bind both roots now,
@@ -25,7 +34,7 @@ before the first write, and use them for the rest of the workflow:
 
 ```bash
 REPO="$(git rev-parse --show-toplevel)"   # the repo being adopted into
-KIT=/tmp/agentic-dev-kit                  # the kit checkout you are copying FROM
+KIT="${KIT:?KIT is not set — clone the kit above}"  # the kit checkout you are copying FROM
 echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"
 ```
 

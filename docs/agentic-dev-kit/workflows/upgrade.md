@@ -88,14 +88,23 @@ not at the caller's current feature branch, and has no upstream to the protected
 branch. On its first publication use `git -C "$REPO" push -u "$UPGRADE_REMOTE" HEAD`.
 For an assigned worktree, establish its intended publication remote before that push.
 
-Also fetch the kit you are upgrading *to*. If a non-empty `/tmp/agentic-dev-kit` already
-exists the clone fails and the step stops — inspect that checkout or move it aside rather
-than upgrading from a tree of unknown revision:
+Also fetch the kit you are upgrading *to*, into a directory made for this run. Never
+clone to or reuse a shared path such as `/tmp/agentic-dev-kit`: another session's clone, a
+previous upgrade's, or a skeleton a temp-directory reaper left behind can already be
+there, and a tree you did not just clone is a kit of unknown revision (`#576`).
+`mktemp -d` makes a new, empty directory every time:
 <!-- systemize:2026-09-22 pattern; PRs #733,#734 -->
 
 ```bash
-git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit || exit 1
+KIT="$(mktemp -d "${TMPDIR:-/tmp}/agentic-dev-kit.XXXXXX")" || exit 1
+git clone --depth 1 https://github.com/topij/agentic-dev-kit "$KIT" || exit 1
+echo "KIT=$KIT"
 ```
+
+Every later step names the kit as `$KIT`. A shell that does not keep variables between
+commands needs `KIT` set again to the path that line printed, and a command run without it
+stops at its `${KIT:?…}` guard instead of reading some other tree. The clone is this
+session's own: delete it once the upgrade has landed.
 
 Everything below copies **from** that checkout **into** this repo — **two trees, and
 from here every write must name which one.** Bind both roots now, before the first
@@ -103,7 +112,7 @@ write, and use them for the rest of the workflow:
 
 ```bash
 REPO="${REPO:?REPO is not set — re-run the config check}"  # the repo being upgraded
-KIT=/tmp/agentic-dev-kit                  # the kit you are upgrading TO
+KIT="${KIT:?KIT is not set — clone the kit above}"  # the kit you are upgrading TO
 echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"
 ```
 
@@ -151,12 +160,12 @@ which is why it takes `"$REPO"` above rather than `.`.
 ## Step 1 — Diff the installation (read-only)
 
 ```bash
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json"
 ```
 
 Read `<engine-dir>` from `paths.engines`. If `kit_doctor.py` isn't installed yet, run the
-kit's copy against this repo: `uv run /tmp/agentic-dev-kit/scripts/kit_doctor.py --root
-"${REPO:?REPO is not set — re-run Step 0}" --manifest /tmp/agentic-dev-kit/kit-manifest.json`.
+kit's copy against this repo: `uv run "${KIT:?KIT is not set — re-run Step 0}/scripts/kit_doctor.py" --root
+"${REPO:?REPO is not set — re-run Step 0}" --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json"`.
 
 The report gives you, per kit-owned file: `unchanged` / `differs` /
 `unknown-version` / `missing-required`, and — for an absent file — one of `declined` /
@@ -764,7 +773,7 @@ anyway), but a **partially-adopted** repo missing one of the seeded docs would s
 get it seeded — including the root `AGENTS.md` and `CLAUDE.md`, which on this upgrade path is
 how an existing adopter first receives either at all.
 
-Note this is also why running `/tmp/agentic-dev-kit/init.sh` in place of the copy is *not*
+Note this is also why running `$KIT/init.sh` in place of the copy is *not*
 equivalent: every path it reads — the config, the templates — resolves against the working
 directory, not against its own location, so it still needs the templates present here.
 
@@ -993,7 +1002,7 @@ new session, so file reconciliation alone is not evidence the runtime loaded it.
 `differs` unjudgeable for every adopter until now:**
 
 ```bash
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run Step 0}"
 ```
 
 This rewrites `kit-manifest.json` **here** to record what this repo now has installed —
@@ -1023,7 +1032,7 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 ## Step 5 — Verify
 
 ```bash
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json || exit 1
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json" || exit 1
 tmp="$(mktemp -d)" || exit 1
 DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}" || exit 1
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py || exit 1
@@ -1108,7 +1117,7 @@ upgrade the previous cycle's baseline is still on disk, so a skipped Step 4 prin
 perfectly well-formed line naming the commit you upgraded from *last* time:
 
 ```sh
-git -C /tmp/agentic-dev-kit rev-parse HEAD   # the baseline: line shows its first 12 chars
+git -C "${KIT:?KIT is not set — re-run Step 0}" rev-parse HEAD   # the baseline: line shows its first 12 chars
 ```
 
 `none recorded` means Step 4's `--record-install` never ran. A line reading `compared

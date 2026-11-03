@@ -25,6 +25,7 @@ import yaml
 from conftest import (
     generated_adapter_source,
     read_workflow,
+    require_kit_paths,
     require_kit_source,
     shipped_test_input,
 )
@@ -19741,6 +19742,7 @@ def test_upgrade_verification_stops_at_the_failed_command(
     monkeypatch.setenv("VERIFY_FAIL", failure)
     monkeypatch.setenv("VERIFY_ROOT", str(tmp_path / "state"))
     monkeypatch.setenv("REPO", str(repo))
+    monkeypatch.setenv("KIT", str(tmp_path / "kit"))
     workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
     block = workflow.split("## Step 5 — Verify", 1)[1].split("```bash\n", 1)[1].split("```", 1)[0]
     block = block.replace("<engine-dir>", "scripts")
@@ -19749,6 +19751,73 @@ def test_upgrade_verification_stops_at_the_failed_command(
     expected = order if failure == "none" else order[:order.index(failure) + 1]
     assert calls.read_text().splitlines() == expected
     assert (result.returncode == 0) == (failure == "none")
+
+
+_KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/upgrade.md", "docs/agentic-dev-kit/workflows/adopt.md")
+
+
+def _shell_blocks(doc: str) -> list[str]:
+    return re.findall(
+        r"^[ \t]*```(?:bash|sh|zsh|shell)[ \t]*\n(.*?)^[ \t]*```", doc, re.MULTILINE | re.DOTALL
+    )
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_the_kit_clone_lands_in_a_fresh_directory_every_run(
+    tmp_path: Path, workflow: str, shell: str
+) -> None:
+    """A shared clone path is a trap: an earlier upgrade's clone, another session's, or
+    a reaped skeleton already sits there, so the clone fails or a stale kit is read
+    (#576). Run each workflow's own clone block twice and require two new, empty,
+    distinct directories under $TMPDIR, each the one the clone was handed."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    require_kit_paths(workflow)
+    blocks = [b for b in _shell_blocks((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "git clone" in b]
+    assert len(blocks) == 1, blocks
+    bins, tmp, calls = tmp_path / "bin", tmp_path / "tmp", tmp_path / "calls"
+    bins.mkdir()
+    tmp.mkdir()
+    stub = bins / "git"
+    # Records the clone's destination and whether it was empty when handed over.
+    stub.write_text(
+        '#!/bin/sh\n'
+        'for last; do :; done\n'
+        'if [ -z "$(ls -A "$last")" ]; then state=empty; else state=nonempty; fi\n'
+        'echo "$last $state" >> "$CALLS"\n'
+    )
+    stub.chmod(0o755)
+    env = dict(os.environ, PATH=f"{bins}{os.pathsep}{os.environ['PATH']}", TMPDIR=str(tmp), CALLS=str(calls))
+    env.pop("KIT", None)
+    printed = []
+    for _ in range(2):
+        result = subprocess.run([shell, "-c", blocks[0]], env=env, capture_output=True, text=True)
+        assert result.returncode == 0, result.stderr
+        printed.append(result.stdout.strip().removeprefix("KIT="))
+    cloned = [line.split() for line in calls.read_text().splitlines()]
+    assert [path for path, _ in cloned] == printed
+    assert all(state == "empty" for _, state in cloned)
+    assert printed[0] != printed[1]
+    assert all(Path(p).resolve().parent == tmp.resolve() for p in printed)
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) -> None:
+    """After Step 0, a command reaches the kit only as `"${KIT:?...}"` (or the clone
+    block's own `"$KIT"`), never as a literal path: a literal path reads whatever
+    tree sits there, and the baseline `--from-kit` records stamps that tree's commit
+    (#576). Prose may name the shared path to warn against it."""
+    require_kit_paths(workflow)
+    offenders = []
+    for block in _shell_blocks((REPO_ROOT / workflow).read_text(encoding="utf-8")):
+        for raw in block.splitlines():
+            line = re.sub(r"\s+#\s.*$", "", raw)  # a trailing comment runs nothing
+            if "/tmp/agentic-dev-kit" in line:
+                offenders.append(line.strip())
+            if re.search(r"\$KIT\b", line) and "git clone" not in line and not line.startswith(("echo", "KIT=")):
+                offenders.append(line.strip())
+    assert offenders == []
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
