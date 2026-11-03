@@ -88,14 +88,38 @@ not at the caller's current feature branch, and has no upstream to the protected
 branch. On its first publication use `git -C "$REPO" push -u "$UPGRADE_REMOTE" HEAD`.
 For an assigned worktree, establish its intended publication remote before that push.
 
-Also fetch the kit you are upgrading *to*. If a non-empty `/tmp/agentic-dev-kit` already
-exists the clone fails and the step stops — inspect that checkout or move it aside rather
-than upgrading from a tree of unknown revision:
+Also fetch the kit you are upgrading *to*. Never clone to or reuse a shared path such as
+`/tmp/agentic-dev-kit`: another session's clone, a previous upgrade's, or a skeleton a
+temp-directory reaper left behind can already be there, and a tree you did not clone for
+this task is a kit of unknown revision (`#576`). Clone it into this checkout's own git
+directory instead, under the task branch's name. Run this **kit block**:
 <!-- systemize:2026-09-22 pattern; PRs #733,#734 -->
 
 ```bash
-git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit || exit 1
+KIT_HOME="$(git -C "${REPO:?REPO is not set — re-run the config check}" rev-parse --absolute-git-dir)" || exit 1
+KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || { echo "the kit block needs this task's branch checked out in $REPO" >&2; exit 1; }
+KIT="$KIT_HOME/agentic-dev-kit/$KIT_TASK"
+KIT_URL=https://github.com/topij/agentic-dev-kit
+if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
+KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
+  [ -z "$KIT_STATUS" ] &&
+  [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
+  { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
+echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 ```
+
+The path depends only on this checkout and its task branch, so the block is safe to re-run
+from any shell or session: it finds this task's clone again instead of making another,
+which matters once Step 3 has copied from it. A clone it finds must still be a clean clone
+of `KIT_URL`: its `origin` is `KIT_URL`, and `git status` shows no change to a tracked file
+and no untracked file, whatever the git configuration says about showing them. A clone
+that fails that check is no longer the kit its commit names, and the block stops rather
+than let Step 4 record it. The check does not see ignored files or entries marked
+`--assume-unchanged`. It writes into the git directory, so a sandbox that allows writes only inside
+the working tree needs to allow this one. That is also what a command's `${KIT:?…}`
+guard tells you to do when `KIT` is unset. No other task's checkout or branch reaches the
+path, and removing the task worktree removes the clone with it. In a long-lived checkout,
+such as the primary one, delete `$KIT` once the upgrade has landed.
 
 Everything below copies **from** that checkout **into** this repo — **two trees, and
 from here every write must name which one.** Bind both roots now, before the first
@@ -103,7 +127,7 @@ write, and use them for the rest of the workflow:
 
 ```bash
 REPO="${REPO:?REPO is not set — re-run the config check}"  # the repo being upgraded
-KIT=/tmp/agentic-dev-kit                  # the kit you are upgrading TO
+KIT="${KIT:?KIT is not set — run the kit block above}"  # the kit you are upgrading TO
 echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"
 ```
 
@@ -151,12 +175,12 @@ which is why it takes `"$REPO"` above rather than `.`.
 ## Step 1 — Diff the installation (read-only)
 
 ```bash
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json"
 ```
 
 Read `<engine-dir>` from `paths.engines`. If `kit_doctor.py` isn't installed yet, run the
-kit's copy against this repo: `uv run /tmp/agentic-dev-kit/scripts/kit_doctor.py --root
-"${REPO:?REPO is not set — re-run Step 0}" --manifest /tmp/agentic-dev-kit/kit-manifest.json`.
+kit's copy against this repo: `uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root
+"${REPO:?REPO is not set — re-run Step 0}" --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json"`.
 
 The report gives you, per kit-owned file: `unchanged` / `differs` /
 `unknown-version` / `missing-required`, and — for an absent file — one of `declined` /
@@ -197,9 +221,9 @@ Then classify the runtime adapters with the **fetched kit's** renderer, not the
 installed engine's older idea of their shape:
 
 ```bash
-uv run "${KIT:?KIT is not set — re-run Step 0}"/scripts/kit_doctor.py \
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}"/scripts/kit_doctor.py \
   --root "${REPO:?REPO is not set — re-run Step 0}" \
-  --adapter-report --adapter-source "${KIT:?KIT is not set — re-run Step 0}"
+  --adapter-report --adapter-source "${KIT:?KIT is not set — re-run the kit block in Step 0}"
 ```
 
 This comparison is deliberately outside `KIT_OWNED` and never changes the drift
@@ -250,7 +274,7 @@ disk right now, whatever this run just reported about it (`#544` anchored every
 engine invocation here to `$REPO`; a repo upgrading from before it runs Steps 2–3
 against the unanchored prose regardless of what Step 1 said). Confirm now, while
 this step is still read-only: diff
-`"${KIT:?KIT is not set — re-run Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`
+`"${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`
 against
 `"${REPO:?REPO is not set — re-run Step 0}/docs/agentic-dev-kit/workflows/upgrade.md"`;
 if they differ, finish this upgrade following `$KIT`'s copy.
@@ -315,9 +339,15 @@ was never in this history, so it routes you to the degraded path and you read a 
 answer as a complete one:
 
 ```bash
-git -C "${KIT:?KIT is not set — re-run Step 0}" fetch --unshallow 2>/dev/null ||
-  git -C "${KIT:?KIT is not set — re-run Step 0}" fetch --depth=1000
+KIT_SHALLOW="$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse --is-shallow-repository)" || exit 1
+if [ "$KIT_SHALLOW" = true ]; then
+  git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --unshallow 2>/dev/null ||
+    git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --depth=1000
+fi
 ```
+
+Only a shallow clone is deepened: on a clone a re-run already deepened, `--unshallow`
+fails and the fallback would cut its history back to 1000 commits.
 
 Then resolve the baseline and read the entries that landed after it. **Entries live in two
 places, split at a cutover**, and the block below reads both:
@@ -351,7 +381,7 @@ goes stale the moment another commit lands — and count against `main`, since a
 branch's own commits have no PR number yet and would read as a fault:
 
 ```bash
-git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
+git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
 ```
 
 So the count below is a tripwire rather than a formality — if it fires, the
@@ -360,15 +390,15 @@ fallback. The fragment half does not read subjects, so the tripwire says nothing
 it:
 
 ```bash
-BASELINE="$(uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json" --json \
+BASELINE="$(uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
 echo "baseline=${BASELINE:-NONE}"
 if [ -z "$BASELINE" ] ||
-   ! git -C "${KIT:?KIT is not set — re-run Step 0}" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
+   ! git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
   echo "no usable install provenance — take the degraded path below"
 else
-  COUNT="$(git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list --count "$BASELINE..HEAD")"
-  SUBJECTS="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log --format='%s' "$BASELINE..HEAD")"
+  COUNT="$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-list --count "$BASELINE..HEAD")"
+  SUBJECTS="$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" log --format='%s' "$BASELINE..HEAD")"
   if [ "$COUNT" -gt 0 ]; then
     # changelog.d/: each version of a fragment that a commit in range wrote, newest
     # first, read from that commit — never from the working tree — so a reused name
@@ -376,17 +406,17 @@ else
     # the fragments it changed relative to every parent: one written while resolving
     # the merge. A path under changelog.d/ that is not a <name>.md fragment directly
     # in it — nested, dot-led, or another extension — is named, not dropped.
-    git -C "${KIT:?KIT is not set — re-run Step 0}" rev-list "$BASELINE..HEAD" -- changelog.d/ |
+    git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-list "$BASELINE..HEAD" -- changelog.d/ |
       while IFS= read -r c; do
-        at="$(git -C "${KIT:?KIT is not set — re-run Step 0}" log -1 --format='%h %s' "$c")"
-        git -C "${KIT:?KIT is not set — re-run Step 0}" diff-tree -c --no-commit-id --diff-filter=AMT \
+        at="$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" log -1 --format='%h %s' "$c")"
+        git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" diff-tree -c --no-commit-id --diff-filter=AMT \
             --name-only -r "$c" -- changelog.d/ |
           while IFS= read -r frag; do
             case "$frag" in
               changelog.d/*/* | changelog.d/.*) ;;
               changelog.d/*.md)
                 echo "── $frag ($at)"
-                git -C "${KIT:?KIT is not set — re-run Step 0}" show "$c:$frag"
+                git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" show "$c:$frag"
                 echo
                 continue ;;
             esac
@@ -400,7 +430,7 @@ else
    they are NOT indexed against CHANGELOG.md — read it from the top as well"
     printf '%s\n' "$SUBJECTS" | grep -oE '\(#[0-9]+\)$' | tr -d '()#' |
       while read -r pr; do
-        awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "${KIT:?KIT is not set — re-run Step 0}/CHANGELOG.md"
+        awk -v pr="$pr" '/^## /{p = ($2 == "#" pr)} p' "${KIT:?KIT is not set — re-run the kit block in Step 0}/CHANGELOG.md"
       done
   else
     echo "up to date — no commits between your baseline and the kit's HEAD"
@@ -450,14 +480,14 @@ There is no range to compute, so:
   can show otherwise. It takes longer than a ranged read, but it is still reading, not
   the debugging session `#430` describes. For the fragments, run the block above with
   its own `BASELINE=` line replaced by `BASELINE` set to the kit's root commit,
-  `git -C "$KIT" rev-list --max-parents=0 HEAD`. For the frozen entries, read
-  `$KIT/CHANGELOG.md` once from the top, and skip the `## #NNN` entries the block
+  `git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-list --max-parents=0 HEAD`. For the frozen entries, read
+  `"${KIT:?KIT is not set — re-run the kit block in Step 0}/CHANGELOG.md"` once from the top, and skip the `## #NNN` entries the block
   printed after its fragments: each one is in that file too.
 - If you know roughly when this repo last upgraded, bound it by date instead: run the
   block with its `BASELINE=` line replaced the same way, by
-  `git -C "$KIT" rev-list -1 --before=<date> HEAD`. If that prints nothing, the date is
+  `git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-list -1 --before=<date> HEAD`. If that prints nothing, the date is
   older than the kit's first commit: use the root commit as in the bullet above.
-- Either way, **Step 4's `--record-install --from-kit "$KIT"` is what stops the next
+- Either way, **Step 4's `--record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}"` is what stops the next
   upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
   / `LOCALLY EDITED` split above already depends on.
 
@@ -487,7 +517,7 @@ cd "$REPO" || exit 1                              # every write below lands here
 # Collect the permitted copies without changing the destination.
 set --
 _partial=0
-for _tmpl in "${KIT:?KIT is not set — re-run Step 0}"/docs/templates/*.tmpl; do
+for _tmpl in "${KIT:?KIT is not set — re-run the kit block in Step 0}"/docs/templates/*.tmpl; do
   _rel="docs/templates/$(basename "$_tmpl")"
   python3 -c 'import json,pathlib,sys
 b = pathlib.Path(sys.argv[1]) / "kit-manifest.json"
@@ -565,7 +595,7 @@ except (OSError, ValueError) as exc:
     print(f"STOP: {exc}. Copied nothing.", file=sys.stderr)
     sys.exit(1)
 PYREFRESH
-cp "${KIT:?KIT is not set — re-run Step 0}/init.sh" "${REPO:?REPO is not set — re-run Step 0}/init.sh" || exit 1
+cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/init.sh" "${REPO:?REPO is not set — re-run Step 0}/init.sh" || exit 1
 chmod +x "${REPO:?REPO is not set — re-run Step 0}/init.sh" || exit 1
 mkdir -p "${REPO:?REPO is not set — re-run Step 0}/docs/templates" || exit 1
 for _tmpl in "$@"; do
@@ -764,7 +794,7 @@ anyway), but a **partially-adopted** repo missing one of the seeded docs would s
 get it seeded — including the root `AGENTS.md` and `CLAUDE.md`, which on this upgrade path is
 how an existing adopter first receives either at all.
 
-Note this is also why running `/tmp/agentic-dev-kit/init.sh` in place of the copy is *not*
+Note this is also why running `$KIT/init.sh` in place of the copy is *not*
 equivalent: every path it reads — the config, the templates — resolves against the working
 directory, not against its own location, so it still needs the templates present here.
 
@@ -993,7 +1023,7 @@ new session, so file reconciliation alone is not evidence the runtime loaded it.
 `differs` unjudgeable for every adopter until now:**
 
 ```bash
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --record-install --from-kit /tmp/agentic-dev-kit
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}"
 ```
 
 This rewrites `kit-manifest.json` **here** to record what this repo now has installed —
@@ -1023,7 +1053,7 @@ Commit the rewritten `kit-manifest.json` with the rest of the upgrade.
 ## Step 5 — Verify
 
 ```bash
-uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest /tmp/agentic-dev-kit/kit-manifest.json || exit 1
+uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json" || exit 1
 tmp="$(mktemp -d)" || exit 1
 DEVKIT_STATE_ROOT="$tmp" uv run --with pytest --with pyyaml python "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/run_installed_tests.py --root "${REPO:?REPO is not set — re-run Step 0}" || exit 1
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/check_doc_budget.py || exit 1
@@ -1108,7 +1138,7 @@ upgrade the previous cycle's baseline is still on disk, so a skipped Step 4 prin
 perfectly well-formed line naming the commit you upgraded from *last* time:
 
 ```sh
-git -C /tmp/agentic-dev-kit rev-parse HEAD   # the baseline: line shows its first 12 chars
+git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse HEAD   # the baseline: line shows its first 12 chars
 ```
 
 `none recorded` means Step 4's `--record-install` never ran. A line reading `compared

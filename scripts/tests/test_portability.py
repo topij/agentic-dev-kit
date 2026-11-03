@@ -25,6 +25,7 @@ import yaml
 from conftest import (
     generated_adapter_source,
     read_workflow,
+    require_kit_paths,
     require_kit_source,
     shipped_test_input,
 )
@@ -19741,6 +19742,7 @@ def test_upgrade_verification_stops_at_the_failed_command(
     monkeypatch.setenv("VERIFY_FAIL", failure)
     monkeypatch.setenv("VERIFY_ROOT", str(tmp_path / "state"))
     monkeypatch.setenv("REPO", str(repo))
+    monkeypatch.setenv("KIT", str(tmp_path / "kit"))
     workflow = (REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md").read_text()
     block = workflow.split("## Step 5 — Verify", 1)[1].split("```bash\n", 1)[1].split("```", 1)[0]
     block = block.replace("<engine-dir>", "scripts")
@@ -19749,6 +19751,351 @@ def test_upgrade_verification_stops_at_the_failed_command(
     expected = order if failure == "none" else order[:order.index(failure) + 1]
     assert calls.read_text().splitlines() == expected
     assert (result.returncode == 0) == (failure == "none")
+
+
+_KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/upgrade.md", "docs/agentic-dev-kit/workflows/adopt.md")
+
+# Fence labels that hold no command to run: transcripts and data. Every other fence,
+# an unlabelled one included, is read as shell.
+_NON_SHELL_FENCES = frozenset({"text", "console", "json", "yaml", "toml", "markdown", "diff", "python"})
+
+
+def _fences(doc: str) -> list[tuple[str, str]]:
+    """Each fenced block as (label, body), however it is labelled."""
+    return [
+        (label.strip(), body)
+        for label, body in re.findall(
+            r"^[ \t]*```([^\n`]*)\n(.*?)^[ \t]*```", doc, re.MULTILINE | re.DOTALL
+        )
+    ]
+
+
+def _kit_block(workflow: str) -> str:
+    blocks = [b for label, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "git clone" in b]
+    assert len(blocks) == 1, blocks
+    return blocks[0]
+
+
+def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
+    """A PATH whose `git clone <url> <dest>` makes a clean one-commit repository at
+    <dest>, with `origin` set to <url>, and logs <dest>; every other git call, fetch
+    included, is the real git, and a fetch is logged too."""
+    real = shutil.which("git")
+    assert real
+    bins = tmp_path / "bin"
+    bins.mkdir()
+    calls = tmp_path / "clones"
+    stub = bins / "git"
+    stub.write_text(
+        '#!/bin/sh\n'
+        'if [ "$1" = clone ]; then\n'
+        '  url=; for last; do url="$prev"; prev="$last"; done\n'
+        '  echo "$last" >> "$CLONES"\n'
+        '  "$REAL_GIT" init -q "$last" && "$REAL_GIT" -C "$last" remote add origin "$url" &&\n'
+        '    echo "{}" > "$last/kit-manifest.json" && "$REAL_GIT" -C "$last" add kit-manifest.json &&\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -m kit\n'
+        '  exit $?\n'
+        'fi\n'
+        'case " $* " in *" fetch "*) echo "fetch $*" >> "$CLONES.fetch" ;; esac\n'
+        'exec "$REAL_GIT" "$@"\n'
+    )
+    stub.chmod(0o755)
+    # An empty global config and no system config, so an operator's git settings
+    # (status.showUntrackedFiles, say) cannot decide a check (PR 1340 round 5).
+    empty = tmp_path / "gitconfig"
+    empty.write_text("")
+    env = dict(
+        os.environ,
+        PATH=f"{bins}{os.pathsep}{os.environ['PATH']}",
+        REAL_GIT=real,
+        CLONES=str(calls),
+        GIT_CONFIG_GLOBAL=str(empty),
+        GIT_CONFIG_NOSYSTEM="1",
+    )
+    env.pop("KIT", None)
+    return env, calls
+
+
+def _repo_with_task(tmp_path: Path, name: str) -> tuple[Path, Path]:
+    """A primary checkout and a linked task worktree on its own branch."""
+    main = tmp_path / f"{name}-main"
+    _git(tmp_path, "init", "-q", "-b", "main", str(main))
+    _git(main, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "base")
+    task = tmp_path / f"{name}-task"
+    _git(main, "worktree", "add", "-q", "-b", f"chore/{name}", str(task))
+    return main, task
+
+
+def _run_kit_block(shell: str, block: str, env: dict, repo: Path) -> subprocess.CompletedProcess:
+    # upgrade.md's block reads $REPO; adopt.md's runs from inside the repo.
+    return subprocess.run([shell, "-c", block], env=dict(env, REPO=str(repo)), cwd=repo, capture_output=True, text=True)
+
+
+def _git_dir(path: Path) -> Path:
+    return Path(_git(path, "rev-parse", "--absolute-git-dir").stdout.strip())
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
+    tmp_path: Path, workflow: str, shell: str
+) -> None:
+    """A shared clone path is a trap: an earlier upgrade's clone, another session's,
+    or a reaped skeleton already sits there (#576). The kit block clones into the
+    checkout's own git directory, so a re-run, from any shell, finds the same clone
+    and makes no second one, and a different task's checkout gets its own."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task_a = _repo_with_task(tmp_path, "a")
+    _, task_b = _repo_with_task(tmp_path, "b")
+    kits = []
+    for task in (task_a, task_a, task_b):
+        result = _run_kit_block(shell, block, env, task)
+        assert result.returncode == 0, result.stderr
+        kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    assert kits[0] == kits[1] != kits[2]
+    assert clones.read_text().splitlines() == [kits[0], kits[2]]
+    assert Path(kits[0]).is_relative_to(_git_dir(task_a))
+    assert Path(kits[2]).is_relative_to(_git_dir(task_b))
+    assert _git(task_a, "status", "--porcelain").stdout == ""
+
+
+def _tamper(kit: Path, how: str) -> None:
+    if how == "not-a-clone":
+        shutil.rmtree(kit / ".git")
+        (kit / "leftover").write_text("x")
+    elif how == "modified":
+        (kit / "kit-manifest.json").write_text('{"tampered": true}')
+    elif how == "added":
+        (kit / "init.sh").write_text("echo stray\n")
+    elif how == "deleted":
+        (kit / "kit-manifest.json").unlink()
+    elif how == "corrupt-index":
+        # `git status` then fails, and an empty failure must not read as clean.
+        (kit / ".git" / "index").write_bytes(b"not an index")
+    elif how == "other-origin":
+        subprocess.run(
+            ["git", "--git-dir", str(kit / ".git"), "remote", "set-url", "origin", "https://example.invalid/other.git"],
+            check=True, capture_output=True,
+        )
+
+
+@pytest.mark.parametrize("how", ["not-a-clone", "modified", "added", "deleted", "corrupt-index", "other-origin"])
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_refuses_a_clone_that_is_no_longer_the_kit(tmp_path: Path, workflow: str, how: str) -> None:
+    """A clone the block finds again is only the kit its commit names while it is a
+    clean clone of KIT_URL: a stray `cp` or `./init.sh` into it, a deleted file or
+    another origin would otherwise be copied from and recorded by --from-kit (PR 1340
+    round 4). Its checks name the clone's own git directory, because a plain `git -C`
+    inside the checkout's git directory finds the outer repository."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    first = _run_kit_block("sh", block, env, task)
+    assert first.returncode == 0, first.stderr
+    kit = Path(first.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    _tamper(kit, how)
+    again = _run_kit_block("sh", block, env, task)
+    assert again.returncode != 0
+    assert "is not a clean clone of" in again.stderr
+    assert clones.read_text().splitlines() == [str(kit)]
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_sees_an_added_file_whatever_the_git_config(tmp_path: Path, workflow: str) -> None:
+    """`status.showUntrackedFiles = no` hides untracked files from a plain
+    `status --porcelain`, and a stray `cp` into the clone is an untracked file."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, _ = _kit_world(tmp_path)
+    Path(env["GIT_CONFIG_GLOBAL"]).write_text("[status]\n\tshowUntrackedFiles = no\n")
+    _, task = _repo_with_task(tmp_path, "a")
+    first = _run_kit_block("sh", block, env, task)
+    assert first.returncode == 0, first.stderr
+    kit = Path(first.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    _tamper(kit, "added")
+    again = _run_kit_block("sh", block, env, task)
+    assert again.returncode != 0
+    assert "is not a clean clone of" in again.stderr
+
+
+def test_the_upgrade_kit_block_explains_a_detached_head(tmp_path: Path) -> None:
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    _git(task, "checkout", "-q", "--detach")
+    result = _run_kit_block("sh", _kit_block(workflow), env, task)
+    assert result.returncode != 0
+    assert "needs this task's branch checked out" in result.stderr
+
+
+def _history_fetch_block() -> str:
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    blocks = [b for _, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "fetch --unshallow" in b]
+    assert len(blocks) == 1, blocks
+    return blocks[0]
+
+
+@pytest.mark.parametrize("kit", ["unset", "missing"])
+@pytest.mark.parametrize("shell", ["sh", "bash", "zsh"])
+def test_the_history_fetch_stops_without_a_kit(tmp_path: Path, shell: str, kit: str) -> None:
+    """A `${KIT:?}` inside `$(...)` exits only that subshell, so a block that tests
+    its output would go on and skip the fetch. The block must stop instead (PR 1340
+    round 5)."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    env, clones = _kit_world(tmp_path)
+    if kit == "missing":
+        env["KIT"] = str(tmp_path / "no-such-kit")
+    result = subprocess.run([shell, "-c", _history_fetch_block() + "\necho went-on\n"], env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "went-on" not in result.stdout
+    assert not Path(f"{clones}.fetch").exists()
+
+
+@pytest.mark.parametrize("shallow", [True, False])
+def test_the_history_fetch_deepens_only_a_shallow_kit(tmp_path: Path, shallow: bool) -> None:
+    """Re-running Step 2 on a clone a first run already deepened must not fetch:
+    `--unshallow` fails there and `--depth=1000` would cut its history back (PR 1340
+    round 4)."""
+    block = _history_fetch_block()
+    env, clones = _kit_world(tmp_path)
+    source = tmp_path / "source"
+    _git(tmp_path, "init", "-q", "-b", "main", str(source))
+    for n in range(3):
+        _git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", f"c{n}")
+    kit = tmp_path / "kit"
+    depth = ["--depth", "1"] if shallow else []
+    _git(tmp_path, "clone", "-q", *depth, f"file://{source}", str(kit))
+    result = subprocess.run(["sh", "-c", block], env=dict(env, KIT=str(kit)), capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    fetched = Path(f"{clones}.fetch")
+    assert fetched.exists() is shallow
+    assert _git(kit, "rev-list", "--count", "HEAD").stdout.strip() == "3"
+
+
+@pytest.mark.parametrize("unbound", ["detached", "no-repo"])
+def test_the_upgrade_kit_block_stops_without_a_task_branch_or_repo(tmp_path: Path, unbound: str) -> None:
+    """The upgrade path is keyed on the task branch, so a detached HEAD has no path
+    and an unset REPO has no checkout: both stop before cloning."""
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    if unbound == "detached":
+        _git(task, "checkout", "-q", "--detach")
+        result = _run_kit_block("sh", _kit_block(workflow), env, task)
+    else:
+        result = subprocess.run(["sh", "-c", _kit_block(workflow)], env=env, cwd=task, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert not clones.exists()
+
+
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_the_upgrade_kit_block_keys_on_the_task_branch(tmp_path: Path, shell: str) -> None:
+    """An upgrade run in a long-lived checkout, such as the primary one, must not
+    find the clone an earlier upgrade left there: the path carries the task branch,
+    and each upgrade's task branch is new."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    env, clones = _kit_world(tmp_path)
+    main, _ = _repo_with_task(tmp_path, "a")
+    kits = []
+    for branch in ("chore/upgrade-1", "chore/upgrade-2"):
+        _git(main, "switch", "-q", "-c", branch)
+        result = _run_kit_block(shell, _kit_block(workflow), env, main)
+        assert result.returncode == 0, result.stderr
+        kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    assert kits[0] != kits[1]
+    assert clones.read_text().splitlines() == kits
+
+
+def test_removing_the_task_worktree_removes_its_kit_clone(tmp_path: Path) -> None:
+    """The cleanup the workflow relies on instead of telling you to delete the clone."""
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    env, _ = _kit_world(tmp_path)
+    main, task = _repo_with_task(tmp_path, "a")
+    result = _run_kit_block("sh", _kit_block(workflow), env, task)
+    assert result.returncode == 0, result.stderr
+    kit = Path(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    assert kit.is_dir()
+    _git(main, "worktree", "remove", str(task))
+    assert not kit.exists()
+
+
+# Inline code spans that name the kit without being a command to run: the bare
+# name and the bare form the guard replaces, the hazard example (`cd "$KIT"`), the
+# "not equivalent" remarks about running the kit's own init.sh, the documented
+# `--from-kit ""` failure, and the shared path the clone step warns against.
+_KIT_PROSE_SPANS = frozenset(
+    {'$KIT', '"$KIT"', 'cd "$KIT"', "$KIT/init.sh", '--from-kit ""', "/tmp/agentic-dev-kit"}
+)
+# The binding block's print, which follows its guarded assignment. The kit block,
+# where KIT is set, is exempt as a whole and pinned by the tests above instead.
+_KIT_CLONE_LINES = frozenset({'echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"'})
+# The only things a KIT guard may tell the reader: every command after Step 0 sends
+# them back to the kit block, which finds this checkout's clone again, and the
+# binding block, which runs right after it, to the block above. Prose that names
+# the guard's form uses a placeholder.
+_KIT_GUARD_MESSAGES = frozenset({
+    "KIT is not set — re-run the kit block in Step 0",
+    "KIT is not set — run the kit block above",
+    "…", "...", "msg",
+})
+# Any expansion of KIT that is not the `${KIT:?` form, which stops on an unset KIT.
+_UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?)")
+
+
+def _kit_command_spans(doc: str) -> list[str]:
+    """Every line of a fence that may hold a command, trailing comment dropped, and
+    every inline code span outside fences: the two places a reader takes a command
+    from."""
+    lines = [
+        re.sub(r"\s+#\s.*$", "", line).strip()  # a trailing comment runs nothing
+        for label, block in _fences(doc)
+        if label not in _NON_SHELL_FENCES and "git clone" not in block
+        for line in block.splitlines()
+    ]
+    prose = re.sub(r"^[ \t]*```.*?^[ \t]*```", "", doc, flags=re.MULTILINE | re.DOTALL)
+    spans = [" ".join(s.split()) for s in re.findall(r"`([^`]+)`", prose)]
+    return [line for line in lines if line not in _KIT_CLONE_LINES] + [
+        s for s in spans if s not in _KIT_PROSE_SPANS
+    ]
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) -> None:
+    """Outside the kit block and the named prose spans, every
+    expansion of KIT in a fence that may hold a command, labelled or not, and in
+    every inline code span is the `${KIT:?` form that stops on an unset KIT, and no command names
+    the shared path. A literal path reads whatever tree sits there, and any other
+    expansion of an unset KIT is no better: `git -C ""` reads the current repository
+    (#576, PR 1340 rounds 1 and 2). The two flags that choose which kit is compared
+    with or recorded take nothing but `"${KIT:?`. Fences labelled as transcripts or
+    data are not read."""
+    require_kit_paths(workflow)
+    offenders = []
+    for span in _kit_command_spans((REPO_ROOT / workflow).read_text(encoding="utf-8")):
+        if "/tmp/agentic-dev-kit" in span or _UNGUARDED_KIT.search(span):
+            offenders.append(span)
+        for arg in re.findall(r"--(?:from-kit|manifest)\s+(\S+)", span):
+            if not arg.startswith('"${KIT:?'):
+                offenders.append(span)
+        # What a guard tells the reader is part of the guard: under a per-run path
+        # "re-run Step 0" made a second clone (PR 1340 rounds 2 and 3).
+        for message in re.findall(r"\$\{KIT:\?([^}]*)\}", span):
+            if message not in _KIT_GUARD_MESSAGES:
+                offenders.append(span)
+    assert offenders == []
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")

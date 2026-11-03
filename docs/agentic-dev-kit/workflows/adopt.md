@@ -12,12 +12,36 @@ non-destructively on a branch; the operator confirms the plan before anything is
 
 ## Step 0 — Fetch the kit
 
-If the kit isn't already checked out locally, shallow-clone it to a temp dir (use your
-own fork's URL if you maintain one):
+Shallow-clone the kit (use your own fork's URL if you maintain one). Never clone to or
+reuse a shared path such as `/tmp/agentic-dev-kit`: another session's clone or a leftover
+skeleton can already be there, and a tree you did not clone for this adoption is a kit of
+unknown revision (`#576`). Clone it into the adopter checkout's own git directory instead.
+Run this **kit block** from inside the repo being adopted into:
 
 ```bash
-git clone --depth 1 https://github.com/topij/agentic-dev-kit /tmp/agentic-dev-kit
+KIT_HOME="$(git rev-parse --absolute-git-dir)" || exit 1
+KIT="$KIT_HOME/agentic-dev-kit"
+KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
+if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
+KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
+  [ -z "$KIT_STATUS" ] &&
+  [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
+  { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
+echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 ```
+
+The path depends only on this checkout, so the block is safe to re-run from any shell or
+session: it finds the same clone again instead of making another, which matters once
+Step 3 has copied from it. That is also what a command's `${KIT:?…}` guard tells you to
+do when `KIT` is unset. A clone it finds must still be a clean clone of `KIT_URL`: its
+`origin` is `KIT_URL`, and `git status` shows no change to a tracked file and no untracked
+file, whatever the git configuration says about showing them. Otherwise the block stops
+rather than let Step 3b record it. The check does not see ignored files or entries marked
+`--assume-unchanged`. An existing clone is from an earlier adoption attempt in this
+checkout: the line the block prints names its commit, and if that is not the kit you mean
+to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
+sandbox that allows writes only inside the working tree needs to allow this one. Delete
+the clone once the adoption has landed.
 
 Everything below copies **from** that checkout **into** the current repo (the adopter) —
 **two trees, and from here every write must name which one.** Bind both roots now,
@@ -25,7 +49,7 @@ before the first write, and use them for the rest of the workflow:
 
 ```bash
 REPO="$(git rev-parse --show-toplevel)"   # the repo being adopted into
-KIT=/tmp/agentic-dev-kit                  # the kit checkout you are copying FROM
+KIT="${KIT:?KIT is not set — run the kit block above}"  # the kit checkout you are copying FROM
 echo "REPO=$REPO"; echo "KIT=$KIT"; echo "pwd=$(pwd)"
 ```
 
@@ -53,7 +77,7 @@ Run these probes and record the answers — they drive the plan:
 
 - **Living plan?** `ls ROADMAP.md PLAN.md docs/plan.md docs/handoff.md handoff.md 2>/dev/null`. If one exists, the repo already practices Principle #1 — you'll point the kit at it, not add a second plan.
 - **Skill collisions?** Inspect `.claude/skills/`, `.claude/commands/` and `.agents/skills/`. Which of the kit's workflows already exist for either runtime? Keep the adopter's implementation and install only the missing adapters. A same-named `.claude/commands/<name>.md` counts as an existing workflow: Claude Code runs a skill in preference to a command of the same name, so installing the kit's skill beside it would silently replace the adopter's command.
-- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* — read `seed_doc`'s call sites for the list (four for the narrative paths, two for the entry points) rather than a line number; the two ranges cited here were stale within a release of being written. Read them at the absolute path `"$KIT/init.sh"`. **Do not `cd "$KIT"` to get there** — Step 0 above names the hazard of a `cd` into the kit checkout outliving the command that made it; this file read is exactly the kind of "just quickly look" step that invites it. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
+- **Seedable targets?** Classify each of the **six** files `init.sh` can render over into one of **four** states. Presence alone is not enough. The six are `AGENTS.md`, `CLAUDE.md`, and the four narrative docs *at their configured paths* — read `seed_doc`'s call sites for the list (four for the narrative paths, two for the entry points) rather than a line number; the two ranges cited here were stale within a release of being written. Read them at the absolute path `"${KIT:?KIT is not set — re-run the kit block in Step 0}/init.sh"`. **Do not `cd "$KIT"` to get there** — Step 0 above names the hazard of a `cd` into the kit checkout outliving the command that made it; this file read is exactly the kind of "just quickly look" step that invites it. **All four narrative docs ship pre-marked** with `devkit-template: unrendered`, so a repo that took the `cp -r` quickstart has four marker-carrying files before it has any of its own; verified on the shipped copies of all four:
 
   **Read line 1 of each of the six yourself and report the state.** Do not run a shell
   snippet for this — the predicate belongs to `init.sh` (`_seedable`), and every attempt to
@@ -255,7 +279,7 @@ It does not run `init.sh` or advance the operator initialization boundary.
 before the Step 3c handoff:**
 
 ```bash
-uv run <engines-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run Step 0}"
+uv run <engines-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}"
 ```
 
 **`${KIT:?...}`, not bare `"$KIT"`, and this is not decoration — though the unguarded
@@ -277,8 +301,9 @@ both ways, reproduced end to end each time. `${KIT:?msg}` fails the parameter ex
 itself, before `uv run` is even invoked, so an empty or unset `$KIT` fails **closed** in
 both branches, instead of failing confusingly in one and silently wrong in the other.
 This step is exactly the "different session, different day" case the variable is most
-likely to have gone missing in, since it runs after every copy in Step 3 — bind `$KIT`
-again from Step 0 if this fails.
+likely to have gone missing in, since it runs after every copy in Step 3 — if this fails,
+re-run Step 0's kit block, which finds the clone Step 3 copied from. A fresh clone
+elsewhere could be a newer kit than that one, and this command would record it.
 
 Order matters for every manifest-tracked path: `docs/templates/` **and `init.sh`** (tracked
 since `#362`) must be copied *before* this runs, or the baseline records them as not
@@ -502,7 +527,7 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
 - `kit_doctor`: run it **against `$KIT`'s manifest**, not bare:
 
   ```sh
-  uv run <engines-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run Step 0}/kit-manifest.json"
+  uv run <engines-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json"
   ```
 
   Guarded the same way as Step 3b's `--from-kit`, for the same reason and for
@@ -540,7 +565,7 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
   earlier attempt prints a real-looking line naming the wrong commit:
 
   ```sh
-  git -C "${KIT:?KIT is not set — re-run Step 0}" rev-parse HEAD    # the baseline: line shows its first 12 chars
+  git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse HEAD    # the baseline: line shows its first 12 chars
   ```
 
   Guarded for the same reason as the two commands above: `git -C ""` is not an error —
