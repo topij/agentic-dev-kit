@@ -318,8 +318,12 @@ adopter decisions: unattended notification delivery, and OpenKitchen's installat
 reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-toolkit#3014, merged 2026-10-29), which
 contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-parallel-oy/cs-toolkit#3020, merged
-2026-10-30). Its vendored PR follow-up hook still words the fallback review as conditional on a bot outage until it
-installs #1301.
+2026-10-30). Its installed `pr_followup_hook.py` matched kit `69f30eb6` byte for byte on 2026-11-03, so it carries
+#1301's no-bot wording.
 **Owner:** #1116, #990, #1011, #979, #1282.
 
-▶ Next: cs-toolkit reported on 2026-10-29 that its completed LIVE state had retired (see *Triage one-run cleanup*), so removing the shim (#1305) owes cs-toolkit nothing more. Separately, upgrade cs-toolkit to a kit at or after `e68010213` (#1301: the hook's no-bot wording and the empty `review.bots` default; its config already names no bot, so the changelog's BREAKING entries need no config change there) following `upgrade.md`.
+▶ Next: cs-toolkit installed kit `69f30eb6` (in-parallel-oy/cs-toolkit#3047, merged 2026-10-31), which is past
+#1301, keeping `test_systemize_config.py` as a local patch until #1313 ships. Its next upgrade, following `upgrade.md`,
+takes the kit's copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment),
+and lands #1329's fix before any `retire-evidence` reclaim of its sealed evidence. #576 (Step 0's `/tmp` clone) is
+still open.
