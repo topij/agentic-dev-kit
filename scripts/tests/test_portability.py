@@ -19800,7 +19800,18 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
         'exec "$REAL_GIT" "$@"\n'
     )
     stub.chmod(0o755)
-    env = dict(os.environ, PATH=f"{bins}{os.pathsep}{os.environ['PATH']}", REAL_GIT=real, CLONES=str(calls))
+    # An empty global config and no system config, so an operator's git settings
+    # (status.showUntrackedFiles, say) cannot decide a check (PR 1340 round 5).
+    empty = tmp_path / "gitconfig"
+    empty.write_text("")
+    env = dict(
+        os.environ,
+        PATH=f"{bins}{os.pathsep}{os.environ['PATH']}",
+        REAL_GIT=real,
+        CLONES=str(calls),
+        GIT_CONFIG_GLOBAL=str(empty),
+        GIT_CONFIG_NOSYSTEM="1",
+    )
     env.pop("KIT", None)
     return env, calls
 
@@ -19862,6 +19873,9 @@ def _tamper(kit: Path, how: str) -> None:
         (kit / "init.sh").write_text("echo stray\n")
     elif how == "deleted":
         (kit / "kit-manifest.json").unlink()
+    elif how == "corrupt-index":
+        # `git status` then fails, and an empty failure must not read as clean.
+        (kit / ".git" / "index").write_bytes(b"not an index")
     elif how == "other-origin":
         subprocess.run(
             ["git", "--git-dir", str(kit / ".git"), "remote", "set-url", "origin", "https://example.invalid/other.git"],
@@ -19869,7 +19883,7 @@ def _tamper(kit: Path, how: str) -> None:
         )
 
 
-@pytest.mark.parametrize("how", ["not-a-clone", "modified", "added", "deleted", "other-origin"])
+@pytest.mark.parametrize("how", ["not-a-clone", "modified", "added", "deleted", "corrupt-index", "other-origin"])
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
 def test_the_kit_block_refuses_a_clone_that_is_no_longer_the_kit(tmp_path: Path, workflow: str, how: str) -> None:
     """A clone the block finds again is only the kit its commit names while it is a
@@ -19891,6 +19905,24 @@ def test_the_kit_block_refuses_a_clone_that_is_no_longer_the_kit(tmp_path: Path,
     assert clones.read_text().splitlines() == [str(kit)]
 
 
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_sees_an_added_file_whatever_the_git_config(tmp_path: Path, workflow: str) -> None:
+    """`status.showUntrackedFiles = no` hides untracked files from a plain
+    `status --porcelain`, and a stray `cp` into the clone is an untracked file."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, _ = _kit_world(tmp_path)
+    Path(env["GIT_CONFIG_GLOBAL"]).write_text("[status]\n\tshowUntrackedFiles = no\n")
+    _, task = _repo_with_task(tmp_path, "a")
+    first = _run_kit_block("sh", block, env, task)
+    assert first.returncode == 0, first.stderr
+    kit = Path(first.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+    _tamper(kit, "added")
+    again = _run_kit_block("sh", block, env, task)
+    assert again.returncode != 0
+    assert "is not a clean clone of" in again.stderr
+
+
 def test_the_upgrade_kit_block_explains_a_detached_head(tmp_path: Path) -> None:
     workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
     require_kit_paths(workflow)
@@ -19902,15 +19934,37 @@ def test_the_upgrade_kit_block_explains_a_detached_head(tmp_path: Path) -> None:
     assert "needs this task's branch checked out" in result.stderr
 
 
+def _history_fetch_block() -> str:
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    blocks = [b for _, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "fetch --unshallow" in b]
+    assert len(blocks) == 1, blocks
+    return blocks[0]
+
+
+@pytest.mark.parametrize("kit", ["unset", "missing"])
+@pytest.mark.parametrize("shell", ["sh", "bash", "zsh"])
+def test_the_history_fetch_stops_without_a_kit(tmp_path: Path, shell: str, kit: str) -> None:
+    """A `${KIT:?}` inside `$(...)` exits only that subshell, so a block that tests
+    its output would go on and skip the fetch. The block must stop instead (PR 1340
+    round 5)."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    env, clones = _kit_world(tmp_path)
+    if kit == "missing":
+        env["KIT"] = str(tmp_path / "no-such-kit")
+    result = subprocess.run([shell, "-c", _history_fetch_block() + "\necho went-on\n"], env=env, capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "went-on" not in result.stdout
+    assert not Path(f"{clones}.fetch").exists()
+
+
 @pytest.mark.parametrize("shallow", [True, False])
 def test_the_history_fetch_deepens_only_a_shallow_kit(tmp_path: Path, shallow: bool) -> None:
     """Re-running Step 2 on a clone a first run already deepened must not fetch:
     `--unshallow` fails there and `--depth=1000` would cut its history back (PR 1340
     round 4)."""
-    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
-    require_kit_paths(workflow)
-    blocks = [b for _, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if "fetch --unshallow" in b]
-    assert len(blocks) == 1, blocks
+    block = _history_fetch_block()
     env, clones = _kit_world(tmp_path)
     source = tmp_path / "source"
     _git(tmp_path, "init", "-q", "-b", "main", str(source))
@@ -19919,7 +19973,7 @@ def test_the_history_fetch_deepens_only_a_shallow_kit(tmp_path: Path, shallow: b
     kit = tmp_path / "kit"
     depth = ["--depth", "1"] if shallow else []
     _git(tmp_path, "clone", "-q", *depth, f"file://{source}", str(kit))
-    result = subprocess.run(["sh", "-c", blocks[0]], env=dict(env, KIT=str(kit)), capture_output=True, text=True)
+    result = subprocess.run(["sh", "-c", block], env=dict(env, KIT=str(kit)), capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     fetched = Path(f"{clones}.fetch")
     assert fetched.exists() is shallow

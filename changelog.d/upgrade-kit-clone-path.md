@@ -12,8 +12,9 @@ Step 0 now has a **kit block** that clones into the checkout's own git directory
 `upgrade.md` uses `<git dir>/agentic-dev-kit/<task branch>`, and `adopt.md` uses
 `<git dir>/agentic-dev-kit`. The block clones only when nothing is there yet, so
 re-running it from any shell or session finds the same clone again. A clone it finds must
-be a clean clone of `KIT_URL` (no changed, added or deleted file, the same `origin`), or the
-block stops. After Step 0, every shell block and inline code span that reads the kit names
+be a clean clone of `KIT_URL`, or the block stops: `origin` must be `KIT_URL`, and
+`git status --untracked-files=all` must show no change to a tracked file and no untracked
+file. Ignored files and `--assume-unchanged` entries are outside that check. After Step 0, every shell block and inline code span that reads the kit names
 it as `"${KIT:?KIT is not set — re-run the kit block in Step 0}"`. Removing an upgrade's
 task worktree removes its clone too. The block writes into the git directory, so a sandbox
 that allows writes only inside the working tree needs to allow it.
