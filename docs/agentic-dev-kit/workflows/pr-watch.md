@@ -490,11 +490,17 @@ Self-pace on a bounded cadence — don't busy-wait:
     records it, and record its receipt against that head. That pass is the pull
     request's independent review, not a substitute for one. The next bullet, on
     requesting a review, applies only to a configured bot.
-  - **If the current head has no review coverage, request a review here.** Read
-    `review_bots.coverage`: an entry whose `covers_head` is false — or no entry at
-    all — means nothing has reviewed the diff that is about to merge. Convergence
-    is the moment the merge head stops moving, so it is the moment to spend one
-    review on it: request at the current head, then poll on.
+  - **If the poll prints `⚠ review owed`, request a review here.** That line is
+    the trigger: at convergence it names each configured bot with no review
+    covering the head, no comment-borne verdict, no review in flight, and no
+    outage announced on its own trusted **check**. Nothing has reviewed the diff
+    that is about to merge. Convergence is the moment the merge head stops moving,
+    so it is the moment to spend one review on it: request at the current head,
+    then poll on. `review_bots.coverage` (an entry whose `covers_head` is false, or
+    no entry at all) is the evidence behind the line, not a separate trigger. When
+    the poll prints `⚠ review unavailable` and no `⚠ review owed` for the bot, the
+    reviewer has announced it cannot run: do not request from it; take the
+    fallback-panel route below.
 
     **Poll on means poll on: never wait on the request's outcome.** An
     acknowledgement is not evidence a review is coming. Where automatic review at
