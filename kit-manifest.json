@@ -747,7 +747,7 @@
     },
     "scripts/tests/test_make_lint.py": {
       "role": "repo-only",
-      "sha256": "f1b5e8a3c79ffef62e64c3a0fb24d060b318c9f7530492f9c91bbee854c2b9ec"
+      "sha256": "e0d5cd61ac166d2fa33b2ab090d7d206deca5b2897c25b51a51b8ecaec8cf2cf"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
@@ -771,7 +771,7 @@
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
-      "sha256": "364597dfd4a5835652cdfc8656414e7d396916a1b3c83dc7737e3cc49faafee2"
+      "sha256": "a73b3a7831c5ecd39bb55ca3d19aedbecf14188ac6fe127ed9dd30ecd76a3e56"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",

@@ -36,13 +36,16 @@
 # documented `./init.sh` first command depends on. One `bash -n` per file:
 # `bash -n a.sh b.sh` parses only `a.sh` and hands `b.sh` to it as a
 # positional parameter, so a single call over the list checked nothing past
-# its first name (#561). Mirrors CI's "Check shell
-# syntax" + "init.sh must be executable" steps verbatim, in the same order,
-# so a broken script fails here with the line CI would name — not as a wall
-# of unrelated pytest failures. That gap is issue #292: an apostrophe inside
+# its first name (#561). Equivalent to CI's "Check shell syntax" + "init.sh
+# must be executable" steps, over the same list in the same order (not
+# verbatim: a recipe writes CI's `$f` as `$$f` and ends each loop line with
+# `; \`), so a broken script fails here with the line CI would name, not as a
+# wall of unrelated pytest failures. That gap is issue #292: an apostrophe inside
 # a single-quoted awk program in init.sh closed the string, and `make test`
 # reported 94 failing tests across four unrelated modules while naming
 # nothing; `sh -n init.sh` named the line immediately.
+# scripts/tests/test_make_lint.py runs this recipe and CI's step with the last
+# listed script broken, and pins that the two lists are the same.
 #
 # lint
 # ----

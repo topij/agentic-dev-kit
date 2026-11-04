@@ -93,8 +93,10 @@ def test_the_hook_parses_on_its_own():
     the rest arrived as that script's positional parameters; `scripts/hooks/pre-push`
     was last on that line, so it went unchecked locally and in CI alike.
     Measured while writing `#706`: `bash -n good.sh bad.sh` exits 0 with a
-    broken `bad.sh`. The target now runs `bash -n` once per file; this test stays
-    as the suite's own pin on the one script that runs on every push.
+    broken `bad.sh`. The target now runs `bash -n` once per file, but this test
+    pins only the hook's own parse, not the target: what pins `make check-syntax`
+    and CI's "Check shell syntax" step to one `bash -n` per file is
+    `test_make_lint.py::test_check_syntax_fails_on_a_broken_script_after_the_first`.
     """
     done = subprocess.run(["bash", "-n", str(HOOK)], capture_output=True, text=True)
 
