@@ -177,13 +177,14 @@ Repeat until the report says **converged**:
 
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
    "no outstanding review findings." **Then, before anything else, settle the
-   review request the Converged stop condition below owes.** The poll answers
-   this for you: when it prints `⚠ review owed`, it names the configured
-   reviewers that have not reviewed this head — request one from each, at this
-   head, now. **Key off that line rather than re-deriving it from
-   `review_bots.coverage` alone.** Coverage is one of the four things the engine
-   weighs: it also suppresses the line for a reviewer that answered in a comment
-   (`#44`), for one whose review is still in flight, and whenever the reviewer
+   review request the Converged stop condition below owes.** That bullet states
+   the condition in the fields the `--json` poll carries; the text render prints
+   the same condition as `⚠ review owed`, naming the configured reviewers that
+   have not reviewed this head — request one from each, at this head, now.
+   **Do not rebuild it from `review_bots.coverage` alone.** Coverage is one of
+   the terms the engine weighs: it also accounts for a reviewer that answered in
+   a comment (`#44`), one whose review is still in flight, and one that announced
+   an outage on its own trusted check, and it owes nothing while the reviewer
    read itself failed — so a condition rebuilt from coverage by hand asks for
    reviews the engine already knows are unnecessary. Then record the independent
    review (see below) so the PR becomes `mergeable`.
@@ -490,17 +491,30 @@ Self-pace on a bounded cadence — don't busy-wait:
     records it, and record its receipt against that head. That pass is the pull
     request's independent review, not a substitute for one. The next bullet, on
     requesting a review, applies only to a configured bot.
-  - **If the poll prints `⚠ review owed`, request a review here.** That line is
-    the trigger: at convergence it names each configured bot with no review
-    covering the head, no comment-borne verdict, no review in flight, and no
-    outage announced on its own trusted **check**. Nothing has reviewed the diff
-    that is about to merge. Convergence is the moment the merge head stops moving,
-    so it is the moment to spend one review on it: request at the current head,
-    then poll on. `review_bots.coverage` (an entry whose `covers_head` is false, or
-    no entry at all) is the evidence behind the line, not a separate trigger. When
-    the poll prints `⚠ review unavailable` and no `⚠ review owed` for the bot, the
-    reviewer has announced it cannot run: do not request from it; take the
-    fallback-panel route below.
+  - **If a configured bot has not reviewed the converged head, request a review
+    here.** The loop polls with `--json`, so state the trigger in the fields that
+    report carries. A review is owed when `review_bots.signal` is `ok` and some
+    configured bot has none of these four:
+    - an entry in `review_bots.coverage` whose `covers_head` is true;
+    - an entry in `review_bots.comment_verdicts`;
+    - a review in flight: a `review_bots.pending` entry with `blocking` and
+      `trusted` both true;
+    - an announced outage: a `review_bots.unavailable` entry with `surface`
+      `check` and `trusted` true.
+
+    The text render's `⚠ review owed` line is exactly this condition, printed at
+    convergence and naming each such bot; the JSON has no field of its own for
+    it. Nothing has reviewed the diff that is about to merge. Convergence is the
+    moment the merge head stops moving, so it is the moment to spend one review
+    on it: request from each such bot at the current head, then poll on. The two
+    other states route elsewhere:
+    - **`review_bots.signal` is not `ok`:** the reviewer read failed, so reviewer
+      state is unknown this poll. The bot is neither owed nor covered; re-poll
+      rather than requesting or skipping on that report.
+    - **A trusted check-surface `unavailable` entry for the bot:** the reviewer
+      has announced on its own check that it cannot run. Do not request from it;
+      take the fallback-panel route below. A comment-surface entry, or one whose
+      `trusted` is false, does not account for the bot: the review is still owed.
 
     **Poll on means poll on: never wait on the request's outcome.** An
     acknowledgement is not evidence a review is coming. Where automatic review at

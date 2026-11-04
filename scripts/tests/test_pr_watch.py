@@ -265,11 +265,12 @@ def test_the_converged_step_settles_the_review_request_before_reading_mergeable(
     assert rule.index("settle the review request") < rule.index(
         "record the independent review"
     )
-    # Key off the PRINTED line, not a hand-rebuilt coverage check: the engine
-    # weighs three more things, so a condition re-derived from coverage alone
-    # asks for reviews it already knows are unnecessary.
+    # The full condition, not a hand-rebuilt coverage check: the engine weighs
+    # more than coverage, so a condition re-derived from coverage alone asks for
+    # reviews it already knows are unnecessary.
     assert "⚠ review owed" in rule
-    assert "rather than re-deriving it from" in rule
+    assert "Do not rebuild it from `review_bots.coverage` alone" in rule
+    assert "the `--json` poll carries" in rule
     # And the specific misreading that produced #516.
     assert "does not discharge that request" in rule
     assert "do not read it as the end of this step" in rule
@@ -285,6 +286,49 @@ def test_the_converged_step_settles_the_review_request_before_reading_mergeable(
     assert "no review in flight" in stop
     assert "only when the reviewer read succeeded" in stop
     assert "gates nothing" in stop
+
+
+def test_the_converged_review_request_is_stated_in_the_json_fields_the_loop_polls() -> None:
+    """#1339 — the Converged stop condition's request trigger, in `--json` terms.
+
+    The loop polls with `--json`, and `⚠ review owed` is appended only by the
+    text render: the JSON carries no field for it. A bullet keyed on the line
+    alone hands a `--json` reader no trigger at all; one keyed on coverage alone
+    requests from a reviewer that has announced a trusted outage. So the bullet
+    states the engine's own predicate in `review_bots` fields, names the line as
+    its render, and routes the two states the predicate excludes.
+    """
+    workflow = (
+        REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
+    ).read_text(encoding="utf-8")
+    bullet = _between(
+        workflow,
+        "  - **If a configured bot has not reviewed the converged head",
+        "**Poll on means poll on",
+    )
+
+    trigger = bullet.split("The text render's", 1)[0]
+    assert "`--json`" in trigger
+    assert "`review_bots.signal` is `ok`" in trigger
+    assert "`review_bots.coverage` whose `covers_head` is true" in trigger
+    assert "`review_bots.comment_verdicts`" in trigger
+    assert "`review_bots.pending` entry with `blocking` and `trusted` both true" in trigger
+    assert (
+        "`review_bots.unavailable` entry with `surface` `check` and `trusted` true"
+        in trigger
+    )
+    # The printed line is the render of that condition, not the trigger itself.
+    assert "`⚠ review owed` line is exactly this condition" in bullet
+    assert "the JSON has no field of its own for it" in bullet
+    # Reviewer state unknown routes to a re-poll, not to a request or a skip.
+    assert "**`review_bots.signal` is not `ok`:**" in bullet
+    assert "re-poll" in bullet.split("**`review_bots.signal` is not `ok`:**", 1)[1]
+    # A trusted check outage routes to the panel; an untrusted or comment one
+    # still owes the review.
+    outage = bullet.split("**A trusted check-surface `unavailable` entry", 1)[1]
+    assert "take the fallback-panel route below" in outage
+    assert "Do not request from it" in outage
+    assert "does not account for the bot: the review is still owed" in outage
 
 
 _PR_WATCH_WORKFLOWS = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
