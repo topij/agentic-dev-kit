@@ -1061,6 +1061,11 @@ class Report:
     hooks_installed: bool
     narrative_rendered: dict[str, bool]
     inspection_root: Path = Path(".")
+    # Which of the `narrative_rendered` False entries are an absent file rather
+    # than a present one that is still the shipped template / the kit's own
+    # contract. `narrative_rendered` stays a bool (a shape change would reach JSON
+    # consumers), so the distinction rides here and only the text report reads it.
+    narrative_missing: tuple[str, ...] = ()
     # The version values as they were actually written, so the report can tell
     # "a version key that is not a number" (a typo — do not migrate) apart from
     # "no usable version" (pre-v2 — do migrate). Both leave the parsed field at
@@ -3264,6 +3269,7 @@ def inspect(
         hooks_state = "not-installed"
 
     narrative: dict[str, bool] = {}
+    narrative_missing: list[str] = []
     targets = [get(config, key, None) for key in ("paths.handoff", "paths.friction_log")]
     # The two root entry points are seeded by the same `seed_doc` and gated by the
     # same predicate, so they belong to the same check — and `/upgrade` Step 1 now
@@ -3331,6 +3337,7 @@ def inspect(
             narrative[str(rel)] = not _still_a_skeleton(first_line)
         else:
             narrative[str(rel)] = False  # missing — init.sh WILL seed it
+            narrative_missing.append(str(rel))
 
     raw_version = get(config, "kit.version", None)
     raw_manifest_version = manifest.get("kit_version")
@@ -3349,6 +3356,7 @@ def inspect(
         codex_models=inspect_codex_models(config),
         compute_problems=inspect_compute(config),
         narrative_rendered=narrative,
+        narrative_missing=tuple(narrative_missing),
         baseline_trusted=trusted,
         declared_scope_known=declared_scope is not None,
         # Passed in rather than inferred from paths: `main` knows it from the
@@ -3653,7 +3661,12 @@ def render(report: Report) -> str:
         # narrative skeleton that was never rendered, and the remedy reads
         # differently: the file is not blank, it is confidently wrong about this
         # repo. Same command, so the distinction is in the words only.
-        if doc in ("AGENTS.md", "CLAUDE.md"):
+        #
+        # A file that is not there at all is a third fact: it cannot still be
+        # anyone's copy. Same remedy, so again only the words differ.
+        if doc in report.narrative_missing:
+            unrendered = "missing — run ./init.sh to seed it"
+        elif doc in ("AGENTS.md", "CLAUDE.md"):
             unrendered = "still the kit's own contract, not yours — run ./init.sh"
         else:
             unrendered = "still an unrendered template — run ./init.sh"
