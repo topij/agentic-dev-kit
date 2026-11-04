@@ -799,7 +799,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "0f6c12027f81d1bd31e50cf14d0efb343c2e3450d79138035955e26193c3747e"
+      "sha256": "20b2c3ecf83129c356d56fd290d723625b49ace19a8208d4516a3347b5484a1d"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",
