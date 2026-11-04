@@ -30,6 +30,18 @@
       "role": "doctrine",
       "sha256": "b40ba98f2e56457bfc4254b7d72e3ed02087975ab89023050149b6857aacd2b0"
     },
+    "docs/agentic-dev-kit/lite/lite-review.md": {
+      "role": "repo-only",
+      "sha256": "ccc6d9115315e468ae724b51cd3356b0763eb75e19e10c81009ee483608e55b0"
+    },
+    "docs/agentic-dev-kit/lite/lite-session-start.md": {
+      "role": "repo-only",
+      "sha256": "6954a51eaf193b9b113b8b1f3508c57d78e59ea048f190a2145afe5c5f515bfa"
+    },
+    "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
+      "role": "repo-only",
+      "sha256": "555ed52ac1d845d4b094169c742b1bbe1fda641ac55c2aa698475cb8faaca1f9"
+    },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
       "sha256": "c05b938911ef1f28374027a1668e63ed122a7e9d21887d14a95bb15fa044d0f6"
@@ -95,7 +107,7 @@
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "44f3eb9b194f9c1db651edba8850f8a1a05d5c3e14007bde2d441550868256df"
+      "sha256": "173fccf500437658c5f16503475c34095bf2b03b59a9502ad361b0a7a6746fb9"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -135,7 +147,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "82e4a92e116706a5dff41bd07f1a0aa342a8cd8d822ef2bb580950c1b4754fe1"
+      "sha256": "7cc0c0daede9a0181b48e9e95fb03d7cc0c1ab94debb2bb0fe5dccef07b03972"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -222,7 +234,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "a02500e3740f4bc73a6b0ee1f4c3d5e0bac24a26400aa429d29769d319fc9d5f"
+      "sha256": "7cf6e7a662dc400ba9d8117e34ab38eb23ade3de6ba5e3404550e2985ece1960"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -711,7 +723,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "3716322b3aa72639d3d3723b5043ab09fa0759c25e18dade4b301a1c93aa49c3"
+      "sha256": "603cacee824792b579cabf3856f864e3258030eb606fcdc1065cb858ce5aaa23"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -724,6 +736,10 @@
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
       "sha256": "1f8fddfe6a1cf59d5405c28d97fc7c986b76e56ee5fa6950f037a14a9f50f8a6"
+    },
+    "scripts/tests/test_lite_profile_docs.py": {
+      "role": "repo-only",
+      "sha256": "5a8bf8381d35ea1ac0ebf1908787a9e13594e669cd8b7c6811b427138c2f65fa"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

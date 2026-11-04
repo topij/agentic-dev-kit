@@ -402,6 +402,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_runtime_smoke.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_review_eval.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_skill_routing_eval.py", REPO_ONLY_ROLE),
+    # Pins the lite docs' shared clauses to the full workflows (#1320); the lite
+    # docs below are repo-only until the profile ships, so this is too.
+    ("scripts/tests/test_lite_profile_docs.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
     ("scripts/tests/test_adoption_fixtures.py", REPO_ONLY_ROLE),
@@ -498,6 +501,11 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/agentic-dev-kit/review-eval/reviewer-eval.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/review-eval/cases.yaml", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/skill-routing/cases.json", REPO_ONLY_ROLE),
+    # The lite profile's workflows (#1320). Repo-only until the profile can be
+    # installed, so a full adopter's upgrade does not copy in docs it cannot use.
+    ("docs/agentic-dev-kit/lite/lite-session-start.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/lite/lite-wrap-up.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/lite/lite-review.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an
