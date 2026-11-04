@@ -771,7 +771,7 @@
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
-      "sha256": "ca8ff8d9c6b8eb5daf1c2cc4c972c5e4a954accf1553d248f6b0c86abefef69c"
+      "sha256": "364597dfd4a5835652cdfc8656414e7d396916a1b3c83dc7737e3cc49faafee2"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",

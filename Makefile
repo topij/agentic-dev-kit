@@ -33,7 +33,10 @@
 # `bash -n` on the shell scripts a hook or session can source, `sh -n` on
 # init.sh (it declares no shebang requiring bash, and CI checks it with `sh`,
 # not `bash` — matched here on purpose), and the executable-bit check the
-# documented `./init.sh` first command depends on. Mirrors CI's "Check shell
+# documented `./init.sh` first command depends on. One `bash -n` per file:
+# `bash -n a.sh b.sh` parses only `a.sh` and hands `b.sh` to it as a
+# positional parameter, so a single call over the list checked nothing past
+# its first name (#561). Mirrors CI's "Check shell
 # syntax" + "init.sh must be executable" steps verbatim, in the same order,
 # so a broken script fails here with the line CI would name — not as a wall
 # of unrelated pytest failures. That gap is issue #292: an apostrophe inside
@@ -143,7 +146,10 @@ lint:
 	git ls-files -z '*.py' | xargs -0 -r uvx ruff@0.16.0 check --no-fix --force-exclude
 
 check-syntax:
-	bash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push
+	@for f in scripts/dev_session.sh scripts/reconcile_sessions.sh \
+	          scripts/lib/repo_root.sh scripts/hooks/pre-push; do \
+	  bash -n "$$f" || exit 1; \
+	done
 	sh -n init.sh
 	test -x init.sh
 

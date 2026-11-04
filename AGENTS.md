@@ -11,11 +11,9 @@ into a runtime-specific file.
 
 **`make test` is the verification command for this repo.** It runs `lint` and
 `check-syntax` before the suite, and a failure in either stops it there — no pytest, and
-so no summary line. **`check-syntax` does not cover what its name suggests**: it hands a
-list of filenames to one `bash -n`, which parses the first and takes the rest as that
-script's arguments, so every file after the first goes unchecked — locally and in CI
-alike, since both run the same line. `#561` names them. A green run is not evidence
-those scripts parse. The suite itself (`scripts/lib/state_paths/tests` +
+so no summary line. `check-syntax` runs `bash -n` once per script it lists, so a green
+run says each of those scripts parses — and only those: a shell script the Makefile
+does not list is not checked. The suite itself (`scripts/lib/state_paths/tests` +
 `scripts/tests`) gets pytest and PyYAML from `uv run --with pytest --with pyyaml`;
 `lint` supplies `ruff` separately, through `uvx`. **Raise your tool timeout before
 starting the run** — a default timeout can cut the run off partway, and how that
