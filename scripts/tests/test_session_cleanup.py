@@ -319,7 +319,9 @@ def test_nested_worktree_whose_primary_index_cannot_be_read_is_kept(session, mon
     real = cleanup.git
 
     def failing(repo, *args, **kwargs):
-        if args[:1] == ("ls-files",) and args[-1].startswith(":(literal,icase)"):
+        # #1322: keyed on the primary's ls-files call, not on its pathspec's
+        # spelling; the worktree's own ls-files calls run in the worktree.
+        if Path(repo) == registry.primary and args[:1] == ("ls-files",):
             raise cleanup.sweep.ConfigError("Git identity unavailable: index file corrupt")
         return real(repo, *args, **kwargs)
 
@@ -329,6 +331,53 @@ def test_nested_worktree_whose_primary_index_cannot_be_read_is_kept(session, mon
     assert result["paths"][0]["reason"] == ("cannot read what the primary checkout tracks at the "
                                             "worktree's path: Git identity unavailable: index file corrupt")
     assert task.exists()
+
+
+def assert_nested_worktree_retires(registry, record, receipt, task):
+    registry.track_worktree(record, task, "git")
+    seal(registry, record, receipt)
+    outcome = registry.preview(record)["paths"][0]
+    assert (outcome["path"], outcome["action"], outcome["reason"]) == (str(task), "remove-worktree", None)
+    assert apply(registry, record)["complete"]
+    assert not task.exists()
+
+
+def test_nested_worktree_named_as_a_glob_is_matched_literally(session):
+    # #1322: the primary's index tracks a file .claude/worktrees/a, which the
+    # glob [a-z] matches in full (a glob does not match a tracked directory's
+    # leading part, so the sibling is a file). The pathspec is literal, so the
+    # worktree named [a-z] retires.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    sibling = registry.repo / ".claude" / "worktrees" / "a"
+    sibling.parent.mkdir(parents=True)
+    sibling.write_text("primary content\n")
+    cleanup.git(registry.repo, "add", str(sibling))
+    assert cleanup.git(registry.repo, "ls-files", "--", ":(icase).claude/worktrees/[a-z]") == ".claude/worktrees/a"
+    assert_nested_worktree_retires(registry, record, receipt, nested_tree(registry, "[a-z]"))
+
+
+def test_nested_worktree_beneath_a_gitlink_the_primary_tracks_retires(session):
+    # #1322: the input list's "a path beneath a gitlink the primary tracks". The
+    # index names the gitlink, not anything at the worktree's path under it.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    head = cleanup.git(registry.repo, "rev-parse", "HEAD")
+    cleanup.git(registry.repo, "update-index", "--add", "--cacheinfo", f"160000,{head},.claude/worktrees/sub")
+    assert cleanup.git(registry.repo, "ls-files", "-s", "--", ".claude/worktrees/sub").startswith("160000 ")
+    assert_nested_worktree_retires(registry, record, receipt, nested_tree(registry, "sub/task"))
+
+
+def test_nested_worktree_at_a_path_only_head_tracks_retires(session):
+    # #1322: the input list's "one HEAD tracks but the index no longer does".
+    # What is read is the primary's index, not its HEAD tree.
+    registry, record, root = session
+    receipt = allocate(registry, record)
+    stage_where_a_worktree_goes(registry, "task")
+    cleanup.git(registry.repo, "rm", "-q", "--cached", "-r", "--", ".claude/worktrees/task")
+    assert cleanup.git(registry.repo, "ls-tree", "-r", "--name-only", "HEAD", "--",
+                       ".claude/worktrees/task") == ".claude/worktrees/task/file"
+    assert_nested_worktree_retires(registry, record, receipt, nested_tree(registry, "task"))
 
 
 def test_sibling_worktree_sharing_the_primary_path_prefix_retires(session):
@@ -2793,21 +2842,77 @@ def test_a_round_sealed_by_discard_alone_is_not_without_seal(device_session, mon
     assert plan["rounds_without_seal"] == [unsealed["id"]]
 
 
-def test_a_discard_only_seal_is_not_refused_for_earlier_seals_budget(session, monkeypatch):
+@pytest.fixture(params=[None, 200], ids=["default-path", "long-path"])
+def deep_session(request, tmp_path, monkeypatch):
+    """A session whose fixture root is padded to `param` characters (#1345), so
+    every path the record stores is long whatever the basetemp. 200 stays under
+    the 255-character name limit: the scratch root's {repo_slug} flattens the
+    whole repository path into one name."""
+    base = tmp_path.resolve()
+    if request.param and len(str(base)) < request.param - 1:
+        base = base / ("d" * (request.param - 1 - len(str(base))))
+        base.mkdir()
+    yield from make_session(base, monkeypatch)
+
+
+def test_a_discard_only_seal_is_not_refused_for_earlier_seals_budget(deep_session, monkeypatch):
     # #1327: a seal that retains nothing strands nothing, so the budget earlier
     # seals used does not refuse it; one that retains an item names their share.
-    registry, record, _ = session
+    # #1345: LIMIT is the measured size of the record the discard-only seal
+    # writes, not a fixed headroom, since what a seal adds grows with the
+    # absolute paths under the basetemp. The retained seal's projection adds the
+    # apply copy and three tombstones on top of a larger seal, so it exceeds
+    # that size at any path length; the discard-only seal, if it were checked,
+    # would project its apply copy and two tombstones over it too.
+    registry, record, _ = deep_session
     first = allocate(registry, record)
     seal(registry, record, first, scope=first["id"])
-    path = registry.location(record["id"]) / "session.json"
-    monkeypatch.setattr(cleanup, "LIMIT", len(path.read_bytes()) + 2048)
-    second = allocate(registry, record, keep_previous="probe")
+    second = allocate(registry, registry.load(record["id"]), keep_previous="probe")
     report = Path(second["path"]) / "report.md"
     report.write_text("x" * 4096)
+    path = registry.location(record["id"]) / "session.json"
+    evidence = registry.location(record["id"]) / "evidence"
+    before, held = path.read_bytes(), set(os.listdir(evidence))
+
+    def discarding():
+        registry.seal_round(registry.load(record["id"]), second["id"], {"evidence_complete": True, "retain": [],
+                            "discard": [{"source": str(report), "reason": "recorded on PR #123"}]})
+
+    discarding()  # measure the record a discard-only seal writes, then put it back
+    discarded = len(path.read_bytes())
+    path.write_bytes(before)
+    assert set(os.listdir(evidence)) == held
+    monkeypatch.setattr(cleanup, "LIMIT", discarded)
     with pytest.raises(cleanup.sweep.ConfigError,
                        match=r"each of its 1 retained items and the 2 unretired items earlier seals hold"):
         registry.seal_round(registry.load(record["id"]), second["id"], {"evidence_complete": True, "retain": [
             {"source": str(report), "kind": "report", "requires": [], "exception": EXCEPTION}]})
-    registry.seal_round(registry.load(record["id"]), second["id"], {"evidence_complete": True, "retain": [],
-                        "discard": [{"source": str(report), "reason": "recorded on PR #123"}]})
+    assert path.read_bytes() == before
+    discarding()
+    assert len(path.read_bytes()) == discarded
     assert registry.load(record["id"])["rounds"][1]["seal"]["retained"] == []
+
+
+def test_the_seal_size_refusal_counts_only_unretired_earlier_items(session, monkeypatch):
+    # #1336: a tombstoned item needs no further tombstone, so the refusal's
+    # "earlier" count leaves it out. Round 1's two items retire; round 2's two
+    # stay, so exactly 2 earlier items are unretired, not the 4 a count of every
+    # earlier item would give.
+    registry, record, _ = session
+    first = allocate(registry, record)
+    record = retired_inventory(registry, record, first)
+    _, plan = registry.retirement_plan(record["id"], [])
+    assert len(plan["retire"]) == 2
+    registry.retire_evidence(record["id"], plan["approval_token"], [])
+    assert all(i.get("retired") for i in registry.load(record["id"])["rounds"][0]["seal"]["retained"])
+    second = allocate(registry, registry.load(record["id"]))
+    seal(registry, registry.load(record["id"]), second, scope=second["id"])
+    third = allocate(registry, registry.load(record["id"]), keep_previous="probe")
+    report = Path(third["path"]) / "report.md"
+    report.write_text("report\n")
+    path = registry.location(record["id"]) / "session.json"
+    monkeypatch.setattr(cleanup, "LIMIT", len(path.read_bytes()))
+    with pytest.raises(cleanup.sweep.ConfigError,
+                       match=r"each of its 1 retained items and the 2 unretired items earlier seals hold"):
+        registry.seal_round(registry.load(record["id"]), third["id"], {"evidence_complete": True, "retain": [
+            {"source": str(report), "kind": "report", "requires": [], "exception": EXCEPTION}]})
