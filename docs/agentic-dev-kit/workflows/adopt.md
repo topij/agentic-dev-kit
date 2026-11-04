@@ -36,9 +36,12 @@ Step 3 has copied from it. That is also what a command's `${KIT:?…}` guard tel
 do when `KIT` is unset. A clone it finds must still be a clean clone of `KIT_URL`: its
 `origin` is `KIT_URL`, and `git status` shows no change to a tracked file and no untracked
 file, whatever the git configuration says about showing them. Otherwise the block stops
-rather than let Step 3b record it. The check does not see ignored files or entries marked
-`--assume-unchanged`. An existing clone is from an earlier adoption attempt in this
-checkout: the line the block prints names its commit, and if that is not the kit you mean
+rather than let Step 3b record it. The check sees only what `git status` reports, so it
+does not see ignored files, a pattern added to the clone's `.git/info/exclude` included,
+entries marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone:
+`status` stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any
+of these happened in the clone, delete `$KIT` and re-run the block. An existing clone is
+from an earlier adoption attempt in this checkout: the line the block prints names its commit, and if that is not the kit you mean
 to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
 sandbox that allows writes only inside the working tree needs to allow this one. Delete
 the clone once the adoption has landed.

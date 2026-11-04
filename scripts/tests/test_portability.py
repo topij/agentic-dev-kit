@@ -19980,6 +19980,70 @@ def test_the_history_fetch_deepens_only_a_shallow_kit(tmp_path: Path, shallow: b
     assert _git(kit, "rev-list", "--count", "HEAD").stdout.strip() == "3"
 
 
+@pytest.mark.parametrize("shell", ["sh", "bash", "zsh"])
+def test_the_history_fetch_stops_when_origin_is_unreachable(tmp_path: Path, shell: str) -> None:
+    """Both fetches failing leaves the clone shallow, and the baseline guard after it
+    would read that as a baseline outside this history and route to the degraded
+    path. The block must stop instead (#1341)."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    block = _history_fetch_block()
+    env, clones = _kit_world(tmp_path)
+    source = tmp_path / "source"
+    _git(tmp_path, "init", "-q", "-b", "main", str(source))
+    for n in range(2):
+        _git(source, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", f"c{n}")
+    kit = tmp_path / "kit"
+    _git(tmp_path, "clone", "-q", "--depth", "1", f"file://{source}", str(kit))
+    _git(kit, "remote", "set-url", "origin", str(tmp_path / "unreachable"))
+    result = subprocess.run(
+        [shell, "-c", block + "\necho went-on\n"], env=dict(env, KIT=str(kit)), capture_output=True, text=True
+    )
+    assert result.returncode != 0
+    assert "went-on" not in result.stdout
+    # Both fetches ran: the stop is the fallback's failure, not an earlier one.
+    assert len(Path(f"{clones}.fetch").read_text().splitlines()) == 2
+
+
+def _upgrade_fence_with(needle: str) -> str:
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    blocks = [b for _, b in _fences((REPO_ROOT / workflow).read_text(encoding="utf-8")) if needle in b]
+    assert len(blocks) == 1, blocks
+    return blocks[0].replace("<engine-dir>", "scripts")
+
+
+@pytest.mark.parametrize("unset", ["REPO", "KIT"])
+@pytest.mark.parametrize("shell", ["sh", "bash", "zsh"])
+def test_the_changelog_blocks_stop_without_a_repo_or_kit(tmp_path: Path, shell: str, unset: str) -> None:
+    """A `${VAR:?}` whose only expansion is inside `$(...)`, or in the first command
+    of a pipeline, exits only that subshell. Step 1's baseline block would go on to
+    print `baseline=NONE` and the degraded-path line, as if no baseline had been
+    recorded, and the tripwire would print a count of 0. Each block must stop before
+    printing anything (#1341)."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    bins = tmp_path / "bin"
+    bins.mkdir()
+    calls = tmp_path / "calls"
+    for name in ("uv", "git"):
+        stub = bins / name
+        stub.write_text(f'#!/bin/sh\necho {name} >> "$CALLS"\necho "{{}}"\n')
+        stub.chmod(0o755)
+    env = dict(os.environ, PATH=f"{bins}{os.pathsep}{os.environ['PATH']}", CALLS=str(calls))
+    env["REPO"] = str(tmp_path / "repo")
+    env["KIT"] = str(tmp_path / "kit")
+    env.pop(unset)
+    needles = ['BASELINE="$(uv run'] + (["grep -cvE"] if unset == "KIT" else [])
+    for needle in needles:
+        block = _upgrade_fence_with(needle)
+        result = subprocess.run([shell, "-c", block], env=env, capture_output=True, text=True)
+        assert result.returncode != 0, needle
+        assert result.stdout == "", needle
+        assert f"{unset} is not set" in result.stderr, needle
+    assert not calls.exists()
+
+
 @pytest.mark.parametrize("unbound", ["detached", "no-repo"])
 def test_the_upgrade_kit_block_stops_without_a_task_branch_or_repo(tmp_path: Path, unbound: str) -> None:
     """The upgrade path is keyed on the task branch, so a detached HEAD has no path

@@ -110,16 +110,20 @@ echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 
 The path depends only on this checkout and its task branch, so the block is safe to re-run
 from any shell or session: it finds this task's clone again instead of making another,
-which matters once Step 3 has copied from it. A clone it finds must still be a clean clone
-of `KIT_URL`: its `origin` is `KIT_URL`, and `git status` shows no change to a tracked file
+which matters once Step 3 has copied from it. That is also what a command's `${KIT:?…}`
+guard tells you to do when `KIT` is unset. A clone it finds must still be a clean clone of
+`KIT_URL`: its `origin` is `KIT_URL`, and `git status` shows no change to a tracked file
 and no untracked file, whatever the git configuration says about showing them. A clone
 that fails that check is no longer the kit its commit names, and the block stops rather
-than let Step 4 record it. The check does not see ignored files or entries marked
-`--assume-unchanged`. It writes into the git directory, so a sandbox that allows writes only inside
-the working tree needs to allow this one. That is also what a command's `${KIT:?…}`
-guard tells you to do when `KIT` is unset. No other task's checkout or branch reaches the
-path, and removing the task worktree removes the clone with it. In a long-lived checkout,
-such as the primary one, delete `$KIT` once the upgrade has landed.
+than let Step 4 record it. The check sees only what `git status` reports, so it does not
+see ignored files, a pattern added to the clone's `.git/info/exclude` included, entries
+marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone: `status`
+stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any of these
+happened in the clone, delete `$KIT` and re-run the block. It writes into the git
+directory, so a sandbox that allows writes only inside the working tree needs to allow
+this one. No other task's checkout or branch reaches the path, and removing the task
+worktree removes the clone with it. In a long-lived checkout, such as the primary one,
+delete `$KIT` once the upgrade has landed.
 
 Everything below copies **from** that checkout **into** this repo — **two trees, and
 from here every write must name which one.** Bind both roots now, before the first
@@ -342,12 +346,14 @@ answer as a complete one:
 KIT_SHALLOW="$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse --is-shallow-repository)" || exit 1
 if [ "$KIT_SHALLOW" = true ]; then
   git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --unshallow 2>/dev/null ||
-    git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --depth=1000
+    git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" fetch --depth=1000 || exit 1
 fi
 ```
 
 Only a shallow clone is deepened: on a clone a re-run already deepened, `--unshallow`
-fails and the fallback would cut its history back to 1000 commits.
+fails and the fallback would cut its history back to 1000 commits. When both fetches
+fail, `origin` unreachable say, the block stops: the clone is still shallow, and the
+guard below would read it as a baseline that was never in this history.
 
 Then resolve the baseline and read the entries that landed after it. **Entries live in two
 places, split at a cutover**, and the block below reads both:
@@ -381,6 +387,7 @@ goes stale the moment another commit lands — and count against `main`, since a
 branch's own commits have no PR number yet and would read as a fault:
 
 ```bash
+: "${KIT:?KIT is not set — re-run the kit block in Step 0}"
 git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" log --format='%s' origin/main | grep -cvE '\(#[0-9]+\)$'
 ```
 
@@ -390,6 +397,7 @@ fallback. The fragment half does not read subjects, so the tripwire says nothing
 it:
 
 ```bash
+: "${REPO:?REPO is not set — re-run Step 0}" "${KIT:?KIT is not set — re-run the kit block in Step 0}"
 BASELINE="$(uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
 echo "baseline=${BASELINE:-NONE}"
@@ -447,6 +455,14 @@ silent. A *non-empty* baseline that `$KIT` cannot resolve fails the other way �
 below, so the reader gets a git error instead of the procedure written for exactly their
 case. `merge-base --is-ancestor` covers both, and covers the baseline that resolves but
 sits on a history this checkout does not descend from.
+
+**Neither is the `:` line above `BASELINE=`.** A `${KIT:?…}` whose only expansion is
+inside `$(…)` stops that substitution and nothing else: the block would go on with an
+empty `$BASELINE`, print `baseline=NONE` and send an unset `KIT` to the degraded path, as
+if no baseline had been recorded. The `:` line expands both guards in the block's own
+shell, so an unset `REPO` or `KIT` stops the block there. The tripwire count above starts
+with one for the same reason: the first command of a pipeline runs in a subshell too, so
+its guard alone would print the error and then a count of `0`.
 
 The `-z` test in front of it is deliberate redundancy, not a second guard: `merge-base
 --is-ancestor "" HEAD` already fails, so removing `-z` changes no outcome here. It is
