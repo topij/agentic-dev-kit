@@ -352,7 +352,7 @@ fi
 
 Only a shallow clone is deepened: on a clone a re-run already deepened, `--unshallow`
 fails and the fallback would cut its history back to 1000 commits. When both fetches
-fail, `origin` unreachable say, the block stops: the clone is still shallow, and the
+fail, for example when `origin` is unreachable, the block stops: the clone is still shallow, and the
 guard below would read it as a baseline that was never in this history.
 
 Then resolve the baseline and read the entries that landed after it. **Entries live in two
@@ -456,6 +456,13 @@ below, so the reader gets a git error instead of the procedure written for exact
 case. `merge-base --is-ancestor` covers both, and covers the baseline that resolves but
 sits on a history this checkout does not descend from.
 
+The `-z` test in front of it is deliberate redundancy, not a second guard: `merge-base
+--is-ancestor "" HEAD` already fails, so removing `-z` changes no outcome here. It is
+written out because that behaviour is git's, not this procedure's, and a guard whose
+correctness rests on how another tool treats an empty argument is one silent upstream
+change from being wrong. Nothing downstream distinguishes the two forms — the tests
+cannot, because both land on the same degraded path.
+
 **Neither is the `:` line above `BASELINE=`.** A `${KIT:?…}` whose only expansion is
 inside `$(…)` stops that substitution and nothing else: the block would go on with an
 empty `$BASELINE`, print `baseline=NONE` and send an unset `KIT` to the degraded path, as
@@ -463,13 +470,6 @@ if no baseline had been recorded. The `:` line expands both guards in the block'
 shell, so an unset `REPO` or `KIT` stops the block there. The tripwire count above starts
 with one for the same reason: the first command of a pipeline runs in a subshell too, so
 its guard alone would print the error and then a count of `0`.
-
-The `-z` test in front of it is deliberate redundancy, not a second guard: `merge-base
---is-ancestor "" HEAD` already fails, so removing `-z` changes no outcome here. It is
-written out because that behaviour is git's, not this procedure's, and a guard whose
-correctness rests on how another tool treats an empty argument is one silent upstream
-change from being wrong. Nothing downstream distinguishes the two forms — the tests
-cannot, because both land on the same degraded path.
 
 **Deepen before you guard — the order is the whole point.** `--is-ancestor` cannot tell
 "the clone is shallow" from "that commit is not in this history", because in a `--depth 1`
@@ -529,7 +529,7 @@ schema migrations — so running it would report success while silently applying
 Take the fetched kit's copy first:
 
 ```bash
-cd "$REPO" || exit 1                              # every write below lands here, not in $KIT
+cd "${REPO:?REPO is not set — re-run Step 0}" || exit 1   # every write below lands here, not in $KIT
 # Collect the permitted copies without changing the destination.
 set --
 _partial=0
