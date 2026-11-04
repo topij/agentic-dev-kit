@@ -5354,10 +5354,10 @@ def _upgrade_template_copy_block() -> str:
     caller; its copy and chmod now stay in the block being exercised.
     """
     block = _step2_refresh_block()
-    assert re.search(r'^\s*cd "\$REPO"', block, re.M)
+    assert re.search(r'^\s*cd "\$(?:REPO|\{REPO:\?[^}]*\})"', block, re.M)
     body = "\n".join(
         line for line in block.splitlines()
-        if not re.match(r'^\s*cd "\$REPO"', line)
+        if not re.match(r'^\s*cd "\$(?:REPO|\{REPO:\?[^}]*\})"', line)
     )
     assert "not_installed" in body
     return body
