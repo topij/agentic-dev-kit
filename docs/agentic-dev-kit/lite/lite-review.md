@@ -16,13 +16,21 @@ set of fresh-context reviewers; this is not that.
 Take the change from the repository, not from your memory of making it:
 
 ```sh
-base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)
+if git rev-parse --verify -q HEAD >/dev/null; then
+  base=HEAD
+elif ref=$(git symbolic-ref -q HEAD) && [ -z "$(git for-each-ref --count=1 "$ref")" ]; then
+  base=$(git hash-object -t tree /dev/null)  # an unborn branch: no commit yet
+else
+  base=; echo "stop: HEAD does not resolve" >&2
+fi
 git diff "$base"
 git ls-files --others --exclude-standard
 ```
 
-`base` is the empty tree in a repository with no commit yet, where `HEAD` does not
-resolve.
+`base` is `HEAD`, or the empty tree when the branch has no commit yet: `HEAD` does not
+resolve and the branch it names does not exist. If the block prints `stop:`, or a command after
+it fails, `HEAD` names a ref or commit that cannot be read: stop and tell the operator,
+since what the commands print then is not the change.
 
 When the lite `wrap-up` runs this review, the change is what it staged: read
 `git diff --cached` instead, since its staging step has already classified every path.

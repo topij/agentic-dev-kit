@@ -27,10 +27,13 @@ to the operator:
   workflow does not apply to it;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps;
-- a branch that takes changes only through pull requests. Nothing local records that,
-  so ask the operator, naming the branch the command above printed, before the first
-  edit. If it does, the repository has outgrown the lite profile, whose commit step
-  commits straight to the branch.
+- a branch that takes changes only through pull requests. Git does not record that
+  locally, so look for the operator's answer in `<handoff>`: a line naming the branch
+  the command above printed and saying whether it takes direct commits. With no such
+  line, ask the operator before the first edit, and record the answer there in this
+  wrap-up's handoff step, so the next wrap-up reads it rather than asking again. If the
+  branch takes changes only through pull requests, the repository has outgrown the lite
+  profile, whose commit step commits straight to the branch.
 
 ## Steps
 
@@ -40,15 +43,24 @@ to the operator:
    newest line:
 
    ```sh
-   base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)
+   if git rev-parse --verify -q HEAD >/dev/null; then
+     base=HEAD; git log --oneline -20
+   elif ref=$(git symbolic-ref -q HEAD) && [ -z "$(git for-each-ref --count=1 "$ref")" ]; then
+     base=$(git hash-object -t tree /dev/null)  # an unborn branch: no commit yet
+     echo "no commits yet"
+   else
+     base=; echo "stop: HEAD does not resolve" >&2
+   fi
    git status --short
    git diff "$base"
-   git rev-parse --verify -q HEAD >/dev/null && git log --oneline -20 || echo "no commits yet"
    ```
 
-   `base` is `HEAD`, or the empty tree in a repository with no commit yet, where `HEAD`
-   does not resolve and `git log` fails. Each block that uses `base` assigns it itself,
-   because a runtime may run every block in a fresh shell.
+   `base` is `HEAD`, or the empty tree when the branch has no commit yet: `HEAD` does
+   not resolve and the branch it names does not exist. If the block prints `stop:`, or a
+   command after it fails, `HEAD` names a ref or commit that cannot be read: stop and
+   tell the operator, since what the commands print then is not the change. Each block
+   that uses `base` assigns it itself, because a runtime may run every block in a fresh
+   shell.
 
 1. **Decide whether there is anything to hand over.** Ask of each thing the session
    did or learned whether a commit message, an existing plan line or a friction entry
@@ -119,12 +131,19 @@ to the operator:
    - Check and read the tracked changes:
 
      ```sh
-     base=$(git rev-parse --verify -q HEAD || git hash-object -t tree /dev/null)
+     if git rev-parse --verify -q HEAD >/dev/null; then
+       base=HEAD
+     elif ref=$(git symbolic-ref -q HEAD) && [ -z "$(git for-each-ref --count=1 "$ref")" ]; then
+       base=$(git hash-object -t tree /dev/null)  # an unborn branch: no commit yet
+     else
+       base=; echo "stop: HEAD does not resolve" >&2
+     fi
      git diff "$base" --check
      git diff "$base"
      ```
 
-     Read the whole diff for churn, duplicated blocks, secrets and edits unrelated to
+     Stop on `stop:` or a failing command, as in the review step above. Read the whole
+     diff for churn, duplicated blocks, secrets and edits unrelated to
      the session.
    - Stage each tracked file the session changed by name, the `<handoff>` and
      `<friction-log>` edits included (`git add -- <path>`). `git status --short` shows
@@ -178,8 +197,12 @@ to the operator:
    A fix, and the friction-log or down-route edit a routed finding writes, is staged by
    name, and the review re-reads it.
 
-1. **Commit.** Put the record edits in the session's last commit, or in their own
-   `chore: update plan — <one line>` commit, on the branch the repository works on.
+1. **Commit**, on the branch the repository works on. Either commit everything staged
+   as the session's last commit, or make two commits. For two, unstage the record paths
+   first (`git restore --staged -- <path>` for `<handoff>`, `<friction-log>` and any
+   file the routing step edited), commit the session's work, then stage those paths by
+   name and commit them as `chore: update plan — <one line>`. The second commit holds
+   only those record paths.
 
 1. **Report** what was recorded and where, what was routed, the review's result, and
    the next step for each line of work it touched — or that there was nothing to hand
