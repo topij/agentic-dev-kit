@@ -6076,7 +6076,12 @@ def _run_lookup(tmp_path: Path, baseline: str, kit: Path) -> subprocess.Complete
         r'BASELINE="\$\(.*?\)"\n', "", block, count=1, flags=re.DOTALL
     )
     assert "merge-base --is-ancestor" in body, body
-    script = f'set -u\nKIT={shlex.quote(str(kit))}\nBASELINE={shlex.quote(baseline)}\n{body}'
+    # REPO is bound too: the block's opening `:` line guards it, and only the
+    # `BASELINE=` line it guards for reads it (#1341).
+    script = (
+        f'set -u\nREPO={shlex.quote(str(tmp_path))}\nKIT={shlex.quote(str(kit))}\n'
+        f'BASELINE={shlex.quote(baseline)}\n{body}'
+    )
     return subprocess.run(
         ["bash", "-c", script], capture_output=True, text=True, cwd=tmp_path
     )
