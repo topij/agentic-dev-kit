@@ -28,12 +28,9 @@ to the operator:
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps;
 - a branch that takes changes only through pull requests. Git does not record that
-  locally, so look for the operator's answer in `<handoff>`: a line naming the branch
-  the command above printed and saying whether it takes direct commits. With no such
-  line, ask the operator before the first edit, and record the answer there in this
-  wrap-up's handoff step, so the next wrap-up reads it rather than asking again. If the
-  branch takes changes only through pull requests, the repository has outgrown the lite
-  profile, whose commit step commits straight to the branch.
+  locally, so ask the operator, naming the branch the command above printed, before
+  the first edit. If it does, the repository has outgrown the lite profile, whose
+  commit step commits straight to the branch.
 
 ## Steps
 
@@ -198,11 +195,12 @@ to the operator:
    name, and the review re-reads it.
 
 1. **Commit**, on the branch the repository works on. Either commit everything staged
-   as the session's last commit, or make two commits. For two, unstage the record paths
-   first (`git restore --staged -- <path>` for `<handoff>`, `<friction-log>` and any
-   file the routing step edited), commit the session's work, then stage those paths by
-   name and commit them as `chore: update plan — <one line>`. The second commit holds
-   only those record paths.
+   as the session's last commit, or, when the branch already has a commit, make two
+   commits. For two, unstage `<handoff>` and `<friction-log>` first
+   (`git restore --staged -- <handoff> <friction-log>`), commit the rest, then stage
+   those two by name and commit them as `chore: update plan — <one line>`. The second
+   commit holds only those two files; any other file a routed finding edited goes in
+   the first.
 
 1. **Report** what was recorded and where, what was routed, the review's result, and
    the next step for each line of work it touched — or that there was nothing to hand

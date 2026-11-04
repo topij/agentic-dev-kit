@@ -338,4 +338,5 @@ lite workflow docs in `docs/agentic-dev-kit/lite/`, registered repo-only until t
 wording in `kit_doctor`'s report and `--adapter-report` (with #1342), adapter bindings for `lite-*.md`, and the lite
 option in `adopt`. Also settle the shared clauses that name "Principle #2" and the tracker, which a lite install
 lacks: either word them for both profiles in the full docs, or ship what they point at. The parser-based guard on
-lite docs' links and engine names is #1347.
+lite docs' links and engine names is #1347. Phase 3 also owes an executed fixture test of the lite docs'
+`base` shell blocks (unborn branch, unreadable ref), which nothing runs yet.
