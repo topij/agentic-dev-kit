@@ -234,7 +234,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "7cf6e7a662dc400ba9d8117e34ab38eb23ade3de6ba5e3404550e2985ece1960"
+      "sha256": "5732b4bafb201ed22e16a47013e09942b8ea42d01699eae3e05e811ed2cf194b"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -723,7 +723,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "603cacee824792b579cabf3856f864e3258030eb606fcdc1065cb858ce5aaa23"
+      "sha256": "8783e5411ff8d28c8e1363152e176986a7670e36bd87f41d5a9b2c8619f729d8"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",

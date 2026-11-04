@@ -1754,6 +1754,54 @@ def test_a_kit_own_entry_point_is_reported_as_unrendered(tmp_path, entry_point):
 
 
 @pytest.mark.parametrize("entry_point", ["AGENTS.md", "CLAUDE.md"])
+def test_a_missing_entry_point_is_named_missing_not_the_kits_contract(tmp_path, entry_point):
+    """#1342: an absent file cannot "still be the kit's own contract". The remedy
+    is the same as for the kit's copy, so only the wording differs — and the JSON
+    value stays a bool."""
+    root = _fake_repo(tmp_path)
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    report = kit_doctor.inspect(root, _manifest({}), config)
+    text = kit_doctor.render(report)
+
+    assert report.narrative_rendered[entry_point] is False
+    assert f"⚠ {entry_point}: missing — run ./init.sh to seed it" in text
+    assert f"{entry_point}: still the kit's own contract" not in text
+
+
+@pytest.mark.parametrize("doc", ["docs/handoff.md", "docs/friction-log.md"])
+def test_a_missing_narrative_doc_is_named_missing_not_an_unrendered_template(tmp_path, doc):
+    """The same branch serves the configured handoff and friction log, whose
+    present-file wording is "still an unrendered template": an absent file is
+    not that either."""
+    root = _fake_repo(tmp_path)
+    (root / doc).unlink()
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    report = kit_doctor.inspect(root, _manifest({}), config)
+    text = kit_doctor.render(report)
+
+    assert report.narrative_rendered[doc] is False
+    assert f"⚠ {doc}: missing — run ./init.sh to seed it" in text
+    assert f"{doc}: still an unrendered template" not in text
+
+
+@pytest.mark.parametrize("entry_point", ["AGENTS.md", "CLAUDE.md"])
+def test_a_present_kit_own_entry_point_keeps_the_kits_contract_message(tmp_path, entry_point):
+    """The other half of #1342: the present-but-kit's case keeps its wording."""
+    root = _fake_repo(tmp_path)
+    _write(root / entry_point, "<!-- devkit-source: kit-own — the kit's own -->\n# kit\n")
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+
+    text = kit_doctor.render(kit_doctor.inspect(root, _manifest({}), config))
+
+    assert (
+        f"⚠ {entry_point}: still the kit's own contract, not yours — run ./init.sh" in text
+    )
+    assert f"{entry_point}: missing" not in text
+
+
+@pytest.mark.parametrize("entry_point", ["AGENTS.md", "CLAUDE.md"])
 def test_an_adopters_own_entry_point_is_reported_in_use(tmp_path, entry_point):
     """The control. Without it, a check that always reported False would satisfy
     the test above while telling every adopter to re-run ./init.sh forever."""
