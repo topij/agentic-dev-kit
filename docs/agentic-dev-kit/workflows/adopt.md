@@ -658,7 +658,8 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   `.claude/skills/<name>/`, `.claude/commands/<name>.md` and `.agents/skills/<name>/`.
   Keep what the repository has, skip the kit's binding for that name, and say so.
 - **`config/dev-model.yaml`.** If one exists without `profile: lite`, stop and ask: it
-  is a full install's config or the repository's own file.
+  is a full install's config or the repository's own file. If one exists with
+  `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
 - **`AGENTS.md` and `CLAUDE.md`.** Note which exist, and whether `CLAUDE.md` imports
   `AGENTS.md` (an `@AGENTS.md` line).
 
@@ -672,20 +673,21 @@ works on. Wait for the operator's go-ahead.
 
 ### L3 — Install, never over an existing file
 
-Each copy runs only where the target is absent:
+Each copy runs only where the target is absent. A symlink counts as present even when
+it points nowhere, so a copy never writes through one:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
 mkdir -p "$REPO/docs/agentic-dev-kit/lite"
 for doc in lite-session-start lite-wrap-up lite-review; do
   dst="$REPO/docs/agentic-dev-kit/lite/$doc.md"
-  if [ -e "$dst" ]; then echo "kept: $dst"; else cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/$doc.md" "$dst"; fi
+  if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; else cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/$doc.md" "$dst"; fi
 done
 for slug in session-start wrap-up review; do
   for pair in "claude:.claude/skills" "codex:.agents/skills"; do
     runtime=${pair%%:*}; dir=${pair#*:}
     dst="$REPO/$dir/$slug/SKILL.md"
-    if [ -e "$dst" ]; then echo "kept: $dst"; continue; fi
+    if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
     mkdir -p "$REPO/$dir/$slug"
     cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
   done
@@ -693,9 +695,11 @@ done
 ```
 
 Skip a binding L2 marked as a collision, including one at `.claude/commands/`, which
-this block cannot see. Then write `$REPO/config/dev-model.yaml`. `kit.version` is
-`kit_version` in the kit clone's `kit-manifest.json`; leave out each optional key L1 did
-not settle:
+this block cannot see. Then write `$REPO/config/dev-model.yaml` if it is absent. One
+that exists is kept: change a key in it only with the operator, never by writing the
+file again, which would drop a key such as `review.safety_critical_paths`.
+`kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each
+optional key L1 did not settle:
 
 ```yaml
 profile: lite
@@ -713,7 +717,8 @@ review:
 
 Create the plan and inbox only where L2 said **create**: a `# Plan` heading over an
 empty `## Workstreams` section, and a `# Friction log` heading. Add this section to
-`$REPO/AGENTS.md`, creating the file if it is missing, and create `$REPO/CLAUDE.md` as
+`$REPO/AGENTS.md` unless it already has the section's heading, creating the file if it
+is missing, and create `$REPO/CLAUDE.md` as
 the single line `@AGENTS.md` when it is missing. When `CLAUDE.md` exists and does not
 import `AGENTS.md`, ask the operator where the section goes instead.
 

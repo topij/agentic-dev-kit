@@ -446,6 +446,28 @@ def _doctor(*args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_never_writes_through_a_dangling_symlink(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    links = {
+        repo / ".claude/skills/review/SKILL.md": outside / "skill.md",
+        repo / "docs/agentic-dev-kit/lite/lite-wrap-up.md": outside / "wrap-up.md",
+    }
+    for link, target in links.items():
+        link.parent.mkdir(parents=True)
+        link.symlink_to(target)
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    for link, target in links.items():
+        assert f"kept: {link}" in result.stdout
+        assert link.is_symlink() and not target.exists()
+    assert list(outside.iterdir()) == []
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
 def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path, shell: str) -> None:
     repo, env = _repo(tmp_path, "adopter")
     kept_skill = repo / ".claude/skills/review/SKILL.md"

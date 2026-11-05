@@ -8835,7 +8835,8 @@ def test_profile_of_reads_the_config_and_defaults_to_full(tmp_path, text, expect
     assert kit_doctor.profile_of(kit_doctor.load_config(tmp_path / "c.yaml")) == expected
 
 
-@pytest.mark.parametrize("value", ["Lite", "minimal", "[lite]", "true"])
+# A blank, `~` or `null` value is present and empty: only an absent key means full.
+@pytest.mark.parametrize("value", ["Lite", "minimal", "[lite]", "true", "", "~", "null"])
 def test_an_unknown_profile_is_refused_not_read_as_full(tmp_path, capsys, value):
     root = _fake_repo(tmp_path)
     config = root / "config" / "dev-model.yaml"
@@ -8937,7 +8938,10 @@ def test_a_baseline_recorded_under_the_other_profile_is_named(tmp_path, capsys):
     )
     assert report.baseline_profile_mismatch == "full"
     print(kit_doctor.render(report))
-    assert "the baseline was recorded as full, the config says lite" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "✗ profile: the baseline was recorded as full, the config says lite" in out
+    assert "✗ NOT intact for this adoption — judged as a lite install, recorded as full" in out
+    assert "✓ intact" not in out
     agreeing = kit_doctor.inspect(
         root,
         _manifest(hashes),
@@ -8945,6 +8949,41 @@ def test_a_baseline_recorded_under_the_other_profile_is_named(tmp_path, capsys):
         _lite_baseline(root),
     )
     assert agreeing.baseline_profile_mismatch is None
+
+
+def test_a_lite_repository_whose_config_now_reads_full_fails_the_run(tmp_path, capsys):
+    """The baseline says lite; the config was edited to `full`. Every file state is
+    then judged by the wrong profile's rules, so the run must not report intact."""
+    root, hashes = _lite_repo(tmp_path)
+    (root / "kit-manifest.json").write_text(json.dumps(_lite_baseline(root)), encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    config = root / "config" / "dev-model.yaml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("profile: lite", "profile: full"), encoding="utf-8"
+    )
+    code = kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json")])
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "✗ NOT intact for this adoption — judged as a full install, recorded as lite" in out
+    assert "intact for this adoption —" not in out.replace("NOT intact for this adoption —", "")
+
+
+@pytest.mark.parametrize("state", sorted(kit_doctor._CHOSEN_REGISTRATION_STATES))
+def test_each_chosen_registration_state_reads_not_installed_on_lite(tmp_path, capsys, state):
+    root, hashes = _lite_repo(tmp_path)
+    report = kit_doctor.inspect(
+        root, _manifest(hashes), kit_doctor.load_config(root / "config" / "dev-model.yaml"),
+        _lite_baseline(root),
+    )
+    report.registrations = [kit_doctor.RegistrationStatus("claude", ".claude/settings.json", state, "x")]
+    print(kit_doctor.render(report))
+    assert "· .claude/settings.json [claude]: not installed (lite)" in capsys.readouterr().out
+
+
+def test_the_lite_registration_states_are_pinned_by_name():
+    # Pinned by name, so a state dropped from the set fails here rather than
+    # rendering its full-profile remedy on a lite repository.
+    assert {"unregistered", "absent", "unset", "ungranted"} == kit_doctor._CHOSEN_REGISTRATION_STATES
 
 
 def test_a_dead_registration_still_fails_a_lite_report(tmp_path):

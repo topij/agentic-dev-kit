@@ -702,15 +702,21 @@ class ProfileError(ValueError):
     """A `profile:` value this kit does not know."""
 
 
+_PROFILE_ABSENT = object()
+
+
 def profile_of(config: dict) -> str:
     """The install profile `config` declares: `full` when the key is absent.
 
     An unknown value is refused rather than read as `full`. A typo'd `lite`
     would otherwise report every lite repository as a broken full install, and
     a value from a newer kit would be judged by rules that are not its own.
+    A key that is present but blank or null is refused the same way: only an
+    absent key means `full`, so emptying a lite repository's `profile:` cannot
+    turn it into a full install that reports intact (panel, adversarial lens).
     """
-    raw = get(config, "profile", None)
-    if raw is None:
+    raw = get(config, "profile", _PROFILE_ABSENT)
+    if raw is _PROFILE_ABSENT:
         return "full"
     if raw not in PROFILES:
         raise ProfileError(
@@ -3676,7 +3682,7 @@ def render(report: Report) -> str:
         lines.append("  · profile: lite — engines, hooks and the pull-request loop are not part of it")
     if report.baseline_profile_mismatch is not None:
         lines.append(
-            f"  ⚠ profile: the baseline was recorded as {report.baseline_profile_mismatch}, "
+            f"  ✗ profile: the baseline was recorded as {report.baseline_profile_mismatch}, "
             f"the config says {report.profile} — re-run --record-install after the move"
         )
 
@@ -3884,7 +3890,16 @@ def render(report: Report) -> str:
     caveat = f" ({', '.join(attention)}, listed below)" if attention else ""
     verdict_mark = "⚠" if attention else "✓"
     if report.declared_scope_known:
-        if report.broken:
+        if report.baseline_profile_mismatch is not None:
+            # The files below were judged by the config's profile, which is not
+            # the one this tree was installed as, so no verdict on them holds.
+            # A mismatch that only warned printed `✓ intact` and exit 0 for a lite
+            # repository whose config was edited to read full (panel, adversarial lens).
+            lines.append(
+                "  ✗ NOT intact for this adoption — judged as a "
+                f"{report.profile} install, recorded as {report.baseline_profile_mismatch}"
+            )
+        elif report.broken:
             # Never "intact" while something is absent that should not be —
             # the whole point of the split is that this case is now audible.
             #
@@ -4661,7 +4676,16 @@ def main(argv: list[str] | None = None) -> int:
     # unresolvable states do not. `unverifiable` also reaches this gate: an exact
     # lifecycle command inside an unsupported object shape cannot provide the
     # bounded structural evidence that a `verified` result promises.
-    return 1 if report.drifted or report.broken or report.dead_registrations else 0
+    # A profile mismatch reaches the exit code too: every file state above was
+    # judged by the config's profile, which is not the one the baseline recorded.
+    return (
+        1
+        if report.drifted
+        or report.broken
+        or report.dead_registrations
+        or report.baseline_profile_mismatch is not None
+        else 0
+    )
 
 
 if __name__ == "__main__":
