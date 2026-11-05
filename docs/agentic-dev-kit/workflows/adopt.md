@@ -670,13 +670,14 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   The operator chooses, per collision, one of two outcomes:
   - **keep** — keep what the repository has, skip the kit's binding for that name in
     that runtime, and say so;
-  - **replace** — install the kit's binding and remove the repository's own binding in
-    the install commit: the command file, or the skill's whole directory with whatever
-    sits beside its `SKILL.md`. First list what that binding does beyond the lite doc,
-    every file of it, and give each
-    item a home with the operator: usually a repository source in the `AGENTS.md`
-    section L3 writes, sometimes the plan. An item with no home is dropped only on the
-    operator's word.
+  - **replace** — install the kit's binding in place of the repository's own (the
+    command file, or the skill's whole directory). First list what that binding does
+    beyond the lite doc, every file of it, and give each item a home with the operator:
+    usually a repository source in the `AGENTS.md` section L3 writes, sometimes the
+    plan. An item with no home is dropped only on the operator's word. **The operator
+    removes the binding, not this workflow** (L3): it may be partly untracked, hold
+    uncommitted work, or sit behind a symlink, and the operator is the one who can
+    tell.
 - **`config/dev-model.yaml`.** If one exists without `profile: lite`, stop and ask: it
   is a full install's config or the repository's own file. If one exists with
   `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
@@ -686,8 +687,8 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 ### L2 — Propose the plan, then wait
 
 Show one row per item: the three docs and six adapters (**install**, **skip:
-collision**, or **replace: `<the repository's file>`** with where each of its extra
-items goes), the config with the values L1 settled, the plan and inbox (**point at**
+collision**, or **replace: `<the repository's binding>`, removed by the operator**
+with where each of its extra items goes), the config with the values L1 settled, the plan and inbox (**point at**
 an existing file, or **create**), and the `AGENTS.md` section with any repository
 sources. Name the branch the commit goes to: the operator's choice, which on a lite
 repository is usually the one it works on, or a new branch when that one is
@@ -700,22 +701,11 @@ it points nowhere, and a target under a symlinked directory inside the repositor
 skipped, so a copy never writes through a link. A Claude skill is also skipped while
 `.claude/commands/<slug>.md` exists, because the skill would silently shadow that
 command. For each binding L2 marked **replace**, move its extra items to the homes L2
-named, then remove the repository's binding before running the block, so the block
-installs the kit's and the removal lands in the install commit. Name the binding by its
-path inside the repository (`<binding>`, such as `.claude/commands/wrap-up.md` or
-`.claude/skills/review`) and anchor every removal on `$REPO`, never on the current
-directory, which may be the kit clone (Step 0):
-
-1. Remove what Git tracks: `git -C "$REPO" rm -r -- "<binding>"`. For a binding Git
-   tracks none of, it refuses with `did not match any files`; go on to step 2.
-2. List what is left: `ls -A "$REPO/<binding>"`. A wholly untracked binding is all
-   left, and so is the untracked or ignored part of a partly tracked skill directory.
-   No commit holds it, so remove it with `rm -r -- "$REPO/<binding>"` only on the
-   operator's go-ahead for that path, after its items have their homes.
-3. Confirm it is gone (`ls -A "$REPO/<binding>"` reports no such file) before running
-   the block, which would otherwise copy into the leftover directory.
-
-Then run the block:
+named, then ask the operator to remove the binding and to say when it is done. Remove
+nothing of the repository's yourself. The block confirms the removal: a binding still
+there prints `kept:` or `collision:` for its slug, and then the kit's binding is not
+installed. Ask the operator again rather than removing it. L6 stages a tracked
+binding's removal with the install. Then run the block:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
@@ -822,8 +812,11 @@ the lite one belongs: take the kit's lite copy.
 
 ### L6 — Commit and hand off
 
-Stage every path L3 and L4 wrote by name, and commit on the branch L2 named, or open a
-pull request if the repository takes changes that way. Delete `$KIT` once the commit has
+Stage every path L3 and L4 wrote by name, and each binding the operator removed for a
+**replace**: `git -C "$REPO" add -- <binding>` stages a tracked one's removal, and
+refuses with `did not match any files` for one Git never tracked, which leaves nothing
+to stage. Commit on the branch L2 named, or open a pull request if the repository takes
+changes that way. Delete `$KIT` once the commit has
 landed. Report what was installed, kept and pointed at, and leave `session-start` as the
 next step. A later move to the full profile is this workflow run again with **Full**;
 its path from lite is not written yet (#1320).

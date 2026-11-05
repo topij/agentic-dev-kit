@@ -16,8 +16,10 @@ elsewhere for the lite workflows (a local command, a note) into that section.
 
 ADDED: `adopt.md`'s *Lite profile* L1 offers **replace** beside **keep** for a
 `session-start`, `wrap-up` or `review` the repository already has. Replace gives each
-of its extra items a home (usually a repository source in `AGENTS.md`) and removes the
-repository's binding, a command file or a whole skill directory, in the install commit.
+of its extra items a home (usually a repository source in `AGENTS.md`); the operator
+removes the repository's binding, a command file or a whole skill directory, and the
+workflow stages a tracked one's removal with the install. The workflow deletes nothing
+of the repository's itself.
 
 CHANGED: the L3 copy block skips a Claude skill while `.claude/commands/<slug>.md`
 exists, printing `collision: <path>`, where it installed the skill beside the command
