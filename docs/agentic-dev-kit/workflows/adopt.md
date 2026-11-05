@@ -701,10 +701,21 @@ skipped, so a copy never writes through a link. A Claude skill is also skipped w
 `.claude/commands/<slug>.md` exists, because the skill would silently shadow that
 command. For each binding L2 marked **replace**, move its extra items to the homes L2
 named, then remove the repository's binding before running the block, so the block
-installs the kit's and the removal lands in the install commit. A tracked binding goes
-with `git rm -r -- <command file or skill directory>`. One Git does not track (untracked
-or ignored) has no commit that holds it: remove it with `rm -r` only on the operator's
-go-ahead for that path, after its items have their homes.
+installs the kit's and the removal lands in the install commit. Name the binding by its
+path inside the repository (`<binding>`, such as `.claude/commands/wrap-up.md` or
+`.claude/skills/review`) and anchor every removal on `$REPO`, never on the current
+directory, which may be the kit clone (Step 0):
+
+1. Remove what Git tracks: `git -C "$REPO" rm -r -- "<binding>"`. For a binding Git
+   tracks none of, it refuses with `did not match any files`; go on to step 2.
+2. List what is left: `ls -A "$REPO/<binding>"`. A wholly untracked binding is all
+   left, and so is the untracked or ignored part of a partly tracked skill directory.
+   No commit holds it, so remove it with `rm -r -- "$REPO/<binding>"` only on the
+   operator's go-ahead for that path, after its items have their homes.
+3. Confirm it is gone (`ls -A "$REPO/<binding>"` reports no such file) before running
+   the block, which would otherwise copy into the leftover directory.
+
+Then run the block:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
