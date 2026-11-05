@@ -326,7 +326,8 @@ later, which carries #1352's Step 1 guards and #1350's `review_owed` field. Foll
 copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment), and lands #1329's
 change before any `retire-evidence` reclaim of its sealed evidence. That upgrade's Step 0 runs from the installed copy,
 so run the new kit block by hand, as `changelog.d/upgrade-kit-clone-path.md` describes; don't delete `$KIT` after
-Step 3 has copied from it (#1355). The operator chose this correction on #1341 on 2026-11-03; #1340 completed #576.
+Step 3 has copied from it (#1355). The operator chose on #1341 on 2026-11-03 to correct this entry; the target and the
+#1355 caution were added afterwards. #1340 completed #576.
 
 ### Lite install profile
 
@@ -341,7 +342,8 @@ lacks: either word them for both profiles in the full docs, or ship what they po
 lite docs' links and engine names is #1347. Phase 3 also owes an executed fixture test of the lite docs'
 `base` shell blocks (unborn branch, unreadable ref), which nothing runs yet. Phase 3 includes the optional risk tier
 the operator added on 2026-11-05 (#1320's comment of that date): declared safety-critical paths get one fresh-context
-adversarial review before commit. Then adopt `topij/home-server` as the first lite install, replacing its hand-trimmed
+adversarial review before commit. The operator agreed the order that follows in session on 2026-11-05. Then adopt
+`topij/home-server` as the first lite install, replacing its hand-trimmed
 `/session-start` and `/wrap-up`; its deploy-state and cross-repo reads become a repo-specific section planned with the
 operator then. Its nested service repos (`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`) are decided one at a time
-after that: each has a tracker, PRs and a configured reviewer, so the full profile may fit better.
+after that: each has a tracker and PRs, which lite does not install, so the full profile may fit better.
