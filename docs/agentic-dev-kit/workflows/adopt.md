@@ -797,7 +797,9 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 
 It writes `$REPO/kit-manifest.json` with `"profile": "lite"`. Exit 1 names a lite doc
 that does not match the kit clone's copy, which means one the repository already had: keep or
-replace it with the operator, then re-run.
+replace it with the operator, then re-run. A skill that is not the kit's lite binding is
+named in a note and recorded as the repository's own, which L5 reads as `declined`; it
+should be one L2 kept.
 
 ### L5 — Verify
 

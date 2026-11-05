@@ -609,11 +609,16 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
 
     record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
     assert record.returncode == 0, record.stderr
+    # The kept skill is the repository's own: named, and left out of `files`.
+    assert "recorded as the repository's own" in record.stderr
+    assert "  · .claude/skills/review/SKILL.md" in record.stderr
     report = _doctor("--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), env=env)
     assert report.returncode == 0, report.stdout + report.stderr
     assert "· profile: lite" in report.stdout
-    assert "intact for this adoption — lite install, nothing declined" in report.stdout
-    assert "files: 3 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+    assert "intact for this adoption — lite install, 1 file(s) declined" in report.stdout
+    # The three docs and the five skills the block installed; the kept one is declined.
+    assert "files: 8 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+    assert "rests on the config alone" not in report.stdout
 
     adapters = _doctor(
         "--adapter-report", "--adapter-source", str(REPO_ROOT), "--root", str(repo), "--json", env=env
@@ -624,3 +629,17 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
     for path in (".claude/skills/session-start/SKILL.md", ".agents/skills/review/SKILL.md"):
         assert rows[path] == "kit-current"
     assert rows[".claude/skills/pr-watch/SKILL.md"] == "outside-profile"
+
+    # The main report covers the installed skills, not only the docs (#1365): a
+    # deleted one and an edited one fail it, and the kept one stays declined.
+    (repo / ".agents/skills/wrap-up/SKILL.md").unlink()
+    edited = repo / ".claude/skills/session-start/SKILL.md"
+    edited.write_text(edited.read_text(encoding="utf-8") + "Our edit.\n", encoding="utf-8")
+    broken = _doctor(
+        "--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), "--json", env=env
+    )
+    assert broken.returncode == 1, broken.stdout + broken.stderr
+    states = {row["path"]: row["state"] for row in json.loads(broken.stdout)["files"]}
+    assert states[".agents/skills/wrap-up/SKILL.md"] == "removed"
+    assert states[".claude/skills/session-start/SKILL.md"] == "locally-edited"
+    assert states[".claude/skills/review/SKILL.md"] == "declined"

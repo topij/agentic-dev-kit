@@ -39,7 +39,9 @@ it reports one of:
     Not installed, and the baseline records that it was already absent when the
     install was recorded — a deliberate omission. Not a finding: a sized-down
     adoption is a supported state, so this is what "intact for this adoption"
-    is counted from.
+    is counted from. One present file reads it too: on a lite install, a skill
+    the repository already had at a lite skill path, which adopt.md keeps and
+    the baseline records as the kit's binding not installed (#1365).
 ``removed``
     Not installed, but the baseline records it AS installed. Something deleted
     it after the install was recorded. This is the failure `missing` could not
@@ -67,8 +69,8 @@ it reports one of:
 ``outside-profile``
     Not installed, and not part of this repository's install profile
     (``profile:`` in its config; absent means ``full``, #1320): on a full
-    install, the lite profile's workflows, and on a lite install, everything
-    else. Judged ahead of the declared set, because nobody declined such a
+    install, the lite profile's workflows and their skills, and on a lite
+    install, everything else. Judged ahead of the declared set, because nobody declined such a
     file and no upgrade should offer it. Never a finding. A file the baseline
     records as installed still reads ``removed``.
 ``missing-required``
@@ -528,14 +530,17 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/agentic-dev-kit/lite/lite-review.md", LITE_ROLE),
     # The lite adapters as `adopt` copies them into `.claude/skills/<slug>/` and
     # `.agents/skills/<slug>/`. Rendered by `lib/runtime_adapters.py`, and a test
-    # holds them equal to it. Repo-only: an adopter has the copies at the skill
-    # paths, which `--adapter-report` judges, never these source paths.
-    ("docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md", REPO_ONLY_ROLE),
-    ("docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md", REPO_ONLY_ROLE),
-    ("docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md", REPO_ONLY_ROLE),
-    ("docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md", REPO_ONLY_ROLE),
-    ("docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md", REPO_ONLY_ROLE),
-    ("docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md", REPO_ONLY_ROLE),
+    # holds them equal to it. Role `lite`, so the lite baseline records the six
+    # copies and the main report judges them (#1365): a lite install has them at
+    # the skill paths in `LITE_ADAPTER_INSTALL_PATHS`, never at these source paths,
+    # and is inspected there. Keyed by these kit-layout paths, as an engine is
+    # keyed by `scripts/…` wherever `paths.engines` puts it.
+    ("docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md", LITE_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md", LITE_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md", LITE_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md", LITE_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md", LITE_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md", LITE_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an
@@ -685,6 +690,35 @@ PROFILES: tuple[str, ...] = ("full", "lite")
 LITE_PROFILE_PATHS: tuple[str, ...] = tuple(
     rel for rel, role in KIT_OWNED if role == LITE_ROLE
 )
+
+# Where a lite install puts each lite adapter (#1365): adopt.md's *Lite profile*
+# L3 copies the kit's source path to the skill path. On a lite repository the
+# baseline and the report read the adapter at the skill path; on a full one
+# (the kit's own checkout included) at its source path, where a full adopter
+# has none, so it reads `outside-profile`. A test holds this map equal to
+# `runtime_adapters`' own paths; it is spelled here so the main report does not
+# import that module.
+LITE_ADAPTER_INSTALL_PATHS: dict[str, str] = {
+    f"docs/agentic-dev-kit/lite/adapters/{runtime}/{slug}/SKILL.md": f"{skills}/{slug}/SKILL.md"
+    for runtime, skills in (("claude", ".claude/skills"), ("codex", ".agents/skills"))
+    for slug in ("session-start", "wrap-up", "review")
+}
+
+
+def _present_but_not_a_file(path: Path) -> bool:
+    """Whether something is at `path` that is not a regular file.
+
+    A directory, or a symlink that dangles or loops: `Path.is_file` is False for
+    each, and `load_config` reports them as absent.
+    """
+    return os.path.lexists(path) and not path.is_file()
+
+
+def _installed_path(rel: str, engines_dir: str, profile: str) -> str:
+    """Where a kit-owned path sits in a repository of this profile."""
+    if profile == "lite" and rel in LITE_ADAPTER_INSTALL_PATHS:
+        return LITE_ADAPTER_INSTALL_PATHS[rel]
+    return _remap(rel, engines_dir)
 
 
 def in_profile(role: str, profile: str) -> bool:
@@ -2639,11 +2673,12 @@ def record_install_manifest(
       files as found. Every installed adopter-facing file is recorded.
     """
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
+    profile = profile_of(config)
     files: dict[str, dict] = {}
     unverified: list[str] = []
     not_installed: list[str] = []
     for rel, role in ADOPTER_KIT_OWNED:
-        target = root / _remap(rel, engines_dir)
+        target = root / _installed_path(rel, engines_dir, profile)
         # Keyed by the KIT-layout path even when the file lives somewhere else
         # locally, so this manifest and the kit's are keyed identically and
         # `inspect` can look both up with one key. The remap is applied to the
@@ -2663,7 +2698,17 @@ def record_install_manifest(
             # not come from that kit", which is the conservative answer.
             entry = source_files.get(rel) if isinstance(source_files, dict) else None
             if not isinstance(entry, dict) or entry.get("sha256") != digest:
-                unverified.append(_remap(rel, engines_dir))
+                if profile == "lite" and rel in LITE_ADAPTER_INSTALL_PATHS:
+                    # A lite skill that is not the kit's is the repository's own,
+                    # kept by adopt.md L1's collision rule: the kit's binding was
+                    # not installed, which is what `not_installed` records, and
+                    # `inspect` reads it `declined` while it stays there (#1365).
+                    # Not `unverified`: the collision rule sanctions it, so it
+                    # must not suppress the declared set or fail the record. The
+                    # caller names it, so keeping it is never silent.
+                    not_installed.append(rel)
+                    continue
+                unverified.append(_installed_path(rel, engines_dir, profile))
                 continue
         files[rel] = {"sha256": digest, "role": role}
     recorded = {
@@ -3192,7 +3237,9 @@ def inspect(
     # status loop: whether a missing file is a broken install or a sized-down
     # one is a question about its dependents, and those can sit anywhere in
     # KIT_OWNED order.
-    present = {rel: (root / _remap(rel, engines_dir)).is_file() for rel, _ in inspected}
+    present = {
+        rel: (root / _installed_path(rel, engines_dir, profile)).is_file() for rel, _ in inspected
+    }
 
     _edge_holds: dict[str, bool] = {}
 
@@ -3251,7 +3298,7 @@ def inspect(
 
     statuses: list[FileStatus] = []
     for rel, role in inspected:
-        local_rel = _remap(rel, engines_dir)
+        local_rel = _installed_path(rel, engines_dir, profile)
         target = root / local_rel
         entry = manifest_files.get(rel) or {}
         expected = entry.get("sha256")
@@ -3313,6 +3360,27 @@ def inspect(
                         local_rel, role, "new-upstream", "added to the kit since this baseline"
                     )
                 )
+            continue
+        if (
+            profile == "lite"
+            and rel in LITE_ADAPTER_INSTALL_PATHS
+            and declared_scope is not None
+            and rel in declared_scope
+            and rel not in baseline_files
+            and (expected is None or sha256_of(target) != expected)
+        ):
+            # A lite skill the baseline records as not installed from the kit,
+            # present and not the kit's: the repository's own, kept by adopt.md
+            # L1's collision rule and left out by `--record-install` (#1365).
+            # Ahead of `unknown-version` too, since the bare invocation's
+            # comparison is the baseline, which has no entry for it. A kit skill
+            # recorded as installed never lands here: edited, it is drift below.
+            statuses.append(
+                FileStatus(
+                    local_rel, role, "declined",
+                    "the repository's own skill, kept at install; the kit's was not installed",
+                )
+            )
             continue
         if expected is None:
             statuses.append(FileStatus(local_rel, role, "unknown-version", "no manifest entry"))
@@ -3681,6 +3749,15 @@ def render(report: Report) -> str:
     lite = report.profile == "lite"
     if lite:
         lines.append("  · profile: lite — engines, hooks and the pull-request loop are not part of it")
+        if not report.baseline_trusted:
+            # Only the config says lite, and that alone moves every full-only file
+            # out of the checks below. With no trusted baseline, no record says
+            # this was installed as lite, so nothing can contradict it (#1360).
+            # Said, not failed: an untrusted baseline is a supported state.
+            lines.append(
+                "  ⚠ profile: lite rests on the config alone — no trusted baseline records "
+                "a lite install, so the files outside the lite profile go unchecked"
+            )
     if report.baseline_profile_mismatch is not None:
         lines.append(
             f"  ✗ profile: the baseline was recorded as {report.baseline_profile_mismatch}, "
@@ -3946,9 +4023,12 @@ def render(report: Report) -> str:
                 "rather than an intact one"
             )
         elif n_declined:
+            # On lite a declined file is a skill the repository kept as its own
+            # (#1365), and adopt.md L5 reads `lite install` from this line.
             lines.append(
                 f"  {verdict_mark} intact for this adoption — "
-                f"{n_declined} file(s) declined{caveat}"
+                + ("lite install, " if lite else "")
+                + f"{n_declined} file(s) declined{caveat}"
             )
         else:
             lines.append(
@@ -4291,8 +4371,16 @@ def main(argv: list[str] | None = None) -> int:
         ).resolve()
         # The profile picks which bindings are expected. A repository with no
         # config is judged as full, which is what this report did before profiles.
+        # One whose config path holds something that is not a regular file (a
+        # directory, a link that dangles or loops) is refused, as the main report
+        # refuses it: `load_config` raises FileNotFoundError for those too, and
+        # reading that as "no config" judged a lite repository as full (#1360).
+        config_path = root / "config" / "dev-model.yaml"
+        if _present_but_not_a_file(config_path):
+            print(f"error: {config_path} exists but is not a regular file", file=sys.stderr)
+            return 2
         try:
-            adapter_profile = profile_of(load_config(root / "config" / "dev-model.yaml"))
+            adapter_profile = profile_of(load_config(config_path))
         except FileNotFoundError:
             adapter_profile = "full"
         except (OSError, ValueError) as exc:
@@ -4313,8 +4401,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.adapter_source is not None:
         parser.error("--adapter-source requires --adapter-report")
 
+    config_path = root / "config" / "dev-model.yaml"
+    if _present_but_not_a_file(config_path):
+        # Refused before `load_config`, which raises FileNotFoundError for it and
+        # so earned it the hint below, which is about a config that is absent.
+        print(f"error: {config_path} exists but is not a regular file", file=sys.stderr)
+        return 2
     try:
-        config = load_config(root / "config" / "dev-model.yaml")
+        config = load_config(config_path)
     except ValueError as exc:
         # A local config overlay that cannot be applied. Sibling engines already
         # catch ValueError here; this one caught only FileNotFoundError and so
@@ -4331,8 +4425,10 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
     except OSError as exc:
-        # Unreadable rather than absent (a permission, a directory in its place):
-        # reported, not a traceback (panel, adversarial lens).
+        # A regular file that cannot be read, such as a permission failure:
+        # reported, not a traceback (panel, adversarial lens). A directory or a
+        # dangling or looping link in its place never reaches this branch; the
+        # check above refuses it (#1360).
         print(f"error: {exc}", file=sys.stderr)
         return 2
     try:
@@ -4475,6 +4571,26 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 for path in unverified:
+                    print(f"  · {path}", file=sys.stderr)
+            # The lite skills `record_install_manifest` left out as the
+            # repository's own (#1365). Not a partial record, so the exit code
+            # stays 0, but named, so a kit skill edited before recording is seen.
+            kept = [
+                LITE_ADAPTER_INSTALL_PATHS[rel]
+                for rel in LITE_ADAPTER_INSTALL_PATHS
+                if profile_of(config) == "lite"
+                and rel not in baseline["files"]
+                and (root / LITE_ADAPTER_INSTALL_PATHS[rel]).is_file()
+            ]
+            if kept:
+                print(
+                    "note: these skills are not the kit's lite binding, so they are recorded "
+                    "as the repository's own (not installed from the kit) — adopt.md L1 "
+                    "keeps a skill the repository already had. Replace any that should be "
+                    "the kit's, then re-run:",
+                    file=sys.stderr,
+                )
+                for path in kept:
                     print(f"  · {path}", file=sys.stderr)
             if kit_commit is None:
                 print(

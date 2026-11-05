@@ -5,6 +5,12 @@ same-named command or skill of its own.  Their *kit* form is nevertheless
 derivable.  This module is the one renderer for that form and the comparison
 used by ``kit_doctor --adapter-report``.
 
+The lite profile's six bindings are the exception: their rendered sources are in
+``KIT_OWNED`` with role ``lite`` (#1365), so a lite install's baseline records
+the copies at the skill paths and the main report judges them. A skill the
+repository kept as its own there is recorded as the kit's not installed, and
+reads ``declined``. This report still classifies them, as below.
+
 The comparison is intentionally informational. Rendered bindings are compared
 with known kit forms; unknown forms are left to the adopter. Codex interface
 files beside adopter-owned bindings remain adopter-owned. Otherwise they are
