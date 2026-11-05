@@ -19,15 +19,15 @@ so and make no record edit.
 
 Read `config/dev-model.yaml` directly, as the lite `session-start` does: `<handoff>`
 is `paths.handoff`, `<friction-log>` is `paths.friction_log`, `<down-route>` is
-`friction.down_route` when set, and `<declared-paths>` is
-`review.safety_critical_paths` when set (the risk tier in
-[`lite-review.md`](lite-review.md)). Each of these is a hard stop before any edit; say
+`friction.down_route` when set, and `<declared-paths>` is the list the risk tier in
+[`lite-review.md`](lite-review.md) reads: `review.safety_critical_paths` as committed,
+by that section's rules, never the working tree's copy. Each of these is a hard stop before any edit; say
 which to the operator:
 
 - a missing config file, a missing `paths` key, or an unreadable document;
-- a `review.safety_critical_paths` the risk tier cannot read, by its rules in
-  `lite-review.md`: it could not tell which changes it covers, and guessing would skip
-  the review it exists to require;
+- a `<declared-paths>` the risk tier cannot read, by its rules in `lite-review.md`,
+  including a committed config Git cannot show: it could not tell which changes it
+  covers, and guessing would skip the review it exists to require;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
@@ -205,10 +205,10 @@ current directory.
    [`lite-review.md`](lite-review.md), over what the step above staged (`git diff --cached`),
    the record edits included. Fix each finding or route it as above before going on.
    A fix, and the friction-log or down-route edit a routed finding writes, is staged by
-   name, and the review re-reads it. When `<declared-paths>` is set and the staged
-   change touches one of them, the review's *Risk tier* applies as well: a
-   fresh-context review of the staged change, and the operator's go-ahead before the
-   commit.
+   name, and the review re-reads it. When `<declared-paths>` is configured, run the
+   review's *Risk tier* check over the staged change. When it prints a path, a
+   declared path or the config itself, the tier applies as well: a fresh-context
+   review of the staged change, and the operator's go-ahead before the commit.
 
 1. **Commit**, on the branch the repository works on. Either commit everything staged
    as the session's last commit, or make two commits. Two commits need all three of:

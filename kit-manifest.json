@@ -32,15 +32,15 @@
     },
     "docs/agentic-dev-kit/lite/lite-review.md": {
       "role": "repo-only",
-      "sha256": "87c272b7385b3f0974073f730253646243dca84ba4c33c548b714d212fad3728"
+      "sha256": "61ebd66528024d36869a5af22b5dea92175922e44d73a00db28d067a6ffdb0b4"
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "repo-only",
-      "sha256": "17997326cbeb59894d6f20de4a32bed3ff21bd053532c46fa7e625378533b5db"
+      "sha256": "5f4f466f7e7b31c76164c0c6bddcfe49725a419060b60abab6030b831346c05c"
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "repo-only",
-      "sha256": "c9fe292fea4b372d5d0c6f09418ea08ee49b5e8c2366685c0e32746e45022c6c"
+      "sha256": "3c02c0c643140dc442dd9157623df93c3cd25893c34a46d0b15ead15778c4270"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -739,7 +739,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "46cccf1113739777bb79ea3851d5e6114ba2615fb60e25807577440c55b10220"
+      "sha256": "3d5e13bebe6c3c3ea15cebdee977383b38baca0cf5ce767edf5f5ac81fe5ae85"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

@@ -35,8 +35,9 @@ judge it by the rules there:
 - `Risk tier: configured — <the declared paths>` when it is a usable list;
 - `Risk tier: not configured (lite)` when it is absent, null or an empty list, which
   leaves every change to the same-context review;
-- `Risk tier: unreadable (<reason>)` when it is anything else. Add a 🔴 Now item to
-  fix it: the lite `wrap-up` refuses to start while it is unreadable.
+- `Risk tier: unreadable (<reason>)` when it is anything else, or when Git cannot
+  show the committed config. Add a 🔴 Now item to fix it: the lite `wrap-up` refuses
+  to start while it is unreadable.
 
 When the working tree's config declares a different list, say so on that line: the
 change to it will itself take the tier.

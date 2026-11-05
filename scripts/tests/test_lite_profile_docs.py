@@ -403,3 +403,17 @@ def test_risk_tier_check_prints_nothing_for_an_undeclared_change(tmp_path: Path)
     result = _run("sh", _risk_tier_block("deploy/**", "docs/deploy.md"), repo, env)
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
+
+
+@pytest.mark.parametrize("where", [".", "docs"])
+def test_risk_tier_check_lists_a_change_to_the_config_that_declares_the_list(
+    tmp_path: Path, where: str
+) -> None:
+    """Shortening the list is a change to the config, and the check itself must catch it."""
+    repo, env = _risk_fixture(tmp_path)
+    (repo / "config").mkdir()
+    (repo / "config/dev-model.yaml").write_text("profile: lite\n", encoding="utf-8")
+    _git(repo, env, "add", "config/dev-model.yaml")
+    result = _run("sh", _risk_tier_block("deploy/**", "docs/deploy.md"), repo / where, env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == ["config/dev-model.yaml"]
