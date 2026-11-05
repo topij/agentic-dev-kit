@@ -6178,9 +6178,8 @@ def build_report(
 def _covered_bots(bots: dict) -> set[str]:
     """The bots whose own review object covers the current head.
 
-    Read by :func:`review_owed` and by :func:`render`'s coverage and
-    `ⓘ review reported:` lines, from this one definition so the two cannot
-    drift. `covers_head`, not `qualifying_bot_coverage`: see the comment in
+    Read by :func:`review_owed` and by :func:`render`'s `ⓘ review reported:`
+    line. `covers_head`, not `qualifying_bot_coverage`: see the comment in
     :func:`review_owed` on why the gate predicate is the wrong one here.
     """
     return {e["bot"] for e in bots.get("coverage") or [] if e.get("covers_head")}
@@ -6308,8 +6307,7 @@ def review_owed(review_bots: dict) -> list[str] | None:
     #
     # `covers_head` is the observable answer to "did a configured reviewer look
     # at THIS diff", which is the only thing this line claims. It is the same
-    # field the coverage warning in `render` reads, deliberately, through the
-    # same :func:`_covered_bots`.
+    # field the coverage warning in `render` reads, deliberately.
     #
     # **Per bot, not "has anyone answered".** A blanket "some verdict exists"
     # test lets one reviewer's answer speak for a second, never-asked one — the

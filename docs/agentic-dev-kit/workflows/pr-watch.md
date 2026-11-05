@@ -187,8 +187,8 @@ Repeat until the report says **converged**:
    is still in flight, and one that announced an outage on its own trusted
    check — so a condition rebuilt from coverage by hand asks for reviews the
    engine has already accounted for. When the reviewer read itself failed, the
-   engine makes no claim at all (`null`), which a hand-built condition cannot
-   tell from "nobody owed". Then record the independent review (see below) so
+   engine makes no claim at all (`null`), and a hand-built condition has no way
+   to express that. Then record the independent review (see below) so
    the PR becomes `mergeable`.
 
    **A `mergeable` that is already true does not discharge that request** (`#518`).
