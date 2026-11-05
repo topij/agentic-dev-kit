@@ -256,11 +256,17 @@ def test_base_blocks_resolve_a_readable_head(tmp_path: Path, shell: str, commit:
     for doc, index, block in _base_blocks():
         repo, env = _repo(tmp_path, f"{doc}-{index}-{commit}", commit=commit)
         (repo / "new").write_text("b\n", encoding="utf-8")
-        result = _run(shell, f"set -e\n{block}\nprintf 'BASE=%s\\n' \"$base\"\n", repo, env)
+        (repo / "sub").mkdir()
+        (repo / "sub/keep").write_text("k\n", encoding="utf-8")
+        _git(repo, env, "add", "sub/keep")
+        result = _run(shell, f"set -e\n{block}\nprintf 'BASE=%s\\n' \"$base\"\n", repo / "sub", env)
         where = f"{doc} block {index} under {shell}: {result.stderr}"
         assert result.returncode == 0, where
         assert "stop:" not in result.stderr, where
         assert f"BASE={expected}" in result.stdout.splitlines(), where
+        if "ls-files" in block:
+            # Untracked files are listed from the repository root, not the shell's directory.
+            assert "../new" in result.stdout.splitlines(), where
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -314,16 +320,19 @@ def test_commit_split_check_reports_which_parts_are_staged(
         (repo / rel).write_text("changed\n", encoding="utf-8")
     for rel in staged:
         _git(repo, env, "add", rel)
-    result = _run("sh", _commit_split_block(), repo, env)
-    assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [f"record: {record}", f"other: {other}"]
+    for where in (repo, repo / "docs"):
+        result = _run("sh", _commit_split_block(), where, env)
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.splitlines() == [f"record: {record}", f"other: {other}"], where
 
 
 def _risk_tier_block(*entries: str) -> str:
-    (block,) = _sh_blocks("lite-review.md", ":(glob)")
-    placeholder = "':(glob)<entry 1>' ':(glob)<entry 2>'"
-    assert placeholder in block
-    return block.replace(placeholder, " ".join(f"':(glob){entry}'" for entry in entries))
+    """The doc's check with its entries filled in, keeping whatever pathspec magic it writes."""
+    (block,) = _sh_blocks("lite-review.md", "<entry 1>")
+    match = re.search(r"'([^'<]*)<entry 1>' '\1<entry 2>'", block)
+    assert match, block
+    prefix = match.group(1)
+    return block.replace(match.group(0), " ".join(f"'{prefix}{entry}'" for entry in entries))
 
 
 def _risk_fixture(tmp_path: Path) -> tuple[Path, dict[str, str]]:
@@ -336,7 +345,12 @@ def _risk_fixture(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     return repo, env
 
 
-def test_risk_tier_check_lists_staged_paths_under_declared_entries(tmp_path: Path) -> None:
+@pytest.mark.parametrize("where", [".", "docs", "deploy/a"])
+@pytest.mark.parametrize("entries", [("deploy/**", "docs/deploy.md"), ("DEPLOY/*", "Docs/Deploy.md")])
+def test_risk_tier_check_lists_staged_paths_under_declared_entries(
+    tmp_path: Path, where: str, entries: tuple[str, str]
+) -> None:
+    """From any directory, case-insensitively, with `*` crossing `/` as `pr_watch`'s fnmatch does."""
     repo, env = _risk_fixture(tmp_path)
     (repo / "deploy/a/b").mkdir(parents=True)
     (repo / "deploy/a/b/new.sh").write_text("y\n", encoding="utf-8")
@@ -344,9 +358,23 @@ def test_risk_tier_check_lists_staged_paths_under_declared_entries(tmp_path: Pat
     (repo / "docs/other.md").write_text("changed\n", encoding="utf-8")
     (repo / "deployment.md").write_text("changed\n", encoding="utf-8")
     _git(repo, env, "add", "deploy/a/b/new.sh", "docs/deploy.md", "docs/other.md", "deployment.md")
-    result = _run("sh", _risk_tier_block("deploy/**", "docs/deploy.md"), repo, env)
+    result = _run("sh", _risk_tier_block(*entries), repo / where, env)
     assert result.returncode == 0, result.stderr
     assert sorted(result.stdout.split()) == ["deploy/a/b/new.sh", "docs/deploy.md"]
+
+
+def test_risk_tier_check_matches_like_fnmatch_with_a_directory_entry_covering_its_tree(
+    tmp_path: Path,
+) -> None:
+    repo, env = _risk_fixture(tmp_path)
+    (repo / "deploy/a").mkdir(parents=True)
+    for rel in ("deploy/a/run.sh", "top.sh", "deployment.md"):
+        (repo / rel).write_text("y\n", encoding="utf-8")
+    _git(repo, env, "add", "deploy/a/run.sh", "top.sh", "deployment.md")
+    star = _run("sh", _risk_tier_block("*.sh", "nothing"), repo / "docs", env)
+    assert sorted(star.stdout.split()) == ["deploy/a/run.sh", "top.sh"], star.stderr
+    directory = _run("sh", _risk_tier_block("deploy", "nothing"), repo, env)
+    assert directory.stdout.split() == ["deploy/a/run.sh"], directory.stderr
 
 
 @pytest.mark.parametrize(

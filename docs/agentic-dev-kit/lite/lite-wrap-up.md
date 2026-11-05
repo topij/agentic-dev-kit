@@ -25,8 +25,8 @@ is `paths.handoff`, `<friction-log>` is `paths.friction_log`, `<down-route>` is
 which to the operator:
 
 - a missing config file, a missing `paths` key, or an unreadable document;
-- a `review.safety_critical_paths` that is present but is not a list of non-empty
-  strings: the risk tier cannot tell which changes it covers, and guessing would skip
+- a `review.safety_critical_paths` the risk tier cannot read, by its rules in
+  `lite-review.md`: it could not tell which changes it covers, and guessing would skip
   the review it exists to require;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
@@ -38,6 +38,10 @@ which to the operator:
   commit step commits straight to the branch.
 
 ## Steps
+
+Run every command below from the repository root (`cd "$(git rev-parse --show-toplevel)"`).
+The paths the configuration names are relative to it, and Git reads a path from the
+current directory.
 
 1. **Read `<handoff>` and `<friction-log>`.** Either one missing or unreadable is a hard
    stop, as it is for the lite `session-start`: name it to the operator and make no
@@ -212,20 +216,22 @@ which to the operator:
    `<friction-log>`, and a staged change to some other path. Check the last two:
 
    ```sh
-   git diff --cached --quiet -- <handoff> <friction-log>; echo "record: $?"
-   git diff --cached --quiet -- . ':(exclude)<handoff>' ':(exclude)<friction-log>'; echo "other: $?"
+   git diff --cached --quiet -- ':(top)<handoff>' ':(top)<friction-log>'; echo "record: $?"
+   git diff --cached --quiet -- ':/' ':(top,exclude)<handoff>' ':(top,exclude)<friction-log>'; echo "other: $?"
    ```
 
    Each prints `1` when that part of the index has a staged change and `0` when it has
-   none; any other value is a failed command, so stop and tell the operator. When
-   either prints `0`, there is nothing for one of the two commits: commit once.
+   none; any other value is a failed command, so stop and tell the operator. `:(top)`
+   and `:/` match from the repository root wherever the shell is. When either prints
+   `0`, there is nothing for one of the two commits: commit once. When the risk tier
+   ran, commit once as well, so no declared path lands in a commit without its
+   `Risk-review:` trailer ([`lite-review.md`](lite-review.md), *Risk tier*).
 
    For two, unstage `<handoff>` and `<friction-log>` first
    (`git restore --staged -- <handoff> <friction-log>`), commit the rest, then stage
    those two by name and commit them as `chore: update plan — <one line>`. The second
    commit holds only those two files; any other file a routed finding edited goes in
-   the first. When the risk tier ran, its `Risk-review:` trailer goes on the commit
-   that holds the declared paths ([`lite-review.md`](lite-review.md), *Risk tier*).
+   the first.
 
 1. **Report** what was recorded and where, what was routed, the review's result (and
    the risk tier's, when it ran), and

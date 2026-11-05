@@ -18,7 +18,8 @@ Everything else still gets this same-context review alone.
 
 ## 1 · Read the change as written, not as remembered
 
-Take the change from the repository, not from your memory of making it:
+Take the change from the repository, not from your memory of making it. `:/` lists
+untracked files from the repository root, wherever the shell is:
 
 ```sh
 if git rev-parse --verify -q HEAD >/dev/null; then
@@ -29,7 +30,7 @@ else
   base=; echo "stop: HEAD does not resolve" >&2
 fi
 git diff "$base"
-git ls-files --others --exclude-standard
+git ls-files --others --exclude-standard -- ':/'
 ```
 
 `base` is `HEAD`, or the empty tree when the branch has no commit yet: `HEAD` does not
@@ -98,15 +99,24 @@ are settled the same way; its absence is not a gap in this review.
 
 ## Risk tier: a fresh-context review for declared paths
 
-Read `review.safety_critical_paths` from `config/dev-model.yaml`:
+Read `review.safety_critical_paths` from `config/dev-model.yaml` **as committed**,
+`git show HEAD:config/dev-model.yaml`, not from the working tree, so a change cannot
+shorten the list it is judged by. On a branch with no commit yet there is no committed
+list: read the staged file, `git show :config/dev-model.yaml`. Strip the whitespace
+around each entry, then:
 
-- **absent, or an empty list:** the tier is not configured; skip this section, and
-  the report says so;
-- **a list of non-empty strings:** each is a path the repository declares
-  safety-critical — for example its firewall rules, its access configuration, its
-  deploy scripts and their runbooks; go on below;
+- **absent, null, or an empty list:** the tier is not configured; skip this section,
+  and the report says so;
+- **a list of strings, none empty after stripping and none containing a single
+  quote:** each is a path the repository declares safety-critical — for example its
+  firewall rules, its access configuration, its deploy scripts and their runbooks; go
+  on below;
 - **anything else:** stop and tell the operator. Guessing which paths it meant would
   skip the review it exists to require.
+
+**A staged change to `config/dev-model.yaml` itself takes the tier** whenever the
+committed or the staged version declares a list, whatever paths it touches: it can
+change what the tier covers.
 
 ### Does the change touch a declared path?
 
@@ -116,15 +126,20 @@ already staged it by name; run on its own, stage this change's paths by name, as
 list the staged paths that fall under a declared entry:
 
 ```sh
-git diff --cached --name-only -- ':(glob)<entry 1>' ':(glob)<entry 2>'
+git diff --cached --name-only -- ':(top,icase)<entry 1>' ':(top,icase)<entry 2>'
 ```
 
-Write one `':(glob)<entry>'` argument per declared entry, in single quotes so the
-shell does not expand it. Each entry is matched from the repository root: `*` matches
-within one directory and `**` across directories, so `deploy/**` covers everything
-under `deploy/` and `docs/deploy.md` covers that one file. Git narrows the diff to
-these entries before it looks for renames, so a file moved out of a declared path is
-listed under its old name, and one moved in under its new name.
+Write one `':(top,icase)<entry>'` argument per declared entry, in single quotes so
+the shell does not expand it. `top` matches each entry from the repository root
+whatever directory the shell is in; without it, Git matches from the current
+directory, and a run from a subdirectory prints nothing for a change it should catch.
+`icase` ignores case. Matching is the full profile's (`pr_watch.py` matches the same
+key with `fnmatch`): `*` matches across `/`, so `deploy/*` covers everything under
+`deploy/` and `*.sh` every shell script, and `docs/deploy.md` covers that one file. One
+difference only adds review: an entry naming a directory, such as `deploy`, also
+covers everything under it. Git narrows the diff to these entries before it looks for
+renames, so a file moved out of a declared path is listed under its old name, and one
+moved in under its new name.
 
 A path printed means the tier applies to this change. Nothing printed means it does
 not, and the report says `not touched`. A failed command is a stop, not a pass.
@@ -196,9 +211,11 @@ new staged change, not the earlier one resumed. If a second pass still reports a
 is neither fixed nor routed, stop fixing and hand the decision to the operator.
 
 Then show the operator the reviewer's report and its verdict, and commit only on
-their explicit go-ahead. The verdict informs that decision; it is not the decision.
-Where the operator merges pull requests in this repository, the go-ahead is that
-merge.
+their explicit go-ahead, given in this session after they have seen it. The verdict
+informs that decision; it is not the decision, and a later merge is not one either:
+where this repository takes changes through pull requests, the go-ahead still comes
+before the commit, and the pull request's description carries the reviewer's findings,
+how each was settled, and its verdict line.
 
 ### Record the verdict on the commit
 
@@ -211,7 +228,9 @@ Risk-review: fresh-context adversarial — <clean | findings settled | not indep
 `clean` means the last pass reported no finding; `findings settled` means each finding
 was fixed or routed, and the commit body lists each one with how it was settled;
 `not independent` means no isolated reviewer ran. `git commit --trailer
-"Risk-review: …"` adds it, or write it as the message's last paragraph.
+"Risk-review: …"` adds it, or write it as the message's last paragraph. The trailer is
+the session's own statement, which nothing checks; the operator's go-ahead above is
+the control.
 
 ## Report
 
