@@ -84,12 +84,14 @@ Ask the operator which install profile this repository takes, before Step 1:
   inbox, and the `session-start`, `wrap-up` and `review` workflows as lite docs with
   Claude and Codex adapters. No engines, hooks or Python files are added to the
   repository; `uv` on this machine runs the kit's `kit_doctor.py` from `$KIT` at install
-  time only. It fits one operator and an agent committing to a branch, with no remote
-  CI, tracker integration or parallel lanes. Follow *Lite profile* at the end of this
-  workflow instead of Steps 1–6; it uses the two blocks above.
+  time only. It fits one operator and an agent committing to a branch, or opening a pull
+  request that no review loop or CI gate watches, with no tracker integration or
+  parallel lanes. Follow *Lite profile* at the end of this workflow instead of Steps
+  1–6; it uses the two blocks above.
 
-Recommend lite when the repository has no remote CI and commits without pull
-requests; otherwise full. The operator decides.
+Recommend lite when the repository has no remote CI, tracker integration or parallel
+lanes for the kit to drive; taking changes through pull requests alone does not rule it
+out (L1 records the branch they target). Otherwise recommend full. The operator decides.
 
 ## Step 1 — Inspect the target repo (read-only)
 
@@ -654,6 +656,14 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   firewall or tunnel config, deploy scripts and their runbooks. Ask the operator; the
   answer becomes `review.safety_critical_paths` and turns on the risk tier in
   `lite-review.md`. No answer leaves it out.
+- **Does a branch take changes only through pull requests?** Ask the operator; Git
+  does not record it. The branch becomes `vcs.protected_branch`, and the lite `wrap-up`
+  then commits on a session branch and opens the pull request. No such branch leaves
+  the key out, and the lite `wrap-up` commits to the branch checked out.
+- **Reads a session here needs that the lite docs do not make?** A deploy-state check,
+  pull requests or issues across related repositories, a roadmap's current phase. Each
+  becomes a repository source in the `AGENTS.md` section L3 writes, under the workflow
+  that runs it.
 - **Skill collisions.** For each of `session-start`, `wrap-up` and `review`, look for
   `.claude/skills/<name>/`, `.claude/commands/<name>.md` and `.agents/skills/<name>/`.
   Keep what the repository has, skip the kit's binding for that name, and say so.
@@ -667,9 +677,10 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 
 Show one row per item: the three docs and six adapters (**install** or **skip:
 collision**), the config with the values L1 settled, the plan and inbox (**point at**
-an existing file, or **create**), and the `AGENTS.md` section. Name the branch the
-commit goes to: the operator's choice, which on a lite repository is usually the one it
-works on. Wait for the operator's go-ahead.
+an existing file, or **create**), and the `AGENTS.md` section with any repository
+sources. Name the branch the commit goes to: the operator's choice, which on a lite
+repository is usually the one it works on, or a new branch when that one is
+`vcs.protected_branch`. Wait for the operator's go-ahead.
 
 ### L3 — Install, never over an existing file
 
@@ -726,6 +737,8 @@ friction:
 review:
   safety_critical_paths:   # optional; patterns as lite-review.md's *Risk tier* matches them
     - "<path or pattern>"
+vcs:
+  protected_branch: <branch>   # optional; the branch that takes changes only through pull requests
 ```
 
 Create the plan and inbox only where L2 said **create**: a `# Plan` heading over an
@@ -743,7 +756,13 @@ import `AGENTS.md`, ask the operator where the section goes instead.
 - `config/dev-model.yaml` names the living plan and the friction inbox.
 - The workflows are kit-owned, in `docs/agentic-dev-kit/lite/`. Take the kit's copy
   rather than editing one here.
+- Reads this repository adds to a workflow are its repository sources, listed below
+  under the workflow's name. Each is a source like the doc's own: one that fails is
+  reported unavailable, never as empty.
 ```
+
+When L1 found repository sources, list them after that section's bullets, under a
+`### session-start` or `### wrap-up` heading, each with the command that reads it.
 
 ### L4 — Record the install baseline
 

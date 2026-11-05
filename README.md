@@ -315,7 +315,8 @@ profile to install. Lite adds the living plan, the friction inbox and lite
 `session-start`, `wrap-up` and `review` workflows, with a fresh-context review for paths
 you declare safety-critical. It adds no engines, hooks or Python files: `/adopt` runs
 the kit's `kit_doctor.py` from its clone of the kit to record and check the install. It
-fits one operator and an agent committing to a branch, with no CI or parallel lanes.
+fits one operator and an agent committing to a branch or opening pull requests, with no
+CI or parallel lanes.
 
 ## What's inside
 

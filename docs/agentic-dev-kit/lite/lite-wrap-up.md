@@ -2,8 +2,9 @@
 
 Decide whether the session left anything to hand over, record only that in the living
 plan, route the friction it found, review the change, and commit. For a repository on
-the kit's **lite profile**: one operator and an agent, commits on the branch the
-repository works on, and no pull requests, engines or tracker integration.
+the kit's **lite profile**: one operator and an agent, commits on a branch (pushed as a
+pull request where the repository takes changes that way), and no engines, review loop
+or tracker integration.
 
 The full profile's version is the kit's `wrap-up` workflow, which a lite install does
 not carry. The clauses between `lite:begin` and `lite:end` markers are shared with it
@@ -21,8 +22,10 @@ Read `config/dev-model.yaml` directly, as the lite `session-start` does: `<hando
 is `paths.handoff`, `<friction-log>` is `paths.friction_log`, `<down-route>` is
 `friction.down_route` when set, and `<declared-paths>` is the list the risk tier in
 [`lite-review.md`](lite-review.md) reads: `review.safety_critical_paths` as committed,
-by that section's rules, never the working tree's copy. Each of these is a hard stop before any edit; say
-which to the operator:
+by that section's rules, never the working tree's copy. `<protected-branch>` is
+`vcs.protected_branch` when set: the branch that takes changes only through pull
+requests. Absent, the commit goes to the branch checked out. Each of these is a hard
+stop before any edit; say which to the operator:
 
 - a missing config file, a missing `paths` key, or an unreadable document;
 - a `<declared-paths>` the risk tier cannot read, by its rules in `lite-review.md`,
@@ -31,12 +34,10 @@ which to the operator:
   the way out;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
+- a `vcs.protected_branch` that is set but is not a non-empty string: the commit step
+  could not tell whether the branch checked out takes direct commits;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
-  commit would land on a detached HEAD that no branch keeps;
-- a branch that takes changes only through pull requests. Git does not record that
-  locally, so ask the operator, naming the branch the command above printed, before
-  the first edit. If it does, the repository has outgrown the lite profile, whose
-  commit step commits straight to the branch.
+  commit would land on a detached HEAD that no branch keeps.
 
 ## Steps
 
@@ -72,6 +73,12 @@ current directory.
    tell the operator, since what the commands print then is not the change. Each block
    that uses `base` assigns it itself, because a runtime may run every block in a fresh
    shell.
+
+1. **Run the repository's own wrap-up reads**, if its `AGENTS.md` names any for
+   `wrap-up` (the deploys made this session, the pull requests merged in its service
+   repositories). They count as part of what changed. A read that fails is reported as
+   unavailable, never as its empty value, as the lite `session-start` says of its
+   sources.
 
 1. **Decide whether there is anything to hand over.** Ask of each thing the session
    did or learned whether a commit message, an existing plan line or a friction entry
@@ -211,7 +218,11 @@ current directory.
    declared path or the config itself, the tier applies as well: a fresh-context
    review of the staged change, and the operator's go-ahead before the commit.
 
-1. **Commit**, on the branch the repository works on. Either commit everything staged
+1. **Commit**, on the branch checked out — unless it is `<protected-branch>`, which
+   takes no direct commit. Then move to a session branch first, named the way the
+   repository names its branches (for example `chore/<slug>`) and confirmed with the
+   operator in one line: `git switch -c <name>`. The staged change and the working tree
+   come with it. Either commit everything staged
    as the session's last commit, or make two commits. Two commits need all three of:
    a branch that already has a commit, a staged change to `<handoff>` or
    `<friction-log>`, and a staged change to some other path. Check the last two:
@@ -234,8 +245,17 @@ current directory.
    commit holds only those two files; any other file a routed finding edited goes in
    the first.
 
-1. **Report** what was recorded and where, what was routed, the review's result (and
-   the risk tier's, when it ran), and
+1. **Push and open the pull request**, only when `<protected-branch>` is set. Push the
+   branch (`git push -u origin HEAD`) and open a pull request against
+   `<protected-branch>`, or let the push update the one already open for this branch.
+   Its description says what changed and the review's result; when the risk tier ran,
+   it also carries what [`lite-review.md`](lite-review.md)'s *Risk tier* asks of it.
+   Merging is the operator's. A push or pull request that fails leaves the commits
+   local: report that, with the command's error, rather than calling the work handed
+   over.
+
+1. **Report** what was recorded and where, what was routed, the pull request when one
+   was opened or updated, the review's result (and the risk tier's, when it ran), and
    the next step for each line of work it touched — or that there was nothing to hand
    over, and which commits already say it all.
 

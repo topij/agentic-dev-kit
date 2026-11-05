@@ -24,6 +24,9 @@ Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
 - `review.safety_critical_paths` — optional list of the paths whose changes get the
   risk tier in [`lite-review.md`](lite-review.md): a fresh-context review and the
   operator's go-ahead before the commit.
+- `vcs.protected_branch` — optional: the branch that takes changes only through pull
+  requests. The lite `wrap-up` then commits on a session branch and opens the pull
+  request; absent, it commits to the branch checked out.
 
 A missing config file, an unreadable `<handoff>` or `<friction-log>`, or a missing
 `paths` key is a hard stop: name what is missing and do not render a briefing.
@@ -51,7 +54,15 @@ change to it will itself take the tier.
 | Friction inbox | read `<friction-log>` whole | hard stop |
 | Working tree | `git status --short`, and `git symbolic-ref --short -q HEAD`; if that prints nothing, `git rev-parse --verify HEAD` and report `DETACHED at <sha>` | hard stop |
 | Recent commits | `git log --oneline -15` | report `recent commits: unavailable (<reason>)` |
-| Forge, tracker, CI, scratch | not part of this profile | report `not installed (lite)` |
+| Repository sources | each read the repository's `AGENTS.md` names for `session-start`, as it says to run it | report `<source>: unavailable (<reason>)` |
+| Forge, tracker, CI, scratch | not part of this profile, unless a repository source reads one | report `not installed (lite)` |
+
+**Repository sources** are the reads a repository adds to this workflow: a deploy-state
+check, open pull requests across its service repositories, its roadmap's current phase.
+They live in a section of the repository's `AGENTS.md` that names this workflow, not in
+this kit-owned doc. Each counts as a source above: a candidate traced to one is not
+invented work, and the rule below applies to it. When a repository source reads the
+forge, tracker or CI, its result replaces `not installed (lite)` for that one.
 
 <!-- lite:begin source-failure -->
 **A source that fails is reported as unavailable, never as its empty value.** A
@@ -62,10 +73,17 @@ which is worse than a visible gap because nothing on the briefing says to look
 again.
 <!-- lite:end source-failure -->
 
+**A query narrower than intended fails the same way, without an error.** A filter the
+server applies can match less than its author meant: `gh issue list --label P1,P2`
+matches only issues carrying *both* labels, so it exits 0 with nothing while P2 issues
+are open. Fetch wide and filter locally, and print the filtered count beside
+the total it came from (`P1/P2: 0 of 14 open`), so an over-narrow filter shows.
+
 `not installed (lite)` is a third answer, distinct from both: the source does not
 exist in this repository by choice. Print it rather than leaving the line out, so the
-briefing shows what the full profile would add. When a repository grows a remote, CI
-or parallel agents, that line is the prompt to consider the full profile.
+briefing shows what the full profile would add. When a repository grows CI, a tracker
+it wants driven, or parallel agents, that line is the prompt to consider the full
+profile.
 
 ## Classify
 
@@ -74,8 +92,9 @@ a pointer to where it came from (`plan:<section>`, `friction-log <date>`, or `co
 <sha>`).
 
 - 🔴 **Now** — uncommitted or half-finished work from the last session; a next step the
-  plan marks as blocking.
-- 🟡 **Soon** — the plan's clear next steps; medium-severity friction entries.
+  plan marks as blocking; a friction entry that says it blocks work; a repository
+  source's result its `AGENTS.md` section marks as urgent.
+- 🟡 **Soon** — the plan's clear next steps; high- and medium-severity friction entries.
 - 🟢 **Whenever** — the rest of the plan's backlog; low-severity friction entries;
   housekeeping, such as a plan line that names work the recent commits show is done.
 
@@ -98,7 +117,8 @@ Size is `S` (one small change), `M` (a focused change of about an hour) or `L`
 Where things stand
   • <branch | DETACHED at <sha>> (<clean | N uncommitted/untracked>)
   • Recent commits: <one line | unavailable: reason>
-  • Forge / tracker / CI / scratch: not installed (lite)
+  • <each repository source>: <its result | unavailable: reason>
+  • Forge / tracker / CI / scratch: <not installed (lite), for each no repository source reads>
   • Risk tier: <configured — paths | not configured (lite) | unreadable: reason>
 
 What to do next

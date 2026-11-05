@@ -1,9 +1,9 @@
 # Review (lite)
 
 A basic correctness review of a change before it is committed, for a repository on the
-kit's **lite profile**. Lite repositories commit without pull requests, so this is the
-review the change gets. The lite `wrap-up` runs it before its commit; run it on its own
-before any other commit.
+kit's **lite profile**. A lite repository has no review loop on a pull request, even
+where it opens one, so this is the review the change gets. The lite `wrap-up` runs it
+before its commit; run it on its own before any other commit.
 
 **It runs in the same context that wrote the change, and that is its limit.** The
 reviewer shares the author's reasoning, so it catches what the change *says* that is
