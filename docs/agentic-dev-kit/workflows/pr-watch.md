@@ -109,8 +109,8 @@ Repeat until the report says **converged**:
 
 1. **Poll.** `uv run <engine-dir>/pr_watch.py <PR#> --json` (omit `<PR#>` for the current
    branch). Read `converged`, `mergeable`, `checks` (`all_green`, `failing[]`, `pending`),
-   `merge_blockers[]`, `review_evidence`, `review_bots`, `evidence_findings[]`,
-   `review_rounds`, and `new_comments[]`.
+   `merge_blockers[]`, `review_evidence`, `review_bots`, `review_owed`,
+   `evidence_findings[]`, `review_rounds`, and `new_comments[]`.
 
    The two predicates answer different questions and you need both:
 
@@ -178,15 +178,18 @@ Repeat until the report says **converged**:
 1. **If `converged`:** stop the loop and report — PR #, the green check count, and
    "no outstanding review findings." **Then, before anything else, settle the
    review request the Converged stop condition below owes.** The poll answers
-   this for you: when it prints `⚠ review owed`, it names the configured
-   reviewers that have not reviewed this head — request one from each, at this
-   head, now. **Key off that line rather than re-deriving it from
-   `review_bots.coverage` alone.** Coverage is one of the four things the engine
-   weighs: it also suppresses the line for a reviewer that answered in a comment
-   (`#44`), for one whose review is still in flight, and whenever the reviewer
-   read itself failed — so a condition rebuilt from coverage by hand asks for
-   reviews the engine already knows are unnecessary. Then record the independent
-   review (see below) so the PR becomes `mergeable`.
+   it in `review_owed`: a non-empty list names the configured reviewers that
+   have not reviewed this head — request one from each, at this head, now. The
+   text render prints the same answer as `⚠ review owed`. The stop condition
+   below says what `[]` and `null` mean. **Do not rebuild it from
+   `review_bots`.** Coverage is one of the terms the engine weighs: it also
+   accounts for a reviewer that answered in a comment (`#44`), one whose review
+   is still in flight, and one that announced an outage on its own trusted
+   check — so a condition rebuilt from coverage by hand asks for reviews the
+   engine has already accounted for. When the reviewer read itself failed, the
+   engine makes no claim at all (`null`), and a hand-built condition has no way
+   to express that. Then record the independent review (see below) so
+   the PR becomes `mergeable`.
 
    **A `mergeable` that is already true does not discharge that request** (`#518`).
    The panel branch above can fire on the *first* poll — a reviewer configured not
@@ -490,11 +493,28 @@ Self-pace on a bounded cadence — don't busy-wait:
     records it, and record its receipt against that head. That pass is the pull
     request's independent review, not a substitute for one. The next bullet, on
     requesting a review, applies only to a configured bot.
-  - **If the current head has no review coverage, request a review here.** Read
-    `review_bots.coverage`: an entry whose `covers_head` is false — or no entry at
-    all — means nothing has reviewed the diff that is about to merge. Convergence
-    is the moment the merge head stops moving, so it is the moment to spend one
-    review on it: request at the current head, then poll on.
+  - **If `review_owed` names a bot at the converged head, request a review
+    here.** `review_owed` is the engine's answer to whether a configured bot is
+    owed a review of this head; the text render prints it as `⚠ review owed` at
+    convergence. Key on the field, never on a condition rebuilt from
+    `review_bots`: the engine accounts for a review covering the head, a
+    comment-borne verdict, a review in flight and an outage the bot announced on
+    its own trusted check, and `report-fields.md` gives the reasons for each.
+    Its three values route differently:
+    - **A list of bot names:** nothing configured has reviewed the diff that is
+      about to merge. Convergence is the moment the merge head stops moving, so
+      it is the moment to spend one review on it: request from each named bot at
+      the current head, then poll on.
+    - **`[]`:** nobody is owed — every configured bot is accounted for, or none
+      is configured. Request nothing. A bot accounted for by an outage on its own
+      trusted check is not asked; that outage routes to the fallback panel
+      through the *Reviewer unavailable* step.
+    - **`null`:** the review-bot read failed (`review_bots.signal` is
+      `unavailable`), so the engine makes no claim about who is owed. Neither
+      request nor skip on that report: re-poll once. If the next poll at the
+      same head is still `null`, run the fallback review the PR owes, record
+      it, and say in your report that the configured reviewer's state could not
+      be read, so it was not asked.
 
     **Poll on means poll on: never wait on the request's outcome.** An
     acknowledgement is not evidence a review is coming. Where automatic review at
@@ -520,8 +540,8 @@ Self-pace on a bounded cadence — don't busy-wait:
     where the panel already carries the merge, note the bot's review on the PR
     rather than letting the record say it never happened.
 
-    The engine makes no request itself; its `⚠ review owed` line says when one is
-    owed and from whom. Do not `--record-review` the bot's own verdict: a
+    The engine makes no request itself; `review_owed` (`⚠ review owed` in the text
+    render) says when one is owed and which bots owe it. Do not `--record-review` the bot's own verdict: a
     bot-reviewed head needs no receipt, because its coverage is the evidence
     (`#350`). *The review request at convergence*, in `report-fields.md`, gives the
     reasons behind each rule in this bullet.
