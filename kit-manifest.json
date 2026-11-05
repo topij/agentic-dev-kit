@@ -32,15 +32,15 @@
     },
     "docs/agentic-dev-kit/lite/lite-review.md": {
       "role": "repo-only",
-      "sha256": "ccc6d9115315e468ae724b51cd3356b0763eb75e19e10c81009ee483608e55b0"
+      "sha256": "c93048d3559e6bd406bf4f6a5f1cfbc0998c9c6f32780bc9d399d313be495d6a"
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "repo-only",
-      "sha256": "6954a51eaf193b9b113b8b1f3508c57d78e59ea048f190a2145afe5c5f515bfa"
+      "sha256": "a7d16c9da2d3bfe831d82f5334a4683dfcfec7bf5f771dfb833cc7277f52c77c"
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "repo-only",
-      "sha256": "555ed52ac1d845d4b094169c742b1bbe1fda641ac55c2aa698475cb8faaca1f9"
+      "sha256": "93db3b50e757dbda4b4b46979cb84cb535973b34d91e6fe78f736066ae524072"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -147,7 +147,7 @@
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
-      "sha256": "7cc0c0daede9a0181b48e9e95fb03d7cc0c1ab94debb2bb0fe5dccef07b03972"
+      "sha256": "742e8ebb55c91b71dc8affac8c8d48dc23ad62fda8119ca84a2b91648b877211"
     },
     "docs/agentic-dev-kit/writing-for-agents.md": {
       "role": "doctrine",
@@ -739,7 +739,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "5a8bf8381d35ea1ac0ebf1908787a9e13594e669cd8b7c6811b427138c2f65fa"
+      "sha256": "3d5e13bebe6c3c3ea15cebdee977383b38baca0cf5ce767edf5f5ac81fe5ae85"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
