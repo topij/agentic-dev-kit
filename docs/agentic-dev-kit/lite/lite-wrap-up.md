@@ -18,11 +18,16 @@ so and make no record edit.
 ## Read the configuration
 
 Read `config/dev-model.yaml` directly, as the lite `session-start` does: `<handoff>`
-is `paths.handoff`, `<friction-log>` is `paths.friction_log`, and `<down-route>` is
-`friction.down_route` when set. Each of these is a hard stop before any edit; say which
-to the operator:
+is `paths.handoff`, `<friction-log>` is `paths.friction_log`, `<down-route>` is
+`friction.down_route` when set, and `<declared-paths>` is
+`review.safety_critical_paths` when set (the risk tier in
+[`lite-review.md`](lite-review.md)). Each of these is a hard stop before any edit; say
+which to the operator:
 
 - a missing config file, a missing `paths` key, or an unreadable document;
+- a `review.safety_critical_paths` that is present but is not a list of non-empty
+  strings: the risk tier cannot tell which changes it covers, and guessing would skip
+  the review it exists to require;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
@@ -34,7 +39,11 @@ to the operator:
 
 ## Steps
 
-1. **Read `<handoff>` and `<friction-log>`.**
+1. **Read `<handoff>` and `<friction-log>`.** Either one missing or unreadable is a hard
+   stop, as it is for the lite `session-start`: name it to the operator and make no
+   edit. The commit step names both paths to `git restore --staged`, which refuses a
+   path that does not exist, so a missing file would leave the record edits in the
+   wrong commit.
 
 1. **Review what changed this session**, since this session began, not since the plan's
    newest line:
@@ -92,8 +101,8 @@ to the operator:
      "Verified" with neither is the claim a later review round exists to find.
    - **A "why this is safe" sentence cites a test that would fail if it were
      false** — or is deleted.
-   - **Point, don't restate.** The tracker issue is the record; the handoff
-     carries a pointer. Every restatement is a fresh copy to go stale.
+   - **Point, don't restate.** The issue, pull request or commit that holds a
+     fact is its record; the handoff carries a pointer. Every restatement is a fresh copy to go stale.
    <!-- lite:end record-prose -->
    - **If a command prints it, do not write it.** Counts and statuses go stale; name the
      command, or drop the claim.
@@ -110,13 +119,13 @@ to the operator:
 
    <!-- lite:begin park-conditions -->
    - **Any of the three is missing.** A real **H** you cannot yet explain —
-     *"something about the panel felt wrong and I cannot say what"* — belongs here
+     *"something about the review felt wrong and I cannot say what"* — belongs here
      precisely *because* it has no mechanism. The inbox is where a finding waits to
      become explicable, not where a complete one waits for a sweep.
    - **The point is accumulation.** A single instance of a shape that is only worth
-     acting on if it recurs needs somewhere to pile up. Principle #2 routes a
-     **pattern** up into a rule, and a pattern is only visible once its instances
-     share a home; the tracker is not that home.
+     acting on if it recurs needs somewhere to pile up. Friction becomes a rule
+     only as a **pattern**, and a pattern is only visible once its instances share
+     a home; a queue of work items is not that home.
    <!-- lite:end park-conditions -->
 
    When entries in the inbox share a shape, propose the rule they add up to; adding
@@ -192,17 +201,34 @@ to the operator:
    [`lite-review.md`](lite-review.md), over what the step above staged (`git diff --cached`),
    the record edits included. Fix each finding or route it as above before going on.
    A fix, and the friction-log or down-route edit a routed finding writes, is staged by
-   name, and the review re-reads it.
+   name, and the review re-reads it. When `<declared-paths>` is set and the staged
+   change touches one of them, the review's *Risk tier* applies as well: a
+   fresh-context review of the staged change, and the operator's go-ahead before the
+   commit.
 
 1. **Commit**, on the branch the repository works on. Either commit everything staged
-   as the session's last commit, or, when the branch already has a commit, make two
-   commits. For two, unstage `<handoff>` and `<friction-log>` first
+   as the session's last commit, or make two commits. Two commits need all three of:
+   a branch that already has a commit, a staged change to `<handoff>` or
+   `<friction-log>`, and a staged change to some other path. Check the last two:
+
+   ```sh
+   git diff --cached --quiet -- <handoff> <friction-log>; echo "record: $?"
+   git diff --cached --quiet -- . ':(exclude)<handoff>' ':(exclude)<friction-log>'; echo "other: $?"
+   ```
+
+   Each prints `1` when that part of the index has a staged change and `0` when it has
+   none; any other value is a failed command, so stop and tell the operator. When
+   either prints `0`, there is nothing for one of the two commits: commit once.
+
+   For two, unstage `<handoff>` and `<friction-log>` first
    (`git restore --staged -- <handoff> <friction-log>`), commit the rest, then stage
    those two by name and commit them as `chore: update plan — <one line>`. The second
    commit holds only those two files; any other file a routed finding edited goes in
-   the first.
+   the first. When the risk tier ran, its `Risk-review:` trailer goes on the commit
+   that holds the declared paths ([`lite-review.md`](lite-review.md), *Risk tier*).
 
-1. **Report** what was recorded and where, what was routed, the review's result, and
+1. **Report** what was recorded and where, what was routed, the review's result (and
+   the risk tier's, when it ran), and
    the next step for each line of work it touched — or that there was nothing to hand
    over, and which commits already say it all.
 

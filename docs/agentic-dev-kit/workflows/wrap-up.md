@@ -387,8 +387,8 @@ failure makes the overall outcome `incomplete-resumable`.
      "Verified" with neither is the claim a later review round exists to find.
    - **A "why this is safe" sentence cites a test that would fail if it were
      false** — or is deleted.
-   - **Point, don't restate.** The tracker issue is the record; the handoff
-     carries a pointer. Every restatement is a fresh copy to go stale.
+   - **Point, don't restate.** The issue, pull request or commit that holds a
+     fact is its record; the handoff carries a pointer. Every restatement is a fresh copy to go stale.
      <!-- lite:end record-prose -->
    - **Shorten, don't correct.** A claim that has needed repair twice gets cut
      to what you can stand behind (`fallback-review-panel.md`, "Keep the
@@ -514,13 +514,13 @@ failure makes the overall outcome `incomplete-resumable`.
 
    <!-- lite:begin park-conditions -->
    - **Any of the three is missing.** A real **H** you cannot yet explain —
-     *"something about the panel felt wrong and I cannot say what"* — belongs here
+     *"something about the review felt wrong and I cannot say what"* — belongs here
      precisely *because* it has no mechanism. The inbox is where a finding waits to
      become explicable, not where a complete one waits for a sweep.
    - **The point is accumulation.** A single instance of a shape that is only worth
-     acting on if it recurs needs somewhere to pile up. Principle #2 routes a
-     **pattern** up into a rule, and a pattern is only visible once its instances
-     share a home; the tracker is not that home.
+     acting on if it recurs needs somewhere to pile up. Friction becomes a rule
+     only as a **pattern**, and a pattern is only visible once its instances share
+     a home; a queue of work items is not that home.
      <!-- lite:end park-conditions -->
 
    **Severity is not the test for whether a finding is issue-shaped.** It is the most

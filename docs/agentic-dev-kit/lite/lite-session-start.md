@@ -21,9 +21,21 @@ Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
 - `paths.friction_log` — the friction inbox, `<friction-log>`.
 - `friction.down_route` — optional free text saying where a fully explained finding
   goes in this repository (for example "fix it now and log it in `docs/FIXLOG.md`").
+- `review.safety_critical_paths` — optional list of the paths whose changes get the
+  risk tier in [`lite-review.md`](lite-review.md): a fresh-context review and the
+  operator's go-ahead before the commit.
 
 A missing config file, an unreadable `<handoff>` or `<friction-log>`, or a missing
 `paths` key is a hard stop: name what is missing and do not render a briefing.
+
+The risk tier is a declared capability, and the briefing always prints its line:
+
+- `Risk tier: configured — <the declared paths>` when the key is a list of non-empty
+  strings;
+- `Risk tier: not configured (lite)` when the key is absent or an empty list, which
+  leaves every change to the same-context review;
+- `Risk tier: unreadable (<reason>)` when it is anything else. Add a 🔴 Now item to
+  fix it: the lite `wrap-up` refuses to start while it is unreadable.
 
 ## Sources
 
@@ -81,6 +93,7 @@ Where things stand
   • <branch | DETACHED at <sha>> (<clean | N uncommitted/untracked>)
   • Recent commits: <one line | unavailable: reason>
   • Forge / tracker / CI / scratch: not installed (lite)
+  • Risk tier: <configured — paths | not configured (lite) | unreadable: reason>
 
 What to do next
 🔴 Now
