@@ -42,6 +42,10 @@ test -f "$REPO/config/dev-model.yaml" && echo "has config" || echo "NO CONFIG"
 - **No `config/dev-model.yaml`** → this repo predates the config surface entirely (a kit
   *ancestor*, or a partial hand-install). **Stop and run `/adopt` instead** — there is no
   schema to migrate from. Say so plainly rather than guessing a config into existence.
+- **Config present with `profile: lite`** → a lite install (`adopt.md`, *Lite profile*).
+  This workflow upgrades a full install: its steps refresh engines, hooks and
+  `init.sh`, none of which a lite repository has. **Stop and tell the operator** that the
+  lite upgrade path is not written yet (#1320). Do not run these steps on it.
 - **Config present** → continue. `kit.version` tells you the schema generation; its
   absence means v1 (pre-`runtime:`, pre-`models.tiers`).
 
@@ -189,7 +193,8 @@ kit's copy against this repo: `uv run "${KIT:?KIT is not set — re-run the kit 
 The report gives you, per kit-owned file: `unchanged` / `differs` /
 `unknown-version` / `missing-required`, and — for an absent file — one of `declined` /
 `removed` / `new-upstream` where this repo has a **declared install set**, or the older
-undifferentiated `missing` where it does not. Plus four installation-level checks.
+undifferentiated `missing` where it does not. An absent file that belongs to the other
+install profile reads `outside-profile` whatever the baseline says. Plus four installation-level checks.
 **Read all four** — each is a silent failure mode:
 
 - **config schema version** — unversioned or behind means migrations are pending.
@@ -243,6 +248,8 @@ that path is `adopter-owned`, and the skill path beside it is then reported
 preference to a same-named command and installing one would silently replace theirs. The source kit's own adapters must first
 equal what its renderer produces, or the command refuses: a broken generator cannot
 classify an adopter by comparing it with itself.
+`profile-mismatch` is a lite profile binding (`adopt.md`, *Lite profile*) installed
+in a full repository: take the kit's full binding at that path.
 
 When a description changed, the report also compares the installed skill with a
 known rendered form at the adopter manifest's `kit_commit`. This needs that commit
@@ -895,6 +902,10 @@ still shows no `missing-required`.
   answer. Do not re-litigate it: re-asking every upgrade is the noise the declared set
   exists to remove. Raise it only if the operator asks what was left out, or if a
   `missing-required` above now names it.
+- **`outside-profile`** → nothing to do, and nothing to offer. The file belongs to the
+  other install profile (`profile:` in `config/dev-model.yaml`; absent means `full`):
+  on a full install, the lite profile's workflows. Copying it in would install a
+  workflow this repository does not run.
 - **`new-upstream`** → **this is the decision `/upgrade` owns.** The baseline mentions the
   file in neither map; the ordinary cause is that the kit gained it after the baseline was
   recorded, so no declared set could have mentioned it and nobody has ever been asked.

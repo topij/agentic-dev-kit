@@ -331,18 +331,16 @@ Step 3 has copied from it (#1355). #1340 completed #576.
 ### Lite install profile
 
 **Status:** the operator's decisions and the phase 1 probe are #1320's comments of 2026-11-03. Phase 2 added the
-lite workflow docs in `docs/agentic-dev-kit/lite/`, registered repo-only until the profile can be installed.
+lite workflow docs in `docs/agentic-dev-kit/lite/`. Phase 3 is two pull requests: #1358 (the optional risk tier,
+the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, executed shell-block tests) and #1359
+(the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). A lite
+repository has no upgrade path yet: `upgrade.md` Step 0 stops on one.
 **Owner:** #1320.
 
-▶ Next: #1320 phase 3 — a `profiles` map in the kit manifest and `profile: lite` in the adopter baseline, profile
-wording in `kit_doctor`'s report and `--adapter-report`, adapter bindings for `lite-*.md`, and the lite
-option in `adopt`. Also settle the shared clauses that name "Principle #2" and the tracker, which a lite install
-lacks: either word them for both profiles in the full docs, or ship what they point at. The parser-based guard on
-lite docs' links and engine names is #1347. Phase 3 also owes an executed fixture test of the lite docs'
-`base` shell blocks (unborn branch, unreadable ref), which nothing runs yet. Phase 3 includes the optional risk tier
-the operator added on 2026-11-05 (#1320's comment of that date): declared safety-critical paths get one fresh-context
-adversarial review before commit. The operator agreed the order that follows in session on 2026-11-05. Then adopt
-`topij/home-server` as the first lite install, replacing its hand-trimmed
-`/session-start` and `/wrap-up`; its deploy-state and cross-repo reads become a repo-specific section planned with the
-operator then. Its nested service repos (`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`) are decided one at a time
-after that: each has a tracker and PRs, which lite does not install, so the full profile may fit better.
+▶ Next: once #1359 merges, adopt `topij/home-server` as the first lite install with `adopt.md`'s *Lite
+profile* (the order the operator agreed in session on 2026-11-05), replacing its hand-trimmed `/session-start` and
+`/wrap-up` and declaring its `review.safety_critical_paths`; its deploy-state and cross-repo reads become a
+repo-specific section planned with the operator then. Its nested service repos (`brain`, `mcp-voice-notes`,
+`obsidian-vault-mcp`) are decided one at a time after that: each has a tracker and PRs, which lite does not install,
+so the full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in `adopt`.
+The parser-based guard on lite docs' links and engine names is #1347.

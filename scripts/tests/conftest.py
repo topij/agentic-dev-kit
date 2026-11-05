@@ -335,6 +335,21 @@ def generated_adapter_source(root: Path) -> Path:
                 if slug in runtime_adapters.EXPLICIT_INVOCATION_ONLY:
                     metadata["policy"] = {"allow_implicit_invocation": False}
                 interface.write_text(json.dumps(metadata), encoding="utf-8")
+        # The lite bindings a lite adapter report reads from its source kit (#1320).
+        for slug in runtime_adapters.LITE_SLUGS:
+            workflow_path = runtime_adapters.LITE_WORKFLOW_PATH.format(slug=slug)
+            workflow = root / workflow_path
+            workflow.parent.mkdir(parents=True, exist_ok=True)
+            if not workflow.exists():
+                workflow.write_text(f"# lite {slug}\n", encoding="utf-8")
+            source = root / runtime_adapters.LITE_SOURCE_PATH.format(runtime=runtime, slug=slug)
+            source.parent.mkdir(parents=True, exist_ok=True)
+            source.write_text(
+                runtime_adapters.render_adapter(
+                    runtime, slug, f"Exercise lite {slug}.", workflow_path, profile="lite"
+                ),
+                encoding="utf-8",
+            )
     return root
 
 

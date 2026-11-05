@@ -310,6 +310,13 @@ the adoption surfaced. The principles it applies:
 > This path was walked for real: a pilot into a live, mature repo, whose adoption
 > friction became several of the fixes in this version.
 
+**A lite profile for repos that want only the session discipline.** `/adopt` asks which
+profile to install. Lite adds the living plan, the friction inbox and lite
+`session-start`, `wrap-up` and `review` workflows, with a fresh-context review for paths
+you declare safety-critical. It adds no engines, hooks or Python files: `/adopt` runs
+the kit's `kit_doctor.py` from its clone of the kit to record and check the install. It
+fits one operator and an agent committing to a branch, with no CI or parallel lanes.
+
 ## What's inside
 
 Each piece maps to one or more of the ten principles in
@@ -322,6 +329,7 @@ Each piece maps to one or more of the ten principles in
 | `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads a `CLAUDE.md` instead of `AGENTS.md` once one exists) — on adopt or upgrade. Never overwrites one already in use. |
 | `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
 | `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize`, `adopt`, and `upgrade`. |
+| `docs/agentic-dev-kit/lite/` | #1, #2 | The lite profile: `session-start`, `wrap-up` and `review` without engines, and their Claude and Codex adapters as `/adopt`'s *Lite profile* copies them. |
 | `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the one-shot descriptor, lane-contract preamble, supported Codex wrapper, and observed/terminal receipt. |
 | `.claude/skills/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows, rendered by `scripts/lib/runtime_adapters.py` from their text in `scripts/lib/adapter_templates/<runtime>/<name>.md`. The authoritative inventory and explicit exceptions live in `docs/agentic-dev-kit/runtime-parity.md`. |
 | `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |

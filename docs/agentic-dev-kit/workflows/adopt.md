@@ -74,6 +74,23 @@ When you verify a copy landed, **hash it at the destination** —
 shell is. In the first occurrence above, the destination hash is what would have
 revealed it, and `git status` is what concealed it.
 
+### Choose the profile
+
+Ask the operator which install profile this repository takes, before Step 1:
+
+- **Full** — everything this workflow installs: the engines, hooks, the pull-request
+  watch and review loop, triage, and the narrative docs. Continue with Step 1.
+- **Lite** — the session discipline without the engines: the living plan, the friction
+  inbox, and the `session-start`, `wrap-up` and `review` workflows as lite docs with
+  Claude and Codex adapters. No engines, hooks or Python files are added to the
+  repository; `uv` on this machine runs the kit's `kit_doctor.py` from `$KIT` at install
+  time only. It fits one operator and an agent committing to a branch, with no remote
+  CI, tracker integration or parallel lanes. Follow *Lite profile* at the end of this
+  workflow instead of Steps 1–6; it uses the two blocks above.
+
+Recommend lite when the repository has no remote CI and commits without pull
+requests; otherwise full. The operator decides.
+
 ## Step 1 — Inspect the target repo (read-only)
 
 Run these probes and record the answers — they drive the plan:
@@ -614,3 +631,148 @@ did to each, any `MARKED` path the operator intentionally retained, and the PR U
 `/session-start` (Claude) or `$session-start` (Codex) as the adopter's next step after
 merge. If Step 3c is still pending, stop there instead: do not open or describe the
 adoption as review-ready.
+
+## Lite profile
+
+A lite install (#1320) writes only these into the repository: the three lite workflow
+docs, their six adapters, a short `config/dev-model.yaml`, the plan and friction docs
+when the repository has none, a section in `AGENTS.md`, and the install baseline
+`kit-manifest.json`. Run Step 0's two blocks first; every write below goes through
+`$REPO` and every read of the kit through the guarded `$KIT`.
+
+### L1 — Inspect (read-only)
+
+- **A plan already kept?** A `docs/plan.md`, a roadmap, or a plan file another tool
+  maintains. If so, `paths.handoff` points at it and the lite `wrap-up` edits it in its
+  own format. Otherwise the plan is a new `docs/handoff.md`.
+- **A fix log or friction inbox already kept?** If so, `paths.friction_log` points at it.
+  Otherwise the inbox is a new `docs/friction-log.md`.
+- **Where does a fully explained finding go here?** A fix log with a rule per entry, a
+  backlog, an issue tracker. That sentence becomes `friction.down_route`; without one,
+  the lite `wrap-up` asks each time.
+- **Paths whose changes need more than a same-context review?** Access control,
+  firewall or tunnel config, deploy scripts and their runbooks. Ask the operator; the
+  answer becomes `review.safety_critical_paths` and turns on the risk tier in
+  `lite-review.md`. No answer leaves it out.
+- **Skill collisions.** For each of `session-start`, `wrap-up` and `review`, look for
+  `.claude/skills/<name>/`, `.claude/commands/<name>.md` and `.agents/skills/<name>/`.
+  Keep what the repository has, skip the kit's binding for that name, and say so.
+- **`config/dev-model.yaml`.** If one exists without `profile: lite`, stop and ask: it
+  is a full install's config or the repository's own file. If one exists with
+  `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
+- **`AGENTS.md` and `CLAUDE.md`.** Note which exist, and whether `CLAUDE.md` imports
+  `AGENTS.md` (an `@AGENTS.md` line).
+
+### L2 — Propose the plan, then wait
+
+Show one row per item: the three docs and six adapters (**install** or **skip:
+collision**), the config with the values L1 settled, the plan and inbox (**point at**
+an existing file, or **create**), and the `AGENTS.md` section. Name the branch the
+commit goes to: the operator's choice, which on a lite repository is usually the one it
+works on. Wait for the operator's go-ahead.
+
+### L3 — Install, never over an existing file
+
+Each copy runs only where the target is absent. A symlink counts as present even when
+it points nowhere, and a target under a symlinked directory inside the repository is
+skipped, so a copy never writes through a link:
+
+```bash
+REPO="${REPO:?REPO is not set — run Step 0}"
+under_link() {
+  d=$(dirname "$1")
+  while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
+    if [ -L "$d" ]; then return 0; fi
+    d=$(dirname "$d")
+  done
+  return 1
+}
+for doc in lite-session-start lite-wrap-up lite-review; do
+  dst="$REPO/docs/agentic-dev-kit/lite/$doc.md"
+  if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
+  if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
+  mkdir -p "$REPO/docs/agentic-dev-kit/lite"
+  cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/$doc.md" "$dst"
+done
+for slug in session-start wrap-up review; do
+  for pair in "claude:.claude/skills" "codex:.agents/skills"; do
+    runtime=${pair%%:*}; dir=${pair#*:}
+    dst="$REPO/$dir/$slug/SKILL.md"
+    if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
+    if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
+    mkdir -p "$REPO/$dir/$slug"
+    cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
+  done
+done
+```
+
+Skip a binding L2 marked as a collision, including one at `.claude/commands/`, which
+this block cannot see. Resolve a target the block skipped for a symlinked directory with
+the operator. Then write `$REPO/config/dev-model.yaml` if it is absent. One
+that exists is kept: change a key in it only with the operator, never by writing the
+file again, which would drop a key such as `review.safety_critical_paths`.
+`kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each
+optional key L1 did not settle:
+
+```yaml
+profile: lite
+kit:
+  version: <kit_version>
+paths:
+  handoff: <plan path>
+  friction_log: <inbox path>
+friction:
+  down_route: "<where a fully explained finding goes>"   # optional
+review:
+  safety_critical_paths:   # optional; patterns as lite-review.md's *Risk tier* matches them
+    - "<path or pattern>"
+```
+
+Create the plan and inbox only where L2 said **create**: a `# Plan` heading over an
+empty `## Workstreams` section, and a `# Friction log` heading. Add this section to
+`$REPO/AGENTS.md` unless it already has the section's heading, creating the file if it
+is missing, and create `$REPO/CLAUDE.md` as
+the single line `@AGENTS.md` when it is missing. When `CLAUDE.md` exists and does not
+import `AGENTS.md`, ask the operator where the section goes instead.
+
+```markdown
+## Session discipline (agentic-dev-kit, lite profile)
+
+- Start a session with `session-start` and end it with `wrap-up`. Run `review` before
+  any other commit.
+- `config/dev-model.yaml` names the living plan and the friction inbox.
+- The workflows are kit-owned, in `docs/agentic-dev-kit/lite/`. Take the kit's copy
+  rather than editing one here.
+```
+
+### L4 — Record the install baseline
+
+```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "${REPO:?REPO is not set — run Step 0}"
+```
+
+It writes `$REPO/kit-manifest.json` with `"profile": "lite"`. Exit 1 names a lite doc
+that does not match the kit clone's copy, which means one the repository already had: keep or
+replace it with the operator, then re-run.
+
+### L5 — Verify
+
+```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "${REPO:?REPO is not set — run Step 0}" --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json"
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --adapter-report --adapter-source "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "$REPO"
+```
+
+The first must exit 0 and print `· profile: lite` and `intact for this adoption — lite
+install`. Every full-profile file is counted `outside the lite profile`, and the
+engines, hook and registrations read `not installed (lite)`. The second lists each lite
+binding `kit-current`, or `adopter-owned` where L2 kept the repository's own, and every
+full-only binding `outside-profile`. A `profile-mismatch` row is a full binding where
+the lite one belongs: take the kit's lite copy.
+
+### L6 — Commit and hand off
+
+Stage every path L3 and L4 wrote by name, and commit on the branch L2 named, or open a
+pull request if the repository takes changes that way. Delete `$KIT` once the commit has
+landed. Report what was installed, kept and pointed at, and leave `session-start` as the
+next step. A later move to the full profile is this workflow run again with **Full**;
+its path from lite is not written yet (#1320).
