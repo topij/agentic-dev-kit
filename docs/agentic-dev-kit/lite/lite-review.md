@@ -99,15 +99,21 @@ are settled the same way; its absence is not a gap in this review.
 
 ## Risk tier: a fresh-context review for declared paths
 
-Read `review.safety_critical_paths` from `config/dev-model.yaml` **as committed**,
-`git show HEAD:config/dev-model.yaml`, not from the working tree, so a change cannot
-shorten the list it is judged by. On a branch with no commit yet, read the staged
-file, `git show :config/dev-model.yaml`. **If either read fails, stop and tell the
-operator:** a config Git cannot show is unreadable, not absent, and reading the
-working tree instead would let the change judge itself. The way out is to commit
-`config/dev-model.yaml` on its own, with the operator's go-ahead after they have read
-it; `adopt.md`'s lite install makes that commit when it installs the config. Strip the whitespace around
-each entry, then:
+Read `review.safety_critical_paths` from `config/dev-model.yaml` **as committed**, not
+from the working tree, so a change cannot shorten the list it is judged by. One read
+applies:
+
+- on a branch with a commit, `git show HEAD:config/dev-model.yaml`;
+- on a branch with no commit yet, the staged file, `git show :config/dev-model.yaml`.
+
+**If the read that applies fails, stop and tell the operator:** a config Git cannot
+show is unreadable, not absent, and reading the working tree instead would let the
+change judge itself. The way out is outside the lite workflows, which stop in this
+state: once the operator has read the config and said to go ahead, commit
+`config/dev-model.yaml` on its own with a plain `git commit`. That commit sets the
+list, so no list judges it; the operator's reading is its review.
+
+Strip the whitespace around each entry, then:
 
 - **absent, null, or an empty list:** the tier is not configured; skip this section,
   and the report says so;
@@ -145,9 +151,10 @@ two matchers are not identical, so keep entries to plain names, `*` and `?`:
 - Git ignores case for ASCII letters only, where `pr_watch.py` folds every letter,
   so write an entry with non-ASCII letters (`Ärzte/*`) in the case the paths use;
 - bracket classes (`[^a]`, `[[:alpha:]]`) and backslashes mean different things to
-  Git and to `fnmatch`; do not use them. Git narrows the diff to these entries before it looks for
-renames, so a file moved out of a declared path is listed under its old name, and one
-moved in under its new name.
+  Git and to `fnmatch`; do not use them.
+
+Git narrows the diff to these entries before it looks for renames, so a file moved out
+of a declared path is listed under its old name, and one moved in under its new name.
 
 A path printed means the tier applies to this change. Nothing printed means it does
 not, and the report says `not touched`. A failed command is a stop, not a pass.

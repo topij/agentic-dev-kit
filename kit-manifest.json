@@ -32,11 +32,11 @@
     },
     "docs/agentic-dev-kit/lite/lite-review.md": {
       "role": "repo-only",
-      "sha256": "e5dc6e387d9d308d9981c1b788dfe36f47afcd8c15b110baf95fab2967ed7b51"
+      "sha256": "c93048d3559e6bd406bf4f6a5f1cfbc0998c9c6f32780bc9d399d313be495d6a"
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "repo-only",
-      "sha256": "5f4f466f7e7b31c76164c0c6bddcfe49725a419060b60abab6030b831346c05c"
+      "sha256": "a7d16c9da2d3bfe831d82f5334a4683dfcfec7bf5f771dfb833cc7277f52c77c"
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "repo-only",
