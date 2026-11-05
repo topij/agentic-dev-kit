@@ -468,7 +468,11 @@ def test_adopt_lite_copy_block_never_writes_through_a_dangling_symlink(tmp_path:
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
-@pytest.mark.parametrize("linked", [".claude/skills", ".claude", "docs/agentic-dev-kit"])
+# The target's own directory first: a guard that starts one level up skips it (#1360).
+@pytest.mark.parametrize(
+    "linked",
+    [".claude/skills/review", "docs/agentic-dev-kit/lite", ".claude/skills", ".claude", "docs/agentic-dev-kit"],
+)
 def test_adopt_lite_copy_block_skips_a_target_under_a_symlinked_directory(
     tmp_path: Path, shell: str, linked: str
 ) -> None:
@@ -484,6 +488,46 @@ def test_adopt_lite_copy_block_skips_a_target_under_a_symlinked_directory(
     assert "skipped, a directory on its path is a symlink" in result.stdout
     assert list(outside.iterdir()) == []
     assert (repo / ".agents/skills/review/SKILL.md").is_file()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("dangling", [False, True])
+def test_adopt_lite_copy_block_skips_a_claude_skill_a_command_would_be_shadowed_by(
+    tmp_path: Path, shell: str, dangling: bool
+) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    command = repo / ".claude/commands/session-start.md"
+    command.parent.mkdir(parents=True)
+    if dangling:
+        command.symlink_to(tmp_path / "nowhere.md")
+    else:
+        command.write_text("Our session start.\n", encoding="utf-8")
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert f"collision: {command}" in result.stdout
+    assert not (repo / ".claude/skills/session-start").exists()
+    # Codex reads no `.claude/commands/`, so its binding still installs, as do the other slugs.
+    assert (repo / ".agents/skills/session-start/SKILL.md").is_file()
+    assert (repo / ".claude/skills/wrap-up/SKILL.md").is_file()
+    assert command.is_symlink() if dangling else command.read_text(encoding="utf-8") == "Our session start.\n"
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_symlinked_ancestor(
+    tmp_path: Path, shell: str
+) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    alias = tmp_path / "alias"
+    alias.symlink_to(tmp_path)
+    env = {**env, "REPO": f"{alias / 'adopter'}/", "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert "skipped" not in result.stdout
+    assert (repo / "docs/agentic-dev-kit/lite/lite-review.md").is_file()
+    assert (repo / ".claude/skills/review/SKILL.md").is_file()
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])

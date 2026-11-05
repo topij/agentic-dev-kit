@@ -666,7 +666,14 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   that runs it.
 - **Skill collisions.** For each of `session-start`, `wrap-up` and `review`, look for
   `.claude/skills/<name>/`, `.claude/commands/<name>.md` and `.agents/skills/<name>/`.
-  Keep what the repository has, skip the kit's binding for that name, and say so.
+  The operator chooses, per collision, one of two outcomes:
+  - **keep** — keep what the repository has, skip the kit's binding for that name in
+    that runtime, and say so;
+  - **replace** — install the kit's binding and remove the repository's own file in the
+    install commit. First list what that file does beyond the lite doc, and give each
+    item a home with the operator: usually a repository source in the `AGENTS.md`
+    section L3 writes, sometimes the plan. An item with no home is dropped only on the
+    operator's word.
 - **`config/dev-model.yaml`.** If one exists without `profile: lite`, stop and ask: it
   is a full install's config or the repository's own file. If one exists with
   `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
@@ -675,8 +682,9 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 
 ### L2 — Propose the plan, then wait
 
-Show one row per item: the three docs and six adapters (**install** or **skip:
-collision**), the config with the values L1 settled, the plan and inbox (**point at**
+Show one row per item: the three docs and six adapters (**install**, **skip:
+collision**, or **replace: `<the repository's file>`** with where each of its extra
+items goes), the config with the values L1 settled, the plan and inbox (**point at**
 an existing file, or **create**), and the `AGENTS.md` section with any repository
 sources. Name the branch the commit goes to: the operator's choice, which on a lite
 repository is usually the one it works on, or a new branch when that one is
@@ -686,10 +694,15 @@ repository is usually the one it works on, or a new branch when that one is
 
 Each copy runs only where the target is absent. A symlink counts as present even when
 it points nowhere, and a target under a symlinked directory inside the repository is
-skipped, so a copy never writes through a link:
+skipped, so a copy never writes through a link. A Claude skill is also skipped while
+`.claude/commands/<slug>.md` exists, because the skill would silently shadow that
+command. For each binding L2 marked **replace**, move its extra items to the homes L2
+named and remove the repository's file with `git rm` before running the block, so the
+block installs the kit's binding and the removal lands in the install commit:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
+REPO="${REPO%/}"
 under_link() {
   d=$(dirname "$1")
   while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
@@ -710,6 +723,8 @@ for slug in session-start wrap-up review; do
     runtime=${pair%%:*}; dir=${pair#*:}
     dst="$REPO/$dir/$slug/SKILL.md"
     if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
+    cmd="$REPO/.claude/commands/$slug.md"
+    if [ "$runtime" = claude ] && { [ -e "$cmd" ] || [ -L "$cmd" ]; }; then echo "collision: $cmd"; continue; fi
     if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
     mkdir -p "$REPO/$dir/$slug"
     cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
@@ -717,9 +732,9 @@ for slug in session-start wrap-up review; do
 done
 ```
 
-Skip a binding L2 marked as a collision, including one at `.claude/commands/`, which
-this block cannot see. Resolve a target the block skipped for a symlinked directory with
-the operator. Then write `$REPO/config/dev-model.yaml` if it is absent. One
+A `collision:` line for a binding L2 marked **replace** means its command is still
+there: remove it and run the block again. Resolve a target the block skipped for a
+symlinked directory with the operator. Then write `$REPO/config/dev-model.yaml` if it is absent. One
 that exists is kept: change a key in it only with the operator, never by writing the
 file again, which would drop a key such as `review.safety_critical_paths`.
 `kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each
