@@ -24,8 +24,8 @@ of the repository's itself.
 CHANGED: the L3 copy block skips a Claude skill while `.claude/commands/<slug>.md`
 exists, printing `collision: <path>`, where it installed the skill beside the command
 and shadowed it. It strips every trailing slash from `REPO`: a `REPO` given with one,
-for a repository reached through a symlinked ancestor, had every target skipped. A lite repository installed
-before this change that has a command shadowed by a kit skill of the same name chooses
+for a repository reached through a symlinked ancestor, had every target skipped. A
+lite repository installed before this change that has a command shadowed by a kit skill of the same name chooses
 keep or replace for it now.
 
 CHANGED: `session-start`, full and lite, puts high-severity friction entries in 🟡

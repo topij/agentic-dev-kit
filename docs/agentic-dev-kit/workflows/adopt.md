@@ -688,11 +688,11 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 
 Show one row per item: the three docs and six adapters (**install**, **skip:
 collision**, or **replace: `<the repository's binding>`, removed by the operator**
-with where each of its extra items goes), the config with the values L1 settled, the plan and inbox (**point at**
-an existing file, or **create**), and the `AGENTS.md` section with any repository
-sources. Name the branch the commit goes to: the operator's choice, which on a lite
-repository is usually the one it works on, or a new branch when that one is
-`vcs.protected_branch`. Wait for the operator's go-ahead.
+with where each of its extra items goes), the config with the values L1 settled, the
+plan and inbox (**point at** an existing file, or **create**), and the `AGENTS.md`
+section with any repository sources. Name the branch the commit goes to: the
+operator's choice, which on a lite repository is usually the one it works on, or a new
+branch when that one is `vcs.protected_branch`. Wait for the operator's go-ahead.
 
 ### L3 — Install, never over an existing file
 
@@ -701,11 +701,15 @@ it points nowhere, and a target under a symlinked directory inside the repositor
 skipped, so a copy never writes through a link. A Claude skill is also skipped while
 `.claude/commands/<slug>.md` exists, because the skill would silently shadow that
 command. For each binding L2 marked **replace**, move its extra items to the homes L2
-named, then ask the operator to remove the binding and to say when it is done. Remove
-nothing of the repository's yourself. The block confirms the removal: a binding still
-there prints `kept:` or `collision:` for its slug, and then the kit's binding is not
-installed. Ask the operator again rather than removing it. L6 stages a tracked
-binding's removal with the install. Then run the block:
+named, then ask the operator to remove the whole binding (the command file, or the skill
+directory with everything in it) and to say when it is done. Remove nothing of the
+repository's yourself. Before running the block, confirm the removal:
+`ls -A "$REPO/<binding>"` must report no such file. Anything left, such as a helper
+file in a skill directory whose `SKILL.md` went, goes back to the operator; the block
+would otherwise copy the kit's `SKILL.md` in beside it. The block itself sees only a
+`SKILL.md` or command file still there, which it reports as `kept:` or `collision:`
+and does not install over. L6 stages a tracked binding's removal with the install.
+Then run the block:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
@@ -739,10 +743,10 @@ for slug in session-start wrap-up review; do
 done
 ```
 
-A `collision:` line for a binding L2 marked **replace** means its command is still
-there: remove it and run the block again. Resolve a target the block skipped for a
-symlinked directory with the operator. Then write `$REPO/config/dev-model.yaml` if it is absent. One
-that exists is kept: change a key in it only with the operator, never by writing the
+A `kept:` or `collision:` line for a binding L2 marked **replace** means it is still
+there: ask the operator to remove it, then run the block again. Resolve a target the
+block skipped for a symlinked directory with the operator. Then write
+`$REPO/config/dev-model.yaml` if it is absent. One that exists is kept: change a key in it only with the operator, never by writing the
 file again, which would drop a key such as `review.safety_critical_paths`.
 `kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each
 optional key L1 did not settle:
