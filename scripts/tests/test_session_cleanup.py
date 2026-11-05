@@ -2368,9 +2368,17 @@ def test_a_returning_round_directory_gets_every_check_again(session):
     assert apply_round(registry, record, receipt)["complete"]
     away.rename(receipt["root"])  # the volume comes back with the round in it
     assert registry.preview_round(registry.load(record["id"]), receipt["id"])["paths"][0]["action"] == "eligible"
-    shutil.rmtree(receipt["path"])
-    Path(receipt["path"]).mkdir()  # a different directory at that path
-    with pytest.raises(cleanup.sweep.ConfigError, match="replaced"):
+    # A different directory at that path. The original is moved aside rather
+    # than removed, so it still holds its inode: ext4 may hand a freed inode
+    # straight to the next mkdir, and the replacement would then pass the
+    # identity check and refuse on its missing marker instead. The copied
+    # marker keeps this case about the directory, not the marker.
+    path = Path(receipt["path"])
+    saved = path.with_name(path.name + "-saved")
+    path.rename(saved)
+    path.mkdir()
+    shutil.copyfile(saved / cleanup.sweep.ROUND_MARKER, path / cleanup.sweep.ROUND_MARKER)
+    with pytest.raises(cleanup.sweep.ConfigError, match="round was replaced"):
         registry.preview_round(registry.load(record["id"]), receipt["id"])
 
 

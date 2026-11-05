@@ -847,7 +847,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "20b2c3ecf83129c356d56fd290d723625b49ace19a8208d4516a3347b5484a1d"
+      "sha256": "433c04905c8acfff561e4192d94ba81d5121a2cdffed3a75ffcc0c25829cb822"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",
