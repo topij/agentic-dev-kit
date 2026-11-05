@@ -326,8 +326,7 @@ later, which carries #1352's Step 1 guards and #1350's `review_owed` field. Foll
 copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment), and lands #1329's
 change before any `retire-evidence` reclaim of its sealed evidence. That upgrade's Step 0 runs from the installed copy,
 so run the new kit block by hand, as `changelog.d/upgrade-kit-clone-path.md` describes; don't delete `$KIT` after
-Step 3 has copied from it (#1355). The operator chose on #1341 on 2026-11-03 to correct this entry; the target and the
-#1355 caution were added afterwards. #1340 completed #576.
+Step 3 has copied from it (#1355). #1340 completed #576.
 
 ### Lite install profile
 
