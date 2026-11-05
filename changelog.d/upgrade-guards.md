@@ -1,7 +1,7 @@
 ## `upgrade.md` Step 1 stops on an unset `REPO` or `KIT` and on a failed history fetch
 
-CHANGED (upgrade procedure): Step 1's baseline block and its non-conforming-subject count
-now stop when `REPO` or `KIT` is unset. Before, the baseline block printed
+CHANGED (upgrade procedure): Step 1's baseline block now stops when `REPO` or `KIT` is
+unset, and its non-conforming-subject count now stops when `KIT` is unset. Before, the baseline block printed
 `baseline=NONE` and sent you to the degraded path as if no baseline had been recorded,
 and the count printed `0`. Step 1's history fetch now stops when both
 `fetch --unshallow` and its `--depth=1000` fallback fail, rather than leave the clone
