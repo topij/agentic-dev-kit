@@ -133,8 +133,15 @@ jobs:
           version: "0.16.0"
           args: check --no-fix
       - name: Check shell syntax
+        # One `bash -n` per file: `bash -n a.sh b.sh` parses only `a.sh` and
+        # hands `b.sh` to it as a positional parameter (#561). The same loop
+        # over the same list as the Makefile's `check-syntax` target; keep the
+        # two the same.
         run: |
-          bash -n scripts/dev_session.sh scripts/reconcile_sessions.sh scripts/lib/repo_root.sh scripts/hooks/pre-push
+          for f in scripts/dev_session.sh scripts/reconcile_sessions.sh \
+                   scripts/lib/repo_root.sh scripts/hooks/pre-push; do
+            bash -n "$f" || exit 1
+          done
           sh -n init.sh
       - name: init.sh must be executable
         # The documented first command is `./init.sh`; a non-executable mode makes

@@ -54,8 +54,6 @@ For changes to these guides, run the [documentation checks](documentation-checks
    remote, protected branch and task-branch convention.
 3. Make the change and run the repository's verification command. For this kit,
    run `make test` with a long enough tool timeout to receive the pytest summary.
-   Its `check-syntax` target has the limitation recorded in [AGENTS.md](../AGENTS.md);
-   inspect changed shell scripts separately until that gap is repaired.
 4. Run `wrap-up`'s handoff test before requesting each PR's opening review,
    preferably before opening the PR. It asks whether the work left anything the PR, its
    commits and the tracker do not already record — a decision, an abandoned approach, a next step

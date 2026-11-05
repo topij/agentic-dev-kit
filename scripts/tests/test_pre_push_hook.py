@@ -87,17 +87,16 @@ def _push(repo: Path, sha: str, ref: str = "refs/heads/chore/x"):
 
 
 def test_the_hook_parses_on_its_own():
-    """`make check-syntax` cannot establish this, which is `#561`.
+    """Written while `make check-syntax` could not establish this (`#561`).
 
-    It passes four filenames to ONE `bash -n`, so the first is parsed and the
-    rest arrive as that script's positional arguments. `scripts/hooks/pre-push`
-    is last on that line, so it is unchecked locally and in CI alike.
-
+    It then passed four filenames to ONE `bash -n`, so the first was parsed and
+    the rest arrived as that script's positional parameters; `scripts/hooks/pre-push`
+    was last on that line, so it went unchecked locally and in CI alike.
     Measured while writing `#706`: `bash -n good.sh bad.sh` exits 0 with a
-    broken `bad.sh`. A genuinely unparseable pre-push would therefore reach
-    every adopter through a green suite, and it is a hook that runs on every
-    push. This test is the one file's worth of that hole closed; `#561` is the
-    general fix and stays open.
+    broken `bad.sh`. The target now runs `bash -n` once per file, but this test
+    pins only the hook's own parse, not the target: what pins `make check-syntax`
+    and CI's "Check shell syntax" step to one `bash -n` per file is
+    `test_make_lint.py::test_check_syntax_fails_on_a_broken_script_after_the_first`.
     """
     done = subprocess.run(["bash", "-n", str(HOOK)], capture_output=True, text=True)
 
