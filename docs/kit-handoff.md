@@ -116,7 +116,7 @@ disk; `session_cleanup.py preview --round` reported each `absent`, marked unveri
 no longer matched), and `apply --round`, with the operator's approval, returned `complete: true` for each.
 #1319 (`c08a3f56`) retires a round whose scratch root is gone too as `absent`, marked unverified (#1278).
 #1321 (`97b1780a`) retires a tracked task worktree nested under the primary checkout (#1307); its delta
-review's test-pinning LOWs are #1322. #1323 delivers #1312: it counts only local branches and tags as a retiring worktree's
+review's test-pinning LOWs were #1322, which #1349 delivered. #1323 delivers #1312: it counts only local branches and tags as a retiring worktree's
 commit retention, not remote-tracking refs, which `git fetch --prune` can delete. #1312 proposed counting
 the refs a fetch refspec maps, which are the ones a prune deletes once the remote has no ref at their
 mapped source; the operator chose branches and tags only over that and over counting the unmapped ones,
@@ -131,15 +131,13 @@ on 2026-10-31.
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1279](https://github.com/topij/agentic-dev-kit/issues/1279),
 [#1280](https://github.com/topij/agentic-dev-kit/issues/1280),
-[#1322](https://github.com/topij/agentic-dev-kit/issues/1322),
-[#1335](https://github.com/topij/agentic-dev-kit/issues/1335),
-[#1336](https://github.com/topij/agentic-dev-kit/issues/1336).
+[#1335](https://github.com/topij/agentic-dev-kit/issues/1335).
 
 #1334 delivers #1327's items 1 and 3: `rounds_without_seal` is documented as rounds that recorded no disposition,
 and a seal that retains an item refuses, before copying, unless `session.json` can take the seal, its own first
 apply's copy and every item's retirement tombstone. That reservation is partial: its docstring in `session_cleanup.py`
 lists what it leaves out, and #1335 proposes storing `last_result` without the seal copy so that it covers every write
-that grows with the evidence. #1336 asks for a test of the refusal's count. Item 2 was #1331's.
+that grows with the evidence. #1349 added the test of the refusal's count (#1336). Item 2 was #1331's.
 
 ▶ Next: decide with the operator whether #1327 is finished, and whether #1256's seal byte budget and #1315's shared
 store are still wanted.
@@ -323,10 +321,12 @@ contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-paralle
 **Owner:** #1116, #990, #1011, #979, #1282.
 
 ▶ Next: cs-toolkit installed kit `69f30eb6` (in-parallel-oy/cs-toolkit#3047, merged 2026-10-31), which is past
-#1301, keeping `test_systemize_config.py` as a local patch until #1313 ships. Its next upgrade, following `upgrade.md`,
-takes the kit's copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment),
-and lands #1329's change before any `retire-evidence` reclaim of its sealed evidence. #576 (Step 0's `/tmp` clone) is
-still open.
+#1301, keeping `test_systemize_config.py` as a local patch until #1313 shipped. Its next upgrade targets `48cdc699` or
+later, which carries #1352's Step 1 guards and #1350's `review_owed` field. Following `upgrade.md`, it takes the kit's
+copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment), and lands #1329's
+change before any `retire-evidence` reclaim of its sealed evidence. That upgrade's Step 0 runs from the installed copy,
+so run the new kit block by hand, as `changelog.d/upgrade-kit-clone-path.md` describes; don't delete `$KIT` after
+Step 3 has copied from it (#1355). #1340 completed #576.
 
 ### Lite install profile
 
@@ -335,8 +335,14 @@ lite workflow docs in `docs/agentic-dev-kit/lite/`, registered repo-only until t
 **Owner:** #1320.
 
 ▶ Next: #1320 phase 3 — a `profiles` map in the kit manifest and `profile: lite` in the adopter baseline, profile
-wording in `kit_doctor`'s report and `--adapter-report` (with #1342), adapter bindings for `lite-*.md`, and the lite
+wording in `kit_doctor`'s report and `--adapter-report`, adapter bindings for `lite-*.md`, and the lite
 option in `adopt`. Also settle the shared clauses that name "Principle #2" and the tracker, which a lite install
 lacks: either word them for both profiles in the full docs, or ship what they point at. The parser-based guard on
 lite docs' links and engine names is #1347. Phase 3 also owes an executed fixture test of the lite docs'
-`base` shell blocks (unborn branch, unreadable ref), which nothing runs yet.
+`base` shell blocks (unborn branch, unreadable ref), which nothing runs yet. Phase 3 includes the optional risk tier
+the operator added on 2026-11-05 (#1320's comment of that date): declared safety-critical paths get one fresh-context
+adversarial review before commit. The operator agreed the order that follows in session on 2026-11-05. Then adopt
+`topij/home-server` as the first lite install, replacing its hand-trimmed
+`/session-start` and `/wrap-up`; its deploy-state and cross-repo reads become a repo-specific section planned with the
+operator then. Its nested service repos (`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`) are decided one at a time
+after that: each has a tracker and PRs, which lite does not install, so the full profile may fit better.
