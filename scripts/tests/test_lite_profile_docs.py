@@ -515,13 +515,14 @@ def test_adopt_lite_copy_block_skips_a_claude_skill_a_command_would_be_shadowed_
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("slashes", ["/", "//", "///"])
 def test_adopt_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_symlinked_ancestor(
-    tmp_path: Path, shell: str
+    tmp_path: Path, shell: str, slashes: str
 ) -> None:
     repo, env = _repo(tmp_path, "adopter")
     alias = tmp_path / "alias"
     alias.symlink_to(tmp_path)
-    env = {**env, "REPO": f"{alias / 'adopter'}/", "KIT": str(REPO_ROOT)}
+    env = {**env, "REPO": f"{alias / 'adopter'}{slashes}", "KIT": str(REPO_ROOT)}
 
     result = _run(shell, _adopt_copy_block(), repo, env)
     assert result.returncode == 0, result.stderr

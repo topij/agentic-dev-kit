@@ -24,8 +24,11 @@ is `paths.handoff`, `<friction-log>` is `paths.friction_log`, `<down-route>` is
 [`lite-review.md`](lite-review.md) reads: `review.safety_critical_paths` as committed,
 by that section's rules, never the working tree's copy. `<protected-branch>` is
 `vcs.protected_branch` when set: the branch that takes changes only through pull
-requests. Absent, the commit goes to the branch checked out. Each of these is a hard
-stop before any edit; say which to the operator:
+requests. **An absent key is a declaration, not an unknown:** the repository takes
+direct commits, and the commit goes to the branch checked out without asking. A
+repository whose branch takes changes only through pull requests must set the key;
+`adopt` asks for it. Each of these is a hard stop before any edit; say which to the
+operator:
 
 - a missing config file, a missing `paths` key, or an unreadable document;
 - a `<declared-paths>` the risk tier cannot read, by its rules in `lite-review.md`,
@@ -34,8 +37,12 @@ stop before any edit; say which to the operator:
   the way out;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
-- a `vcs.protected_branch` that is set but is not a non-empty string: the commit step
-  could not tell whether the branch checked out takes direct commits;
+- a `vcs.protected_branch` key that is present but unusable: null or empty, blank
+  after trimming, not a string, a template placeholder still in angle brackets, or a
+  name that is no branch here (both `git rev-parse --verify -q "refs/heads/<name>"`
+  and `git rev-parse --verify -q "refs/remotes/origin/<name>"` print nothing). The
+  commit step could not tell which branch takes no direct commit, and guessing could
+  commit to it;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
 
@@ -246,13 +253,15 @@ current directory.
    the first.
 
 1. **Push and open the pull request**, only when `<protected-branch>` is set. Push the
-   branch (`git push -u origin HEAD`) and open a pull request against
-   `<protected-branch>`, or let the push update the one already open for this branch.
-   Its description says what changed and the review's result; when the risk tier ran,
-   it also carries what [`lite-review.md`](lite-review.md)'s *Risk tier* asks of it.
-   Merging is the operator's. A push or pull request that fails leaves the commits
-   local: report that, with the command's error, rather than calling the work handed
-   over.
+   branch to the remote `<protected-branch>` lives on (`git push -u origin HEAD` when
+   that is `origin`), then open a pull request against `<protected-branch>` with the
+   forge's own tool (`gh pr create --base <protected-branch>` on GitHub), or let the
+   push update the one already open for this branch. Its description says what changed
+   and the review's result; when the risk tier ran, it also carries what
+   [`lite-review.md`](lite-review.md)'s *Risk tier* asks of it. Merging is the
+   operator's. Report a failure rather than calling the work handed over: a push that
+   fails leaves the commits local, and a pull request that fails to open leaves the
+   branch pushed with no pull request. Give the command's error either way.
 
 1. **Report** what was recorded and where, what was routed, the pull request when one
    was opened or updated, the review's result (and the risk tier's, when it ran), and

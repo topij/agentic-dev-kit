@@ -659,7 +659,8 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 - **Does a branch take changes only through pull requests?** Ask the operator; Git
   does not record it. The branch becomes `vcs.protected_branch`, and the lite `wrap-up`
   then commits on a session branch and opens the pull request. No such branch leaves
-  the key out, and the lite `wrap-up` commits to the branch checked out.
+  the key out, and the lite `wrap-up` reads that absence as "takes direct commits": it
+  commits to the branch checked out without asking.
 - **Reads a session here needs that the lite docs do not make?** A deploy-state check,
   pull requests or issues across related repositories, a roadmap's current phase. Each
   becomes a repository source in the `AGENTS.md` section L3 writes, under the workflow
@@ -669,8 +670,10 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   The operator chooses, per collision, one of two outcomes:
   - **keep** — keep what the repository has, skip the kit's binding for that name in
     that runtime, and say so;
-  - **replace** — install the kit's binding and remove the repository's own file in the
-    install commit. First list what that file does beyond the lite doc, and give each
+  - **replace** — install the kit's binding and remove the repository's own binding in
+    the install commit: the command file, or the skill's whole directory with whatever
+    sits beside its `SKILL.md`. First list what that binding does beyond the lite doc,
+    every file of it, and give each
     item a home with the operator: usually a repository source in the `AGENTS.md`
     section L3 writes, sometimes the plan. An item with no home is dropped only on the
     operator's word.
@@ -697,12 +700,15 @@ it points nowhere, and a target under a symlinked directory inside the repositor
 skipped, so a copy never writes through a link. A Claude skill is also skipped while
 `.claude/commands/<slug>.md` exists, because the skill would silently shadow that
 command. For each binding L2 marked **replace**, move its extra items to the homes L2
-named and remove the repository's file with `git rm` before running the block, so the
-block installs the kit's binding and the removal lands in the install commit:
+named, then remove the repository's binding before running the block, so the block
+installs the kit's and the removal lands in the install commit. A tracked binding goes
+with `git rm -r -- <command file or skill directory>`. One Git does not track (untracked
+or ignored) has no commit that holds it: remove it with `rm -r` only on the operator's
+go-ahead for that path, after its items have their homes.
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
-REPO="${REPO%/}"
+while [ "$REPO" != / ] && [ "${REPO%/}" != "$REPO" ]; do REPO="${REPO%/}"; done
 under_link() {
   d=$(dirname "$1")
   while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
