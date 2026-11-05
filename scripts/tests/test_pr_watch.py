@@ -325,8 +325,11 @@ def test_the_converged_review_request_keys_on_the_review_owed_field() -> None:
     assert "If the next poll at the same head is still `null`, run the fallback review the PR owes" in null
     assert "so it was not asked" in null
     # The routes appear in this order, each once.
-    for route in ("- **A list of bot names:**", "- **`[]`:**", "- **`null`:**"):
+    routes = ("- **A list of bot names:**", "- **`[]`:**", "- **`null`:**")
+    for route in routes:
         assert bullet.count(route) == 1
+    positions = [bullet.index(route) for route in routes]
+    assert positions == sorted(positions)
 
     # The field and the doc agree on what `[]` and `null` mean: the engine's own
     # docstring states the same three answers.
@@ -4598,6 +4601,13 @@ def test_review_owed_is_reported_in_the_json_and_is_what_the_line_prints(
     # And the function directly, on shapes `build_report` does not emit.
     assert pr_watch.review_owed({}) is None
     assert pr_watch.review_owed({"signal": "error"}) is None
+
+    # "Sorted" is part of the reported shape: configured in reverse order, the
+    # owed bots still come back in name order. Six names, so neither the
+    # configured order nor a set's iteration order matches by chance.
+    configured = ("fbot", "ebot", "dbot", "cbot", "bbot", "abot")
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", configured)
+    assert pr_watch.review_owed({"signal": "ok"}) == sorted(configured)
 
 
 def test_a_rate_limited_bot_naming_the_range_it_would_have_reviewed_is_not_a_verdict() -> None:

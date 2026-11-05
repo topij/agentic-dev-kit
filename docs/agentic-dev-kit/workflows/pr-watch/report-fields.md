@@ -357,7 +357,7 @@ panel is the review of record: a bot review that arrives gate-visible spares
 the receipt via the `bot-coverage` route, and one that never arrives changes
 nothing about what the merge rests on.
 
-**State the condition as coverage, not as configuration**, because two
+**The engine states the condition as coverage, not as configuration**, because two
 different causes land here and only the observable one catches both. A repo
 that has turned off incremental auto-review (to stop spending a bounded review
 budget on fix rounds — see

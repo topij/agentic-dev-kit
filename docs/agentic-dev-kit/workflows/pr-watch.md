@@ -182,12 +182,14 @@ Repeat until the report says **converged**:
    have not reviewed this head — request one from each, at this head, now. The
    text render prints the same answer as `⚠ review owed`. The stop condition
    below says what `[]` and `null` mean. **Do not rebuild it from
-   `review_bots`.** Coverage is one of the terms the engine weighs: it also accounts for a reviewer that answered in
-   a comment (`#44`), one whose review is still in flight, and one that announced
-   an outage on its own trusted check, and it owes nothing while the reviewer
-   read itself failed — so a condition rebuilt from coverage by hand asks for
-   reviews the engine already knows are unnecessary. Then record the independent
-   review (see below) so the PR becomes `mergeable`.
+   `review_bots`.** Coverage is one of the terms the engine weighs: it also
+   accounts for a reviewer that answered in a comment (`#44`), one whose review
+   is still in flight, and one that announced an outage on its own trusted
+   check — so a condition rebuilt from coverage by hand asks for reviews the
+   engine has already accounted for. When the reviewer read itself failed, the
+   engine makes no claim at all (`null`), which a hand-built condition cannot
+   tell from "nobody owed". Then record the independent review (see below) so
+   the PR becomes `mergeable`.
 
    **A `mergeable` that is already true does not discharge that request** (`#518`).
    The panel branch above can fire on the *first* poll — a reviewer configured not

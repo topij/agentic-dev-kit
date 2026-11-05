@@ -6175,6 +6175,31 @@ def build_report(
     return report
 
 
+def _covered_bots(bots: dict) -> set[str]:
+    """The bots whose own review object covers the current head.
+
+    Read by :func:`review_owed` and by :func:`render`'s coverage and
+    `ⓘ review reported:` lines, from this one definition so the two cannot
+    drift. `covers_head`, not `qualifying_bot_coverage`: see the comment in
+    :func:`review_owed` on why the gate predicate is the wrong one here.
+    """
+    return {e["bot"] for e in bots.get("coverage") or [] if e.get("covers_head")}
+
+
+def _reviewing_trusted_bots(bots: dict) -> set[str]:
+    """The bots mid-review on a TRUSTED blocking pending entry (#521, #535).
+
+    One definition for both consumers of "a bot is mid-review" —
+    :func:`render`'s coverage warning and :func:`review_owed` — so they agree on
+    who counts. A missing or unresolvable `trusted` counts as not trusted.
+    """
+    return {
+        e["bot"]
+        for e in bots.get("pending") or []
+        if e.get("blocking") and e.get("trusted")
+    }
+
+
 def review_owed(review_bots: dict) -> list[str] | None:
     """The configured review bots owed a review of this head, or ``None``.
 
@@ -6213,26 +6238,30 @@ def review_owed(review_bots: dict) -> list[str] | None:
     # (`gh pr view 516 --json reviews` -> `[]`). A report that only ever says
     # what DID happen cannot show that; this says what has not.
     #
+    # "This line" below is `render`'s `⚠ review owed`, which prints this
+    # function's answer at convergence; "the coverage warning", "the hedge" and
+    # the other lines named here are `render`'s too.
+    #
     # Deliberately narrow, because the way this line fails is by being ignored:
     #
     #   - Only at convergence (the render's term; this function answers on
     #     every poll). That is when the merge head stops moving and the
     #     request becomes worth spending; on a moving head it would fire every
     #     poll of the healthy window and train the reader to skim it, which is
-    #     the same trap the coverage warning above documents.
+    #     the same trap the coverage warning in `render` documents.
     #   - Silent where no reviewer is configured (`signal: skipped`) — there is
     #     nobody to ask, so the line would name no action.
     #   - Silent where a comment-borne verdict exists. Those are current-head by
     #     construction (term 4 of `bot_comment_verdicts`), so the reviewer
-    #     demonstrably did look, and the line above already carries that state
+    #     demonstrably did look, and `render`'s `ⓘ review reported:` line carries that state
     #     and its own remedy.
     #   - Silent where a bot is mid-review (a BLOCKING pending entry). A verdict
     #     is coming; telling you to request one spends a second unit on a review
-    #     already in flight. Same `reviewing_trusted` set the coverage warning
-    #     above computes, and for the same reason.
+    #     already in flight. The same :func:`_reviewing_trusted_bots` set the
+    #     coverage warning in `render` reads, and for the same reason.
     #   - Silent where the bot is resolved UNAVAILABLE on a TRUSTED CHECK.
     #     #535 item 4. The sanctioned remedy for an announced outage is the
-    #     fallback panel, and the `⚠ review unavailable` line below prescribes
+    #     fallback panel, and `render`'s `⚠ review unavailable` line prescribes
     #     it in the same render — so "request one now" here contradicts the line
     #     underneath it and names the one action the outage has ruled out. The
     #     trust qualifier is load-bearing rather than symmetry: an UNTRUSTED
@@ -6256,7 +6285,7 @@ def review_owed(review_bots: dict) -> list[str] | None:
     #     also carries no `trusted` key at all (only the check surface does), so
     #     any defaulted read of it necessarily trusts an unauthenticated author.
     #   - Silent where the review-bot read FAILED (`signal` is not `ok`). The
-    #     hedge printed above says reviewer state could not be read this poll;
+    #     hedge `render` prints says reviewer state could not be read this poll;
     #     an absolute about reviewer state underneath it would retract that
     #     hedge rather than qualify it.
     #
@@ -6279,7 +6308,8 @@ def review_owed(review_bots: dict) -> list[str] | None:
     #
     # `covers_head` is the observable answer to "did a configured reviewer look
     # at THIS diff", which is the only thing this line claims. It is the same
-    # field the coverage warning above reads, deliberately.
+    # field the coverage warning in `render` reads, deliberately, through the
+    # same :func:`_covered_bots`.
     #
     # **Per bot, not "has anyone answered".** A blanket "some verdict exists"
     # test lets one reviewer's answer speak for a second, never-asked one — the
@@ -6308,16 +6338,11 @@ def review_owed(review_bots: dict) -> list[str] | None:
     # be redundant; the other direction costs the diff being merged unreviewed,
     # which is the failure this whole line exists to prevent.
     #
-    # `reviewing_trusted` was computed once already, above the coverage warning
-    # — reused here rather than recomputed. It used to be `reviewing` there,
-    # keyed on name only; #521 closed that gap so both consumers of "a bot is
-    # mid-review" now agree on who counts.
-    covered = {e["bot"] for e in bots.get("coverage") or [] if e.get("covers_head")}
-    reviewing_trusted = {
-        e["bot"]
-        for e in bots.get("pending") or []
-        if e.get("blocking") and e.get("trusted")
-    }
+    # `render`'s coverage warning used to key "mid-review" on name only;
+    # #521 closed that gap, and :func:`_reviewing_trusted_bots` is now the one
+    # definition both consumers read, so they agree on who counts.
+    covered = _covered_bots(bots)
+    reviewing_trusted = _reviewing_trusted_bots(bots)
     accounted = (
         covered
         | reviewing_trusted
@@ -6427,11 +6452,7 @@ def render(report: dict) -> str:
     # off again — silently, and with every test in this file still passing,
     # because they hand `check_details` to `build_report` directly and never
     # cross the transport boundary where the defect lives.
-    reviewing_trusted = {
-        e["bot"]
-        for e in bots.get("pending") or []
-        if e.get("blocking") and e.get("trusted")
-    }
+    reviewing_trusted = _reviewing_trusted_bots(bots)
     for entry in bots.get("coverage") or []:
         if not entry["covers_head"] and entry["bot"] not in reviewing_trusted:
             # Direct indexing, not `.get`: bot_review_coverage always emits all
@@ -6449,7 +6470,7 @@ def render(report: dict) -> str:
     # state where `coverage: []` and `unavailable: []` together look exactly like
     # "nobody reviewed" and actually mean "reviewed, on a surface the gate cannot
     # read". Says what to do, because the remedy is not guessable from the fact.
-    covered = {e["bot"] for e in bots.get("coverage") or [] if e.get("covers_head")}
+    covered = _covered_bots(bots)
     for entry in bots.get("comment_verdicts") or []:
         if entry["bot"] in covered:
             continue
