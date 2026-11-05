@@ -5354,10 +5354,10 @@ def _upgrade_template_copy_block() -> str:
     caller; its copy and chmod now stay in the block being exercised.
     """
     block = _step2_refresh_block()
-    assert re.search(r'^\s*cd "\$REPO"', block, re.M)
+    assert re.search(r'^\s*cd "\$(?:REPO|\{REPO:\?[^}]*\})"', block, re.M)
     body = "\n".join(
         line for line in block.splitlines()
-        if not re.match(r'^\s*cd "\$REPO"', line)
+        if not re.match(r'^\s*cd "\$(?:REPO|\{REPO:\?[^}]*\})"', line)
     )
     assert "not_installed" in body
     return body
@@ -6076,7 +6076,12 @@ def _run_lookup(tmp_path: Path, baseline: str, kit: Path) -> subprocess.Complete
         r'BASELINE="\$\(.*?\)"\n', "", block, count=1, flags=re.DOTALL
     )
     assert "merge-base --is-ancestor" in body, body
-    script = f'set -u\nKIT={shlex.quote(str(kit))}\nBASELINE={shlex.quote(baseline)}\n{body}'
+    # REPO is bound too: the block's opening `:` line guards it, and only the
+    # `BASELINE=` line it guards for reads it (#1341).
+    script = (
+        f'set -u\nREPO={shlex.quote(str(tmp_path))}\nKIT={shlex.quote(str(kit))}\n'
+        f'BASELINE={shlex.quote(baseline)}\n{body}'
+    )
     return subprocess.run(
         ["bash", "-c", script], capture_output=True, text=True, cwd=tmp_path
     )
