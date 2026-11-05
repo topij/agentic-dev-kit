@@ -111,7 +111,9 @@ show is unreadable, not absent, and reading the working tree instead would let t
 change judge itself. The way out is outside the lite workflows, which stop in this
 state: once the operator has read the config and said to go ahead, commit
 `config/dev-model.yaml` on its own with a plain `git commit`. That commit sets the
-list, so no list judges it; the operator's reading is its review.
+list, so no list judges it; the operator's reading is its review. A repository
+installed by `adopt.md`'s *Lite profile* starts with the config committed: its L6
+step commits the config with the rest of the install.
 
 Strip the whitespace around each entry, then:
 
