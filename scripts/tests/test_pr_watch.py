@@ -269,8 +269,8 @@ def test_the_converged_step_settles_the_review_request_before_reading_mergeable(
     # more than coverage, so a condition re-derived from coverage alone asks for
     # reviews it already knows are unnecessary.
     assert "⚠ review owed" in rule
-    assert "Do not rebuild it from `review_bots.coverage` alone" in rule
-    assert "the `--json` poll carries" in rule
+    assert "The poll answers it in `review_owed`" in rule
+    assert "Do not rebuild it from `review_bots`." in rule
     # And the specific misreading that produced #516.
     assert "does not discharge that request" in rule
     assert "do not read it as the end of this step" in rule
@@ -285,54 +285,58 @@ def test_the_converged_step_settles_the_review_request_before_reading_mergeable(
     assert "no comment-borne verdict" in stop
     assert "no review in flight" in stop
     assert "only when the reviewer read succeeded" in stop
-    assert "gates nothing" in stop
+    assert "gate nothing" in stop
 
 
-def test_the_converged_review_request_is_stated_in_the_json_fields_the_loop_polls() -> None:
-    """#1339 — the Converged stop condition's request trigger, in `--json` terms.
+def test_the_converged_review_request_keys_on_the_review_owed_field() -> None:
+    """#1339 — the Converged stop condition's request trigger is `review_owed`.
 
-    The loop polls with `--json`, and `⚠ review owed` is appended only by the
-    text render: the JSON carries no field for it. A bullet keyed on the line
-    alone hands a `--json` reader no trigger at all; one keyed on coverage alone
-    requests from a reviewer that has announced a trusted outage. So the bullet
-    states the engine's own predicate in `review_bots` fields, names the line as
-    its render, and routes the two states the predicate excludes.
+    The loop polls with `--json`. PR 1350 first keyed this bullet on the
+    text-only `⚠ review owed` line, then restated the engine's predicate in
+    `review_bots` fields; each version drew a MEDIUM regression in review (no
+    trigger for a `--json` reader, then an unbounded re-poll when the read
+    failed and a no-bot repo misdescribed). The engine now reports the answer
+    as `review_owed`, and the bullet routes its three values. Each route is
+    pinned as its own whole sentence under its own value, so swapping two
+    routes, or dropping the bound on the `null` re-poll, fails here.
     """
     workflow = (
         REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows" / "pr-watch.md"
     ).read_text(encoding="utf-8")
-    bullet = _between(
-        workflow,
-        "  - **If a configured bot has not reviewed the converged head",
-        "**Poll on means poll on",
+    bullet = " ".join(
+        _between(
+            workflow,
+            "  - **If `review_owed` names a bot at the converged head",
+            "**Poll on means poll on",
+        ).split()
     )
+    assert "Key on the field, never on a condition rebuilt from `review_bots`" in bullet
+    assert "the text render prints it as `⚠ review owed` at convergence" in bullet
 
-    trigger = bullet.split("The text render's", 1)[0]
-    assert "`--json`" in trigger
-    assert "`review_bots.signal` is `ok`" in trigger
-    assert "`review_bots.coverage` whose `covers_head` is true" in trigger
-    assert "`review_bots.comment_verdicts`" in trigger
-    assert "`review_bots.pending` entry with `blocking` and `trusted` both true" in trigger
-    assert (
-        "`review_bots.unavailable` entry with `surface` `check` and `trusted` true"
-        in trigger
-    )
-    # The printed line is the render of that condition, not the trigger itself.
-    assert "`⚠ review owed` line is exactly this condition" in bullet
-    assert "the JSON has no field of its own for it" in bullet
-    # Reviewer state unknown routes to a re-poll, not to a request or a skip.
-    assert "**`review_bots.signal` is not `ok`:**" in bullet
-    assert "re-poll" in bullet.split("**`review_bots.signal` is not `ok`:**", 1)[1]
-    # A trusted check outage routes to the panel; an untrusted or comment one
-    # still owes the review.
-    outage = bullet.split("**A trusted check-surface `unavailable` entry", 1)[1]
-    assert "take the fallback-panel route below" in outage
-    assert "Do not request from it" in outage
-    assert "does not account for the bot: the review is still owed" in outage
+    names = bullet.split("- **A list of bot names:**", 1)[1].split("- **`[]`:**", 1)[0]
+    empty = bullet.split("- **`[]`:**", 1)[1].split("- **`null`:**", 1)[0]
+    null = bullet.split("- **`null`:**", 1)[1]
+
+    assert "request from each named bot at the current head, then poll on" in names
+    assert "Request nothing." in empty
+    assert "or none is configured" in empty
+    assert "request" not in empty.replace("Request nothing", "")
+    assert "Neither request nor skip on that report: re-poll once." in null
+    assert "If the next poll at the same head is still `null`, run the fallback review the PR owes" in null
+    assert "so it was not asked" in null
+    # The routes appear in this order, each once.
+    for route in ("- **A list of bot names:**", "- **`[]`:**", "- **`null`:**"):
+        assert bullet.count(route) == 1
+
+    # The field and the doc agree on what `[]` and `null` mean: the engine's own
+    # docstring states the same three answers.
+    pr_watch = _load_pr_watch()
+    doc = pr_watch.review_owed.__doc__
+    assert "``None``: the review-bot read did not succeed" in doc
+    assert "``[]``: nobody is owed" in doc
 
 
 _PR_WATCH_WORKFLOWS = REPO_ROOT / "docs" / "agentic-dev-kit" / "workflows"
-
 
 def _between(text: str, start: str, end: str) -> str:
     begin = text.index(start)
@@ -4518,6 +4522,82 @@ def test_a_converged_head_with_no_reviewer_coverage_says_the_review_is_owed(
     unconfigured = pr_watch.build_report(view, [], set(), **_settled(view))
     assert unconfigured["review_bots"]["signal"] == "skipped"
     assert "review owed" not in pr_watch.render(unconfigured)
+
+
+def test_review_owed_is_reported_in_the_json_and_is_what_the_line_prints(
+    monkeypatch,
+) -> None:
+    """#1339 — the `--json` report carries the `⚠ review owed` predicate itself.
+
+    PR 1350 restated the predicate in `pr-watch.md` prose for a loop that polls
+    with `--json`, and each of two full review passes found a MEDIUM regression
+    in the restatement. So the field is the answer, and the render only reads
+    it. The three values are distinct on purpose: `None` (the read failed, no
+    claim), `[]` (nobody owed, including no bot configured) and a list of names.
+    A consumer that collapses `None` into `[]` skips a review it cannot know is
+    unneeded; one that collapses `[]` into `None` re-polls forever on a repo
+    with no reviewer, which was the second round's finding.
+    """
+    pr_watch = _load_pr_watch()
+    import json as _json
+
+    view = _green_view()
+    owed = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert owed["review_owed"] == ["coderabbit"]
+    # The JSON the loop reads carries it, not only the in-memory dict.
+    assert _json.loads(_json.dumps(owed))["review_owed"] == ["coderabbit"]
+    assert "coderabbit has not reviewed it" in pr_watch.render(owed)
+
+    # Covered: the bot reviewed this head, so nobody is owed and nothing prints.
+    covered_view = _green_view(
+        reviews=[_review("coderabbitai", "abc123", "2026-07-25T12:00:00Z")]
+    )
+    covered = pr_watch.build_report(covered_view, [], set(), **_settled(covered_view))
+    assert covered["review_owed"] == []
+    assert "review owed" not in pr_watch.render(covered)
+
+    # Not converged: the field still answers (it is a fact about the head); only
+    # the render waits for convergence.
+    failing = _green_view(
+        statusCheckRollup=[
+            {"name": "tests", "status": "COMPLETED", "conclusion": "FAILURE"}
+        ]
+    )
+    moving = pr_watch.build_report(failing, [], set(), **_settled(failing))
+    assert moving["converged"] is False
+    assert moving["review_owed"] == ["coderabbit"]
+    assert "review owed" not in pr_watch.render(moving)
+
+    # Read failed: None, never [] — reviewer state is unknown, not satisfied.
+    unread = pr_watch.build_report(
+        view,
+        [],
+        set(),
+        check_details=pr_watch.CheckDetails([], "unavailable"),
+        **_settled(view),
+    )
+    assert unread["review_bots"]["signal"] == "unavailable"
+    assert unread["review_owed"] is None
+    assert "review owed" not in pr_watch.render(unread)
+
+    # No bot configured: [] — there is nobody to ask, so nothing is owed and a
+    # consumer has nothing to wait for.
+    monkeypatch.setattr(pr_watch, "_REVIEW_BOTS", ())
+    unconfigured = pr_watch.build_report(view, [], set(), **_settled(view))
+    assert unconfigured["review_bots"]["signal"] == "skipped"
+    assert unconfigured["review_owed"] == []
+
+    # The render reads the field rather than recomputing: a converged report
+    # whose field names a bot prints it, whatever `review_bots` says, and one
+    # without the key prints nothing.
+    planted = dict(covered, review_owed=["somebot"])
+    assert "somebot has not reviewed it" in pr_watch.render(planted)
+    keyless = {k: v for k, v in owed.items() if k != "review_owed"}
+    assert "review owed" not in pr_watch.render(keyless)
+
+    # And the function directly, on shapes `build_report` does not emit.
+    assert pr_watch.review_owed({}) is None
+    assert pr_watch.review_owed({"signal": "error"}) is None
 
 
 def test_a_rate_limited_bot_naming_the_range_it_would_have_reviewed_is_not_a_verdict() -> None:

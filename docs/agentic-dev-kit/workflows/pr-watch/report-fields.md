@@ -425,13 +425,15 @@ however, **say when one is owed**, and name who owes it: at convergence,
 for each configured bot with no review covering the head, no comment-borne
 verdict, no review in flight, and no outage the bot announced on its own
 **check** — and only when the reviewer read succeeded — the poll prints
-`⚠ review owed` naming that bot. The line exists only in the text render: the
-`--json` report the loop polls carries no field for it, which is why the
-*Converged* stop condition states the same predicate in `review_bots` fields —
-`signal`, `coverage`, `comment_verdicts`, `pending` and `unavailable` — rather
-than keying on the line. That line is
-reported and gates nothing, deliberately — blocking there would wedge the
-loop on exactly the repos whose reviewer cannot answer. Its job is to make the
+`⚠ review owed` naming that bot. The `--json` report carries the same answer
+as the top-level `review_owed` (`#1339`): a sorted list of the bots owed, `[]`
+when nobody is (every configured bot accounted for, or none configured), and
+`null` when the review-bot read did not succeed, so no claim is made. It is
+computed on every poll; only the line waits for convergence. A consumer keys on
+the field rather than restating the predicate from `review_bots`: two review
+passes on PR 1350 each found a regression in such a restatement. Field and line
+are reported and gate nothing, deliberately — blocking there would wedge the
+loop on exactly the repos whose reviewer cannot answer. Their job is to make the
 *Converged* stop condition's request something you are *told about* rather than
 something you must remember to come back to, which is the failure `#518` records.
 

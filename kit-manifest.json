@@ -96,14 +96,14 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "ec03cddf0876781401c6839df928a8a32b271b6f542490ffc0f93b8cf81abc7b"
+      "sha256": "9930f5ffb5e2f1ea5fb4d7e13dab7df12c7366ebe5bb49f50471c6f72c19d0c8"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "a387be0bd8c0e7a153aba74a3e70b45a6561ec01c2d77e4ce10d05f65a29c245"
+      "sha256": "2853212847647f8d24eab4d35c6dea7f0749aadb342e7a28b146afa731545663"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -619,7 +619,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "b6a8f2cb9d81d83a005726111f0e19fe10fe69db69213b498ee273520995b332"
+      "sha256": "42656264907c93d00564e64609774c2fc25d9667269c5f673fb167c326595529"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -767,7 +767,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "e76ee8f9129fa0e4dc584598e938b61440f9d3b420853930e69dd8efb51ab4c1"
+      "sha256": "3610e07ca2cdf5d95ff06e5b8546c80d99a243fa574b152a20d51908848f4e2e"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
