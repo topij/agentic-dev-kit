@@ -3445,13 +3445,14 @@ def inspect(
 
     raw_version = get(config, "kit.version", None)
     raw_manifest_version = manifest.get("kit_version")
-    # A trusted baseline with no `profile` key was recorded as full. Compared
-    # only when it is a real baseline, not the release manifest standing in for one.
+    # A trusted baseline with no `profile` key was recorded as full. Trust is
+    # the presence of `kit_commit`, which a release manifest never carries, so a
+    # release manifest standing in for a baseline is never compared. The bare
+    # invocation, where the baseline is also the comparison, still is: there the
+    # baseline is the repository's own record (panel, adversarial lens).
     recorded_profile = (baseline or {}).get("profile", "full")
     profile_mismatch = (
-        str(recorded_profile)
-        if trusted and not baseline_is_comparison and recorded_profile != profile
-        else None
+        str(recorded_profile) if trusted and recorded_profile != profile else None
     )
     return Report(
         kit_version_config=_as_version(raw_version),
@@ -4294,7 +4295,8 @@ def main(argv: list[str] | None = None) -> int:
             adapter_profile = profile_of(load_config(root / "config" / "dev-model.yaml"))
         except FileNotFoundError:
             adapter_profile = "full"
-        except ValueError as exc:
+        except (OSError, ValueError) as exc:
+            # An unreadable config is an error here as below, not a traceback.
             print(f"error: {exc}", file=sys.stderr)
             return 2
         try:
@@ -4327,6 +4329,11 @@ def main(argv: list[str] | None = None) -> int:
             "entirely — adopt it with the /adopt skill rather than upgrading.",
             file=sys.stderr,
         )
+        return 2
+    except OSError as exc:
+        # Unreadable rather than absent (a permission, a directory in its place):
+        # reported, not a traceback (panel, adversarial lens).
+        print(f"error: {exc}", file=sys.stderr)
         return 2
     try:
         profile_of(config)

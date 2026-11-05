@@ -674,20 +674,32 @@ works on. Wait for the operator's go-ahead.
 ### L3 — Install, never over an existing file
 
 Each copy runs only where the target is absent. A symlink counts as present even when
-it points nowhere, so a copy never writes through one:
+it points nowhere, and a target under a symlinked directory inside the repository is
+skipped, so a copy never writes through a link:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
-mkdir -p "$REPO/docs/agentic-dev-kit/lite"
+under_link() {
+  d=$(dirname "$1")
+  while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
+    if [ -L "$d" ]; then return 0; fi
+    d=$(dirname "$d")
+  done
+  return 1
+}
 for doc in lite-session-start lite-wrap-up lite-review; do
   dst="$REPO/docs/agentic-dev-kit/lite/$doc.md"
-  if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; else cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/$doc.md" "$dst"; fi
+  if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
+  if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
+  mkdir -p "$REPO/docs/agentic-dev-kit/lite"
+  cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/$doc.md" "$dst"
 done
 for slug in session-start wrap-up review; do
   for pair in "claude:.claude/skills" "codex:.agents/skills"; do
     runtime=${pair%%:*}; dir=${pair#*:}
     dst="$REPO/$dir/$slug/SKILL.md"
     if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
+    if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
     mkdir -p "$REPO/$dir/$slug"
     cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
   done
@@ -695,7 +707,8 @@ done
 ```
 
 Skip a binding L2 marked as a collision, including one at `.claude/commands/`, which
-this block cannot see. Then write `$REPO/config/dev-model.yaml` if it is absent. One
+this block cannot see. Resolve a target the block skipped for a symlinked directory with
+the operator. Then write `$REPO/config/dev-model.yaml` if it is absent. One
 that exists is kept: change a key in it only with the operator, never by writing the
 file again, which would drop a key such as `review.safety_critical_paths`.
 `kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each

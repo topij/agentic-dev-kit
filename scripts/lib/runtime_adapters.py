@@ -14,6 +14,7 @@ ownership of their other keys. Neither comparison changes the drift gate.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
@@ -472,9 +473,19 @@ def compare_adapters(
     for runtime in RUNTIMES:
         if profile == "lite":
             for slug in LITE_SLUGS:
-                statuses.append(
-                    _lite_status(adopter_root, source_root, runtime, slug, lite_renders)
+                # The retired command path is judged as on a full repository: an
+                # authored `.claude/commands/<slug>.md` makes the absent skill
+                # theirs, never `missing`, since a skill would shadow it.
+                retired = (
+                    _lite_retired_command_status(adopter_root, source_root, slug)
+                    if runtime == "claude"
+                    else None
                 )
+                statuses.append(
+                    _lite_status(adopter_root, source_root, runtime, slug, lite_renders, retired)
+                )
+                if retired is not None:
+                    statuses.append(retired)
         for slug in WORKFLOW_SLUGS:
             rel = _adapter_path(runtime, slug)
             if profile == "lite" and slug in LITE_SLUGS:
@@ -578,6 +589,7 @@ def _lite_status(
     runtime: str,
     slug: str,
     lite_renders: dict[tuple[str, str], str],
+    retired: AdapterStatus | None = None,
 ) -> AdapterStatus:
     """Classify one lite binding in a lite repository."""
     rel = _adapter_path(runtime, slug)
@@ -586,6 +598,11 @@ def _lite_status(
     if unsafe_path is not None:
         return AdapterStatus(runtime, slug, rel, "adopter-owned", unsafe_path)
     if not (adopter_root / rel).is_file():
+        if retired is not None and retired.state == "adopter-owned":
+            return AdapterStatus(
+                runtime, slug, rel, "adopter-owned",
+                f"not installed: a skill here would shadow the authored {retired.path}",
+            )
         return AdapterStatus(runtime, slug, rel, "missing", f"install the kit's {source}")
     try:
         text = (adopter_root / rel).read_text(encoding="utf-8")
@@ -610,6 +627,24 @@ def _lite_status(
     except (OSError, UnicodeError, ValueError):
         return owned
     return _mismatch_or(owned, adopter_root, full_render, "full")
+
+
+def _lite_retired_command_status(
+    adopter_root: Path, source_root: Path, slug: str
+) -> AdapterStatus | None:
+    """`_retired_command_status` for a lite slug, judged against the full forms.
+
+    The kit only ever generated commands at that path from the full workflows, so
+    those are the forms a kit-generated one can match.
+    """
+    workflow_path = f"docs/agentic-dev-kit/workflows/{slug}.md"
+    description = ""
+    if slug in WORKFLOW_SLUGS:
+        with contextlib.suppress(OSError, UnicodeError, ValueError):
+            description = _frontmatter(
+                (source_root / _adapter_path("claude", slug)).read_text(encoding="utf-8")
+            ).get("description", "")
+    return _retired_command_status(adopter_root, slug, description, workflow_path)
 
 
 def _disables_implicit_invocation(text: str) -> bool:
@@ -783,7 +818,9 @@ def _retired_command_status(
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         return AdapterStatus("claude", slug, rel, "adopter-owned", f"unreadable: {exc}")
-    for version in (1, 2):
+    # A slug with no full workflow (lite's `review`) was never generated here, so
+    # only the authored case below applies to it.
+    for version in (1, 2) if slug in WORKFLOW_SLUGS else ():
         if text == render_adapter(
             "claude", slug, description, workflow_path, template_version=version
         ):

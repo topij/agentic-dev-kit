@@ -2,7 +2,9 @@
 
 ADDED: `config/dev-model.yaml` key `profile`, `full` or `lite`; absent means `full`.
 `kit_doctor.py` refuses any other value with exit 2, in every mode, including a key
-that is present but blank or null. A full install needs no change.
+that is present but blank or null. A config that exists but cannot be read is reported
+as an error with exit 2, in every mode, where it was a traceback. A full install needs no
+change.
 
 ADDED: the lite profile (#1320). `adopt.md` gains *Choose the profile* after Step 0
 and a *Lite profile* section, which installs `docs/agentic-dev-kit/lite/` and

@@ -332,12 +332,12 @@ Step 3 has copied from it (#1355). #1340 completed #576.
 
 **Status:** the operator's decisions and the phase 1 probe are #1320's comments of 2026-11-03. Phase 2 added the
 lite workflow docs in `docs/agentic-dev-kit/lite/`. Phase 3 is two pull requests: #1358 (the optional risk tier,
-the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, executed shell-block tests) and #1359,
-stacked on it (the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). A lite
+the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, executed shell-block tests) and #1359
+(the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). A lite
 repository has no upgrade path yet: `upgrade.md` Step 0 stops on one.
 **Owner:** #1320.
 
-▶ Next: once #1358 and #1359 merge, adopt `topij/home-server` as the first lite install with `adopt.md`'s *Lite
+▶ Next: once #1359 merges, adopt `topij/home-server` as the first lite install with `adopt.md`'s *Lite
 profile* (the order the operator agreed in session on 2026-11-05), replacing its hand-trimmed `/session-start` and
 `/wrap-up` and declaring its `review.safety_critical_paths`; its deploy-state and cross-repo reads become a
 repo-specific section planned with the operator then. Its nested service repos (`brain`, `mcp-voice-notes`,

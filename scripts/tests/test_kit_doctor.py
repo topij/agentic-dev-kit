@@ -8968,6 +8968,32 @@ def test_a_lite_repository_whose_config_now_reads_full_fails_the_run(tmp_path, c
     assert "intact for this adoption —" not in out.replace("NOT intact for this adoption —", "")
 
 
+def test_the_bare_invocation_also_fails_a_lite_repository_whose_config_reads_full(tmp_path, capsys):
+    """No `--manifest`: the repository's own `kit-manifest.json` is both baseline and
+    comparison, and it is still the record the mismatch is judged against."""
+    root, _ = _lite_repo(tmp_path)
+    (root / "kit-manifest.json").write_text(json.dumps(_lite_baseline(root)), encoding="utf-8")
+    config = root / "config" / "dev-model.yaml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace("profile: lite", "profile: full"), encoding="utf-8"
+    )
+    code = kit_doctor.main(["--root", str(root)])
+    out = capsys.readouterr().out
+    assert code == 1, out
+    assert "✗ NOT intact for this adoption — judged as a full install, recorded as lite" in out
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads a mode-000 file")
+@pytest.mark.parametrize("mode", [[], ["--adapter-report"]])
+def test_an_unreadable_config_is_an_error_not_a_traceback(tmp_path, capsys, mode):
+    root = _fake_repo(tmp_path)
+    config = root / "config" / "dev-model.yaml"
+    config.chmod(0)
+    assert kit_doctor.main(["--root", str(root), *mode]) == 2
+    err = capsys.readouterr().err
+    assert err.startswith("error:") and "Traceback" not in err
+
+
 @pytest.mark.parametrize("state", sorted(kit_doctor._CHOSEN_REGISTRATION_STATES))
 def test_each_chosen_registration_state_reads_not_installed_on_lite(tmp_path, capsys, state):
     root, hashes = _lite_repo(tmp_path)
@@ -9022,6 +9048,39 @@ def test_a_lite_adapter_report_expects_the_lite_bindings(tmp_path, adapter_sourc
         for slug in set(runtime_adapters.WORKFLOW_SLUGS) - set(runtime_adapters.LITE_SLUGS):
             assert rows[(runtime, slug)].state == "outside-profile"
     assert not any(s.path.endswith("openai.yaml") for s in rows.values())
+
+
+def test_an_authored_command_makes_an_absent_lite_skill_the_adopters(tmp_path, adapter_source):
+    """A skill would shadow `.claude/commands/<slug>.md`, so on lite as on full the
+    absent skill is the adopter's to resolve, never `missing`."""
+    adopter = _lite_adopter(tmp_path, adapter_source)
+    skill = runtime_adapters._adapter_path("claude", "review")
+    (adopter / skill).unlink()
+    command = runtime_adapters.LEGACY_CLAUDE_COMMAND_PATH.format(slug="review")
+    _write(adopter / command, "Our own review command.\n")
+    rows = {s.path: s for s in runtime_adapters.compare_adapters(adapter_source, adopter, profile="lite")}
+    assert rows[skill].state == "adopter-owned"
+    assert "would shadow the authored" in rows[skill].detail
+    assert rows[command].state == "adopter-owned"
+
+
+def test_a_kit_generated_command_on_lite_reads_kit_retired(tmp_path, adapter_source):
+    adopter = _lite_adopter(tmp_path, adapter_source)
+    full = _frontmatter_description(
+        adapter_source / runtime_adapters._adapter_path("claude", "session-start")
+    )
+    command = runtime_adapters.LEGACY_CLAUDE_COMMAND_PATH.format(slug="session-start")
+    _write(adopter / command, runtime_adapters.render_adapter(
+        "claude", "session-start", full, "docs/agentic-dev-kit/workflows/session-start.md",
+        template_version=2,
+    ))
+    rows = {s.path: s for s in runtime_adapters.compare_adapters(adapter_source, adopter, profile="lite")}
+    assert rows[command].state == "kit-retired"
+    assert rows[runtime_adapters._adapter_path("claude", "session-start")].state == "kit-current"
+
+
+def _frontmatter_description(path: Path) -> str:
+    return runtime_adapters._frontmatter(path.read_text(encoding="utf-8")).get("description", "")
 
 
 def test_a_full_binding_in_a_lite_repository_is_a_profile_mismatch(tmp_path, adapter_source):

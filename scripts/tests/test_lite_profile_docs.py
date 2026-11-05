@@ -468,6 +468,25 @@ def test_adopt_lite_copy_block_never_writes_through_a_dangling_symlink(tmp_path:
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("linked", [".claude/skills", ".claude", "docs/agentic-dev-kit"])
+def test_adopt_lite_copy_block_skips_a_target_under_a_symlinked_directory(
+    tmp_path: Path, shell: str, linked: str
+) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (repo / linked).parent.mkdir(parents=True, exist_ok=True)
+    (repo / linked).symlink_to(outside)
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert "skipped, a directory on its path is a symlink" in result.stdout
+    assert list(outside.iterdir()) == []
+    assert (repo / ".agents/skills/review/SKILL.md").is_file()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
 def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path, shell: str) -> None:
     repo, env = _repo(tmp_path, "adopter")
     kept_skill = repo / ".claude/skills/review/SKILL.md"
