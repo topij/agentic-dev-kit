@@ -32,7 +32,7 @@
     },
     "docs/agentic-dev-kit/lite/lite-review.md": {
       "role": "repo-only",
-      "sha256": "61ebd66528024d36869a5af22b5dea92175922e44d73a00db28d067a6ffdb0b4"
+      "sha256": "e5dc6e387d9d308d9981c1b788dfe36f47afcd8c15b110baf95fab2967ed7b51"
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "repo-only",
@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "repo-only",
-      "sha256": "3c02c0c643140dc442dd9157623df93c3cd25893c34a46d0b15ead15778c4270"
+      "sha256": "93db3b50e757dbda4b4b46979cb84cb535973b34d91e6fe78f736066ae524072"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",

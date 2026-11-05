@@ -27,7 +27,8 @@ which to the operator:
 - a missing config file, a missing `paths` key, or an unreadable document;
 - a `<declared-paths>` the risk tier cannot read, by its rules in `lite-review.md`,
   including a committed config Git cannot show: it could not tell which changes it
-  covers, and guessing would skip the review it exists to require;
+  covers, and guessing would skip the review it exists to require. That section names
+  the way out;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a

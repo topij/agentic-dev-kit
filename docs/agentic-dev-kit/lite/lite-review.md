@@ -102,9 +102,11 @@ are settled the same way; its absence is not a gap in this review.
 Read `review.safety_critical_paths` from `config/dev-model.yaml` **as committed**,
 `git show HEAD:config/dev-model.yaml`, not from the working tree, so a change cannot
 shorten the list it is judged by. On a branch with no commit yet, read the staged
-file, `git show :config/dev-model.yaml`. **If that command fails, stop and tell the
+file, `git show :config/dev-model.yaml`. **If either read fails, stop and tell the
 operator:** a config Git cannot show is unreadable, not absent, and reading the
-working tree instead would let the change judge itself. Strip the whitespace around
+working tree instead would let the change judge itself. The way out is to commit
+`config/dev-model.yaml` on its own, with the operator's go-ahead after they have read
+it; `adopt.md`'s lite install makes that commit when it installs the config. Strip the whitespace around
 each entry, then:
 
 - **absent, null, or an empty list:** the tier is not configured; skip this section,
@@ -135,12 +137,15 @@ whatever directory the shell is in; without it, Git matches from the current
 directory, and a run from a subdirectory prints nothing for a change it should catch.
 `icase` ignores case. Matching is the full profile's (`pr_watch.py` matches the same
 key with `fnmatch`): `*` matches across `/`, so `deploy/*` covers everything under
-`deploy/` and `*.sh` every shell script, and `docs/deploy.md` covers that one file. It
-differs from `pr_watch.py` in three ways. An entry naming a directory, such as
-`deploy`, also covers everything under it, which only adds review. Git ignores case
-for ASCII letters only, where `pr_watch.py` folds every letter, so write an entry with
-non-ASCII letters (`Ärzte/*`) in the case the paths use. And a backslash escapes the
-next character for Git but is an ordinary character for `fnmatch`; avoid it. Git narrows the diff to these entries before it looks for
+`deploy/` and `*.sh` every shell script, and `docs/deploy.md` covers that one file. The
+two matchers are not identical, so keep entries to plain names, `*` and `?`:
+
+- an entry naming a directory, such as `deploy`, also covers everything under it,
+  which only adds review;
+- Git ignores case for ASCII letters only, where `pr_watch.py` folds every letter,
+  so write an entry with non-ASCII letters (`Ärzte/*`) in the case the paths use;
+- bracket classes (`[^a]`, `[[:alpha:]]`) and backslashes mean different things to
+  Git and to `fnmatch`; do not use them. Git narrows the diff to these entries before it looks for
 renames, so a file moved out of a declared path is listed under its old name, and one
 moved in under its new name.
 
