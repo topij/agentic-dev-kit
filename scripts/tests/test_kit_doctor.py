@@ -2429,8 +2429,8 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
             # them; every mention must read from there, never from the adopter.
             for rel, text in adopter_doctrine.items():
                 for match in re.finditer(re.escape(lite_sources), text):
-                    assert text[: match.start()].endswith("$KIT/"), (
-                        f"{rel} refers to {lite_sources} outside the kit clone"
+                    assert re.search(r"\$\{KIT:\?[^}]*\}/$", text[: match.start()]), (
+                        f"{rel} refers to {lite_sources} outside the guarded kit clone"
                     )
             continue
         basename = Path(repo_only_path).name
