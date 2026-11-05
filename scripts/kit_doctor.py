@@ -64,6 +64,13 @@ it reports one of:
     does not mention these — and names the likely cause as likely. Making the
     distinction mechanical needs an integrity-protected baseline, which is a
     larger change than this axis.
+``outside-profile``
+    Not installed, and not part of this repository's install profile
+    (``profile:`` in its config; absent means ``full``, #1320): on a full
+    install, the lite profile's workflows, and on a lite install, everything
+    else. Judged ahead of the declared set, because nobody declined such a
+    file and no upgrade should offer it. Never a finding. A file the baseline
+    records as installed still reads ``removed``.
 ``missing-required``
     Not installed, but an engine that IS installed needs it — so this install
     is broken, not sized down. The distinction exists because the old report had
@@ -226,6 +233,10 @@ from kitconfig import get, load_config, repo_root  # noqa: E402
 
 MANIFEST_NAME = "kit-manifest.json"
 REPO_ONLY_ROLE = "repo-only"
+# The lite profile's own files (#1320): the session discipline without the
+# engines. A lite install takes exactly these; a full install takes every other
+# adopter-facing path and leaves these out. See `in_profile`.
+LITE_ROLE = "lite"
 
 # Files the KIT owns, as they sit in the kit's own tree. An adopter should never
 # need to edit one of these — everything project-specific belongs in
@@ -345,6 +356,13 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/lib/adapter_templates/codex/triage-friction-log.md", "template"),
     ("scripts/lib/adapter_templates/codex/upgrade.md", "template"),
     ("scripts/lib/adapter_templates/codex/wrap-up.md", "template"),
+    # The lite profile's bindings (#1320), read by the same renderer.
+    ("scripts/lib/adapter_templates/claude/lite-session-start.md", "template"),
+    ("scripts/lib/adapter_templates/claude/lite-wrap-up.md", "template"),
+    ("scripts/lib/adapter_templates/claude/lite-review.md", "template"),
+    ("scripts/lib/adapter_templates/codex/lite-session-start.md", "template"),
+    ("scripts/lib/adapter_templates/codex/lite-wrap-up.md", "template"),
+    ("scripts/lib/adapter_templates/codex/lite-review.md", "template"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
     ("scripts/lib/repo_root.sh", "engine"),
@@ -402,8 +420,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_runtime_smoke.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_review_eval.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_skill_routing_eval.py", REPO_ONLY_ROLE),
-    # Pins the lite docs' shared clauses to the full workflows (#1320); the lite
-    # docs below are repo-only until the profile ships, so this is too.
+    # Pins the lite docs' shared clauses to the full workflows and runs their shell
+    # blocks (#1320). It needs the full workflows beside the lite docs, which only
+    # the kit's own checkout has, so it stays repo-only.
     ("scripts/tests/test_lite_profile_docs.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
@@ -501,11 +520,22 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("docs/agentic-dev-kit/review-eval/reviewer-eval.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/review-eval/cases.yaml", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/skill-routing/cases.json", REPO_ONLY_ROLE),
-    # The lite profile's workflows (#1320). Repo-only until the profile can be
-    # installed, so a full adopter's upgrade does not copy in docs it cannot use.
-    ("docs/agentic-dev-kit/lite/lite-session-start.md", REPO_ONLY_ROLE),
-    ("docs/agentic-dev-kit/lite/lite-wrap-up.md", REPO_ONLY_ROLE),
-    ("docs/agentic-dev-kit/lite/lite-review.md", REPO_ONLY_ROLE),
+    # The lite profile's workflows (#1320). Role `lite`: a lite install takes them,
+    # and a full install reports them `outside-profile` rather than offering them,
+    # so a full adopter's upgrade does not copy in docs it cannot use.
+    ("docs/agentic-dev-kit/lite/lite-session-start.md", LITE_ROLE),
+    ("docs/agentic-dev-kit/lite/lite-wrap-up.md", LITE_ROLE),
+    ("docs/agentic-dev-kit/lite/lite-review.md", LITE_ROLE),
+    # The lite adapters as `adopt` copies them into `.claude/skills/<slug>/` and
+    # `.agents/skills/<slug>/`. Rendered by `lib/runtime_adapters.py`, and a test
+    # holds them equal to it. Repo-only: an adopter has the copies at the skill
+    # paths, which `--adapter-report` judges, never these source paths.
+    ("docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md", REPO_ONLY_ROLE),
+    ("docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md", REPO_ONLY_ROLE),
     ("docs/agentic-dev-kit/safety-critical-changes.md", "doctrine"),
     # Tracked because safety-critical-changes.md — which IS refreshed by
     # /upgrade — links to it from rules 2 and 3. An untracked target means an
@@ -645,6 +675,49 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
 ADOPTER_KIT_OWNED = tuple(
     (rel, role) for rel, role in KIT_OWNED if role != REPO_ONLY_ROLE
 )
+
+# Install profiles (#1320). A repository declares its profile as `profile:` in
+# config/dev-model.yaml; no key means `full`, so every config written before
+# profiles existed keeps its meaning. `--record-install` copies a `lite` profile
+# into the baseline, and `--generate-manifest` publishes the lite file list as
+# `profiles.lite`, derived from the `lite` role rather than listed a second time.
+PROFILES: tuple[str, ...] = ("full", "lite")
+LITE_PROFILE_PATHS: tuple[str, ...] = tuple(
+    rel for rel, role in KIT_OWNED if role == LITE_ROLE
+)
+
+
+def in_profile(role: str, profile: str) -> bool:
+    """Whether a kit-owned path of this role belongs to an install of this profile.
+
+    The two profiles do not overlap: lite takes only the `lite` role, and full
+    takes every other adopter-facing role. A path outside the repository's
+    profile that is absent is `outside-profile`, never `declined`, `missing` or
+    `new-upstream`: nobody declined it, and no upgrade should offer it.
+    """
+    return (role == LITE_ROLE) == (profile == "lite")
+
+
+class ProfileError(ValueError):
+    """A `profile:` value this kit does not know."""
+
+
+def profile_of(config: dict) -> str:
+    """The install profile `config` declares: `full` when the key is absent.
+
+    An unknown value is refused rather than read as `full`. A typo'd `lite`
+    would otherwise report every lite repository as a broken full install, and
+    a value from a newer kit would be judged by rules that are not its own.
+    """
+    raw = get(config, "profile", None)
+    if raw is None:
+        return "full"
+    if raw not in PROFILES:
+        raise ProfileError(
+            f"profile is {raw!r}; this kit knows {', '.join(repr(p) for p in PROFILES)}"
+        )
+    return raw
+
 
 # The kit-layout key for the pre-push hook, derived from KIT_OWNED rather than
 # spelled again: `not_installed` records these keys, so a declined-hook check
@@ -1108,6 +1181,10 @@ class Report:
     # a `--json` consumer reading it must not have the answer change shape under
     # it — so the third state arrives beside it rather than inside it.
     hooks_state: str = "not-installed"
+    # The profile the config declares (#1320), and the one the baseline recorded
+    # when they differ (None when they agree or there is no trusted baseline).
+    profile: str = "full"
+    baseline_profile_mismatch: str | None = None
     registrations: list[RegistrationStatus] = field(default_factory=list)
     lens_definitions: list[LensDefinitionStatus] = field(default_factory=list)
     files: list[FileStatus] = field(default_factory=list)
@@ -2440,6 +2517,9 @@ def generate_manifest(root: Path, kit_version: int) -> dict:
         "kit_version": kit_version,
         "files": files,
         "adopter_owned": list(ADOPTER_OWNED),
+        # Each non-full profile's paths (#1320). A path in no list here is
+        # full-only, so a per-file entry needs no profile field.
+        "profiles": {"lite": list(LITE_PROFILE_PATHS)},
     }
 
 
@@ -2604,6 +2684,12 @@ def record_install_manifest(
     # lists the unverified paths on stderr, so this is never silent.
     if not unverified:
         recorded["not_installed"] = not_installed
+    # Written only for lite, so a full adopter's re-recorded baseline is the
+    # same shape as before profiles existed; an absent key reads as `full`.
+    # `not_installed` keeps its meaning (every absent kit-owned path, full-only
+    # ones included), so upgrade.md's copy loop and older engines need nothing new.
+    if profile_of(config) == "lite":
+        recorded["profile"] = "lite"
     return recorded, unverified
 
 
@@ -3082,6 +3168,7 @@ def inspect(
         else ADOPTER_KIT_OWNED
     )
     engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
+    profile = profile_of(config)
     manifest_files = manifest.get("files") or {}
     trusted = _baseline_trusted(baseline)
     # `isinstance`, not `or {}`: a non-empty list or string is truthy, so `or`
@@ -3186,6 +3273,15 @@ def inspect(
                 statuses.append(
                     FileStatus(local_rel, role, "missing-required", f"needed by {names}")
                 )
+            elif not in_profile(role, profile) and rel not in baseline_files:
+                # Ahead of every declared-set state: nobody declined a file
+                # outside the profile, and no upgrade should offer it. One the
+                # baseline records as installed falls through to `removed`.
+                statuses.append(
+                    FileStatus(
+                        local_rel, role, "outside-profile", f"not part of the {profile} profile"
+                    )
+                )
             elif declared_scope is None:
                 # No declared set — the pre-#286 answer, unchanged and
                 # deliberately not improved by inference. `render` says why and
@@ -3263,6 +3359,8 @@ def inspect(
     # stronger fact and a stale declaration must not hide a working install.
     if hooks_installed:
         hooks_state = "installed"
+    elif profile == "lite":
+        hooks_state = "outside-profile"
     elif declared_scope is not None and PRE_PUSH_REL in declared_scope:
         hooks_state = "declined"
     else:
@@ -3341,6 +3439,14 @@ def inspect(
 
     raw_version = get(config, "kit.version", None)
     raw_manifest_version = manifest.get("kit_version")
+    # A trusted baseline with no `profile` key was recorded as full. Compared
+    # only when it is a real baseline, not the release manifest standing in for one.
+    recorded_profile = (baseline or {}).get("profile", "full")
+    profile_mismatch = (
+        str(recorded_profile)
+        if trusted and not baseline_is_comparison and recorded_profile != profile
+        else None
+    )
     return Report(
         kit_version_config=_as_version(raw_version),
         kit_version_manifest=_as_version(raw_manifest_version),
@@ -3350,6 +3456,8 @@ def inspect(
         engines_dir_ok=engines_probe,
         hooks_installed=hooks_installed,
         hooks_state=hooks_state,
+        profile=profile,
+        baseline_profile_mismatch=profile_mismatch,
         inspection_root=root,
         registrations=inspect_registrations(root, engines_dir),
         lens_definitions=inspect_lens_definitions(root, config, engines_dir),
@@ -3464,6 +3572,12 @@ def _lens_definition_remedy(root: Path, engines_dir: str) -> str:
     )
 
 
+# The registration states that describe a hook nobody wired, as opposed to one
+# wired wrongly. `dead_registrations` leaves exactly these out of the exit code;
+# on a lite repository `render` prints them as the profile's `not installed (lite)`.
+_CHOSEN_REGISTRATION_STATES = frozenset({"unregistered", "absent", "unset", "ungranted"})
+
+
 def render(report: Report) -> str:
     lines: list[str] = ["kit-doctor — installation report", ""]
     if report.codex_models:
@@ -3557,8 +3671,19 @@ def render(report: Report) -> str:
             "behind the kit"
         )
 
+    lite = report.profile == "lite"
+    if lite:
+        lines.append("  · profile: lite — engines, hooks and the pull-request loop are not part of it")
+    if report.baseline_profile_mismatch is not None:
+        lines.append(
+            f"  ⚠ profile: the baseline was recorded as {report.baseline_profile_mismatch}, "
+            f"the config says {report.profile} — re-run --record-install after the move"
+        )
+
     if report.engines_dir_ok:
         lines.append(f"  ✓ paths.engines: {report.engines_dir}")
+    elif lite:
+        lines.append("  · paths.engines: not installed (lite)")
     else:
         lines.append(
             f"  ✗ paths.engines: {report.engines_dir} — contains no kit engine. "
@@ -3572,6 +3697,7 @@ def render(report: Report) -> str:
     hook_line = {
         "installed": "  ✓ pre-push hook: installed",
         "declined": "  · pre-push hook: declined (recorded in not_installed)",
+        "outside-profile": "  · pre-push hook: not installed (lite)",
         "not-installed": "  ⚠ pre-push hook: NOT installed — run ./init.sh",
     }
     lines.append(hook_line.get(report.hooks_state, hook_line["not-installed"]))
@@ -3613,8 +3739,12 @@ def render(report: Report) -> str:
             ),
             "unreadable": ("⚠", f"unreadable — {reg.detail}"),
         }.get(reg.state, ("⚠", reg.state))
+        if lite and reg.state in _CHOSEN_REGISTRATION_STATES:
+            # Nothing to register on lite: these states are the profile, not a
+            # choice made against it. A defect still renders as one.
+            mark, text = "·", "not installed (lite)"
         lines.append(f"  {mark} {reg.surface} [{reg.runtime}]: {text}")
-    if any(
+    if not lite and any(
         reg.state in ("unregistered", "absent", "unset") for reg in report.registrations
     ):
         # Said once, not per line: `init.sh` prints both blocks and writes
@@ -3625,7 +3755,7 @@ def render(report: Report) -> str:
             "    (registrations are hand-written — ./init.sh prints both blocks; "
             "`/hooks` in a session is the authority on what loaded)"
         )
-    if any(reg.state == "ungranted" for reg in report.registrations):
+    if not lite and any(reg.state == "ungranted" for reg in report.registrations):
         # Its OWN footer rather than a name added to the condition above, which
         # is what a review lens first proposed. That footer is about hook
         # registrations and names `/hooks` as the authority — neither is true of
@@ -3664,7 +3794,10 @@ def render(report: Report) -> str:
         #
         # A file that is not there at all is a third fact: it cannot still be
         # anyone's copy. Same remedy, so again only the words differ.
-        if doc in report.narrative_missing:
+        if doc in report.narrative_missing and lite:
+            # No init.sh on lite: the lite install writes these by hand.
+            unrendered = "missing — adopt.md's *Lite profile* (L3) writes it"
+        elif doc in report.narrative_missing:
             unrendered = "missing — run ./init.sh to seed it"
         elif doc in ("AGENTS.md", "CLAUDE.md"):
             unrendered = "still the kit's own contract, not yours — run ./init.sh"
@@ -3680,6 +3813,7 @@ def render(report: Report) -> str:
     n_removed = len(by_state.get("removed", []))
     n_declined = len(by_state.get("declined", []))
     n_new_upstream = len(by_state.get("new-upstream", []))
+    n_outside = len(by_state.get("outside-profile", []))
     # `missing` counts the absences that are FINDINGS, which is what it always
     # meant — the change is that `declined` and `new-upstream` are no longer
     # among them, because they are now distinguishable. Counting them here would
@@ -3715,6 +3849,9 @@ def render(report: Report) -> str:
         f"{n_differ} differ, "
         f"{n_absent} missing{absent_note}, "
         f"{len(by_state.get('unknown-version', []))} unknown"
+        # On lite only: there it is most of the kit, and the reader should see
+        # where it went. On full it is always the lite docs, so it would be noise.
+        + (f", {n_outside} outside the lite profile" if lite and n_outside else "")
     )
     # The line #286 asked for, and it only exists when the question can actually
     # be answered. "Intact" is a claim about the DECLARED set, so it needs one;
@@ -3799,7 +3936,7 @@ def render(report: Report) -> str:
             )
         else:
             lines.append(
-                f"  {verdict_mark} intact for this adoption — full install, "
+                f"  {verdict_mark} intact for this adoption — {report.profile} install, "
                 f"nothing declined{caveat}"
             )
     if n_new_upstream:
@@ -4136,8 +4273,17 @@ def main(argv: list[str] | None = None) -> int:
         source_root = (
             args.adapter_source or Path(__file__).resolve().parent.parent
         ).resolve()
+        # The profile picks which bindings are expected. A repository with no
+        # config is judged as full, which is what this report did before profiles.
         try:
-            adapter_statuses = compare_adapters(source_root, root)
+            adapter_profile = profile_of(load_config(root / "config" / "dev-model.yaml"))
+        except FileNotFoundError:
+            adapter_profile = "full"
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        try:
+            adapter_statuses = compare_adapters(source_root, root, profile=adapter_profile)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 2
@@ -4166,6 +4312,11 @@ def main(argv: list[str] | None = None) -> int:
             "entirely — adopt it with the /adopt skill rather than upgrading.",
             file=sys.stderr,
         )
+        return 2
+    try:
+        profile_of(config)
+    except ProfileError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 2
 
     if args.record_install:
@@ -4440,6 +4591,8 @@ def main(argv: list[str] | None = None) -> int:
                     # consumer reading a bool must keep reading a bool, and the
                     # third state (#381) is what it could not previously see.
                     "hooks_state": report.hooks_state,
+                    "profile": report.profile,
+                    "baseline_profile_mismatch": report.baseline_profile_mismatch,
                     # #379. A consumer cannot derive this from `files`: runtime
                     # registration surfaces are adopter-owned and are in neither
                     # `KIT_OWNED` nor any manifest. The state also carries Codex

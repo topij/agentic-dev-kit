@@ -69,6 +69,22 @@ RUNTIMES = ("claude", "codex")
 # The workflows each runtime binds, in report order.
 WORKFLOW_SLUGS = tuple(_DISPLAY_NAMES)
 
+# The lite profile's bindings (#1320). The same skill names as the full ones,
+# where both exist, so a session's `/session-start` works on either profile and
+# growing lite into full switches what the binding reads, not what it is called.
+# Each reads `docs/agentic-dev-kit/lite/lite-<slug>.md`; its text comes from
+# `adapter_templates/<runtime>/lite-<slug>.md`, and the rendered skill ships at
+# `LITE_SOURCE_PATH` for `adopt` to copy into a lite repository.
+_LITE_DISPLAY_NAMES = {
+    "session-start": "Session Start",
+    "wrap-up": "Wrap Up",
+    "review": "Review",
+}
+LITE_SLUGS = tuple(_LITE_DISPLAY_NAMES)
+LITE_WORKFLOW_PATH = "docs/agentic-dev-kit/lite/lite-{slug}.md"
+LITE_SOURCE_PATH = "docs/agentic-dev-kit/lite/adapters/{runtime}/{slug}/SKILL.md"
+PROFILES = ("full", "lite")
+
 # Each binding's runtime-specific text is authored as Markdown, one file per
 # runtime and workflow, at `adapter_templates/<runtime>/<slug>.md` beside this
 # module. The frame around it stays below: the front matter, the Codex heading,
@@ -221,11 +237,16 @@ def render_adapter(
     workflow_path: str,
     *,
     template_version: int = CURRENT_TEMPLATE_VERSION,
+    profile: str = "full",
 ) -> str:
     """Render one complete adapter from its declared inputs."""
 
     if runtime not in RUNTIMES:
         raise ValueError(f"unsupported runtime: {runtime}")
+    if profile == "lite":
+        return _render_lite_adapter(runtime, slug, description, workflow_path, template_version)
+    if profile != "full":
+        raise ValueError(f"unsupported profile: {profile}")
     if slug not in WORKFLOW_SLUGS:
         raise ValueError(f"unsupported workflow slug for {runtime}: {slug}")
     expected_path = f"docs/agentic-dev-kit/workflows/{slug}.md"
@@ -283,6 +304,30 @@ def render_adapter(
         )
     else:
         raise ValueError(f"unsupported adapter template version: {template_version}")
+    return "\n".join(frontmatter) + "\n" + body
+
+
+def _render_lite_adapter(
+    runtime: str, slug: str, description: str, workflow_path: str, template_version: int
+) -> str:
+    """A lite binding: the current template's frame around its lite text.
+
+    Lite bindings started at template version 3, so no earlier form exists to
+    recognise, and none of them is explicit-invocation-only or takes arguments.
+    """
+    if template_version != CURRENT_TEMPLATE_VERSION:
+        raise ValueError(f"lite adapters exist only at template version {CURRENT_TEMPLATE_VERSION}")
+    if slug not in LITE_SLUGS:
+        raise ValueError(f"unsupported lite workflow slug for {runtime}: {slug}")
+    expected_path = LITE_WORKFLOW_PATH.format(slug=slug)
+    if workflow_path != expected_path:
+        raise ValueError(f"workflow path for lite {slug} must be {expected_path}")
+    if not description.strip() or "\n" in description:
+        raise ValueError("adapter description must be a non-empty single line")
+    frontmatter = ["---", f"name: {slug}", f"description: {_yaml_scalar(description)}", "---", ""]
+    heading = f"# {_LITE_DISPLAY_NAMES[slug]}\n\n" if runtime == "codex" else ""
+    context = _context(runtime, f"lite-{slug}")
+    body = f"{heading}Read `{workflow_path}` completely and follow it.\n\n{context}\n"
     return "\n".join(frontmatter) + "\n" + body
 
 
@@ -378,8 +423,20 @@ def _baseline_adapter_text(
         return None, "baseline unavailable: historical adapter could not be read"
 
 
-def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatus]:
-    """Compare an adopter against adapters rendered from a source kit checkout."""
+def compare_adapters(
+    source_root: Path, adopter_root: Path, profile: str = "full"
+) -> list[AdapterStatus]:
+    """Compare an adopter against adapters rendered from a source kit checkout.
+
+    `profile` is the adopter's install profile (#1320). On `lite`, the lite
+    bindings are expected at the skill paths, an absent full-only binding is
+    `outside-profile`, and a present one is still judged against the kit's full
+    form. On either profile, a binding that is the other profile's render is
+    `profile-mismatch` rather than `adopter-owned`: the kit wrote it, for the
+    wrong profile.
+    """
+    if profile not in PROFILES:
+        raise ValueError(f"unsupported profile: {profile}")
 
     # A missing adopter interface is told to copy the source file. Validate
     # that recommendation before computing any adopter rows, just as source
@@ -399,11 +456,34 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                 "policy.allow_implicit_invocation: false; inspect the source kit"
             )
 
+    # A lite report needs every lite binding from the source kit. A full one uses
+    # them only to recognise a lite binding installed by mistake, and a source
+    # without them (an adopter's own engines directory, which ships no repo-only
+    # paths) simply cannot recognise one, so they are optional there.
+    lite_renders = {
+        (runtime, slug): _lite_source_render(source_root, runtime, slug)
+        for runtime in RUNTIMES
+        for slug in LITE_SLUGS
+        if profile == "lite"
+        or _exists(source_root / LITE_SOURCE_PATH.format(runtime=runtime, slug=slug))
+    }
     baseline_revision, baseline_gap = _baseline_adapter_revision(adopter_root)
     statuses: list[AdapterStatus] = []
     for runtime in RUNTIMES:
+        if profile == "lite":
+            for slug in LITE_SLUGS:
+                statuses.append(
+                    _lite_status(adopter_root, source_root, runtime, slug, lite_renders)
+                )
         for slug in WORKFLOW_SLUGS:
             rel = _adapter_path(runtime, slug)
+            if profile == "lite" and slug in LITE_SLUGS:
+                continue
+            if profile == "lite" and not _exists(adopter_root / rel):
+                statuses.append(AdapterStatus(
+                    runtime, slug, rel, "outside-profile", "not part of the lite profile",
+                ))
+                continue
             source_path = source_root / rel
             try:
                 source_text = source_path.read_text(encoding="utf-8")
@@ -431,6 +511,8 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                 adopter_root, runtime, slug, rel, current, description,
                 workflow_path, retired, source_root, baseline_revision, baseline_gap,
             )
+            if binding.state == "adopter-owned" and (runtime, slug) in lite_renders:
+                binding = _mismatch_or(binding, adopter_root, lite_renders[(runtime, slug)], "lite")
             statuses.append(binding)
             if retired is not None:
                 statuses.append(retired)
@@ -446,6 +528,88 @@ def compare_adapters(source_root: Path, adopter_root: Path) -> list[AdapterStatu
                 else:
                     statuses.append(_invocation_policy_status(adopter_root, slug))
     return statuses
+
+
+def _exists(path: Path) -> bool:
+    return path.exists() or path.is_symlink()
+
+
+def _lite_source_render(source_root: Path, runtime: str, slug: str) -> str:
+    """The source kit's shipped lite binding, refused unless it is the current render."""
+    rel = LITE_SOURCE_PATH.format(runtime=runtime, slug=slug)
+    try:
+        source_text = (source_root / rel).read_text(encoding="utf-8")
+        metadata = _frontmatter(source_text)
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ValueError(f"cannot read source lite adapter {rel}: {exc}") from exc
+    if metadata.get("name") != slug:
+        raise ValueError(f"source lite adapter {rel} declares the wrong name")
+    workflow_path = LITE_WORKFLOW_PATH.format(slug=slug)
+    if not (source_root / workflow_path).is_file():
+        raise ValueError(f"source lite adapter {rel} has no lite workflow {workflow_path}")
+    current = render_adapter(
+        runtime, slug, metadata.get("description", ""), workflow_path, profile="lite"
+    )
+    if source_text != current:
+        raise ValueError(f"source lite adapter {rel} does not equal the current rendered form")
+    return current
+
+
+def _mismatch_or(
+    status: AdapterStatus, adopter_root: Path, other_render: str, other_profile: str
+) -> AdapterStatus:
+    """Re-file an adopter-owned binding that is the other profile's render."""
+    try:
+        text = (adopter_root / status.path).read_text(encoding="utf-8")
+    except (OSError, UnicodeError):
+        return status
+    if text != other_render:
+        return status
+    return AdapterStatus(
+        status.runtime, status.slug, status.path, "profile-mismatch",
+        f"the {other_profile} profile's binding; this repository's profile needs its own — "
+        "take the kit's copy for this profile",
+    )
+
+
+def _lite_status(
+    adopter_root: Path,
+    source_root: Path,
+    runtime: str,
+    slug: str,
+    lite_renders: dict[tuple[str, str], str],
+) -> AdapterStatus:
+    """Classify one lite binding in a lite repository."""
+    rel = _adapter_path(runtime, slug)
+    source = LITE_SOURCE_PATH.format(runtime=runtime, slug=slug)
+    unsafe_path = _unsafe_adopter_path(adopter_root, rel)
+    if unsafe_path is not None:
+        return AdapterStatus(runtime, slug, rel, "adopter-owned", unsafe_path)
+    if not (adopter_root / rel).is_file():
+        return AdapterStatus(runtime, slug, rel, "missing", f"install the kit's {source}")
+    try:
+        text = (adopter_root / rel).read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        return AdapterStatus(runtime, slug, rel, "adopter-owned", f"unreadable: {exc}")
+    if text == lite_renders[(runtime, slug)]:
+        return AdapterStatus(runtime, slug, rel, "kit-current", "matches the lite rendered form")
+    owned = AdapterStatus(
+        runtime, slug, rel, "adopter-owned",
+        "does not match a rendered kit form; report and leave unchanged",
+    )
+    if slug not in WORKFLOW_SLUGS:
+        return owned
+    full_rel = _adapter_path(runtime, slug)
+    try:
+        full_description = _frontmatter(
+            (source_root / full_rel).read_text(encoding="utf-8")
+        ).get("description", "")
+        full_render = render_adapter(
+            runtime, slug, full_description, f"docs/agentic-dev-kit/workflows/{slug}.md"
+        )
+    except (OSError, UnicodeError, ValueError):
+        return owned
+    return _mismatch_or(owned, adopter_root, full_render, "full")
 
 
 def _disables_implicit_invocation(text: str) -> bool:
@@ -654,6 +818,8 @@ def render_adapter_report(statuses: list[AdapterStatus]) -> str:
         "missing": "+",
         "kit-retired": "-",
         "policy-stale": "↻",
+        "outside-profile": "·",
+        "profile-mismatch": "↻",
     }
     for runtime in ("claude", "codex"):
         lines.append(f"  {runtime}:")

@@ -47,6 +47,11 @@ import panel_prompt  # noqa: E402
 import run_installed_tests  # noqa: E402
 import runtime_adapters  # noqa: E402
 
+# The paths a full install takes: every adopter-facing one but the lite profile's.
+_FULL_PROFILE = [
+    rel for rel, role in kit_doctor.ADOPTER_KIT_OWNED if kit_doctor.in_profile(role, "full")
+]
+
 
 def _shipped(name: str) -> Path:
     """See `conftest.shipped_registration`, which this and `test_init_sh.py`
@@ -468,6 +473,10 @@ def test_adapter_templates_are_one_per_binding_and_manifest_tracked():
         f"{runtime}/{slug}.md"
         for runtime in runtime_adapters.RUNTIMES
         for slug in runtime_adapters.WORKFLOW_SLUGS
+    } | {
+        f"{runtime}/lite-{slug}.md"
+        for runtime in runtime_adapters.RUNTIMES
+        for slug in runtime_adapters.LITE_SLUGS
     }
     on_disk = {
         path.relative_to(runtime_adapters.TEMPLATE_ROOT).as_posix()
@@ -2360,9 +2369,11 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
         "scripts/tests/test_skill_routing_eval.py",
         "docs/agentic-dev-kit/skill-routing/cases.json",
         "scripts/tests/test_lite_profile_docs.py",
-        "docs/agentic-dev-kit/lite/lite-session-start.md",
-        "docs/agentic-dev-kit/lite/lite-wrap-up.md",
-        "docs/agentic-dev-kit/lite/lite-review.md",
+        *(
+            f"docs/agentic-dev-kit/lite/adapters/{runtime}/{slug}/SKILL.md"
+            for runtime in ("claude", "codex")
+            for slug in ("session-start", "wrap-up", "review")
+        ),
     }
     assert {
         rel for rel, role in kit_doctor.KIT_OWNED if role == kit_doctor.REPO_ONLY_ROLE
@@ -2411,7 +2422,17 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
         (path.as_posix(), path.read_text(encoding="utf-8"))
         for path in sorted(runtime_adapters.TEMPLATE_ROOT.rglob("*.md"))
     )
+    lite_sources = "docs/agentic-dev-kit/lite/adapters/"
     for repo_only_path in repo_only:
+        if repo_only_path.startswith(lite_sources):
+            # `adopt.md`'s lite install copies these from the kit clone, which has
+            # them; every mention must read from there, never from the adopter.
+            for rel, text in adopter_doctrine.items():
+                for match in re.finditer(re.escape(lite_sources), text):
+                    assert text[: match.start()].endswith("$KIT/"), (
+                        f"{rel} refers to {lite_sources} outside the kit clone"
+                    )
+            continue
         basename = Path(repo_only_path).name
         assert all(basename not in text for text in adopter_doctrine.values()), (
             f"adopter-facing doctrine still refers to repo-only {basename}"
@@ -3404,7 +3425,7 @@ def test_a_healthy_report_does_not_grow_the_parenthetical(tmp_path, capsys):
     # Derived, not literal: a new KIT_OWNED entry would otherwise fail this test
     # for a reason unrelated to the property under test, which is only that the
     # parenthetical is absent. (CodeRabbit, PR #225.)
-    absent = len(kit_doctor.ADOPTER_KIT_OWNED) - 1
+    absent = len(_FULL_PROFILE) - 1
     assert line == f"  files: 1 unchanged, 0 differ, {absent} missing, 0 unknown"
     assert "required by an installed engine" not in out
     assert "this install is broken" not in out
@@ -4871,7 +4892,7 @@ def test_the_report_says_intact_and_stops_repeating_the_count(tmp_path, capsys):
     line = next(ln for ln in out.splitlines() if ln.startswith("  files:"))
     assert line == "  files: 1 unchanged, 0 differ, 0 missing, 0 unknown"
     assert (
-        f"✓ intact for this adoption — {len(kit_doctor.ADOPTER_KIT_OWNED) - 1} "
+        f"✓ intact for this adoption — {len(_FULL_PROFILE) - 1} "
         "file(s) declined"
     ) in out
     assert "sized-down adoption, or incomplete" not in out
@@ -4954,7 +4975,9 @@ def test_json_exposes_whether_the_scope_was_judgeable(tmp_path, capsys):
     )
     payload = json.loads(capsys.readouterr().out)
     assert payload["declared_scope_known"] is True
-    assert {f["state"] for f in payload["files"]} == {"unchanged", "declined"}
+    # `outside-profile`: the lite profile's docs, which a full install never takes.
+    assert {f["state"] for f in payload["files"]} == {"unchanged", "declined", "outside-profile"}
+    assert payload["profile"] == "full"
 
 
 def test_the_not_intact_line_does_not_claim_a_provenance_it_lacks(tmp_path, capsys):
@@ -5225,9 +5248,11 @@ def test_an_empty_adoption_does_not_say_all_declined_when_some_were_never_offere
     """
     root = _fake_repo(tmp_path)
     (root / "scripts" / "check_doc_budget.py").unlink()
-    every = [rel for rel, _role in kit_doctor.ADOPTER_KIT_OWNED]
+    every = [
+        rel for rel, role in kit_doctor.ADOPTER_KIT_OWNED if kit_doctor.in_profile(role, "full")
+    ]
     config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
-    # Nothing installed, nothing declined, everything unmentioned.
+    # Nothing installed, nothing declined, everything in the profile unmentioned.
     baseline = {"kit_version": 2, "kit_commit": "abc", "files": {}, "not_installed": []}
     print(kit_doctor.render(kit_doctor.inspect(root, _manifest({}), config, baseline)))
     out = capsys.readouterr().out
@@ -8759,3 +8784,290 @@ def test_a_compute_problem_is_reported_without_changing_exit_status(tmp_path, ca
     assert len(problems) == 1 and "verifier_compute.claude.effort is set" in problems[0]
     assert kit_doctor.main(["--root", str(root)]) == 0
     assert "⚠ compute config: review.fallback_panel.verifier_compute.claude.effort is set" in capsys.readouterr().out
+
+
+# The lite install profile (#1320).
+
+
+def _lite_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
+    """A lite adopter: a lite config, the plan and inbox, and the three lite docs."""
+    root = tmp_path / "lite"
+    _write(
+        root / "config" / "dev-model.yaml",
+        "profile: lite\nkit:\n  version: 2\npaths:\n  handoff: docs/plan.md\n"
+        "  friction_log: docs/FIXLOG.md\n",
+    )
+    _write(root / "docs" / "plan.md", "# Plan\n")
+    _write(root / "docs" / "FIXLOG.md", "# Fix log\n")
+    hashes = {}
+    for rel in kit_doctor.LITE_PROFILE_PATHS:
+        _write(root / rel, f"# {rel}\n")
+        hashes[rel] = kit_doctor.sha256_of(root / rel)
+    return root, hashes
+
+
+def _lite_baseline(root: Path) -> dict:
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    recorded, unverified = kit_doctor.record_install_manifest(root, config, 2, "abc")
+    assert unverified == []
+    return recorded
+
+
+def test_the_lite_profile_is_the_lite_role_and_the_profiles_partition_the_adopter_paths():
+    lite = {rel for rel, role in kit_doctor.KIT_OWNED if role == kit_doctor.LITE_ROLE}
+    assert lite and set(kit_doctor.LITE_PROFILE_PATHS) == lite
+    assert lite <= {rel for rel, _role in kit_doctor.ADOPTER_KIT_OWNED}
+    for rel, role in kit_doctor.ADOPTER_KIT_OWNED:
+        assert kit_doctor.in_profile(role, "full") != kit_doctor.in_profile(role, "lite"), rel
+
+
+def test_the_release_manifest_publishes_the_lite_paths(tmp_path):
+    manifest = kit_doctor.generate_manifest(tmp_path, 2)
+    assert manifest["profiles"] == {"lite": list(kit_doctor.LITE_PROFILE_PATHS)}
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [("kit:\n  version: 2\n", "full"), ("profile: full\n", "full"), ("profile: lite\n", "lite")],
+)
+def test_profile_of_reads_the_config_and_defaults_to_full(tmp_path, text, expected):
+    _write(tmp_path / "c.yaml", text)
+    assert kit_doctor.profile_of(kit_doctor.load_config(tmp_path / "c.yaml")) == expected
+
+
+@pytest.mark.parametrize("value", ["Lite", "minimal", "[lite]", "true"])
+def test_an_unknown_profile_is_refused_not_read_as_full(tmp_path, capsys, value):
+    root = _fake_repo(tmp_path)
+    config = root / "config" / "dev-model.yaml"
+    config.write_text(config.read_text(encoding="utf-8") + f"profile: {value}\n", encoding="utf-8")
+    for argv in (["--root", str(root)], ["--root", str(root), "--adapter-report"]):
+        assert kit_doctor.main(argv) == 2
+        err = capsys.readouterr().err
+        assert "profile is" in err and "Traceback" not in err
+
+
+def test_record_install_writes_the_profile_for_lite_only(tmp_path):
+    root, _ = _lite_repo(tmp_path)
+    recorded = _lite_baseline(root)
+    assert recorded["profile"] == "lite"
+    assert sorted(recorded["files"]) == sorted(kit_doctor.LITE_PROFILE_PATHS)
+    # `not_installed` keeps its meaning: every absent kit-owned path.
+    assert len(recorded["not_installed"]) == len(kit_doctor.ADOPTER_KIT_OWNED) - len(
+        kit_doctor.LITE_PROFILE_PATHS
+    )
+    full = _fake_repo(tmp_path / "full")
+    config = kit_doctor.load_config(full / "config" / "dev-model.yaml")
+    assert "profile" not in kit_doctor.record_install_manifest(full, config, 2, "abc")[0]
+
+
+def test_a_lite_install_reports_intact_and_names_what_is_not_installed(tmp_path, capsys):
+    root, hashes = _lite_repo(tmp_path)
+    (root / "kit-manifest.json").write_text(json.dumps(_lite_baseline(root)), encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    code = kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json")])
+    out = capsys.readouterr().out
+    assert code == 0, out
+    for expected in (
+        "· profile: lite",
+        "· paths.engines: not installed (lite)",
+        "· pre-push hook: not installed (lite)",
+        "[claude]: not installed (lite)",
+        "[codex]: not installed (lite)",
+        "outside the lite profile",
+        "✓ intact for this adoption — lite install, nothing declined",
+    ):
+        assert expected in out, (expected, out)
+    assert "./init.sh" not in out
+    assert "never offered" not in out and "Run /upgrade" not in out
+    assert "⚠ AGENTS.md: missing — adopt.md's *Lite profile* (L3) writes it" in out
+
+    kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["profile"] == "lite" and payload["hooks_state"] == "outside-profile"
+    states = {f["path"]: f["state"] for f in payload["files"]}
+    assert {states[rel] for rel in kit_doctor.LITE_PROFILE_PATHS} == {"unchanged"}
+    assert set(states.values()) == {"unchanged", "outside-profile"}
+
+
+def test_a_lite_doc_deleted_after_install_is_removed_and_fails(tmp_path, capsys):
+    root, hashes = _lite_repo(tmp_path)
+    (root / "kit-manifest.json").write_text(json.dumps(_lite_baseline(root)), encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    (root / kit_doctor.LITE_PROFILE_PATHS[0]).unlink()
+    code = kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"])
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert code == 1
+    assert states[kit_doctor.LITE_PROFILE_PATHS[0]] == "removed"
+
+
+def test_a_full_only_file_recorded_as_installed_on_lite_still_reads_removed(tmp_path):
+    root, hashes = _lite_repo(tmp_path)
+    baseline = _lite_baseline(root)
+    baseline["files"][ENGINE] = {"sha256": "0" * 64, "role": "engine"}
+    report = kit_doctor.inspect(
+        root, _manifest(hashes), kit_doctor.load_config(root / "config" / "dev-model.yaml"), baseline
+    )
+    assert next(f for f in report.files if f.path == ENGINE).state == "removed"
+    assert report.broken
+
+
+def test_a_full_install_reports_the_lite_docs_outside_its_profile_not_new_upstream(tmp_path, capsys):
+    root = _fake_repo(tmp_path)
+    target = root / ENGINE
+    # A baseline from before the lite docs were adopter-facing mentions them nowhere.
+    baseline = _scoped_baseline(
+        {ENGINE: kit_doctor.sha256_of(target)}, unrecorded=kit_doctor.LITE_PROFILE_PATHS
+    )
+    report = _inspect(root, {ENGINE: kit_doctor.sha256_of(target)}, baseline)
+    states = {f.path: f.state for f in report.files}
+    assert {states[rel] for rel in kit_doctor.LITE_PROFILE_PATHS} == {"outside-profile"}
+    assert not report.new_upstream
+    print(kit_doctor.render(report))
+    out = capsys.readouterr().out
+    assert "outside the" not in out and "profile:" not in out
+    assert "· paths.engines" not in out
+
+
+def test_a_baseline_recorded_under_the_other_profile_is_named(tmp_path, capsys):
+    root, hashes = _lite_repo(tmp_path)
+    baseline = _lite_baseline(root)
+    del baseline["profile"]
+    report = kit_doctor.inspect(
+        root, _manifest(hashes), kit_doctor.load_config(root / "config" / "dev-model.yaml"), baseline
+    )
+    assert report.baseline_profile_mismatch == "full"
+    print(kit_doctor.render(report))
+    assert "the baseline was recorded as full, the config says lite" in capsys.readouterr().out
+    agreeing = kit_doctor.inspect(
+        root,
+        _manifest(hashes),
+        kit_doctor.load_config(root / "config" / "dev-model.yaml"),
+        _lite_baseline(root),
+    )
+    assert agreeing.baseline_profile_mismatch is None
+
+
+def test_a_dead_registration_still_fails_a_lite_report(tmp_path):
+    root, hashes = _lite_repo(tmp_path)
+    report = kit_doctor.inspect(
+        root, _manifest(hashes), kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    )
+    report.registrations.append(
+        kit_doctor.RegistrationStatus("claude", ".claude/settings.json", "broken", "x")
+    )
+    assert report.dead_registrations
+    assert "NO SUCH FILE" in kit_doctor.render(report)
+
+
+def _lite_adopter(tmp_path: Path, source: Path, *, profile: str = "lite") -> Path:
+    adopter = tmp_path / "adopter"
+    _write(adopter / "config" / "dev-model.yaml", f"profile: {profile}\n")
+    if profile == "lite":
+        for runtime in runtime_adapters.RUNTIMES:
+            for slug in runtime_adapters.LITE_SLUGS:
+                rel = runtime_adapters._adapter_path(runtime, slug)
+                src = source / runtime_adapters.LITE_SOURCE_PATH.format(runtime=runtime, slug=slug)
+                _write(adopter / rel, src.read_text(encoding="utf-8"))
+    return adopter
+
+
+def test_a_lite_adapter_report_expects_the_lite_bindings(tmp_path, adapter_source):
+    adopter = _lite_adopter(tmp_path, adapter_source)
+    rows = {
+        (s.runtime, s.slug): s
+        for s in runtime_adapters.compare_adapters(adapter_source, adopter, profile="lite")
+    }
+    for runtime in runtime_adapters.RUNTIMES:
+        for slug in runtime_adapters.LITE_SLUGS:
+            assert rows[(runtime, slug)].state == "kit-current", rows[(runtime, slug)]
+        for slug in set(runtime_adapters.WORKFLOW_SLUGS) - set(runtime_adapters.LITE_SLUGS):
+            assert rows[(runtime, slug)].state == "outside-profile"
+    assert not any(s.path.endswith("openai.yaml") for s in rows.values())
+
+
+def test_a_full_binding_in_a_lite_repository_is_a_profile_mismatch(tmp_path, adapter_source):
+    adopter = _lite_adopter(tmp_path, adapter_source)
+    rel = runtime_adapters._adapter_path("claude", "session-start")
+    _write(adopter / rel, (adapter_source / rel).read_text(encoding="utf-8"))
+    (adopter / runtime_adapters._adapter_path("codex", "review")).unlink()
+    rows = {
+        (s.runtime, s.slug): s
+        for s in runtime_adapters.compare_adapters(adapter_source, adopter, profile="lite")
+    }
+    assert rows[("claude", "session-start")].state == "profile-mismatch"
+    assert "full profile's binding" in rows[("claude", "session-start")].detail
+    assert rows[("codex", "review")].state == "missing"
+    _write(adopter / rel, "authored\n")
+    rows = runtime_adapters.compare_adapters(adapter_source, adopter, profile="lite")
+    assert next(s for s in rows if s.path == rel).state == "adopter-owned"
+
+
+def test_a_lite_binding_in_a_full_repository_is_a_profile_mismatch(tmp_path, adapter_source):
+    adopter = tmp_path / "full"
+    rel = runtime_adapters._adapter_path("codex", "wrap-up")
+    lite = adapter_source / runtime_adapters.LITE_SOURCE_PATH.format(runtime="codex", slug="wrap-up")
+    _write(adopter / rel, lite.read_text(encoding="utf-8"))
+    row = next(
+        s for s in runtime_adapters.compare_adapters(adapter_source, adopter) if s.path == rel
+    )
+    assert row.state == "profile-mismatch"
+    assert "lite profile's binding" in row.detail
+
+
+def test_a_full_report_does_not_need_the_lite_sources(tmp_path, adapter_source):
+    """An adopter's engines directory ships no repo-only paths, and is the default source."""
+    shutil.rmtree(adapter_source / "docs" / "agentic-dev-kit" / "lite" / "adapters")
+    statuses = runtime_adapters.compare_adapters(adapter_source, tmp_path / "adopter")
+    assert "profile-mismatch" not in {s.state for s in statuses}
+    with pytest.raises(ValueError, match="cannot read source lite adapter"):
+        runtime_adapters.compare_adapters(
+            adapter_source, _lite_adopter(tmp_path, adapter_source, profile="full"), profile="lite"
+        )
+
+
+def test_a_stale_lite_source_is_refused(tmp_path, adapter_source):
+    source = adapter_source / runtime_adapters.LITE_SOURCE_PATH.format(runtime="claude", slug="review")
+    source.write_text(source.read_text(encoding="utf-8") + "drift\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="does not equal the current rendered form"):
+        runtime_adapters.compare_adapters(adapter_source, tmp_path / "adopter", profile="lite")
+
+
+def test_the_adapter_report_cli_reads_the_profile_from_the_adopter_config(tmp_path, adapter_source, capsys):
+    adopter = _lite_adopter(tmp_path, adapter_source)
+    code = kit_doctor.main(
+        ["--adapter-report", "--adapter-source", str(adapter_source), "--root", str(adopter), "--json"]
+    )
+    assert code == 0
+    states = {row["state"] for row in json.loads(capsys.readouterr().out)["adapters"]}
+    assert states == {"kit-current", "outside-profile"}
+
+
+@pytest.mark.parametrize(
+    ("slug", "workflow", "version", "message"),
+    [
+        ("pr-watch", "docs/agentic-dev-kit/lite/lite-pr-watch.md", 3, "unsupported lite workflow slug"),
+        ("review", "docs/agentic-dev-kit/workflows/review.md", 3, "workflow path for lite review"),
+        ("review", "docs/agentic-dev-kit/lite/lite-review.md", 2, "only at template version"),
+    ],
+)
+def test_the_lite_renderer_refuses_what_it_cannot_render(slug, workflow, version, message):
+    _require_adapter_templates()
+    with pytest.raises(ValueError, match=message):
+        runtime_adapters.render_adapter(
+            "claude", slug, "Probe.", workflow, template_version=version, profile="lite"
+        )
+
+
+def test_shipped_lite_adapters_equal_the_renderer():
+    require_kit_source()
+    _require_adapter_templates()
+    for runtime in runtime_adapters.RUNTIMES:
+        for slug in runtime_adapters.LITE_SLUGS:
+            rendered = runtime_adapters._lite_source_render(REPO_ROOT, runtime, slug)
+            assert f"Read `docs/agentic-dev-kit/lite/lite-{slug}.md` completely" in rendered
+    tracked = {rel for rel, _role in kit_doctor.KIT_OWNED}
+    assert {
+        runtime_adapters.LITE_SOURCE_PATH.format(runtime=runtime, slug=slug)
+        for runtime in runtime_adapters.RUNTIMES
+        for slug in runtime_adapters.LITE_SLUGS
+    } <= tracked

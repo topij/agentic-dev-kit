@@ -12,10 +12,13 @@ are pinned to `review.fallback_panel.lenses` in `config/dev-model.yaml` the same
 The second half runs the lite docs' shell blocks, taken from the docs as written,
 against fixture repositories: the `base` blocks on a readable and an unreadable
 `HEAD`, the wrap-up's commit-split check, and the risk tier's declared-path check.
+Last, `adopt.md`'s lite copy block installs into a fresh repository, and
+`kit_doctor.py` records and reports that install as intact.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -417,3 +420,71 @@ def test_risk_tier_check_lists_a_change_to_the_config_that_declares_the_list(
     result = _run("sh", _risk_tier_block("deploy/**", "docs/deploy.md"), repo / where, env)
     assert result.returncode == 0, result.stderr
     assert result.stdout.split() == ["config/dev-model.yaml"]
+
+
+# adopt.md's *Lite profile*, run end to end from the doc's own copy block.
+
+ADOPT = REPO_ROOT / "docs/agentic-dev-kit/workflows/adopt.md"
+KIT_DOCTOR = engine_dir(Path(__file__)) / "kit_doctor.py"
+
+
+def _adopt_copy_block() -> str:
+    text = ADOPT.read_text(encoding="utf-8")
+    blocks = [
+        textwrap.dedent(m.group(1))
+        for m in re.finditer(r"^```bash\n(.*?)^```", text, re.MULTILINE | re.DOTALL)
+        if "for doc in lite-session-start lite-wrap-up lite-review" in m.group(1)
+    ]
+    assert len(blocks) == 1, "adopt.md's lite copy block is missing or repeated"
+    return blocks[0]
+
+
+def _doctor(*args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(KIT_DOCTOR), *args], env=env, capture_output=True, text=True, timeout=120
+    )
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    kept_skill = repo / ".claude/skills/review/SKILL.md"
+    kept_skill.parent.mkdir(parents=True)
+    kept_skill.write_text("---\nname: review\ndescription: Ours.\n---\n\nOur review.\n", encoding="utf-8")
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert f"kept: {kept_skill}" in result.stdout
+    assert kept_skill.read_text(encoding="utf-8").endswith("Our review.\n")
+    again = _run(shell, _adopt_copy_block(), repo, env)
+    assert again.returncode == 0 and again.stdout.count("kept: ") == 9, again.stdout
+
+    (repo / "config").mkdir()
+    (repo / "config/dev-model.yaml").write_text(
+        "profile: lite\nkit:\n  version: 2\npaths:\n  handoff: docs/plan.md\n"
+        "  friction_log: docs/friction-log.md\n",
+        encoding="utf-8",
+    )
+    (repo / "docs/plan.md").write_text("# Plan\n\n## Workstreams\n", encoding="utf-8")
+    (repo / "docs/friction-log.md").write_text("# Friction log\n", encoding="utf-8")
+    (repo / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
+
+    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
+    assert record.returncode == 0, record.stderr
+    report = _doctor("--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), env=env)
+    assert report.returncode == 0, report.stdout + report.stderr
+    assert "· profile: lite" in report.stdout
+    assert "intact for this adoption — lite install, nothing declined" in report.stdout
+    assert "files: 3 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+
+    adapters = _doctor(
+        "--adapter-report", "--adapter-source", str(REPO_ROOT), "--root", str(repo), "--json", env=env
+    )
+    assert adapters.returncode == 0, adapters.stderr
+    rows = {row["path"]: row["state"] for row in json.loads(adapters.stdout)["adapters"]}
+    assert rows[".claude/skills/review/SKILL.md"] == "adopter-owned"
+    for path in (".claude/skills/session-start/SKILL.md", ".agents/skills/review/SKILL.md"):
+        assert rows[path] == "kit-current"
+    assert rows[".claude/skills/pr-watch/SKILL.md"] == "outside-profile"
