@@ -749,6 +749,162 @@ def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
         assert "pr merge" not in call_log.read_text(encoding="utf-8"), label
 
 
+STANDARD_CLASS = {
+    "class": "standard",
+    "matched_paths": [],
+    "changes_config": False,
+    "unclassified": None,
+}
+
+
+@pytest.mark.evidence
+def test_self_merge_refuses_a_pr_whose_computed_review_class_is_not_standard(
+    tmp_path: Path,
+) -> None:
+    """A `self` lane merges only a PR that `pr_watch` classes standard (#1357).
+
+    The lane's merge class is written once at plan time; the PR's diff can grow
+    past that footprint. On 2026-11-05 PR #1350 started as a self-class docs lane,
+    gained a `scripts/pr_watch.py` change, and the wrapper merged it while the
+    report said `review_class.class: "safety-critical"`. Every report here is
+    otherwise merge-ready and matches the lane's identity, so only the class
+    check stands between it and the merge.
+
+    The shapes that share "not standard", and each must refuse:
+
+    - a safety-critical class with matched paths (the #1350 case);
+    - a safety-critical class from the config change alone;
+    - an unclassified change, even one that also says `standard`, and one whose
+      reason is falsy but present (the engine tests `is None`, not truthiness);
+    - a `review_class` absent (an older `pr_watch`) or not an object;
+    - any class string other than exactly `standard`;
+    - a `standard` class that still lists matched paths or a config change,
+      which the engine never emits and the wrapper does not trust.
+
+    Each refusal names its own remedy: an operator merge for a class that is
+    not standard, an upgrade for a report without the field, and a fetch for
+    an unclassified PR, whose usual cause is a commit this clone lacks.
+    """
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+    pr_json = json.dumps(
+        [
+            {
+                "number": 8,
+                "baseRefName": "trunk",
+                "headRefName": "lane/probe",
+                "headRefOid": "reviewed-head",
+                "headRepositoryOwner": {"login": "owner"},
+                "isCrossRepository": False,
+            }
+        ]
+    )
+    base_report = {
+        "pr": 8,
+        "base": "trunk",
+        "head": "reviewed-head",
+        "done": True,
+        "mergeable": True,
+    }
+    operator = "operator lands it directly"
+    upgrade = "upgrade pr_watch.py together with dev_session.sh"
+    fetch = "fetch the PR's base and head (git fetch origin 'trunk')"
+    cases = (
+        (
+            "safety-critical by path",
+            {
+                **STANDARD_CLASS,
+                "class": "safety-critical",
+                "matched_paths": ["scripts/pr_watch.py"],
+            },
+            ["scripts/pr_watch.py", "it is operator-merge", operator],
+        ),
+        (
+            "safety-critical by config change",
+            {**STANDARD_CLASS, "class": "safety-critical", "changes_config": True},
+            ["the config that declares review.safety_critical_paths", operator],
+        ),
+        (
+            "unclassified, though it says standard",
+            {**STANDARD_CLASS, "unclassified": "the PR's base or head commit is unknown"},
+            ["could not be classed (the PR's base or head commit is unknown)", fetch],
+        ),
+        (
+            "unclassified with a falsy reason",
+            {**STANDARD_CLASS, "unclassified": ""},
+            ["could not be classed", fetch],
+        ),
+        ("absent", None, ["has no review_class", upgrade]),
+        ("not an object", "standard", ["has no review_class", upgrade]),
+        (
+            "another class string",
+            {**STANDARD_CLASS, "class": "Standard"},
+            ["class Standard", operator],
+        ),
+        (
+            "standard, but with matched paths",
+            {**STANDARD_CLASS, "matched_paths": ["scripts/dev_session.sh"]},
+            ["class standard; matched: scripts/dev_session.sh", operator],
+        ),
+        (
+            "standard, but changing the config",
+            {**STANDARD_CLASS, "changes_config": True},
+            ["the config that declares review.safety_critical_paths", operator],
+        ),
+    )
+
+    for label, review_class, reasons in cases:
+        report = dict(base_report)
+        if review_class is not None:
+            report["review_class"] = review_class
+        result = subprocess.run(
+            ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+            cwd=tmp_path,
+            env={
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "DEVKIT_SESSIONS_DIR": str(sessions),
+                "CALL_LOG": str(call_log),
+                "UV_LOG": str(uv_log),
+                "PR_JSON": pr_json,
+                "REPORT_JSON": json.dumps(report),
+            },
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode != 0, label
+        assert "is not classed standard" in result.stderr, (label, result.stderr)
+        for reason in reasons:
+            assert reason in result.stderr, (label, reason, result.stderr)
+        if operator not in reasons:
+            assert "it is operator-merge" not in result.stderr, (label, result.stderr)
+        assert "pr merge" not in call_log.read_text(encoding="utf-8"), label
+
+    # The same report classed standard merges, so the refusals above are the
+    # class check and not something else in the fixture.
+    result = subprocess.run(
+        ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "DEVKIT_SESSIONS_DIR": str(sessions),
+            "CALL_LOG": str(call_log),
+            "UV_LOG": str(uv_log),
+            "PR_JSON": pr_json,
+            "REPORT_JSON": json.dumps({**base_report, "review_class": STANDARD_CLASS}),
+        },
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "|pr merge " in call_log.read_text(encoding="utf-8")
+
+
 @pytest.mark.evidence
 def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> None:
     """The gate extraction is tab-joined and the shell splits it on tabs, so an
@@ -964,6 +1120,26 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
         # that flattened everything would not pass here either.
         assert emitted(block, payload("tr-unk"), field) == "tr-unk", label
 
+    # The review-class reason (#1357) is the last field, so it absorbs the rest
+    # of the line and is only printed. It still carries report text, so it gets
+    # the same scrub: a raw tab or NUL there would reach the refusal message.
+    def reason_payload(value: str) -> str:
+        return json.dumps(
+            {
+                "mergeable": True,
+                "pr": 8,
+                "base": "b",
+                "head": "h",
+                "review_class": {"class": value, "unclassified": None},
+            }
+        )
+
+    for code in [*range(0x20), 0x7F]:
+        got = emitted(gate[0], reason_payload(f"tr{chr(code)}unk"), 5)
+        assert got == "class tr unk", f"review reason: chr({code}) emitted as {got!r}"
+    assert emitted(gate[0], reason_payload("standard"), 4) == "standard"
+    assert emitted(gate[0], reason_payload("tr-unk"), 4) == "not-standard"
+
 
 @pytest.mark.evidence
 def test_self_merge_refuses_when_identity_read_and_review_poll_disagree_on_head(
@@ -1052,6 +1228,7 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
                 "head": "reviewed-head",
                 "done": True,
                 "mergeable": True,
+                "review_class": STANDARD_CLASS,
             }
         ),
         "GH_REPO": "attacker/other",
@@ -1136,6 +1313,7 @@ def test_scope_wrappers_canonicalize_a_relative_session_state_root(tmp_path: Pat
                 "base": "trunk",
                 "head": "reviewed-head",
                 "mergeable": True,
+                "review_class": STANDARD_CLASS,
             }
         ),
     }
@@ -3621,7 +3799,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-merge-write": (
                 "conditional and authority-gated",
-                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. For an isolated lane whose persisted class is self, the cockpit must invoke <engine-dir>/dev_session.sh merge <scope>; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
+                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. For an isolated lane whose persisted class is self, the cockpit must invoke <engine-dir>/dev_session.sh merge <scope>; a direct runtime-native forge write does not satisfy this capability. A wrapper refusal that says the pull request is operator-merge because it is not classed standard merged nothing: hold the exact head under successful-operator-handoff. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
             ),
             "scratch-report": (
                 "optional",

@@ -511,8 +511,9 @@ headless Claude lane whose runtime exits successfully without naming a terminal 
 session up to `parallel.max_resumes` times; one still without it, or a Codex lane,
 which the launcher cannot resume, is recorded `stalled`. **Lanes assert their own ready state but never merge**: a
 `self`-class lane is closed out by the cockpit through `scripts/dev_session.sh merge`
-(no operator sign-off needed), an `operator`-class one only by an explicit operator
-decision.
+(no operator sign-off needed) while `pr_watch` classes its PR `standard`, an
+`operator`-class one, or a `self` lane whose PR grew into `review.safety_critical_paths`,
+only by an explicit operator decision.
 
 Full walkthrough — the lane contract, the live board, reconciliation, and a worked
 example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step

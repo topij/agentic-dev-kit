@@ -5126,15 +5126,41 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
         text=True,
         check=True,
     )
-    mergeable, validated_pr, validated_base, validated_head = proc.stdout.rstrip(
-        "\n"
-    ).split("\t")
+    (
+        mergeable,
+        validated_pr,
+        validated_base,
+        validated_head,
+        review_class,
+        _review_why,
+    ) = proc.stdout.rstrip("\n").split("\t")
 
     # The literal the wrapper compares against, and the identity check behind it.
     assert mergeable == "true"
     assert validated_pr == "7"
     assert validated_base == "trunk"
     assert validated_head == "abc123"
+    # The wrapper also reads the report's `review_class` by that key (#1357).
+    # This fixture's shas are not real commits, so the engine cannot class it
+    # and the wrapper must read that as unclassified, which refuses the merge.
+    assert report["review_class"]["unclassified"]
+    assert review_class == "unclassified"
+
+    # The same report with its class set by hand to the shape the engine emits
+    # for a standard PR (this fixture cannot produce one) reads standard.
+    report["review_class"] = {
+        **report["review_class"],
+        "class": pr_watch.REVIEW_CLASS_STANDARD,
+        "unclassified": None,
+    }
+    proc = subprocess.run(
+        [sys.executable, "-c", blocks[0]],
+        input=json.dumps(report),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert proc.stdout.rstrip("\n").split("\t")[4] == "standard"
 
 
 def test_coverage_tolerates_a_missing_or_malformed_commit_field() -> None:

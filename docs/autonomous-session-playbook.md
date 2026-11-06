@@ -105,7 +105,7 @@ Follow this top to bottom, per ticket.
   merge class at act time: `self` lanes merge through
   `<engine-dir>/dev_session.sh merge <scope>` (which re-polls `pr-watch`); missing,
   unknown, or `operator` metadata refuses autonomous merge and requires operator
-  sign-off. A non-lane PR with no project merge policy defaults to the operator
+  sign-off, and so does a `self` lane whose PR `pr_watch` does not class `standard`. A non-lane PR with no project merge policy defaults to the operator
   route and needs authorization for the exact PR; an autonomous-session request
   alone does not grant that merge. Only after the applicable authority is established,
   a non-lane/operator merge uses:
