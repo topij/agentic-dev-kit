@@ -515,7 +515,10 @@ def test_adopt_lite_copy_block_skips_a_claude_skill_a_command_would_be_shadowed_
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
-@pytest.mark.parametrize("left", ["helper file", "hidden file", "subdirectory", "plain file", "unreadable"])
+# A name made only of newlines: a command substitution strips them, so `-z "$(ls -A ...)"` saw it as empty.
+@pytest.mark.parametrize(
+    "left", ["helper file", "hidden file", "newline-named file", "subdirectory", "plain file", "unreadable"]
+)
 def test_adopt_lite_copy_block_keeps_a_skill_directory_that_still_holds_something(
     tmp_path: Path, shell: str, left: str
 ) -> None:
@@ -533,6 +536,8 @@ def test_adopt_lite_copy_block_keeps_a_skill_directory_that_still_holds_somethin
             (skill / "helper.sh").write_text("echo ours\n", encoding="utf-8")
         elif left == "hidden file":
             (skill / ".notes").write_text("ours\n", encoding="utf-8")
+        elif left == "newline-named file":
+            (skill / "\n\n").write_text("ours\n", encoding="utf-8")
         elif left == "subdirectory":
             (skill / "scripts").mkdir()
         else:

@@ -734,7 +734,7 @@ for slug in session-start wrap-up review; do
     if [ "$runtime" = claude ] && { [ -e "$cmd" ] || [ -L "$cmd" ]; }; then echo "collision: $cmd"; continue; fi
     if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
     skill="$REPO/$dir/$slug"
-    if [ -e "$skill" ] && ! { [ -d "$skill" ] && [ -z "$(ls -A "$skill" 2>&1)" ]; }; then echo "kept: $skill"; continue; fi
+    if [ -e "$skill" ] && ! { [ -d "$skill" ] && [ "$(ls -A "$skill" 2>&1; echo x)" = x ]; }; then echo "kept: $skill"; continue; fi
     mkdir -p "$skill"
     cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
   done

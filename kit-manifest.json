@@ -104,7 +104,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "97a99bd01088fc932507020757bec86cbf1b1e5ec6d73355d324f546502e435c"
+      "sha256": "8de68e17377f182074d8e0d4fff014bf2f15294fe8d5a068c05211c9d8e5abdd"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -787,7 +787,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "6d7d884d9004cf7ab665eee2a086d0a6162cc606f626ecc9f6beed885b8e9598"
+      "sha256": "6b326b54c8adecac17ca9b96b93d7ad58ca6dc3ffc23af3201b660763b3504ee"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
