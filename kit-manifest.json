@@ -31,27 +31,27 @@
       "sha256": "b40ba98f2e56457bfc4254b7d72e3ed02087975ab89023050149b6857aacd2b0"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md": {
-      "role": "repo-only",
+      "role": "lite",
       "sha256": "7c733a7010e008a65aa4abde71f0b3bc06d5058d60da1293445532dbe004f474"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md": {
-      "role": "repo-only",
+      "role": "lite",
       "sha256": "6c9052fc4f0f2d6687209b7f42b7bf97d439679fe70763be54b67932894830f3"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md": {
-      "role": "repo-only",
+      "role": "lite",
       "sha256": "77aafb3b075160e8fd46d26d8d9296075e03568b4b822b5595d958fafef6a864"
     },
     "docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md": {
-      "role": "repo-only",
+      "role": "lite",
       "sha256": "bc7e3435c925c584fcf97753cb4b6f88fcca46fc64193c6d0e667d1283c534aa"
     },
     "docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md": {
-      "role": "repo-only",
+      "role": "lite",
       "sha256": "a69159a6a2d62127348971785cdc046992272fea65712cd7a2b45d6f7bfc9928"
     },
     "docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md": {
-      "role": "repo-only",
+      "role": "lite",
       "sha256": "1c68f9279f1d31f93d74b518161bd141ed7df4b21d9bbd7b568079fe8817c58c"
     },
     "docs/agentic-dev-kit/lite/lite-review.md": {
@@ -104,7 +104,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "2fee3a4f01c5c711cb72a06f129b764764348e31ce07b88a8da5b1ef0b914cdb"
+      "sha256": "8e8ab35e73f59600ce279331717b917e909b826a799c340b76834e9ad73112ef"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -167,7 +167,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "7a986b1cc2baee141e595ab0eeae3ced4967b6f567d7a7a98208fe11d37513c6"
+      "sha256": "3acdc0f75ed8b81782e4a8f254dbed50ed1575b3ad735745931161faea78f611"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -258,7 +258,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "b1bda971b74b746707c53764aa9f41b0944f21558c19875ce50340efe39d749d"
+      "sha256": "06edc9a78886cf97e7d8b663e1a5340c2e3460568d2818dd4fb0f5501375874d"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -392,7 +392,7 @@
         "scripts/kit_doctor.py"
       ],
       "role": "engine",
-      "sha256": "b65e4c88394fc708085d688a42a14c6101736b917beced9075108cb286d30199"
+      "sha256": "7cfbf5f18273eb63d256b3cc0b46ce3115326e3998d3faa7073611f612aef085"
     },
     "scripts/lib/state_paths/__init__.py": {
       "required_by": [
@@ -771,7 +771,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "58a6c0d1c1d481e318ef9c80f66a9cca910971557b4a61ea7825fdddc69aeea4"
+      "sha256": "9f71b3ba05a67627eeb981658790f372ae42124c655c3cc7275e69a63a0053f6"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -787,7 +787,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "8b460a4d62401e88c01340b2b4741d9cf59613b9e8bef5bcf1d58ac59960dc80"
+      "sha256": "0444c357c13eb013230aed0841583fe0064e28c9246f1e70ebf42ad86450f212"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
@@ -958,7 +958,13 @@
     "lite": [
       "docs/agentic-dev-kit/lite/lite-session-start.md",
       "docs/agentic-dev-kit/lite/lite-wrap-up.md",
-      "docs/agentic-dev-kit/lite/lite-review.md"
+      "docs/agentic-dev-kit/lite/lite-review.md",
+      "docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md",
+      "docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md",
+      "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md",
+      "docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md",
+      "docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md",
+      "docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md"
     ]
   }
 }

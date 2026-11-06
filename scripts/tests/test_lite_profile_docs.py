@@ -515,7 +515,10 @@ def test_adopt_lite_copy_block_skips_a_claude_skill_a_command_would_be_shadowed_
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
-@pytest.mark.parametrize("left", ["helper file", "hidden file", "subdirectory", "plain file", "unreadable"])
+# A name made only of newlines: a command substitution strips them, so `-z "$(ls -A ...)"` saw it as empty.
+@pytest.mark.parametrize(
+    "left", ["helper file", "hidden file", "newline-named file", "subdirectory", "plain file", "unreadable"]
+)
 def test_adopt_lite_copy_block_keeps_a_skill_directory_that_still_holds_something(
     tmp_path: Path, shell: str, left: str
 ) -> None:
@@ -533,6 +536,8 @@ def test_adopt_lite_copy_block_keeps_a_skill_directory_that_still_holds_somethin
             (skill / "helper.sh").write_text("echo ours\n", encoding="utf-8")
         elif left == "hidden file":
             (skill / ".notes").write_text("ours\n", encoding="utf-8")
+        elif left == "newline-named file":
+            (skill / "\n\n").write_text("ours\n", encoding="utf-8")
         elif left == "subdirectory":
             (skill / "scripts").mkdir()
         else:
@@ -607,13 +612,22 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
     (repo / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
     (repo / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
 
-    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
+    # adopt.md L4, with `--keep` for the skill L2 kept.
+    record = _doctor(
+        "--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo),
+        "--keep", ".claude/skills/review/SKILL.md", env=env,
+    )
     assert record.returncode == 0, record.stderr
+    # The kept skill is the repository's own: named, and left out of `files`.
+    assert "recorded as the repository's own" in record.stderr
+    assert "  · .claude/skills/review/SKILL.md" in record.stderr
     report = _doctor("--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), env=env)
     assert report.returncode == 0, report.stdout + report.stderr
     assert "· profile: lite" in report.stdout
-    assert "intact for this adoption — lite install, nothing declined" in report.stdout
-    assert "files: 3 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+    assert "intact for this adoption — lite install, 1 file(s) declined" in report.stdout
+    # The three docs and the five skills the block installed; the kept one is declined.
+    assert "files: 8 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+    assert "rests on the config alone" not in report.stdout
 
     adapters = _doctor(
         "--adapter-report", "--adapter-source", str(REPO_ROOT), "--root", str(repo), "--json", env=env
@@ -624,3 +638,17 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
     for path in (".claude/skills/session-start/SKILL.md", ".agents/skills/review/SKILL.md"):
         assert rows[path] == "kit-current"
     assert rows[".claude/skills/pr-watch/SKILL.md"] == "outside-profile"
+
+    # The main report covers the installed skills, not only the docs (#1365): a
+    # deleted one and an edited one fail it, and the kept one stays declined.
+    (repo / ".agents/skills/wrap-up/SKILL.md").unlink()
+    edited = repo / ".claude/skills/session-start/SKILL.md"
+    edited.write_text(edited.read_text(encoding="utf-8") + "Our edit.\n", encoding="utf-8")
+    broken = _doctor(
+        "--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), "--json", env=env
+    )
+    assert broken.returncode == 1, broken.stdout + broken.stderr
+    states = {row["path"]: row["state"] for row in json.loads(broken.stdout)["files"]}
+    assert states[".agents/skills/wrap-up/SKILL.md"] == "removed"
+    assert states[".claude/skills/session-start/SKILL.md"] == "locally-edited"
+    assert states[".claude/skills/review/SKILL.md"] == "declined"

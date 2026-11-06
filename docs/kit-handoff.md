@@ -339,9 +339,10 @@ install (topij/home-server#31, at kit `78f10709`); its field reports are #1361 t
 2026-11-05 that lite supports pull-request repositories through `vcs.protected_branch` (#1362).
 **Owner:** #1320.
 
-▶ Next: the remaining field report, #1365 (the lite baseline's skills), with #1360's items 2, 3 and 5 in the same
-files. When home-server takes these docs (by hand: lite has no upgrade path yet), it sets
-`vcs.protected_branch` and moves its `AGENTS.md` reads under the repository-sources headings. Its nested service repos (`brain`, `mcp-voice-notes`,
+▶ Next: home-server takes the changes from #1367 and from the pull request that records the lite baseline's skills
+(by hand: lite has no upgrade path yet). It sets `vcs.protected_branch`, moves its `AGENTS.md` reads under the
+repository-sources headings, and re-runs `kit_doctor.py --record-install --from-kit` (with `--keep` for a skill it
+kept) so its baseline records the six skills. Its nested service repos (`brain`, `mcp-voice-notes`,
 `obsidian-vault-mcp`) are decided one at a time after that: each has a tracker, which lite does not drive, so the
 full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in `adopt`. The
 parser-based guard on lite docs' links and engine names is #1347.

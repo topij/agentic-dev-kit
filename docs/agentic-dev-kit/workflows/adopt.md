@@ -734,7 +734,7 @@ for slug in session-start wrap-up review; do
     if [ "$runtime" = claude ] && { [ -e "$cmd" ] || [ -L "$cmd" ]; }; then echo "collision: $cmd"; continue; fi
     if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
     skill="$REPO/$dir/$slug"
-    if [ -e "$skill" ] && ! { [ -d "$skill" ] && [ -z "$(ls -A "$skill" 2>&1)" ]; }; then echo "kept: $skill"; continue; fi
+    if [ -e "$skill" ] && ! { [ -d "$skill" ] && [ "$(ls -A "$skill" 2>&1; echo x)" = x ]; }; then echo "kept: $skill"; continue; fi
     mkdir -p "$skill"
     cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
   done
@@ -795,9 +795,13 @@ When L1 found repository sources, list them after that section's bullets, under 
 uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "${REPO:?REPO is not set — run Step 0}"
 ```
 
-It writes `$REPO/kit-manifest.json` with `"profile": "lite"`. Exit 1 names a lite doc
-that does not match the kit clone's copy, which means one the repository already had: keep or
-replace it with the operator, then re-run.
+Add `--keep <skill path>` to it for each skill L2 kept, such as `--keep
+.claude/skills/review/SKILL.md`: it is recorded as the repository's own, named in a
+note, and read `declined` by L5. It writes `$REPO/kit-manifest.json` with `"profile":
+"lite"`. Exit 1 names a lite doc or skill that does not match the kit clone's copy and
+was not named with `--keep`: one the repository already had, or one edited since L3.
+Settle each with the operator (keep it with `--keep`, or take the kit's copy), then
+re-run. Re-running alone does not settle one: it stays exit 1 until then.
 
 ### L5 — Verify
 
@@ -807,11 +811,14 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 ```
 
 The first must exit 0 and print `· profile: lite` and `intact for this adoption — lite
-install`. Every full-profile file is counted `outside the lite profile`, and the
-engines, hook and registrations read `not installed (lite)`. The second lists each lite
-binding `kit-current`, or `adopter-owned` where L2 kept the repository's own, and every
-full-only binding `outside-profile`. A `profile-mismatch` row is a full binding where
-the lite one belongs: take the kit's lite copy.
+install`, with `nothing declined` unless L2 kept a skill or a command. Each file it
+reads `declined` must be a skill L2 kept, or the Claude skill L3 skipped for a
+`.claude/commands/<slug>.md` L2 kept; any other is a lite doc or skill that is missing,
+so take the kit's copy and re-run L4. Every full-profile file is counted `outside the
+lite profile`, and the engines, hook and registrations read `not installed (lite)`. The
+second lists each lite binding `kit-current`, or `adopter-owned` where L2 kept the
+repository's own, and every full-only binding `outside-profile`. A `profile-mismatch`
+row is a full binding where the lite one belongs: take the kit's lite copy.
 
 ### L6 — Commit and hand off
 

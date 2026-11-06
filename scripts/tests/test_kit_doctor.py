@@ -2369,11 +2369,6 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
         "scripts/tests/test_skill_routing_eval.py",
         "docs/agentic-dev-kit/skill-routing/cases.json",
         "scripts/tests/test_lite_profile_docs.py",
-        *(
-            f"docs/agentic-dev-kit/lite/adapters/{runtime}/{slug}/SKILL.md"
-            for runtime in ("claude", "codex")
-            for slug in ("session-start", "wrap-up", "review")
-        ),
     }
     assert {
         rel for rel, role in kit_doctor.KIT_OWNED if role == kit_doctor.REPO_ONLY_ROLE
@@ -2422,17 +2417,16 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
         (path.as_posix(), path.read_text(encoding="utf-8"))
         for path in sorted(runtime_adapters.TEMPLATE_ROOT.rglob("*.md"))
     )
+    # The lite adapters' source paths are the kit clone's, not the adopter's: a
+    # lite install has them at the skill paths (#1365). `adopt.md`'s lite install
+    # copies them from there, so every mention must read from the guarded clone.
     lite_sources = "docs/agentic-dev-kit/lite/adapters/"
+    for rel, text in adopter_doctrine.items():
+        for match in re.finditer(re.escape(lite_sources), text):
+            assert re.search(r"\$\{KIT:\?[^}]*\}/$", text[: match.start()]), (
+                f"{rel} refers to {lite_sources} outside the guarded kit clone"
+            )
     for repo_only_path in repo_only:
-        if repo_only_path.startswith(lite_sources):
-            # `adopt.md`'s lite install copies these from the kit clone, which has
-            # them; every mention must read from there, never from the adopter.
-            for rel, text in adopter_doctrine.items():
-                for match in re.finditer(re.escape(lite_sources), text):
-                    assert re.search(r"\$\{KIT:\?[^}]*\}/$", text[: match.start()]), (
-                        f"{rel} refers to {lite_sources} outside the guarded kit clone"
-                    )
-            continue
         basename = Path(repo_only_path).name
         assert all(basename not in text for text in adopter_doctrine.values()), (
             f"adopter-facing doctrine still refers to repo-only {basename}"
@@ -8790,7 +8784,8 @@ def test_a_compute_problem_is_reported_without_changing_exit_status(tmp_path, ca
 
 
 def _lite_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
-    """A lite adopter: a lite config, the plan and inbox, and the three lite docs."""
+    """A lite adopter: a lite config, the plan and inbox, the three lite docs, and
+    the six lite skills at their skill paths. `hashes` is keyed by kit-layout path."""
     root = tmp_path / "lite"
     _write(
         root / "config" / "dev-model.yaml",
@@ -8801,9 +8796,14 @@ def _lite_repo(tmp_path: Path) -> tuple[Path, dict[str, str]]:
     _write(root / "docs" / "FIXLOG.md", "# Fix log\n")
     hashes = {}
     for rel in kit_doctor.LITE_PROFILE_PATHS:
-        _write(root / rel, f"# {rel}\n")
-        hashes[rel] = kit_doctor.sha256_of(root / rel)
+        _write(root / _lite_local(rel), f"# {rel}\n")
+        hashes[rel] = kit_doctor.sha256_of(root / _lite_local(rel))
     return root, hashes
+
+
+def _lite_local(rel: str) -> str:
+    """Where a lite install has the kit-owned path `rel`."""
+    return kit_doctor.LITE_ADAPTER_INSTALL_PATHS.get(rel, rel)
 
 
 def _lite_baseline(root: Path) -> dict:
@@ -8886,7 +8886,7 @@ def test_a_lite_install_reports_intact_and_names_what_is_not_installed(tmp_path,
     payload = json.loads(capsys.readouterr().out)
     assert payload["profile"] == "lite" and payload["hooks_state"] == "outside-profile"
     states = {f["path"]: f["state"] for f in payload["files"]}
-    assert {states[rel] for rel in kit_doctor.LITE_PROFILE_PATHS} == {"unchanged"}
+    assert {states[_lite_local(rel)] for rel in kit_doctor.LITE_PROFILE_PATHS} == {"unchanged"}
     assert set(states.values()) == {"unchanged", "outside-profile"}
 
 
@@ -9169,3 +9169,375 @@ def test_shipped_lite_adapters_equal_the_renderer():
         for runtime in runtime_adapters.RUNTIMES
         for slug in runtime_adapters.LITE_SLUGS
     } <= tracked
+
+
+def test_the_lite_skill_install_paths_are_the_adapter_renderers():
+    assert {
+        runtime_adapters.LITE_SOURCE_PATH.format(runtime=runtime, slug=slug):
+            runtime_adapters._adapter_path(runtime, slug)
+        for runtime in runtime_adapters.RUNTIMES
+        for slug in runtime_adapters.LITE_SLUGS
+    } == kit_doctor.LITE_ADAPTER_INSTALL_PATHS
+    assert set(kit_doctor.LITE_ADAPTER_INSTALL_PATHS) <= set(kit_doctor.LITE_PROFILE_PATHS)
+
+
+def _lite_source_files(hashes: dict[str, str]) -> dict:
+    """The source kit's `files`, as `--record-install --from-kit` reads them."""
+    return {rel: {"sha256": sha, "role": kit_doctor.LITE_ROLE} for rel, sha in hashes.items()}
+
+
+def _lite_recorded(root: Path, hashes: dict[str, str]) -> dict:
+    config = kit_doctor.load_config(root / "config" / "dev-model.yaml")
+    recorded, unverified = kit_doctor.record_install_manifest(
+        root, config, 2, "abc", _lite_source_files(hashes)
+    )
+    assert unverified == []
+    (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    return recorded
+
+
+@pytest.mark.parametrize("change", ["deleted", "edited"])
+def test_the_main_report_fails_a_lite_skill_deleted_or_edited_after_install(tmp_path, capsys, change):
+    """#1365: the lite baseline records the six skills, so the main report sees them."""
+    root, hashes = _lite_repo(tmp_path)
+    recorded = _lite_recorded(root, hashes)
+    assert set(kit_doctor.LITE_ADAPTER_INSTALL_PATHS) <= set(recorded["files"])
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    skill = root / ".agents/skills/review/SKILL.md"
+    if change == "deleted":
+        skill.unlink()
+    else:
+        skill.write_text("edited\n", encoding="utf-8")
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json")]
+    assert kit_doctor.main([*argv, "--json"]) == 1
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[".agents/skills/review/SKILL.md"] == (
+        "removed" if change == "deleted" else "locally-edited"
+    )
+    assert kit_doctor.main(argv) == 1
+    assert "✓ intact" not in capsys.readouterr().out
+
+
+def test_an_authored_command_kept_beside_a_skipped_lite_skill_is_not_a_finding(tmp_path, capsys):
+    """adopt.md L1 keeps `.claude/commands/<slug>.md` and skips the kit's skill for
+    that name: the absent skill is declined, not removed or missing."""
+    root, hashes = _lite_repo(tmp_path)
+    (root / ".claude/skills/wrap-up/SKILL.md").unlink()
+    _write(root / ".claude/commands/wrap-up.md", "Our own wrap-up.\n")
+    recorded = _lite_recorded(root, hashes)
+    source = "docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md"
+    assert source in recorded["not_installed"] and source not in recorded["files"]
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json")]
+    assert kit_doctor.main([*argv, "--json"]) == 0
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[".claude/skills/wrap-up/SKILL.md"] == "declined"
+    assert kit_doctor.main(argv) == 0
+    assert "✓ intact for this adoption — lite install, 1 file(s) declined" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("comparison", ["release manifest", "bare"])
+def test_a_skill_the_repository_kept_at_a_lite_skill_path_is_declined(
+    tmp_path, capsys, monkeypatch, comparison
+):
+    """adopt.md L1 keeps a skill the repository already had. `--record-install
+    --keep` names it and records the kit's binding as not installed, exit 0; the report,
+    against the kit's manifest or against the baseline alone, reads it declined."""
+    root, hashes = _lite_repo(tmp_path)
+    kept = root / ".claude/skills/review/SKILL.md"
+    kept.write_text("---\nname: review\ndescription: Ours.\n---\n\nOur review.\n", encoding="utf-8")
+    source = tmp_path / "kit"
+    _write(source / "kit-manifest.json", json.dumps({"kit_version": 2, "files": _lite_source_files(hashes)}))
+    monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "a" * 40)
+    record = ["--root", str(root), "--record-install", "--from-kit", str(source)]
+    assert kit_doctor.main([*record, "--keep", ".claude/skills/review/SKILL.md"]) == 0
+    err = capsys.readouterr().err
+    assert "recorded as the repository's own" in err and "  · .claude/skills/review/SKILL.md" in err
+    # Only the kept one: an installed skill is not the repository's own.
+    assert "  · .agents/skills/review/SKILL.md" not in err
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md" in recorded["not_installed"]
+    argv = ["--root", str(root)]
+    if comparison == "release manifest":
+        _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+        argv += ["--manifest", str(root / "manifest.json")]
+    assert kit_doctor.main([*argv, "--json"]) == 0
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[".claude/skills/review/SKILL.md"] == "declined"
+    assert set(states.values()) == {"unchanged", "declined", "outside-profile"}
+
+
+def _record_from_kit(
+    root: Path, source_files: dict, monkeypatch, tmp_path: Path, *keep: str
+) -> int:
+    source = tmp_path / "kit"
+    _write(source / "kit-manifest.json", json.dumps({"kit_version": 2, "files": source_files}))
+    monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "a" * 40)
+    flags = [arg for path in keep for arg in ("--keep", path)]
+    return kit_doctor.main(["--root", str(root), "--record-install", "--from-kit", str(source), *flags])
+
+
+def test_a_lite_skill_that_is_not_the_kits_copy_is_unverified_unless_kept(tmp_path, capsys, monkeypatch):
+    """#1372 R2 F1: a skill that is not the kit's copy looks the same kept or edited,
+    so only `--keep` records it as the repository's own; otherwise it is unverified."""
+    root, hashes = _lite_repo(tmp_path)
+    (root / ".claude/skills/review/SKILL.md").write_text("Ours, or an edit.\n", encoding="utf-8")
+    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "  · .claude/skills/review/SKILL.md" in err
+    assert "recorded as the repository's own" not in err
+    assert "not_installed" not in json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+
+
+def test_a_lite_skill_an_older_kit_does_not_ship_is_unverified_not_kept(tmp_path, capsys, monkeypatch):
+    """#1372 R1 F1: a kit whose manifest has no entry for a lite skill cannot vouch
+    for any copy of it, so the skill is not recorded as the repository's own."""
+    root, hashes = _lite_repo(tmp_path)
+    older = {rel: sha for rel, sha in hashes.items() if rel not in kit_doctor.LITE_ADAPTER_INSTALL_PATHS}
+    assert _record_from_kit(root, _lite_source_files(older), monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "  · .claude/skills/review/SKILL.md" in err
+    assert "recorded as the repository's own" not in err
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert "not_installed" not in recorded
+
+
+def test_re_recording_does_not_turn_an_edited_kit_skill_into_the_repositorys_own(
+    tmp_path, capsys, monkeypatch
+):
+    """#1372 R1 F1 and R2 F1: an edited kit skill is unverified on every re-record."""
+    root, hashes = _lite_repo(tmp_path)
+    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 0
+    capsys.readouterr()
+    (root / ".claude/skills/review/SKILL.md").write_text("edited\n", encoding="utf-8")
+    # Every run, not only the first: an earlier run's refusal leaves the skill out
+    # of the baseline it writes, so nothing from that baseline may decide it (R2 F1).
+    for _run in range(3):
+        assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 1
+        err = capsys.readouterr().err
+        assert "  · .claude/skills/review/SKILL.md" in err
+        assert "recorded as the repository's own" not in err
+
+
+def test_an_edited_lite_skill_under_an_untrusted_baseline_differs(tmp_path, capsys):
+    """#1372 R1 F2: with no trusted baseline there is no declared set, so a skill
+    that is not the kit's is drift, never declined."""
+    root, hashes = _lite_repo(tmp_path)
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    _write(root / "kit-manifest.json", json.dumps(_manifest(hashes)))
+    (root / ".claude/skills/review/SKILL.md").write_text("edited\n", encoding="utf-8")
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]
+    assert kit_doctor.main(argv) == 1
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[".claude/skills/review/SKILL.md"] == "differs"
+
+
+def test_a_kept_lite_skill_replaced_by_the_kits_copy_reads_unchanged(tmp_path, capsys, monkeypatch):
+    """#1372 R1 F2: declined is for a skill that is not the kit's; once the kit's copy
+    is in place, it matches the comparison manifest."""
+    root, hashes = _lite_repo(tmp_path)
+    kept = root / ".claude/skills/review/SKILL.md"
+    kits_copy = kept.read_text(encoding="utf-8")
+    kept.write_text("Our review.\n", encoding="utf-8")
+    assert _record_from_kit(
+        root, _lite_source_files(hashes), monkeypatch, tmp_path, ".claude/skills/review/SKILL.md"
+    ) == 0
+    kept.write_text(kits_copy, encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]
+    assert kit_doctor.main(argv) == 0
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[".claude/skills/review/SKILL.md"] == "unchanged"
+
+
+def test_a_lite_skill_in_both_baseline_maps_reads_as_drift_not_declined(tmp_path, capsys):
+    """#1372 R1 F2: a malformed baseline listing a skill as installed and not
+    installed resolves to the finding, as `removed` does for an absent path."""
+    root, hashes = _lite_repo(tmp_path)
+    recorded = _lite_recorded(root, hashes)
+    source = "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md"
+    recorded["not_installed"] = [*recorded.get("not_installed", []), source]
+    (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    (root / ".claude/skills/review/SKILL.md").write_text("edited\n", encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]
+    assert kit_doctor.main(argv) == 1
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[".claude/skills/review/SKILL.md"] == "locally-edited"
+
+
+def test_keep_on_the_kits_own_copy_records_it_as_installed(tmp_path, capsys, monkeypatch):
+    """`--keep` names a skill the repository kept; one that is the kit's copy was
+    installed from the kit, and is recorded so, where a later edit is drift."""
+    root, hashes = _lite_repo(tmp_path)
+    assert _record_from_kit(
+        root, _lite_source_files(hashes), monkeypatch, tmp_path, ".claude/skills/review/SKILL.md"
+    ) == 0
+    assert "recorded as the repository's own" not in capsys.readouterr().err
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md" in recorded["files"]
+
+
+@pytest.mark.parametrize(
+    ("repo", "keep", "message"),
+    [
+        ("lite", ".claude/skills/nope/SKILL.md", "--keep takes a lite skill path"),
+        ("lite", "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md", "--keep takes a lite skill path"),
+        ("full", ".claude/skills/review/SKILL.md", "--keep applies only to a lite repository"),
+    ],
+)
+def test_keep_refuses_a_path_that_is_not_a_lite_skill_and_a_full_repository(
+    tmp_path, capsys, monkeypatch, repo, keep, message
+):
+    root = _lite_repo(tmp_path)[0] if repo == "lite" else _fake_repo(tmp_path)
+    before = (root / "kit-manifest.json").read_bytes() if (root / "kit-manifest.json").exists() else None
+    assert _record_from_kit(root, {}, monkeypatch, tmp_path, keep) == 2
+    assert message in capsys.readouterr().err
+    after = (root / "kit-manifest.json").read_bytes() if (root / "kit-manifest.json").exists() else None
+    assert after == before
+
+
+@pytest.mark.parametrize("mode", [[], ["--adapter-report"]])
+def test_keep_needs_record_install(tmp_path, capsys, mode):
+    root, _hashes = _lite_repo(tmp_path)
+    with pytest.raises(SystemExit) as exit_info:
+        kit_doctor.main(["--root", str(root), *mode, "--keep", ".claude/skills/review/SKILL.md"])
+    assert exit_info.value.code == 2
+    assert "--keep" in capsys.readouterr().err
+
+
+def test_a_full_install_record_names_no_skill_as_the_repositorys_own(tmp_path, capsys):
+    """#1372 R1 F2: the kept note is lite's; a full install has its own skills at
+    the lite skill paths, and they are not the repository's own."""
+    root = _fake_repo(tmp_path)
+    _write(root / ".claude/skills/review/SKILL.md", "Full review skill.\n")
+    # Without --from-kit the record is complete, so the lite sources are in
+    # `not_installed` while a skill sits at their lite install path.
+    assert kit_doctor.main(["--root", str(root), "--record-install"]) == 0
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md" in recorded["not_installed"]
+    assert "recorded as the repository's own" not in capsys.readouterr().err
+
+
+def test_a_deleted_kept_lite_skill_is_not_said_to_have_been_absent(tmp_path, capsys, monkeypatch):
+    """#1372 R1 F3: the repository's own skill was present at record time."""
+    root, hashes = _lite_repo(tmp_path)
+    kept = root / ".claude/skills/review/SKILL.md"
+    kept.write_text("Our review.\n", encoding="utf-8")
+    assert _record_from_kit(
+        root, _lite_source_files(hashes), monkeypatch, tmp_path, ".claude/skills/review/SKILL.md"
+    ) == 0
+    kept.unlink()
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]
+    assert kit_doctor.main(argv) == 0
+    rows = {f["path"]: f for f in json.loads(capsys.readouterr().out)["files"]}
+    assert rows[".claude/skills/review/SKILL.md"]["state"] == "declined"
+    assert "absent when the baseline was recorded" not in rows[".claude/skills/review/SKILL.md"]["detail"]
+
+
+def test_an_absent_lite_skill_beside_a_kit_generated_command_is_missing(tmp_path, adapter_source):
+    """#1360 item 2: only an authored command makes the absent skill the adopter's.
+    A command the kit generated is retired, so the absent skill is `missing`."""
+    adopter = _lite_adopter(tmp_path, adapter_source)
+    skill = runtime_adapters._adapter_path("claude", "session-start")
+    (adopter / skill).unlink()
+    full = _frontmatter_description(
+        adapter_source / runtime_adapters._adapter_path("claude", "session-start")
+    )
+    command = runtime_adapters.LEGACY_CLAUDE_COMMAND_PATH.format(slug="session-start")
+    _write(adopter / command, runtime_adapters.render_adapter(
+        "claude", "session-start", full, "docs/agentic-dev-kit/workflows/session-start.md",
+        template_version=2,
+    ))
+    rows = {s.path: s for s in runtime_adapters.compare_adapters(adapter_source, adopter, profile="lite")}
+    assert rows[command].state == "kit-retired"
+    assert rows[skill].state == "missing"
+
+
+def _config_not_a_file(config: Path, shape: str) -> None:
+    config.unlink()
+    if shape == "directory":
+        config.mkdir()
+    elif shape == "dangling link":
+        config.symlink_to(config.parent / "nowhere.yaml")
+    else:
+        config.symlink_to(config)
+
+
+@pytest.mark.parametrize("shape", ["directory", "dangling link", "link loop"])
+@pytest.mark.parametrize("mode", [[], ["--adapter-report"]])
+def test_a_config_that_is_not_a_regular_file_is_refused_in_both_modes(tmp_path, capsys, shape, mode):
+    """#1360 item 3: the adapter report read these as "no config", so `full` and
+    exit 0, while the main report exited 2 with a hint about an absent config."""
+    root = _fake_repo(tmp_path)
+    config = root / "config" / "dev-model.yaml"
+    _config_not_a_file(config, shape)
+    assert kit_doctor.main(["--root", str(root), *mode]) == 2
+    err = capsys.readouterr().err
+    assert f"error: {config} exists but is not a regular file" in err
+    assert "Traceback" not in err and "predates the config surface" not in err
+
+
+@pytest.mark.parametrize("shape", ["file", "dangling link", "link loop"])
+@pytest.mark.parametrize("mode", [[], ["--adapter-report"]])
+def test_a_config_whose_directory_is_not_a_directory_is_refused_in_both_modes(
+    tmp_path, capsys, shape, mode
+):
+    """#1372 R1 F4: `config` itself not a directory reads the config as absent too."""
+    root = _fake_repo(tmp_path)
+    directory = root / "config"
+    shutil.rmtree(directory)
+    if shape == "file":
+        directory.write_text("not a directory\n", encoding="utf-8")
+    elif shape == "dangling link":
+        directory.symlink_to(root / "nowhere")
+    else:
+        directory.symlink_to(directory)
+    assert kit_doctor.main(["--root", str(root), *mode]) == 2
+    err = capsys.readouterr().err
+    assert f"error: {directory / 'dev-model.yaml'} cannot be read: {directory} is not a directory" in err
+    assert "Traceback" not in err and "predates the config surface" not in err
+
+
+def test_a_config_directory_linked_to_a_directory_without_it_reads_as_absent(tmp_path, capsys, adapter_source):
+    """A symlinked `config/` that reaches a directory lacking the file: absent, not refused."""
+    adopter = tmp_path / "adopter"
+    adopter.mkdir()
+    (tmp_path / "elsewhere").mkdir()
+    (adopter / "config").symlink_to(tmp_path / "elsewhere")
+    code = kit_doctor.main(
+        ["--adapter-report", "--adapter-source", str(adapter_source), "--root", str(adopter), "--json"]
+    )
+    assert code == 0, capsys.readouterr().err
+
+
+def test_the_adapter_report_still_reads_an_absent_config_as_full(tmp_path, capsys, adapter_source):
+    adopter = tmp_path / "adopter"
+    adopter.mkdir()
+    code = kit_doctor.main(
+        ["--adapter-report", "--adapter-source", str(adapter_source), "--root", str(adopter), "--json"]
+    )
+    assert code == 0
+    assert "outside-profile" not in {r["state"] for r in json.loads(capsys.readouterr().out)["adapters"]}
+
+
+@pytest.mark.parametrize("baseline", ["none", "release manifest copy", "recorded"])
+def test_lite_scoping_on_an_untrusted_baseline_is_said(tmp_path, capsys, baseline):
+    """#1360 item 5: `profile: lite` alone moves every full-only file out of the
+    checks. Without a trusted baseline nothing contradicts it, so the report says
+    so, and the exit code is unchanged."""
+    root, hashes = _lite_repo(tmp_path)
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    if baseline == "release manifest copy":
+        _write(root / "kit-manifest.json", json.dumps(_manifest(hashes)))
+    elif baseline == "recorded":
+        _lite_recorded(root, hashes)
+    assert kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json")]) == 0
+    out = capsys.readouterr().out
+    line = (
+        "⚠ profile: lite rests on the config alone — no trusted baseline records a lite "
+        "install, so the files outside the lite profile go unchecked"
+    )
+    assert (line in out) == (baseline != "recorded"), out
+    assert "outside the lite profile" in out

@@ -904,7 +904,7 @@ still shows no `missing-required`.
   `missing-required` above now names it.
 - **`outside-profile`** → nothing to do, and nothing to offer. The file belongs to the
   other install profile (`profile:` in `config/dev-model.yaml`; absent means `full`):
-  on a full install, the lite profile's workflows. Copying it in would install a
+  on a full install, the lite profile's workflows and their skills. Copying it in would install a
   workflow this repository does not run.
 - **`new-upstream`** → **this is the decision `/upgrade` owns.** The baseline mentions the
   file in neither map; the ordinary cause is that the kit gained it after the baseline was
