@@ -468,7 +468,11 @@ def test_adopt_lite_copy_block_never_writes_through_a_dangling_symlink(tmp_path:
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
-@pytest.mark.parametrize("linked", [".claude/skills", ".claude", "docs/agentic-dev-kit"])
+# The target's own directory first: a guard that starts one level up skips it (#1360).
+@pytest.mark.parametrize(
+    "linked",
+    [".claude/skills/review", "docs/agentic-dev-kit/lite", ".claude/skills", ".claude", "docs/agentic-dev-kit"],
+)
 def test_adopt_lite_copy_block_skips_a_target_under_a_symlinked_directory(
     tmp_path: Path, shell: str, linked: str
 ) -> None:
@@ -484,6 +488,97 @@ def test_adopt_lite_copy_block_skips_a_target_under_a_symlinked_directory(
     assert "skipped, a directory on its path is a symlink" in result.stdout
     assert list(outside.iterdir()) == []
     assert (repo / ".agents/skills/review/SKILL.md").is_file()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("dangling", [False, True])
+def test_adopt_lite_copy_block_skips_a_claude_skill_a_command_would_be_shadowed_by(
+    tmp_path: Path, shell: str, dangling: bool
+) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    command = repo / ".claude/commands/session-start.md"
+    command.parent.mkdir(parents=True)
+    if dangling:
+        command.symlink_to(tmp_path / "nowhere.md")
+    else:
+        command.write_text("Our session start.\n", encoding="utf-8")
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert f"collision: {command}" in result.stdout
+    assert not (repo / ".claude/skills/session-start").exists()
+    # Codex reads no `.claude/commands/`, so its binding still installs, as do the other slugs.
+    assert (repo / ".agents/skills/session-start/SKILL.md").is_file()
+    assert (repo / ".claude/skills/wrap-up/SKILL.md").is_file()
+    assert command.is_symlink() if dangling else command.read_text(encoding="utf-8") == "Our session start.\n"
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("left", ["helper file", "hidden file", "subdirectory", "plain file", "unreadable"])
+def test_adopt_lite_copy_block_keeps_a_skill_directory_that_still_holds_something(
+    tmp_path: Path, shell: str, left: str
+) -> None:
+    """A half-removed skill (its `SKILL.md` gone, a helper left) is not installed beside."""
+    if left == "unreadable" and os.geteuid() == 0:
+        pytest.skip("root lists an unreadable directory")
+    repo, env = _repo(tmp_path, "adopter")
+    skill = repo / ".claude/skills/review"
+    skill.parent.mkdir(parents=True)
+    if left == "plain file":
+        skill.write_text("not a directory\n", encoding="utf-8")
+    else:
+        skill.mkdir()
+        if left == "helper file":
+            (skill / "helper.sh").write_text("echo ours\n", encoding="utf-8")
+        elif left == "hidden file":
+            (skill / ".notes").write_text("ours\n", encoding="utf-8")
+        elif left == "subdirectory":
+            (skill / "scripts").mkdir()
+        else:
+            skill.chmod(0o000)
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    try:
+        result = _run(shell, _adopt_copy_block(), repo, env)
+    finally:
+        if left == "unreadable":
+            skill.chmod(0o755)
+    assert result.returncode == 0, result.stderr
+    assert f"kept: {skill}" in result.stdout
+    assert not (skill / "SKILL.md").exists()
+    assert (repo / ".agents/skills/review/SKILL.md").is_file()
+    assert (repo / ".claude/skills/wrap-up/SKILL.md").is_file()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_installs_into_an_empty_skill_directory(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    skill = repo / ".claude/skills/review"
+    skill.mkdir(parents=True)
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert "kept:" not in result.stdout
+    assert (skill / "SKILL.md").is_file()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("slashes", ["/", "//", "///"])
+def test_adopt_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_symlinked_ancestor(
+    tmp_path: Path, shell: str, slashes: str
+) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    alias = tmp_path / "alias"
+    alias.symlink_to(tmp_path)
+    env = {**env, "REPO": f"{alias / 'adopter'}{slashes}", "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert "skipped" not in result.stdout
+    assert (repo / "docs/agentic-dev-kit/lite/lite-review.md").is_file()
+    assert (repo / ".claude/skills/review/SKILL.md").is_file()
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])

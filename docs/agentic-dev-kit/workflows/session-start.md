@@ -359,9 +359,10 @@ and a **source pointer**.
   entry by entry — **no entry is promoted for being the most recently updated**;
   any entry your config-drift check flags — a merged config change that's inert on
   the host until applied is an **operator host-action** reminder, not a delegatable
-  build candidate — render it without model/mode tags (see *Render the briefing*).
+  build candidate — render it without model/mode tags (see *Render the briefing*);
+  a friction-log entry that says it blocks work.
 - 🟡 **Soon** — this week's clear next steps. Active-sprint follow-ups, time-bound
-  items ("validate Wednesday's run"), medium-severity friction-log entries,
+  items ("validate Wednesday's run"), high- and medium-severity friction-log entries,
   started/high-priority tracker tickets.
 - 🟢 **Whenever** — backlog. Low-severity friction-log entries, lower-priority tracker
   tickets, nice-to-haves.

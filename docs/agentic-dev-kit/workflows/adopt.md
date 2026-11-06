@@ -84,12 +84,14 @@ Ask the operator which install profile this repository takes, before Step 1:
   inbox, and the `session-start`, `wrap-up` and `review` workflows as lite docs with
   Claude and Codex adapters. No engines, hooks or Python files are added to the
   repository; `uv` on this machine runs the kit's `kit_doctor.py` from `$KIT` at install
-  time only. It fits one operator and an agent committing to a branch, with no remote
-  CI, tracker integration or parallel lanes. Follow *Lite profile* at the end of this
-  workflow instead of Steps 1–6; it uses the two blocks above.
+  time only. It fits one operator and an agent committing to a branch, or opening a pull
+  request that no review loop or CI gate watches, with no tracker integration or
+  parallel lanes. Follow *Lite profile* at the end of this workflow instead of Steps
+  1–6; it uses the two blocks above.
 
-Recommend lite when the repository has no remote CI and commits without pull
-requests; otherwise full. The operator decides.
+Recommend lite when the repository has no remote CI, tracker integration or parallel
+lanes for the kit to drive; taking changes through pull requests alone does not rule it
+out (L1 records the branch they target). Otherwise recommend full. The operator decides.
 
 ## Step 1 — Inspect the target repo (read-only)
 
@@ -654,9 +656,28 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   firewall or tunnel config, deploy scripts and their runbooks. Ask the operator; the
   answer becomes `review.safety_critical_paths` and turns on the risk tier in
   `lite-review.md`. No answer leaves it out.
+- **Does a branch take changes only through pull requests?** Ask the operator; Git
+  does not record it. The branch becomes `vcs.protected_branch`, and the lite `wrap-up`
+  then commits on a session branch and opens the pull request. No such branch leaves
+  the key out, and the lite `wrap-up` reads that absence as "takes direct commits": it
+  commits to the branch checked out without asking.
+- **Reads a session here needs that the lite docs do not make?** A deploy-state check,
+  pull requests or issues across related repositories, a roadmap's current phase. Each
+  becomes a repository source in the `AGENTS.md` section L3 writes, under the workflow
+  that runs it.
 - **Skill collisions.** For each of `session-start`, `wrap-up` and `review`, look for
   `.claude/skills/<name>/`, `.claude/commands/<name>.md` and `.agents/skills/<name>/`.
-  Keep what the repository has, skip the kit's binding for that name, and say so.
+  The operator chooses, per collision, one of two outcomes:
+  - **keep** — keep what the repository has, skip the kit's binding for that name in
+    that runtime, and say so;
+  - **replace** — install the kit's binding in place of the repository's own (the
+    command file, or the skill's whole directory). First list what that binding does
+    beyond the lite doc, every file of it, and give each item a home with the operator:
+    usually a repository source in the `AGENTS.md` section L3 writes, sometimes the
+    plan. An item with no home is dropped only on the operator's word. **The operator
+    removes the binding, not this workflow** (L3): it may be partly untracked, hold
+    uncommitted work, or sit behind a symlink, and the operator is the one who can
+    tell.
 - **`config/dev-model.yaml`.** If one exists without `profile: lite`, stop and ask: it
   is a full install's config or the repository's own file. If one exists with
   `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
@@ -665,20 +686,30 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 
 ### L2 — Propose the plan, then wait
 
-Show one row per item: the three docs and six adapters (**install** or **skip:
-collision**), the config with the values L1 settled, the plan and inbox (**point at**
-an existing file, or **create**), and the `AGENTS.md` section. Name the branch the
-commit goes to: the operator's choice, which on a lite repository is usually the one it
-works on. Wait for the operator's go-ahead.
+Show one row per item: the three docs and six adapters (**install**, **skip:
+collision**, or **replace: `<the repository's binding>`, removed by the operator**
+with where each of its extra items goes), the config with the values L1 settled, the
+plan and inbox (**point at** an existing file, or **create**), and the `AGENTS.md`
+section with any repository sources. Name the branch the commit goes to: the
+operator's choice, which on a lite repository is usually the one it works on, or a new
+branch when that one is `vcs.protected_branch`. Wait for the operator's go-ahead.
 
 ### L3 — Install, never over an existing file
 
 Each copy runs only where the target is absent. A symlink counts as present even when
 it points nowhere, and a target under a symlinked directory inside the repository is
-skipped, so a copy never writes through a link:
+skipped, so a copy never writes through a link. A Claude skill is also skipped while
+`.claude/commands/<slug>.md` exists, because the skill would silently shadow that
+command. A skill directory that holds anything, such as a helper file whose
+`SKILL.md` went, is kept too: the kit's `SKILL.md` would land beside it. For each
+binding L2 marked **replace**, move its extra items to the homes L2 named, then ask
+the operator to remove the whole binding (the command file, or the skill directory
+with everything in it) and to say when it is done. Remove nothing of the repository's
+yourself. L6 stages a tracked binding's removal with the install. Then run the block:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
+while [ "$REPO" != / ] && [ "${REPO%/}" != "$REPO" ]; do REPO="${REPO%/}"; done
 under_link() {
   d=$(dirname "$1")
   while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
@@ -699,18 +730,23 @@ for slug in session-start wrap-up review; do
     runtime=${pair%%:*}; dir=${pair#*:}
     dst="$REPO/$dir/$slug/SKILL.md"
     if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
+    cmd="$REPO/.claude/commands/$slug.md"
+    if [ "$runtime" = claude ] && { [ -e "$cmd" ] || [ -L "$cmd" ]; }; then echo "collision: $cmd"; continue; fi
     if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
-    mkdir -p "$REPO/$dir/$slug"
+    skill="$REPO/$dir/$slug"
+    if [ -e "$skill" ] && ! { [ -d "$skill" ] && [ -z "$(ls -A "$skill" 2>&1)" ]; }; then echo "kept: $skill"; continue; fi
+    mkdir -p "$skill"
     cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
   done
 done
 ```
 
-Skip a binding L2 marked as a collision, including one at `.claude/commands/`, which
-this block cannot see. Resolve a target the block skipped for a symlinked directory with
-the operator. Then write `$REPO/config/dev-model.yaml` if it is absent. One
-that exists is kept: change a key in it only with the operator, never by writing the
-file again, which would drop a key such as `review.safety_critical_paths`.
+A `kept:` or `collision:` line for a binding L2 marked **replace** means some of it is
+still there: ask the operator to remove the rest, then run the block again. Resolve a
+target the block skipped for a symlinked directory with the operator. Then write
+`$REPO/config/dev-model.yaml` if it is absent. One that exists is kept: change a key in
+it only with the operator, never by writing the file again, which would drop a key
+such as `review.safety_critical_paths`.
 `kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each
 optional key L1 did not settle:
 
@@ -726,6 +762,8 @@ friction:
 review:
   safety_critical_paths:   # optional; patterns as lite-review.md's *Risk tier* matches them
     - "<path or pattern>"
+vcs:
+  protected_branch: <branch>   # optional; the branch that takes changes only through pull requests
 ```
 
 Create the plan and inbox only where L2 said **create**: a `# Plan` heading over an
@@ -743,7 +781,13 @@ import `AGENTS.md`, ask the operator where the section goes instead.
 - `config/dev-model.yaml` names the living plan and the friction inbox.
 - The workflows are kit-owned, in `docs/agentic-dev-kit/lite/`. Take the kit's copy
   rather than editing one here.
+- Reads this repository adds to a workflow are its repository sources, listed below
+  under the workflow's name. Each is a source like the doc's own: one that fails is
+  reported unavailable, never as empty.
 ```
+
+When L1 found repository sources, list them after that section's bullets, under a
+`### session-start` or `### wrap-up` heading, each with the command that reads it.
 
 ### L4 — Record the install baseline
 
@@ -771,8 +815,11 @@ the lite one belongs: take the kit's lite copy.
 
 ### L6 — Commit and hand off
 
-Stage every path L3 and L4 wrote by name, and commit on the branch L2 named, or open a
-pull request if the repository takes changes that way. Delete `$KIT` once the commit has
+Stage every path L3 and L4 wrote by name, and each binding the operator removed for a
+**replace**: `git -C "$REPO" add -- <binding>` stages a tracked one's removal, and
+refuses with `did not match any files` for one Git never tracked, which leaves nothing
+to stage. Commit on the branch L2 named, or open a pull request if the repository takes
+changes that way. Delete `$KIT` once the commit has
 landed. Report what was installed, kept and pointed at, and leave `session-start` as the
 next step. A later move to the full profile is this workflow run again with **Full**;
 its path from lite is not written yet (#1320).

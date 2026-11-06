@@ -334,13 +334,14 @@ Step 3 has copied from it (#1355). #1340 completed #576.
 lite workflow docs in `docs/agentic-dev-kit/lite/`. Phase 3 is two pull requests: #1358 (the optional risk tier,
 the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, executed shell-block tests) and #1359
 (the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). A lite
-repository has no upgrade path yet: `upgrade.md` Step 0 stops on one.
+repository has no upgrade path yet: `upgrade.md` Step 0 stops on one. `topij/home-server` is the first lite
+install (topij/home-server#31, at kit `78f10709`); its field reports are #1361 to #1365. The operator chose on
+2026-11-05 that lite supports pull-request repositories through `vcs.protected_branch` (#1362).
 **Owner:** #1320.
 
-▶ Next: once #1359 merges, adopt `topij/home-server` as the first lite install with `adopt.md`'s *Lite
-profile* (the order the operator agreed in session on 2026-11-05), replacing its hand-trimmed `/session-start` and
-`/wrap-up` and declaring its `review.safety_critical_paths`; its deploy-state and cross-repo reads become a
-repo-specific section planned with the operator then. Its nested service repos (`brain`, `mcp-voice-notes`,
-`obsidian-vault-mcp`) are decided one at a time after that: each has a tracker and PRs, which lite does not install,
-so the full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in `adopt`.
-The parser-based guard on lite docs' links and engine names is #1347.
+▶ Next: the remaining field report, #1365 (the lite baseline's skills), with #1360's items 2, 3 and 5 in the same
+files. When home-server takes these docs (by hand: lite has no upgrade path yet), it sets
+`vcs.protected_branch` and moves its `AGENTS.md` reads under the repository-sources headings. Its nested service repos (`brain`, `mcp-voice-notes`,
+`obsidian-vault-mcp`) are decided one at a time after that: each has a tracker, which lite does not drive, so the
+full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in `adopt`. The
+parser-based guard on lite docs' links and engine names is #1347.
