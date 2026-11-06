@@ -795,11 +795,13 @@ When L1 found repository sources, list them after that section's bullets, under 
 uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "${REPO:?REPO is not set — run Step 0}"
 ```
 
-It writes `$REPO/kit-manifest.json` with `"profile": "lite"`. Exit 1 names a lite doc
-that does not match the kit clone's copy, which means one the repository already had: keep or
-replace it with the operator, then re-run. A skill that is not the kit's lite binding is
-named in a note and recorded as the repository's own, which L5 reads as `declined`; it
-should be one L2 kept.
+Add `--keep <skill path>` to it for each skill L2 kept, such as `--keep
+.claude/skills/review/SKILL.md`: it is recorded as the repository's own, named in a
+note, and read `declined` by L5. It writes `$REPO/kit-manifest.json` with `"profile":
+"lite"`. Exit 1 names a lite doc or skill that does not match the kit clone's copy and
+was not named with `--keep`: one the repository already had, or one edited since L3.
+Settle each with the operator (keep it with `--keep`, or take the kit's copy), then
+re-run. Re-running alone does not settle one: it stays exit 1 until then.
 
 ### L5 — Verify
 
@@ -809,10 +811,11 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 ```
 
 The first must exit 0 and print `· profile: lite` and `intact for this adoption — lite
-install`, with `nothing declined` unless L2 kept a skill. Each file it reads `declined`
-must be a skill L2 kept; any other is the kit's skill missing or not the kit's copy, so
-take the kit's copy and re-run L4. Every full-profile file is counted `outside the lite
-profile`, and the engines, hook and registrations read `not installed (lite)`. The
+install`, with `nothing declined` unless L2 kept a skill or a command. Each file it
+reads `declined` must be a skill L2 kept, or the Claude skill L3 skipped for a
+`.claude/commands/<slug>.md` L2 kept; any other is a lite doc or skill that is missing,
+so take the kit's copy and re-run L4. Every full-profile file is counted `outside the
+lite profile`, and the engines, hook and registrations read `not installed (lite)`. The
 second lists each lite binding `kit-current`, or `adopter-owned` where L2 kept the
 repository's own, and every full-only binding `outside-profile`. A `profile-mismatch`
 row is a full binding where the lite one belongs: take the kit's lite copy.

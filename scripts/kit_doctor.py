@@ -2639,7 +2639,7 @@ def record_install_manifest(
     kit_version: int,
     kit_commit: str | None,
     source_files: dict | None = None,
-    prior_installed: frozenset[str] = frozenset(),
+    kept: frozenset[str] = frozenset(),
 ) -> tuple[dict, list[str]]:
     """Record what is ACTUALLY INSTALLED in an adopter as its drift baseline.
 
@@ -2702,6 +2702,18 @@ def record_install_manifest(
             not_installed.append(rel)
             continue
         digest = sha256_of(target)
+        if rel in kept and profile == "lite" and rel in LITE_ADAPTER_INSTALL_PATHS:
+            entry = source_files.get(rel) if isinstance(source_files, dict) else None
+            if not isinstance(entry, dict) or entry.get("sha256") != digest:
+                # A lite skill the operator declared kept (`--keep`, adopt.md L4,
+                # for a skill L2 kept): the repository's own, so the kit's binding
+                # was not installed, which is what `not_installed` records, and
+                # `inspect` reads it `declined` while it stays there (#1365). Only
+                # by declaration: a skill that is not the kit's copy looks the
+                # same whether the repository kept it or someone edited the kit's,
+                # so inferring it let an edit be recorded as the repository's own.
+                not_installed.append(rel)
+                continue
         if source_files is not None:
             # Same non-dict hazard as the caller's, one level down: a `files`
             # value that is a non-empty list survives `or {}` and raises on
@@ -2709,25 +2721,6 @@ def record_install_manifest(
             # not come from that kit", which is the conservative answer.
             entry = source_files.get(rel) if isinstance(source_files, dict) else None
             if not isinstance(entry, dict) or entry.get("sha256") != digest:
-                if (
-                    profile == "lite"
-                    and rel in LITE_ADAPTER_INSTALL_PATHS
-                    and isinstance(entry, dict)
-                    and rel not in prior_installed
-                ):
-                    # A lite skill that is not the kit's is the repository's own,
-                    # kept by adopt.md L1's collision rule: the kit's binding was
-                    # not installed, which is what `not_installed` records, and
-                    # `inspect` reads it `declined` while it stays there (#1365).
-                    # Not `unverified`: the collision rule sanctions it, so it
-                    # must not suppress the declared set or fail the record. The
-                    # caller names it, so keeping it is never silent. Only when the
-                    # source kit ships this skill (an older kit that does not cannot
-                    # vouch for any copy) and the existing baseline does not record
-                    # it as installed from the kit (a re-record after an edit would
-                    # otherwise turn the edit into the repository's own).
-                    not_installed.append(rel)
-                    continue
                 unverified.append(_installed_path(rel, engines_dir, profile))
                 continue
         files[rel] = {"sha256": digest, "role": role}
@@ -4337,6 +4330,16 @@ def main(argv: list[str] | None = None) -> int:
         help="kit checkout this install came from; its HEAD is stamped as kit_commit",
     )
     parser.add_argument(
+        "--keep",
+        action="append",
+        default=[],
+        metavar="SKILL",
+        help=(
+            "(lite, with --record-install) a lite skill path the repository kept as its "
+            "own, such as .claude/skills/review/SKILL.md; repeat for each"
+        ),
+    )
+    parser.add_argument(
         "--adapter-report",
         action="store_true",
         help="classify runtime adapters as rendered kit glue, adopter-owned, or missing",
@@ -4381,6 +4384,7 @@ def main(argv: list[str] | None = None) -> int:
                 ("--generate-manifest", args.generate_manifest),
                 ("--record-install", args.record_install),
                 ("--from-kit", args.from_kit is not None),
+                ("--keep", bool(args.keep)),
                 ("--manifest", args.manifest is not None),
                 ("--baseline", args.baseline is not None),
             )
@@ -4425,6 +4429,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.adapter_source is not None:
         parser.error("--adapter-source requires --adapter-report")
+    if args.keep and not args.record_install:
+        parser.error("--keep requires --record-install")
 
     config_path = root / "config" / "dev-model.yaml"
     if refusal := _config_path_refusal(config_path):
@@ -4467,7 +4473,6 @@ def main(argv: list[str] | None = None) -> int:
         # first because the damage is the write itself, and every later step
         # here (version parse, HEAD resolution, hashing) is wasted if we are
         # about to refuse anyway.
-        prior_installed: frozenset[str] = frozenset()
         if baseline_path.is_file():
             try:
                 existing = json.loads(baseline_path.read_text(encoding="utf-8"))
@@ -4490,11 +4495,24 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 2
-            # What the baseline being replaced records as installed from the
-            # kit: a lite skill in it that no longer matches was edited, and
-            # must not be re-recorded as the repository's own (#1365).
-            if isinstance(existing, dict) and isinstance(existing.get("files"), dict):
-                prior_installed = frozenset(str(k) for k in existing["files"])
+        # `--keep` names the lite skills the repository kept (#1365): checked
+        # before anything is written, since a typo would otherwise leave a kept
+        # skill unverified and say nothing about why.
+        by_install_path = {local: rel for rel, local in LITE_ADAPTER_INSTALL_PATHS.items()}
+        kept_sources: frozenset[str] = frozenset()
+        if args.keep:
+            if profile_of(config) != "lite":
+                print("error: --keep applies only to a lite repository (profile: lite)", file=sys.stderr)
+                return 2
+            unknown = [path for path in args.keep if path not in by_install_path]
+            if unknown:
+                print(
+                    f"error: --keep takes a lite skill path ({', '.join(sorted(by_install_path))}); "
+                    f"not one: {', '.join(unknown)}",
+                    file=sys.stderr,
+                )
+                return 2
+            kept_sources = frozenset(by_install_path[path] for path in args.keep)
         raw_version = get(config, "kit.version", None)
         version = 2 if raw_version is None else _as_version(raw_version)
         if version is None:
@@ -4555,7 +4573,7 @@ def main(argv: list[str] | None = None) -> int:
             raw_source_files = parsed_source.get("files") if isinstance(parsed_source, dict) else None
             source_files = raw_source_files if isinstance(raw_source_files, dict) else {}
         baseline, unverified = record_install_manifest(
-            root, config, version, kit_commit, source_files, prior_installed
+            root, config, version, kit_commit, source_files, kept_sources
         )
         try:
             baseline_path.write_text(
@@ -4603,9 +4621,8 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 for path in unverified:
                     print(f"  · {path}", file=sys.stderr)
-            # The lite skills `record_install_manifest` left out as the
-            # repository's own (#1365). Not a partial record, so the exit code
-            # stays 0, but named, so a kit skill edited before recording is seen.
+            # The lite skills `--keep` recorded as the repository's own (#1365).
+            # Not a partial record, so the exit code stays 0, but named.
             kept = [
                 LITE_ADAPTER_INSTALL_PATHS[rel]
                 for rel in LITE_ADAPTER_INSTALL_PATHS
@@ -4615,10 +4632,9 @@ def main(argv: list[str] | None = None) -> int:
             ]
             if kept:
                 print(
-                    "note: these skills are not the kit's lite binding, so they are recorded "
-                    "as the repository's own (not installed from the kit) — adopt.md L1 "
-                    "keeps a skill the repository already had. Replace any that should be "
-                    "the kit's, then re-run:",
+                    "note: these skills, named with --keep, are recorded as the repository's "
+                    "own (not installed from the kit) — adopt.md L1 keeps a skill the "
+                    "repository already had:",
                     file=sys.stderr,
                 )
                 for path in kept:

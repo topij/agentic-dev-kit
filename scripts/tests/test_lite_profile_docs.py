@@ -612,7 +612,11 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
     (repo / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
     (repo / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
 
-    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
+    # adopt.md L4, with `--keep` for the skill L2 kept.
+    record = _doctor(
+        "--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo),
+        "--keep", ".claude/skills/review/SKILL.md", env=env,
+    )
     assert record.returncode == 0, record.stderr
     # The kept skill is the repository's own: named, and left out of `files`.
     assert "recorded as the repository's own" in record.stderr

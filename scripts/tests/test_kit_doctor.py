@@ -9240,8 +9240,8 @@ def test_an_authored_command_kept_beside_a_skipped_lite_skill_is_not_a_finding(t
 def test_a_skill_the_repository_kept_at_a_lite_skill_path_is_declined(
     tmp_path, capsys, monkeypatch, comparison
 ):
-    """adopt.md L1 keeps a skill the repository already had. `--record-install`
-    names it and records the kit's binding as not installed, exit 0; the report,
+    """adopt.md L1 keeps a skill the repository already had. `--record-install
+    --keep` names it and records the kit's binding as not installed, exit 0; the report,
     against the kit's manifest or against the baseline alone, reads it declined."""
     root, hashes = _lite_repo(tmp_path)
     kept = root / ".claude/skills/review/SKILL.md"
@@ -9249,7 +9249,8 @@ def test_a_skill_the_repository_kept_at_a_lite_skill_path_is_declined(
     source = tmp_path / "kit"
     _write(source / "kit-manifest.json", json.dumps({"kit_version": 2, "files": _lite_source_files(hashes)}))
     monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "a" * 40)
-    assert kit_doctor.main(["--root", str(root), "--record-install", "--from-kit", str(source)]) == 0
+    record = ["--root", str(root), "--record-install", "--from-kit", str(source)]
+    assert kit_doctor.main([*record, "--keep", ".claude/skills/review/SKILL.md"]) == 0
     err = capsys.readouterr().err
     assert "recorded as the repository's own" in err and "  · .claude/skills/review/SKILL.md" in err
     # Only the kept one: an installed skill is not the repository's own.
@@ -9266,11 +9267,26 @@ def test_a_skill_the_repository_kept_at_a_lite_skill_path_is_declined(
     assert set(states.values()) == {"unchanged", "declined", "outside-profile"}
 
 
-def _record_from_kit(root: Path, source_files: dict, monkeypatch, tmp_path: Path) -> int:
+def _record_from_kit(
+    root: Path, source_files: dict, monkeypatch, tmp_path: Path, *keep: str
+) -> int:
     source = tmp_path / "kit"
     _write(source / "kit-manifest.json", json.dumps({"kit_version": 2, "files": source_files}))
     monkeypatch.setattr(kit_doctor, "_git_head", lambda p: "a" * 40)
-    return kit_doctor.main(["--root", str(root), "--record-install", "--from-kit", str(source)])
+    flags = [arg for path in keep for arg in ("--keep", path)]
+    return kit_doctor.main(["--root", str(root), "--record-install", "--from-kit", str(source), *flags])
+
+
+def test_a_lite_skill_that_is_not_the_kits_copy_is_unverified_unless_kept(tmp_path, capsys, monkeypatch):
+    """#1372 R2 F1: a skill that is not the kit's copy looks the same kept or edited,
+    so only `--keep` records it as the repository's own; otherwise it is unverified."""
+    root, hashes = _lite_repo(tmp_path)
+    (root / ".claude/skills/review/SKILL.md").write_text("Ours, or an edit.\n", encoding="utf-8")
+    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "  · .claude/skills/review/SKILL.md" in err
+    assert "recorded as the repository's own" not in err
+    assert "not_installed" not in json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
 
 
 def test_a_lite_skill_an_older_kit_does_not_ship_is_unverified_not_kept(tmp_path, capsys, monkeypatch):
@@ -9289,16 +9305,18 @@ def test_a_lite_skill_an_older_kit_does_not_ship_is_unverified_not_kept(tmp_path
 def test_re_recording_does_not_turn_an_edited_kit_skill_into_the_repositorys_own(
     tmp_path, capsys, monkeypatch
 ):
-    """#1372 R1 F1: the baseline being replaced records the skill as installed from
-    the kit, so a copy that no longer matches was edited, and stays unverified."""
+    """#1372 R1 F1 and R2 F1: an edited kit skill is unverified on every re-record."""
     root, hashes = _lite_repo(tmp_path)
     assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 0
     capsys.readouterr()
     (root / ".claude/skills/review/SKILL.md").write_text("edited\n", encoding="utf-8")
-    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 1
-    err = capsys.readouterr().err
-    assert "  · .claude/skills/review/SKILL.md" in err
-    assert "recorded as the repository's own" not in err
+    # Every run, not only the first: an earlier run's refusal leaves the skill out
+    # of the baseline it writes, so nothing from that baseline may decide it (R2 F1).
+    for _run in range(3):
+        assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 1
+        err = capsys.readouterr().err
+        assert "  · .claude/skills/review/SKILL.md" in err
+        assert "recorded as the repository's own" not in err
 
 
 def test_an_edited_lite_skill_under_an_untrusted_baseline_differs(tmp_path, capsys):
@@ -9321,7 +9339,9 @@ def test_a_kept_lite_skill_replaced_by_the_kits_copy_reads_unchanged(tmp_path, c
     kept = root / ".claude/skills/review/SKILL.md"
     kits_copy = kept.read_text(encoding="utf-8")
     kept.write_text("Our review.\n", encoding="utf-8")
-    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 0
+    assert _record_from_kit(
+        root, _lite_source_files(hashes), monkeypatch, tmp_path, ".claude/skills/review/SKILL.md"
+    ) == 0
     kept.write_text(kits_copy, encoding="utf-8")
     _write(root / "manifest.json", json.dumps(_manifest(hashes)))
     argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]
@@ -9346,6 +9366,46 @@ def test_a_lite_skill_in_both_baseline_maps_reads_as_drift_not_declined(tmp_path
     assert states[".claude/skills/review/SKILL.md"] == "locally-edited"
 
 
+def test_keep_on_the_kits_own_copy_records_it_as_installed(tmp_path, capsys, monkeypatch):
+    """`--keep` names a skill the repository kept; one that is the kit's copy was
+    installed from the kit, and is recorded so, where a later edit is drift."""
+    root, hashes = _lite_repo(tmp_path)
+    assert _record_from_kit(
+        root, _lite_source_files(hashes), monkeypatch, tmp_path, ".claude/skills/review/SKILL.md"
+    ) == 0
+    assert "recorded as the repository's own" not in capsys.readouterr().err
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md" in recorded["files"]
+
+
+@pytest.mark.parametrize(
+    ("repo", "keep", "message"),
+    [
+        ("lite", ".claude/skills/nope/SKILL.md", "--keep takes a lite skill path"),
+        ("lite", "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md", "--keep takes a lite skill path"),
+        ("full", ".claude/skills/review/SKILL.md", "--keep applies only to a lite repository"),
+    ],
+)
+def test_keep_refuses_a_path_that_is_not_a_lite_skill_and_a_full_repository(
+    tmp_path, capsys, monkeypatch, repo, keep, message
+):
+    root = _lite_repo(tmp_path)[0] if repo == "lite" else _fake_repo(tmp_path)
+    before = (root / "kit-manifest.json").read_bytes() if (root / "kit-manifest.json").exists() else None
+    assert _record_from_kit(root, {}, monkeypatch, tmp_path, keep) == 2
+    assert message in capsys.readouterr().err
+    after = (root / "kit-manifest.json").read_bytes() if (root / "kit-manifest.json").exists() else None
+    assert after == before
+
+
+@pytest.mark.parametrize("mode", [[], ["--adapter-report"]])
+def test_keep_needs_record_install(tmp_path, capsys, mode):
+    root, _hashes = _lite_repo(tmp_path)
+    with pytest.raises(SystemExit) as exit_info:
+        kit_doctor.main(["--root", str(root), *mode, "--keep", ".claude/skills/review/SKILL.md"])
+    assert exit_info.value.code == 2
+    assert "--keep" in capsys.readouterr().err
+
+
 def test_a_full_install_record_names_no_skill_as_the_repositorys_own(tmp_path, capsys):
     """#1372 R1 F2: the kept note is lite's; a full install has its own skills at
     the lite skill paths, and they are not the repository's own."""
@@ -9364,7 +9424,9 @@ def test_a_deleted_kept_lite_skill_is_not_said_to_have_been_absent(tmp_path, cap
     root, hashes = _lite_repo(tmp_path)
     kept = root / ".claude/skills/review/SKILL.md"
     kept.write_text("Our review.\n", encoding="utf-8")
-    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 0
+    assert _record_from_kit(
+        root, _lite_source_files(hashes), monkeypatch, tmp_path, ".claude/skills/review/SKILL.md"
+    ) == 0
     kept.unlink()
     _write(root / "manifest.json", json.dumps(_manifest(hashes)))
     argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]

@@ -10,11 +10,14 @@ it reported intact. A lite repository recorded before this change has only the t
 docs in its baseline: re-run `--record-install --from-kit <kit checkout>` so the skills
 are recorded.
 
-CHANGED: on a lite repository, `--record-install` records a skill that is not the kit's
-lite binding as the repository's own: listed in `not_installed`, named in a stderr note,
-exit 0. It does so only when the `--from-kit` manifest ships that skill and the baseline
-being replaced does not record it as installed from the kit; otherwise the skill is
-`unverified` and the run exits 1, as for any other kit-owned path. The report reads it `declined`, and the verdict line reads
+ADDED: `kit_doctor.py --record-install --keep <skill path>`, repeatable, for a lite
+repository: it records a lite skill the repository kept (adopt.md L1) as the
+repository's own, listed in `not_installed` and named in a stderr note, exit 0. A lite
+skill that is not the kit's copy and is not named with `--keep` is `unverified`, and the
+run exits 1, on every run, as for any other kit-owned path. `--keep` needs
+`--record-install`, takes only the six lite skill paths, and is refused on a full
+repository. A lite repository that kept a skill passes `--keep` for it whenever it
+records its baseline. The report reads it `declined`, and the verdict line reads
 `intact for this adoption — lite install, <n> file(s) declined`. A skill absent beside
 the repository's own `.claude/commands/<slug>.md` reads `declined` too.
 
