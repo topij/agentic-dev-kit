@@ -50,7 +50,7 @@ Keep that three-way split in mind and every verb below makes sense.
 | `parallel list --watch` | Same board, auto-refreshing | No | Yes |
 | `parallel plan` | Proposes a disjoint batch to launch | No | Yes (until you confirm) |
 | `dev_session.sh new <scope> --merge-class <class>` | Creates worktree + branch + sandbox, persists merge policy, prints launch or activation guidance | No | No — writes to disk, but **not** to your checkout |
-| `dev_session.sh merge <scope>` | Re-polls and merges an eligible self-merge lane; refuses operator/missing metadata | No | No |
+| `dev_session.sh merge <scope>` | Re-polls and merges an eligible self-merge lane; refuses operator/missing metadata, and a PR `pr_watch` does not class `standard` | No | No |
 | *(you use the printed guidance)* | Launches or activates the lane in a **new terminal** | No | — |
 
 Even `new` doesn't touch *your* working tree: the worktree it creates is a separate

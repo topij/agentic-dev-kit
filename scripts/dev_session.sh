@@ -1029,7 +1029,7 @@ cmd_merge() {
 
     local merge_class="operator" branch="" base="$DEFAULT_BASE"
     local resolved repo_nwo pr listed_head
-    local report mergeable validated_pr validated_base validated_head
+    local report mergeable validated_pr validated_base validated_head review_class review_why
     [[ -s "$session_dir/merge_class" ]] && merge_class="$(cat "$session_dir/merge_class")"
     [[ "$merge_class" == "self" ]] \
         || _die "lane '$scope' is operator-merge (or missing metadata); autonomous merge refused"
@@ -1062,7 +1062,7 @@ cmd_merge() {
     # true on a green, comment-clean PR carrying no receipt.
     # Read the flag pr_watch computes — never re-derive it here, or this gate
     # becomes a second copy of the contract that can drift from the engine's.
-    IFS=$'\t' read -r mergeable validated_pr validated_base validated_head <<< "$(printf '%s' "$report" | python3 -c '
+    IFS=$'\t' read -r mergeable validated_pr validated_base validated_head review_class review_why <<< "$(printf '%s' "$report" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
 def f(v):
@@ -1088,7 +1088,26 @@ def f(v):
     # NB: no apostrophes in this block -- it lives inside python3 -c SINGLE
     # quotes, so one would terminate the string and break the extraction.
     return "".join(" " if ch < "\x20" or ch == "\x7f" else ch for ch in str(v))
-print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr") or ""), f(d.get("base") or ""), f(d.get("head") or ""))))
+# The review class is read as one exact token, so only a report that says
+# standard, with nothing unclassified, can pass. A missing or non-dict field
+# (an older pr_watch), an unclassified change, or any other class reads as not
+# standard and refuses: this check only tightens (#1357). The reason is last so
+# the shell read hands it whatever remains of the line; it is scrubbed like the
+# rest and only ever printed, never compared.
+rc = d.get("review_class")
+if not isinstance(rc, dict):
+    review_class, why = "missing", "the report has no review_class (an older pr_watch?)"
+elif rc.get("unclassified") is not None:
+    review_class, why = "unclassified", "the PR could not be classed: " + str(rc.get("unclassified"))
+elif rc.get("class") == "standard":
+    review_class, why = "standard", ""
+else:
+    matched = [str(m) for m in (rc.get("matched_paths") or []) if isinstance(m, str)]
+    if rc.get("changes_config") is True:
+        matched.append("the config that declares review.safety_critical_paths")
+    review_class = "not-standard"
+    why = "class " + str(rc.get("class")) + ("; matched: " + ", ".join(matched) if matched else "")
+print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr") or ""), f(d.get("base") or ""), f(d.get("head") or ""), review_class, f(why))))
 ')"
     [[ "$mergeable" == "true" ]] \
         || _die "PR #$pr is not green, review-clean, and merge-ready; run pr-watch to convergence first"
@@ -1099,6 +1118,13 @@ print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr"
     [[ -n "$validated_head" ]] || _die "pr-watch returned no validated head for PR #$pr"
     [[ "$validated_head" == "$listed_head" ]] \
         || _die "PR #$pr head changed during validation; retry against the current head"
+    # The lane's merge class was decided at plan time from the planned footprint;
+    # the PR's diff can grow past it. pr_watch computes `review_class` from the
+    # actual diff, so a PR that now touches review.safety_critical_paths (or the
+    # config that declares them) is operator-merge whatever the lane recorded
+    # (safety-critical-changes.md, *Merge class*; #1357).
+    [[ "$review_class" == "standard" ]] \
+        || _die "PR #$pr is not classed standard (${review_why:-$review_class}); it is operator-merge, so the operator lands it directly"
 
     (cd "$REPO_ROOT" && GH_REPO="$repo_nwo" gh pr merge --repo "$repo_nwo" "$pr" --squash --delete-branch \
         --match-head-commit "$validated_head") \

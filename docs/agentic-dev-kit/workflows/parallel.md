@@ -266,7 +266,10 @@ For an autonomous self-merge, run `<engine-dir>/dev_session.sh merge <scope>`.
 That deterministic wrapper re-polls `pr-watch` at act time, requires current-head
 independent-review evidence, validates the exact repository/branch/base, and pins the
 merge to the reviewed head commit. It refuses any lane whose persisted class is not
-`self`. Operator-class lanes intentionally cannot use the wrapper; the operator lands
+`self`, and any PR whose `review_class` in that report is not `standard`: a lane
+planned as self-merge whose diff grew into `review.safety_critical_paths`, or into
+the config that declares them, is operator-merge at act time. A report without the
+field, or one that could not class the PR, refuses too. Operator-class lanes intentionally cannot use the wrapper; the operator lands
 those directly after the required review and sign-off.
 
 **How the tier reaches the lane.** Interactive `new` lanes keep the tier as a kickoff
