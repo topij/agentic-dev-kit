@@ -9439,6 +9439,24 @@ def test_a_skill_absent_at_record_time_that_appears_later_is_drift_not_declined(
     assert states[".claude/skills/wrap-up/SKILL.md"] != "declined"
 
 
+def test_a_kept_entry_outside_not_installed_decides_nothing(tmp_path, capsys):
+    """#1373 R1 F2: `kept` is a subset of `not_installed`; an entry outside it, as a
+    hand-edited baseline might have, does not make a present skill declined."""
+    root, hashes = _lite_repo(tmp_path)
+    recorded = _lite_recorded(root, hashes)
+    source = "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md"
+    del recorded["files"][source]
+    recorded["kept"] = [source]
+    assert source not in recorded["not_installed"]
+    (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    (root / CLAUDE_REVIEW).write_text("Not the kit's copy.\n", encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]
+    assert kit_doctor.main(argv) == 1
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[CLAUDE_REVIEW] != "declined"
+
+
 def test_a_full_install_baseline_has_no_kept_key(tmp_path):
     root = _fake_repo(tmp_path)
     assert kit_doctor.main(["--root", str(root), "--record-install"]) == 0

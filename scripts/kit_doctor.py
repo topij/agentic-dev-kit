@@ -727,13 +727,15 @@ def _config_path_refusal(path: Path) -> str | None:
             return f"{path} cannot be read: {exc.strerror or exc}"
     else:
         return None if path.is_file() else f"{path} exists but is not a regular file"
+    # Here `lstat(path)` failed only for absence or a loop: any other error on an
+    # ancestor would have failed it first and been refused above. So an ancestor
+    # that cannot be looked up is absent, or sits under the looping link this
+    # loop reaches further up.
     for ancestor in path.parents:
         try:
             os.lstat(ancestor)
-        except (FileNotFoundError, NotADirectoryError):
+        except OSError:
             continue
-        except OSError as exc:
-            return f"{path} cannot be read: {ancestor}: {exc.strerror or exc}"
         if ancestor.is_dir():
             return None
         return f"{path} cannot be read: {ancestor} is not a directory"
@@ -4075,8 +4077,10 @@ def render(report: Report) -> str:
                 "rather than an intact one"
             )
         elif n_declined:
-            # On lite a declined file is a skill the repository kept as its own
-            # (#1365), and adopt.md L5 reads `lite install` from this line.
+            # On lite a declined file is a skill kept with `--keep`, or one absent
+            # at record time, such as the Claude skill skipped for the
+            # repository's `.claude/commands/<slug>.md` (#1365, #1372). adopt.md
+            # L5 reads `lite install` from this line.
             lines.append(
                 f"  {verdict_mark} intact for this adoption — "
                 + ("lite install, " if lite else "")

@@ -40,5 +40,7 @@ repository refused this way moves what is at that path aside, or makes it the co
 ADDED: on a lite repository with no trusted baseline (none, or a copy of the release
 manifest), the report prints
 `⚠ profile: lite rests on the config alone — no trusted baseline records a lite install, so the files outside the lite profile go unchecked`.
-The exit code is unchanged. Clear it with `--record-install --from-kit <kit checkout>`;
-nothing else needs doing.
+The exit code is unchanged. Clear it with `--record-install --from-kit <kit checkout>`,
+after deleting a copy of the release manifest at `kit-manifest.json`, which that refuses
+to overwrite. An exit 1 from it names the lite files to settle first, as `adopt.md` L4
+says.
