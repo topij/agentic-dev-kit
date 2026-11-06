@@ -7,7 +7,8 @@ the repository's `.claude/commands/<slug>.md`, say) and has appeared since, not 
 kit's copy, is now drift and fails the report, where it read `declined` with exit 0. A
 lite baseline recorded with `--keep` before this change has no `kept`: re-run
 `--record-install --from-kit <kit checkout> --keep <skill path>` for each kept skill,
-or its kept skills read as drift.
+or its kept skills read as drift. The report says so for such a baseline, naming each
+lite skill that is present and recorded as not installed.
 
 CHANGED: `--keep` naming a skill that is not there exits 2 before anything is written.
 

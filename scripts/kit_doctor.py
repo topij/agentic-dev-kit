@@ -1226,6 +1226,10 @@ class Report:
     # `differs` state, which is the pre-#51 behaviour and the honest answer when
     # the record cannot be relied on.
     baseline_trusted: bool = False
+    # Lite skills present at their install path and recorded as not installed,
+    # in a lite baseline that predates its `kept` record (#1373): a skill kept
+    # then reads as drift, and the render says how to re-record it.
+    lite_kept_unrecorded: tuple[str, ...] = ()
     # The kit commit the baseline says this install came from. None is a real,
     # supported value — a retro-recorded baseline does not know its provenance —
     # and is why this must never be used as the trust signal.
@@ -3595,6 +3599,15 @@ def inspect(
         narrative_rendered=narrative,
         narrative_missing=tuple(narrative_missing),
         baseline_trusted=trusted,
+        lite_kept_unrecorded=tuple(
+            local
+            for rel, local in LITE_ADAPTER_INSTALL_PATHS.items()
+            if profile == "lite"
+            and declared_scope is not None
+            and "kept" not in (baseline or {})
+            and rel in declared_scope
+            and (root / local).is_file()
+        ),
         declared_scope_known=declared_scope is not None,
         # Passed in rather than inferred from paths: `main` knows it from the
         # resolved PATHS, which this function does not see.
@@ -3812,6 +3825,17 @@ def render(report: Report) -> str:
                 "  ⚠ profile: lite rests on the config alone — no trusted baseline records "
                 "a lite install, so the files outside the lite profile go unchecked"
             )
+        if report.lite_kept_unrecorded:
+            # Said rather than inferred: a present skill recorded as not installed
+            # may be one the repository kept or one that appeared since, and only
+            # the operator knows which (#1373).
+            lines.append(
+                "  ⚠ this lite baseline predates its `kept` record, so a skill the "
+                "repository kept reads as drift. Re-run --record-install --from-kit "
+                "<kit checkout> with --keep for each one it kept; these are present "
+                "and recorded as not installed:"
+            )
+            lines.extend(f"      · {path}" for path in report.lite_kept_unrecorded)
     if report.baseline_profile_mismatch is not None:
         lines.append(
             f"  ✗ profile: the baseline was recorded as {report.baseline_profile_mismatch}, "

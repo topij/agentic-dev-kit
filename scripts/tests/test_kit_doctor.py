@@ -9457,6 +9457,26 @@ def test_a_kept_entry_outside_not_installed_decides_nothing(tmp_path, capsys):
     assert states[CLAUDE_REVIEW] != "declined"
 
 
+@pytest.mark.parametrize("has_kept", [False, True])
+def test_a_lite_baseline_from_before_kept_says_how_to_re_record(tmp_path, capsys, monkeypatch, has_kept):
+    """CodeRabbit on #1373: a baseline recorded with --keep before `kept` existed
+    reads its kept skill as drift; the report names it and the re-record step."""
+    root, hashes = _lite_repo(tmp_path)
+    (root / CLAUDE_REVIEW).write_text("Ours.\n", encoding="utf-8")
+    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path, CLAUDE_REVIEW) == 0
+    capsys.readouterr()
+    if not has_kept:
+        recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+        del recorded["kept"]
+        (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    code = kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json")])
+    out = capsys.readouterr().out
+    assert ("predates its `kept` record" in out) == (not has_kept), out
+    assert (f"      · {CLAUDE_REVIEW}" in out) == (not has_kept)
+    assert code == (1 if not has_kept else 0)
+
+
 def test_a_full_install_baseline_has_no_kept_key(tmp_path):
     root = _fake_repo(tmp_path)
     assert kit_doctor.main(["--root", str(root), "--record-install"]) == 0
