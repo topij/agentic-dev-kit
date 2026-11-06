@@ -3799,7 +3799,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "forge-merge-write": (
                 "conditional and authority-gated",
-                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. For an isolated lane whose persisted class is self, the cockpit must invoke <engine-dir>/dev_session.sh merge <scope>; a direct runtime-native forge write does not satisfy this capability. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
+                "Required only when the exact head is mergeable and merge-authority permits this workflow to merge it. For an isolated lane whose persisted class is self, the cockpit must invoke <engine-dir>/dev_session.sh merge <scope>; a direct runtime-native forge write does not satisfy this capability. A wrapper refusal that says the pull request is operator-merge because it is not classed standard merged nothing: hold the exact head under successful-operator-handoff. Read back repository and forge state after a failed or ambiguous response and before any retry. If read-back verifies the merge landed, continue toward successful-completion; if it proves failure or remains ambiguous, preserve the exact head and report incomplete-resumable.",
             ),
             "scratch-report": (
                 "optional",
