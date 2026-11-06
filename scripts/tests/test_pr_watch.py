@@ -5146,7 +5146,8 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
     assert report["review_class"]["unclassified"]
     assert review_class == "unclassified"
 
-    # The same report, classed standard as the engine emits it, reads standard.
+    # The same report with its class set by hand to the shape the engine emits
+    # for a standard PR (this fixture cannot produce one) reads standard.
     report["review_class"] = {
         **report["review_class"],
         "class": pr_watch.REVIEW_CLASS_STANDARD,

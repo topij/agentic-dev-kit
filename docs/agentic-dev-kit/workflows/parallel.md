@@ -269,8 +269,10 @@ merge to the reviewed head commit. It refuses any lane whose persisted class is 
 `self`, and any PR whose `review_class` in that report is not `standard`: a lane
 planned as self-merge whose diff grew into `review.safety_critical_paths`, or into
 the config that declares them, is operator-merge at act time. A report without the
-field, or one that could not class the PR, refuses too. Operator-class lanes intentionally cannot use the wrapper; the operator lands
-those directly after the required review and sign-off.
+field, or one that could not class the PR, refuses too, naming its remedy (upgrade
+`pr_watch.py`, or fetch the PR's base and head). Operator-class lanes intentionally
+cannot use the wrapper; the operator lands those directly after the required review
+and sign-off.
 
 **How the tier reaches the lane.** Interactive `new` lanes keep the tier as a kickoff
 suggestion and the operator applies it through the runtime's own controls — on Claude

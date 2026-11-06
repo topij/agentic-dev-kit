@@ -1091,20 +1091,25 @@ def f(v):
 # The review class is read as one exact token, so only a report that says
 # standard, with nothing unclassified, can pass. A missing or non-dict field
 # (an older pr_watch), an unclassified change, or any other class reads as not
-# standard and refuses: this check only tightens (#1357). The reason is last so
-# the shell read hands it whatever remains of the line; it is scrubbed like the
-# rest and only ever printed, never compared.
+# standard and refuses: this check only tightens (#1357). A standard class that
+# also lists matched paths or a config change is inconsistent, so it reads as
+# not standard too rather than trusting the class string alone. The reason is
+# last so the shell read hands it whatever remains of the line; it is scrubbed
+# like the rest and only ever printed, never compared.
 rc = d.get("review_class")
-if not isinstance(rc, dict):
-    review_class, why = "missing", "the report has no review_class (an older pr_watch?)"
-elif rc.get("unclassified") is not None:
-    review_class, why = "unclassified", "the PR could not be classed: " + str(rc.get("unclassified"))
-elif rc.get("class") == "standard":
-    review_class, why = "standard", ""
-else:
-    matched = [str(m) for m in (rc.get("matched_paths") or []) if isinstance(m, str)]
+matched = []
+if isinstance(rc, dict):
+    raw = rc.get("matched_paths")
+    matched = [str(m) for m in (raw if isinstance(raw, list) else [raw] if raw else [])]
     if rc.get("changes_config") is True:
         matched.append("the config that declares review.safety_critical_paths")
+if not isinstance(rc, dict):
+    review_class, why = "missing", "the report has no review_class"
+elif rc.get("unclassified") is not None:
+    review_class, why = "unclassified", str(rc.get("unclassified"))
+elif rc.get("class") == "standard" and not matched:
+    review_class, why = "standard", ""
+else:
     review_class = "not-standard"
     why = "class " + str(rc.get("class")) + ("; matched: " + ", ".join(matched) if matched else "")
 print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr") or ""), f(d.get("base") or ""), f(d.get("head") or ""), review_class, f(why))))
@@ -1123,8 +1128,18 @@ print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr"
     # actual diff, so a PR that now touches review.safety_critical_paths (or the
     # config that declares them) is operator-merge whatever the lane recorded
     # (safety-critical-changes.md, *Merge class*; #1357).
-    [[ "$review_class" == "standard" ]] \
-        || _die "PR #$pr is not classed standard (${review_why:-$review_class}); it is operator-merge, so the operator lands it directly"
+    # Each refusal names its own remedy: an older pr_watch is version skew, and an
+    # unclassified PR is most often a base or head commit this clone has not
+    # fetched (pr_review_class reads both from local git), not an operator-merge.
+    case "$review_class" in
+        standard) ;;
+        missing)
+            _die "PR #$pr is not classed standard: the pr-watch report has no review_class; upgrade pr_watch.py together with dev_session.sh, then retry" ;;
+        unclassified)
+            _die "PR #$pr is not classed standard: it could not be classed (${review_why}); fetch the PR's base and head (git fetch origin '$base'), then retry, and if it still cannot be classed the operator lands it directly" ;;
+        *)
+            _die "PR #$pr is not classed standard (${review_why:-$review_class}); it is operator-merge, so the operator lands it directly" ;;
+    esac
 
     (cd "$REPO_ROOT" && GH_REPO="$repo_nwo" gh pr merge --repo "$repo_nwo" "$pr" --squash --delete-branch \
         --match-head-commit "$validated_head") \

@@ -161,7 +161,7 @@ un-closeable.) An aggregate "everything's done" is *not* evidence a
 specific lane actually shipped; reconcile per lane. Then review and merge each per its
 pre-assigned merge class: a self-merge lane goes through the deterministic wrapper
 (re-polls CI/review/merge readiness at act time and refuses missing or operator
-metadata); an operator lane is merged only after explicit cockpit sign-off. **held** is
+metadata, and a PR whose `review_class` is not `standard`); an operator lane is merged only after explicit cockpit sign-off. **held** is
 that second kind, seen from the reconciler: an operator lane whose PR is already
 merge-ready, so the batch has nothing left to do and the sign-off is the only thing
 outstanding. Exit **4** is reached only when no lane is open or parked and at least one
