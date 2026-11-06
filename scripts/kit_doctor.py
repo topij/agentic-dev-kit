@@ -705,13 +705,23 @@ LITE_ADAPTER_INSTALL_PATHS: dict[str, str] = {
 }
 
 
-def _present_but_not_a_file(path: Path) -> bool:
-    """Whether something is at `path` that is not a regular file.
+def _config_path_refusal(path: Path) -> str | None:
+    """Why `path` cannot be read as a config that is either there or absent, if it cannot.
 
-    A directory, or a symlink that dangles or loops: `Path.is_file` is False for
-    each, and `load_config` reports them as absent.
+    Something at `path` that is not a regular file (a directory, or a symlink that
+    dangles or loops), or a nearest existing ancestor that is not a directory (a
+    file, or such a symlink, where `config/` belongs): `Path.is_file` is False for
+    each, and `load_config` reports them all as absent. A symlinked ancestor that
+    reaches a directory without the file is not refused: the file is absent there.
     """
-    return os.path.lexists(path) and not path.is_file()
+    if os.path.lexists(path):
+        return None if path.is_file() else f"{path} exists but is not a regular file"
+    for ancestor in path.parents:
+        if os.path.lexists(ancestor):
+            if ancestor.is_dir():
+                return None
+            return f"{path} cannot be read: {ancestor} is not a directory"
+    return None
 
 
 def _installed_path(rel: str, engines_dir: str, profile: str) -> str:
@@ -2629,6 +2639,7 @@ def record_install_manifest(
     kit_version: int,
     kit_commit: str | None,
     source_files: dict | None = None,
+    prior_installed: frozenset[str] = frozenset(),
 ) -> tuple[dict, list[str]]:
     """Record what is ACTUALLY INSTALLED in an adopter as its drift baseline.
 
@@ -2698,14 +2709,23 @@ def record_install_manifest(
             # not come from that kit", which is the conservative answer.
             entry = source_files.get(rel) if isinstance(source_files, dict) else None
             if not isinstance(entry, dict) or entry.get("sha256") != digest:
-                if profile == "lite" and rel in LITE_ADAPTER_INSTALL_PATHS:
+                if (
+                    profile == "lite"
+                    and rel in LITE_ADAPTER_INSTALL_PATHS
+                    and isinstance(entry, dict)
+                    and rel not in prior_installed
+                ):
                     # A lite skill that is not the kit's is the repository's own,
                     # kept by adopt.md L1's collision rule: the kit's binding was
                     # not installed, which is what `not_installed` records, and
                     # `inspect` reads it `declined` while it stays there (#1365).
                     # Not `unverified`: the collision rule sanctions it, so it
                     # must not suppress the declared set or fail the record. The
-                    # caller names it, so keeping it is never silent.
+                    # caller names it, so keeping it is never silent. Only when the
+                    # source kit ships this skill (an older kit that does not cannot
+                    # vouch for any copy) and the existing baseline does not record
+                    # it as installed from the kit (a re-record after an edit would
+                    # otherwise turn the edit into the repository's own).
                     not_installed.append(rel)
                     continue
                 unverified.append(_installed_path(rel, engines_dir, profile))
@@ -3348,9 +3368,14 @@ def inspect(
                     FileStatus(local_rel, role, "removed", "recorded as installed in this baseline")
                 )
             elif rel in declared_scope:
-                statuses.append(
-                    FileStatus(local_rel, role, "declined", "absent when the baseline was recorded")
+                # A lite skill in the declared set may have been the repository's
+                # own, present at record time and deleted since (#1365).
+                detail = (
+                    "the kit's skill was not installed when the baseline was recorded"
+                    if profile == "lite" and rel in LITE_ADAPTER_INSTALL_PATHS
+                    else "absent when the baseline was recorded"
                 )
+                statuses.append(FileStatus(local_rel, role, "declined", detail))
             else:
                 # In neither map: the baseline predates the file's existence in
                 # the kit. Not an omission the adopter chose — one they were
@@ -4376,8 +4401,8 @@ def main(argv: list[str] | None = None) -> int:
         # refuses it: `load_config` raises FileNotFoundError for those too, and
         # reading that as "no config" judged a lite repository as full (#1360).
         config_path = root / "config" / "dev-model.yaml"
-        if _present_but_not_a_file(config_path):
-            print(f"error: {config_path} exists but is not a regular file", file=sys.stderr)
+        if refusal := _config_path_refusal(config_path):
+            print(f"error: {refusal}", file=sys.stderr)
             return 2
         try:
             adapter_profile = profile_of(load_config(config_path))
@@ -4402,10 +4427,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--adapter-source requires --adapter-report")
 
     config_path = root / "config" / "dev-model.yaml"
-    if _present_but_not_a_file(config_path):
+    if refusal := _config_path_refusal(config_path):
         # Refused before `load_config`, which raises FileNotFoundError for it and
         # so earned it the hint below, which is about a config that is absent.
-        print(f"error: {config_path} exists but is not a regular file", file=sys.stderr)
+        print(f"error: {refusal}", file=sys.stderr)
         return 2
     try:
         config = load_config(config_path)
@@ -4442,6 +4467,7 @@ def main(argv: list[str] | None = None) -> int:
         # first because the damage is the write itself, and every later step
         # here (version parse, HEAD resolution, hashing) is wasted if we are
         # about to refuse anyway.
+        prior_installed: frozenset[str] = frozenset()
         if baseline_path.is_file():
             try:
                 existing = json.loads(baseline_path.read_text(encoding="utf-8"))
@@ -4464,6 +4490,11 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 2
+            # What the baseline being replaced records as installed from the
+            # kit: a lite skill in it that no longer matches was edited, and
+            # must not be re-recorded as the repository's own (#1365).
+            if isinstance(existing, dict) and isinstance(existing.get("files"), dict):
+                prior_installed = frozenset(str(k) for k in existing["files"])
         raw_version = get(config, "kit.version", None)
         version = 2 if raw_version is None else _as_version(raw_version)
         if version is None:
@@ -4524,7 +4555,7 @@ def main(argv: list[str] | None = None) -> int:
             raw_source_files = parsed_source.get("files") if isinstance(parsed_source, dict) else None
             source_files = raw_source_files if isinstance(raw_source_files, dict) else {}
         baseline, unverified = record_install_manifest(
-            root, config, version, kit_commit, source_files
+            root, config, version, kit_commit, source_files, prior_installed
         )
         try:
             baseline_path.write_text(
@@ -4579,7 +4610,7 @@ def main(argv: list[str] | None = None) -> int:
                 LITE_ADAPTER_INSTALL_PATHS[rel]
                 for rel in LITE_ADAPTER_INSTALL_PATHS
                 if profile_of(config) == "lite"
-                and rel not in baseline["files"]
+                and rel in baseline.get("not_installed", ())
                 and (root / LITE_ADAPTER_INSTALL_PATHS[rel]).is_file()
             ]
             if kept:

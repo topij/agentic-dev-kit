@@ -12,7 +12,9 @@ are recorded.
 
 CHANGED: on a lite repository, `--record-install` records a skill that is not the kit's
 lite binding as the repository's own: listed in `not_installed`, named in a stderr note,
-exit 0. The report reads it `declined`, and the verdict line reads
+exit 0. It does so only when the `--from-kit` manifest ships that skill and the baseline
+being replaced does not record it as installed from the kit; otherwise the skill is
+`unverified` and the run exits 1, as for any other kit-owned path. The report reads it `declined`, and the verdict line reads
 `intact for this adoption — lite install, <n> file(s) declined`. A skill absent beside
 the repository's own `.claude/commands/<slug>.md` reads `declined` too.
 
@@ -23,7 +25,9 @@ docs, and a full install's re-recorded baseline lists them in `not_installed`.
 
 CHANGED: a `config/dev-model.yaml` that exists but is not a regular file (a directory, or
 a symlink that dangles or loops) is refused with exit 2 and
-`error: <path> exists but is not a regular file` in every mode (#1360). `--adapter-report`
+`error: <path> exists but is not a regular file` in every mode (#1360). So is one whose
+nearest existing ancestor is not a directory, such as a file named `config`, with
+`error: <path> cannot be read: <ancestor> is not a directory`. `--adapter-report`
 read it as no config, judging the repository `full` with exit 0. The main report already
 exited 2, with a hint meant for an absent config. `lite-profile-install.md`'s "in every
 mode" covered only a regular file that cannot be read, such as a permission failure.

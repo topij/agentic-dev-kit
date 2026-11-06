@@ -809,11 +809,13 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 ```
 
 The first must exit 0 and print `· profile: lite` and `intact for this adoption — lite
-install`. Every full-profile file is counted `outside the lite profile`, and the
-engines, hook and registrations read `not installed (lite)`. The second lists each lite
-binding `kit-current`, or `adopter-owned` where L2 kept the repository's own, and every
-full-only binding `outside-profile`. A `profile-mismatch` row is a full binding where
-the lite one belongs: take the kit's lite copy.
+install`, with `nothing declined` unless L2 kept a skill. Each file it reads `declined`
+must be a skill L2 kept; any other is the kit's skill missing or not the kit's copy, so
+take the kit's copy and re-run L4. Every full-profile file is counted `outside the lite
+profile`, and the engines, hook and registrations read `not installed (lite)`. The
+second lists each lite binding `kit-current`, or `adopter-owned` where L2 kept the
+repository's own, and every full-only binding `outside-profile`. A `profile-mismatch`
+row is a full binding where the lite one belongs: take the kit's lite copy.
 
 ### L6 — Commit and hand off
 
