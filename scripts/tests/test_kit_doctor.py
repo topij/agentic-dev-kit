@@ -9366,6 +9366,85 @@ def test_a_lite_skill_in_both_baseline_maps_reads_as_drift_not_declined(tmp_path
     assert states[".claude/skills/review/SKILL.md"] == "locally-edited"
 
 
+CLAUDE_REVIEW = ".claude/skills/review/SKILL.md"
+CODEX_REVIEW = ".agents/skills/review/SKILL.md"
+
+
+def test_keep_covers_only_the_skill_it_names(tmp_path, capsys, monkeypatch):
+    """#1372 R3 F1: two skills not the kit's copy, one kept: the other is unverified."""
+    root, hashes = _lite_repo(tmp_path)
+    for path in (CLAUDE_REVIEW, CODEX_REVIEW):
+        (root / path).write_text("Ours.\n", encoding="utf-8")
+    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path, CLAUDE_REVIEW) == 1
+    err = capsys.readouterr().err
+    unverified_note = err.split("do NOT match", 1)[1].split("note:", 1)[0]
+    assert f"  · {CODEX_REVIEW}" in unverified_note and CLAUDE_REVIEW not in unverified_note
+
+
+def test_keep_is_repeatable_and_the_baseline_records_each(tmp_path, capsys, monkeypatch):
+    """#1372 R3 F1: each --keep is honoured, and the baseline names them in `kept`."""
+    root, hashes = _lite_repo(tmp_path)
+    for path in (CLAUDE_REVIEW, CODEX_REVIEW):
+        (root / path).write_text("Ours.\n", encoding="utf-8")
+    assert _record_from_kit(
+        root, _lite_source_files(hashes), monkeypatch, tmp_path, CLAUDE_REVIEW, CODEX_REVIEW
+    ) == 0
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert sorted(recorded["kept"]) == [
+        "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md",
+        "docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md",
+    ]
+    assert set(recorded["kept"]) <= set(recorded["not_installed"])
+
+
+def test_keep_holds_for_a_skill_the_source_kit_does_not_ship(tmp_path, capsys, monkeypatch):
+    """#1372 R3 F1: a declaration needs no kit entry to compare against."""
+    root, hashes = _lite_repo(tmp_path)
+    (root / CLAUDE_REVIEW).write_text("Ours.\n", encoding="utf-8")
+    older = {rel: sha for rel, sha in hashes.items() if rel not in kit_doctor.LITE_ADAPTER_INSTALL_PATHS}
+    others = [path for path in kit_doctor.LITE_ADAPTER_INSTALL_PATHS.values() if path != CLAUDE_REVIEW]
+    for path in others:
+        (root / path).unlink()
+    assert _record_from_kit(root, _lite_source_files(older), monkeypatch, tmp_path, CLAUDE_REVIEW) == 0
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert recorded["kept"] == ["docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md"]
+
+
+def test_keep_refuses_a_skill_that_is_not_there(tmp_path, capsys, monkeypatch):
+    """#1372 R3 F3: a declaration about an absent skill is a mistake, said before writing."""
+    root, hashes = _lite_repo(tmp_path)
+    (root / CLAUDE_REVIEW).unlink()
+    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path, CLAUDE_REVIEW) == 2
+    assert f"--keep names a skill that is not there: {CLAUDE_REVIEW}" in capsys.readouterr().err
+    assert not (root / "kit-manifest.json").exists()
+
+
+def test_a_skill_absent_at_record_time_that_appears_later_is_drift_not_declined(
+    tmp_path, capsys, monkeypatch
+):
+    """CodeRabbit on #1372: absent at record time is in `not_installed` like a kept
+    skill, but only one named with --keep is the repository's own."""
+    root, hashes = _lite_repo(tmp_path)
+    skill = root / ".claude/skills/wrap-up/SKILL.md"
+    skill.unlink()
+    _write(root / ".claude/commands/wrap-up.md", "Our own wrap-up.\n")
+    assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path) == 0
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert recorded["kept"] == []
+    skill.write_text("Appeared later, not the kit's copy.\n", encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    argv = ["--root", str(root), "--manifest", str(root / "manifest.json"), "--json"]
+    assert kit_doctor.main(argv) == 1
+    states = {f["path"]: f["state"] for f in json.loads(capsys.readouterr().out)["files"]}
+    assert states[".claude/skills/wrap-up/SKILL.md"] != "declined"
+
+
+def test_a_full_install_baseline_has_no_kept_key(tmp_path):
+    root = _fake_repo(tmp_path)
+    assert kit_doctor.main(["--root", str(root), "--record-install"]) == 0
+    assert "kept" not in json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+
+
 def test_keep_on_the_kits_own_copy_records_it_as_installed(tmp_path, capsys, monkeypatch):
     """`--keep` names a skill the repository kept; one that is the kit's copy was
     installed from the kit, and is recorded so, where a later edit is drift."""
@@ -9497,6 +9576,25 @@ def test_a_config_whose_directory_is_not_a_directory_is_refused_in_both_modes(
     assert kit_doctor.main(["--root", str(root), *mode]) == 2
     err = capsys.readouterr().err
     assert f"error: {directory / 'dev-model.yaml'} cannot be read: {directory} is not a directory" in err
+    assert "Traceback" not in err and "predates the config surface" not in err
+
+
+@pytest.mark.parametrize("mode", [[], ["--adapter-report"]])
+def test_a_config_directory_that_cannot_be_searched_is_refused_in_both_modes(tmp_path, capsys, mode):
+    """CodeRabbit on #1372: `os.path.lexists` is False for any error, so a `config/`
+    that cannot be searched read as no config, and the adapter report as `full`."""
+    if os.geteuid() == 0:
+        pytest.skip("root searches a directory whatever its mode")
+    root = _fake_repo(tmp_path)
+    directory = root / "config"
+    directory.chmod(0o600)
+    try:
+        code = kit_doctor.main(["--root", str(root), *mode])
+    finally:
+        directory.chmod(0o755)
+    assert code == 2
+    err = capsys.readouterr().err
+    assert f"error: {directory / 'dev-model.yaml'} cannot be read:" in err
     assert "Traceback" not in err and "predates the config surface" not in err
 
 

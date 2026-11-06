@@ -24,7 +24,8 @@ the repository's own `.claude/commands/<slug>.md` reads `declined` too.
 CHANGED: `kit_doctor.py --json` lists the six skills in `files` (at the skill path on a
 lite repository, at the source path elsewhere, where a full install reads them
 `outside-profile`). The release manifest's `profiles.lite` lists them beside the three
-docs, and a full install's re-recorded baseline lists them in `not_installed`.
+docs, and a full install's re-recorded baseline lists them in `not_installed`. A consumer
+that pins the set of `files` paths, or the `not_installed` list, expects the six.
 
 CHANGED: a `config/dev-model.yaml` that exists but is not a regular file (a directory, or
 a symlink that dangles or loops) is refused with exit 2 and
@@ -33,9 +34,11 @@ nearest existing ancestor is not a directory, such as a file named `config`, wit
 `error: <path> cannot be read: <ancestor> is not a directory`. `--adapter-report`
 read it as no config, judging the repository `full` with exit 0. The main report already
 exited 2, with a hint meant for an absent config. `lite-profile-install.md`'s "in every
-mode" covered only a regular file that cannot be read, such as a permission failure.
+mode" covered only a regular file that cannot be read, such as a permission failure. A
+repository refused this way moves what is at that path aside, or makes it the config.
 
 ADDED: on a lite repository with no trusted baseline (none, or a copy of the release
 manifest), the report prints
 `⚠ profile: lite rests on the config alone — no trusted baseline records a lite install, so the files outside the lite profile go unchecked`.
-The exit code is unchanged.
+The exit code is unchanged. Clear it with `--record-install --from-kit <kit checkout>`;
+nothing else needs doing.
