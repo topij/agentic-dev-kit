@@ -796,12 +796,15 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 ```
 
 Add `--keep <skill path>` to it for each skill L2 kept, such as `--keep
-.claude/skills/review/SKILL.md`: it is recorded as the repository's own, named in a
-note, and read `declined` by L5. It writes `$REPO/kit-manifest.json` with `"profile":
+.claude/skills/review/SKILL.md`. A kept skill that is not the kit's copy is recorded as
+the repository's own, named in a note, and read `declined` by L5; one that is the kit's
+copy is recorded as installed. `--keep` exits 2 for a path that is not one of the six
+lite skills or is not there. It writes `$REPO/kit-manifest.json` with `"profile":
 "lite"`. Exit 1 names a lite doc or skill that does not match the kit clone's copy and
 was not named with `--keep`: one the repository already had, or one edited since L3.
-Settle each with the operator (keep it with `--keep`, or take the kit's copy), then
-re-run. Re-running alone does not settle one: it stays exit 1 until then.
+Settle each with the operator, then re-run: a skill by naming it with `--keep` or by
+taking the kit's copy, and a doc only by taking the kit's copy, since `--keep` takes
+skills alone. Re-running alone does not settle one: it stays exit 1 until then.
 
 ### L5 — Verify
 

@@ -207,6 +207,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import errno
 import hashlib
 import json
 import os
@@ -714,13 +715,30 @@ def _config_path_refusal(path: Path) -> str | None:
     each, and `load_config` reports them all as absent. A symlinked ancestor that
     reaches a directory without the file is not refused: the file is absent there.
     """
-    if os.path.lexists(path):
+    # `os.lstat`, not `os.path.lexists`: `lexists` is False for ANY error, so a
+    # `config/` that cannot be searched read as an absent config (#1372).
+    try:
+        os.lstat(path)
+    except (FileNotFoundError, NotADirectoryError):
+        pass
+    except OSError as exc:
+        # A looping ancestor link: the ancestor check below names it.
+        if exc.errno != errno.ELOOP:
+            return f"{path} cannot be read: {exc.strerror or exc}"
+    else:
         return None if path.is_file() else f"{path} exists but is not a regular file"
+    # Here `lstat(path)` failed only for absence or a loop: any other error on an
+    # ancestor would have failed it first and been refused above. So an ancestor
+    # that cannot be looked up is absent, or sits under the looping link this
+    # loop reaches further up.
     for ancestor in path.parents:
-        if os.path.lexists(ancestor):
-            if ancestor.is_dir():
-                return None
-            return f"{path} cannot be read: {ancestor} is not a directory"
+        try:
+            os.lstat(ancestor)
+        except OSError:
+            continue
+        if ancestor.is_dir():
+            return None
+        return f"{path} cannot be read: {ancestor} is not a directory"
     return None
 
 
@@ -1208,6 +1226,10 @@ class Report:
     # `differs` state, which is the pre-#51 behaviour and the honest answer when
     # the record cannot be relied on.
     baseline_trusted: bool = False
+    # Lite skills present at their install path and recorded as not installed,
+    # in a lite baseline that predates its `kept` record (#1373): a skill kept
+    # then reads as drift, and the render says how to re-record it.
+    lite_kept_unrecorded: tuple[str, ...] = ()
     # The kit commit the baseline says this install came from. None is a real,
     # supported value — a retro-recorded baseline does not know its provenance —
     # and is why this must never be used as the trust signal.
@@ -2688,6 +2710,7 @@ def record_install_manifest(
     files: dict[str, dict] = {}
     unverified: list[str] = []
     not_installed: list[str] = []
+    kept_recorded: list[str] = []
     for rel, role in ADOPTER_KIT_OWNED:
         target = root / _installed_path(rel, engines_dir, profile)
         # Keyed by the KIT-layout path even when the file lives somewhere else
@@ -2702,7 +2725,9 @@ def record_install_manifest(
             not_installed.append(rel)
             continue
         digest = sha256_of(target)
-        if rel in kept and profile == "lite" and rel in LITE_ADAPTER_INSTALL_PATHS:
+        if rel in kept:
+            # `kept` holds lite skill source paths only: `main` builds it from
+            # `--keep`, which it refuses on a full repository or any other path.
             entry = source_files.get(rel) if isinstance(source_files, dict) else None
             if not isinstance(entry, dict) or entry.get("sha256") != digest:
                 # A lite skill the operator declared kept (`--keep`, adopt.md L4,
@@ -2712,7 +2737,10 @@ def record_install_manifest(
                 # by declaration: a skill that is not the kit's copy looks the
                 # same whether the repository kept it or someone edited the kit's,
                 # so inferring it let an edit be recorded as the repository's own.
+                # `kept` in the record tells it apart from a skill absent at
+                # record time, which is in `not_installed` too (#1372).
                 not_installed.append(rel)
+                kept_recorded.append(rel)
                 continue
         if source_files is not None:
             # Same non-dict hazard as the caller's, one level down: a `files`
@@ -2748,6 +2776,10 @@ def record_install_manifest(
     # lists the unverified paths on stderr, so this is never silent.
     if not unverified:
         recorded["not_installed"] = not_installed
+        if profile == "lite":
+            # The lite skills `--keep` recorded as the repository's own, a subset
+            # of `not_installed`: only these read `declined` while present.
+            recorded["kept"] = kept_recorded
     # Written only for lite, so a full adopter's re-recorded baseline is the
     # same shape as before profiles existed; an absent key reads as `full`.
     # `not_installed` keeps its meaning (every absent kit-owned path, full-only
@@ -3245,6 +3277,14 @@ def inspect(
     raw_baseline_files = (baseline or {}).get("files") if trusted else None
     baseline_files = raw_baseline_files if isinstance(raw_baseline_files, dict) else {}
     declared_scope = _declared_scope(baseline, trusted)
+    # The lite skills the baseline records as kept with `--keep` (#1372). Only
+    # with a declared set, and only those in it: a malformed `kept` decides nothing.
+    raw_kept = (baseline or {}).get("kept") if declared_scope is not None else None
+    kept_scope = (
+        {item for item in raw_kept if isinstance(item, str) and item in declared_scope}
+        if isinstance(raw_kept, list)
+        else set()
+    )
 
     # Presence of every file in this inspection scope, resolved before the
     # status loop: whether a missing file is a broken install or a sized-down
@@ -3382,14 +3422,14 @@ def inspect(
         if (
             profile == "lite"
             and rel in LITE_ADAPTER_INSTALL_PATHS
-            and declared_scope is not None
-            and rel in declared_scope
+            and rel in kept_scope
             and rel not in baseline_files
             and (expected is None or sha256_of(target) != expected)
         ):
-            # A lite skill the baseline records as not installed from the kit,
-            # present and not the kit's: the repository's own, kept by adopt.md
-            # L1's collision rule and left out by `--record-install` (#1365).
+            # A lite skill the baseline records as kept with `--keep`, present and
+            # not the kit's: the repository's own, kept by adopt.md L1's
+            # collision rule (#1365). One that was merely absent at record time
+            # and has appeared since is not in `kept`, and falls through to drift.
             # Ahead of `unknown-version` too, since the bare invocation's
             # comparison is the baseline, which has no entry for it. A kit skill
             # recorded as installed never lands here: edited, it is drift below.
@@ -3559,6 +3599,25 @@ def inspect(
         narrative_rendered=narrative,
         narrative_missing=tuple(narrative_missing),
         baseline_trusted=trusted,
+        # A lite baseline (recorded as lite: a full one moved to lite gets the
+        # profile line instead) whose `kept` is missing or not a list, and only
+        # the skills that read as drift for it: present, recorded as not
+        # installed, and not the kit's copy, the condition the kept branch uses.
+        lite_kept_unrecorded=tuple(
+            local
+            for rel, local in LITE_ADAPTER_INSTALL_PATHS.items()
+            if profile == "lite"
+            and declared_scope is not None
+            and (baseline or {}).get("profile") == "lite"
+            and not isinstance((baseline or {}).get("kept"), list)
+            and rel in declared_scope
+            and rel not in baseline_files
+            and (root / local).is_file()
+            and (
+                (expected := (manifest_files.get(rel) or {}).get("sha256")) is None
+                or sha256_of(root / local) != expected
+            )
+        ),
         declared_scope_known=declared_scope is not None,
         # Passed in rather than inferred from paths: `main` knows it from the
         # resolved PATHS, which this function does not see.
@@ -3776,6 +3835,17 @@ def render(report: Report) -> str:
                 "  ⚠ profile: lite rests on the config alone — no trusted baseline records "
                 "a lite install, so the files outside the lite profile go unchecked"
             )
+        if report.lite_kept_unrecorded:
+            # Said rather than inferred: a present skill recorded as not installed
+            # may be one the repository kept or one that appeared since, and only
+            # the operator knows which (#1373).
+            lines.append(
+                "  ⚠ this lite baseline predates its `kept` record, so a skill the "
+                "repository kept reads as drift. Re-run --record-install --from-kit "
+                "<kit checkout> with --keep for each one it kept; these are present "
+                "and recorded as not installed:"
+            )
+            lines.extend(f"      · {path}" for path in report.lite_kept_unrecorded)
     if report.baseline_profile_mismatch is not None:
         lines.append(
             f"  ✗ profile: the baseline was recorded as {report.baseline_profile_mismatch}, "
@@ -4041,8 +4111,10 @@ def render(report: Report) -> str:
                 "rather than an intact one"
             )
         elif n_declined:
-            # On lite a declined file is a skill the repository kept as its own
-            # (#1365), and adopt.md L5 reads `lite install` from this line.
+            # On lite a declined file is a skill kept with `--keep`, or one absent
+            # at record time, such as the Claude skill skipped for the
+            # repository's `.claude/commands/<slug>.md` (#1365, #1372). adopt.md
+            # L5 reads `lite install` from this line.
             lines.append(
                 f"  {verdict_mark} intact for this adoption — "
                 + ("lite install, " if lite else "")
@@ -4512,6 +4584,13 @@ def main(argv: list[str] | None = None) -> int:
                     file=sys.stderr,
                 )
                 return 2
+            absent = [path for path in args.keep if not (root / path).is_file()]
+            if absent:
+                print(
+                    f"error: --keep names a skill that is not there: {', '.join(absent)}",
+                    file=sys.stderr,
+                )
+                return 2
             kept_sources = frozenset(by_install_path[path] for path in args.keep)
         raw_version = get(config, "kit.version", None)
         version = 2 if raw_version is None else _as_version(raw_version)
@@ -4626,9 +4705,7 @@ def main(argv: list[str] | None = None) -> int:
             kept = [
                 LITE_ADAPTER_INSTALL_PATHS[rel]
                 for rel in LITE_ADAPTER_INSTALL_PATHS
-                if profile_of(config) == "lite"
-                and rel in baseline.get("not_installed", ())
-                and (root / LITE_ADAPTER_INSTALL_PATHS[rel]).is_file()
+                if rel in baseline.get("kept", ())
             ]
             if kept:
                 print(
