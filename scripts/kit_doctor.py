@@ -3599,14 +3599,24 @@ def inspect(
         narrative_rendered=narrative,
         narrative_missing=tuple(narrative_missing),
         baseline_trusted=trusted,
+        # A lite baseline (recorded as lite: a full one moved to lite gets the
+        # profile line instead) whose `kept` is missing or not a list, and only
+        # the skills that read as drift for it: present, recorded as not
+        # installed, and not the kit's copy, the condition the kept branch uses.
         lite_kept_unrecorded=tuple(
             local
             for rel, local in LITE_ADAPTER_INSTALL_PATHS.items()
             if profile == "lite"
             and declared_scope is not None
-            and "kept" not in (baseline or {})
+            and (baseline or {}).get("profile") == "lite"
+            and not isinstance((baseline or {}).get("kept"), list)
             and rel in declared_scope
+            and rel not in baseline_files
             and (root / local).is_file()
+            and (
+                (expected := (manifest_files.get(rel) or {}).get("sha256")) is None
+                or sha256_of(root / local) != expected
+            )
         ),
         declared_scope_known=declared_scope is not None,
         # Passed in rather than inferred from paths: `main` knows it from the

@@ -9457,24 +9457,74 @@ def test_a_kept_entry_outside_not_installed_decides_nothing(tmp_path, capsys):
     assert states[CLAUDE_REVIEW] != "declined"
 
 
-@pytest.mark.parametrize("has_kept", [False, True])
-def test_a_lite_baseline_from_before_kept_says_how_to_re_record(tmp_path, capsys, monkeypatch, has_kept):
+@pytest.mark.parametrize("kept", ["absent", "not a list", "recorded"])
+def test_a_lite_baseline_from_before_kept_says_how_to_re_record(tmp_path, capsys, monkeypatch, kept):
     """CodeRabbit on #1373: a baseline recorded with --keep before `kept` existed
-    reads its kept skill as drift; the report names it and the re-record step."""
+    reads its kept skill as drift; the report names it and the re-record step.
+    It names only such a skill (#1373 R2 F1, F4): not the kit's copy recorded as
+    not installed, not one recorded as installed, not one absent."""
     root, hashes = _lite_repo(tmp_path)
+    kits_copy = (root / CODEX_REVIEW).read_text(encoding="utf-8")
     (root / CLAUDE_REVIEW).write_text("Ours.\n", encoding="utf-8")
+    (root / CODEX_REVIEW).unlink()
+    (root / ".agents/skills/session-start/SKILL.md").unlink()
     assert _record_from_kit(root, _lite_source_files(hashes), monkeypatch, tmp_path, CLAUDE_REVIEW) == 0
     capsys.readouterr()
-    if not has_kept:
-        recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    (root / CODEX_REVIEW).write_text(kits_copy, encoding="utf-8")
+    # Installed from the kit and edited since: drift, but not a kept skill.
+    (root / ".claude/skills/wrap-up/SKILL.md").write_text("edited\n", encoding="utf-8")
+    recorded = json.loads((root / "kit-manifest.json").read_text(encoding="utf-8"))
+    # Listed in both maps, as a malformed baseline might: recorded as installed wins.
+    recorded["not_installed"].append("docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md")
+    if kept == "absent":
         del recorded["kept"]
-        (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    elif kept == "not a list":
+        recorded["kept"] = "oops"
+    (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
     _write(root / "manifest.json", json.dumps(_manifest(hashes)))
     code = kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json")])
     out = capsys.readouterr().out
-    assert ("predates its `kept` record" in out) == (not has_kept), out
-    assert (f"      · {CLAUDE_REVIEW}" in out) == (not has_kept)
-    assert code == (1 if not has_kept else 0)
+    hinted = kept != "recorded"
+    assert ("predates its `kept` record" in out) == hinted, out
+    listed = {line.strip()[2:] for line in out.splitlines() if line.startswith("      · ")}
+    assert listed == ({CLAUDE_REVIEW} if hinted else set()), out
+    assert code == 1
+
+
+def test_a_lite_baseline_from_before_the_six_skills_gets_no_kept_hint(tmp_path, capsys):
+    """#1373 R2 F4: a baseline recording none of the six skills (from before #1365)
+    records none of them as not installed, so the hint names none."""
+    root, hashes = _lite_repo(tmp_path)
+    recorded = _lite_recorded(root, hashes)
+    for rel in kit_doctor.LITE_ADAPTER_INSTALL_PATHS:
+        recorded["files"].pop(rel, None)
+    recorded["not_installed"] = [
+        rel for rel in recorded["not_installed"] if rel not in kit_doctor.LITE_ADAPTER_INSTALL_PATHS
+    ]
+    recorded.pop("kept", None)
+    (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    (root / CLAUDE_REVIEW).write_text("Ours.\n", encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json")])
+    assert "predates its `kept` record" not in capsys.readouterr().out
+
+
+def test_a_full_baseline_moved_to_lite_gets_the_profile_line_not_the_kept_hint(tmp_path, capsys):
+    """#1373 R2 F2: a baseline recorded as full is not a lite baseline from before `kept`."""
+    root, hashes = _lite_repo(tmp_path)
+    recorded = _lite_recorded(root, hashes)
+    source = "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md"
+    del recorded["files"][source]
+    recorded["not_installed"] = [*recorded["not_installed"], source]
+    recorded.pop("profile", None)
+    recorded.pop("kept", None)
+    (root / "kit-manifest.json").write_text(json.dumps(recorded), encoding="utf-8")
+    (root / CLAUDE_REVIEW).write_text("Ours.\n", encoding="utf-8")
+    _write(root / "manifest.json", json.dumps(_manifest(hashes)))
+    kit_doctor.main(["--root", str(root), "--manifest", str(root / "manifest.json")])
+    out = capsys.readouterr().out
+    assert "the baseline was recorded as full" in out
+    assert "predates its `kept` record" not in out
 
 
 def test_a_full_install_baseline_has_no_kept_key(tmp_path):
