@@ -700,16 +700,12 @@ Each copy runs only where the target is absent. A symlink counts as present even
 it points nowhere, and a target under a symlinked directory inside the repository is
 skipped, so a copy never writes through a link. A Claude skill is also skipped while
 `.claude/commands/<slug>.md` exists, because the skill would silently shadow that
-command. For each binding L2 marked **replace**, move its extra items to the homes L2
-named, then ask the operator to remove the whole binding (the command file, or the skill
-directory with everything in it) and to say when it is done. Remove nothing of the
-repository's yourself. Before running the block, confirm the removal:
-`ls -A "$REPO/<binding>"` must report no such file. Anything left, such as a helper
-file in a skill directory whose `SKILL.md` went, goes back to the operator; the block
-would otherwise copy the kit's `SKILL.md` in beside it. The block itself sees only a
-`SKILL.md` or command file still there, which it reports as `kept:` or `collision:`
-and does not install over. L6 stages a tracked binding's removal with the install.
-Then run the block:
+command. A skill directory that holds anything, such as a helper file whose
+`SKILL.md` went, is kept too: the kit's `SKILL.md` would land beside it. For each
+binding L2 marked **replace**, move its extra items to the homes L2 named, then ask
+the operator to remove the whole binding (the command file, or the skill directory
+with everything in it) and to say when it is done. Remove nothing of the repository's
+yourself. L6 stages a tracked binding's removal with the install. Then run the block:
 
 ```bash
 REPO="${REPO:?REPO is not set — run Step 0}"
@@ -737,17 +733,20 @@ for slug in session-start wrap-up review; do
     cmd="$REPO/.claude/commands/$slug.md"
     if [ "$runtime" = claude ] && { [ -e "$cmd" ] || [ -L "$cmd" ]; }; then echo "collision: $cmd"; continue; fi
     if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
-    mkdir -p "$REPO/$dir/$slug"
+    skill="$REPO/$dir/$slug"
+    if [ -e "$skill" ] && ! { [ -d "$skill" ] && [ -z "$(ls -A "$skill" 2>&1)" ]; }; then echo "kept: $skill"; continue; fi
+    mkdir -p "$skill"
     cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
   done
 done
 ```
 
-A `kept:` or `collision:` line for a binding L2 marked **replace** means it is still
-there: ask the operator to remove it, then run the block again. Resolve a target the
-block skipped for a symlinked directory with the operator. Then write
-`$REPO/config/dev-model.yaml` if it is absent. One that exists is kept: change a key in it only with the operator, never by writing the
-file again, which would drop a key such as `review.safety_critical_paths`.
+A `kept:` or `collision:` line for a binding L2 marked **replace** means some of it is
+still there: ask the operator to remove the rest, then run the block again. Resolve a
+target the block skipped for a symlinked directory with the operator. Then write
+`$REPO/config/dev-model.yaml` if it is absent. One that exists is kept: change a key in
+it only with the operator, never by writing the file again, which would drop a key
+such as `review.safety_critical_paths`.
 `kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each
 optional key L1 did not settle:
 

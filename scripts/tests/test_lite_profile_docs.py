@@ -515,6 +515,56 @@ def test_adopt_lite_copy_block_skips_a_claude_skill_a_command_would_be_shadowed_
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("left", ["helper file", "hidden file", "subdirectory", "plain file", "unreadable"])
+def test_adopt_lite_copy_block_keeps_a_skill_directory_that_still_holds_something(
+    tmp_path: Path, shell: str, left: str
+) -> None:
+    """A half-removed skill (its `SKILL.md` gone, a helper left) is not installed beside."""
+    if left == "unreadable" and os.geteuid() == 0:
+        pytest.skip("root lists an unreadable directory")
+    repo, env = _repo(tmp_path, "adopter")
+    skill = repo / ".claude/skills/review"
+    skill.parent.mkdir(parents=True)
+    if left == "plain file":
+        skill.write_text("not a directory\n", encoding="utf-8")
+    else:
+        skill.mkdir()
+        if left == "helper file":
+            (skill / "helper.sh").write_text("echo ours\n", encoding="utf-8")
+        elif left == "hidden file":
+            (skill / ".notes").write_text("ours\n", encoding="utf-8")
+        elif left == "subdirectory":
+            (skill / "scripts").mkdir()
+        else:
+            skill.chmod(0o000)
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    try:
+        result = _run(shell, _adopt_copy_block(), repo, env)
+    finally:
+        if left == "unreadable":
+            skill.chmod(0o755)
+    assert result.returncode == 0, result.stderr
+    assert f"kept: {skill}" in result.stdout
+    assert not (skill / "SKILL.md").exists()
+    assert (repo / ".agents/skills/review/SKILL.md").is_file()
+    assert (repo / ".claude/skills/wrap-up/SKILL.md").is_file()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_installs_into_an_empty_skill_directory(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    skill = repo / ".claude/skills/review"
+    skill.mkdir(parents=True)
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert "kept:" not in result.stdout
+    assert (skill / "SKILL.md").is_file()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
 @pytest.mark.parametrize("slashes", ["/", "//", "///"])
 def test_adopt_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_symlinked_ancestor(
     tmp_path: Path, shell: str, slashes: str
