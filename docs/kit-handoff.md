@@ -215,7 +215,7 @@ was removed. #1116 carries the identity follow-ups, including the cs-toolkit upg
 timeout and report-containment findings.
 An adopter's real scheduled runs on 2026-10-23 each wrote a receipt that its wrapper re-checked against the expected
 invocation, as read on 2026-10-27 (sources in `saved_plans/adopter-upgrade-prep_2026-10-27.md`). Neither run reached
-completed-state retirement; the one-run recovery removal is #979 and #1305.
+completed-state retirement.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify the documented trusted launcher boundary for the adopter's scheduled calls.
@@ -303,7 +303,7 @@ these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-too
 contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-parallel-oy/cs-toolkit#3020, merged
 2026-10-30). Its installed `pr_followup_hook.py` matched kit `69f30eb6` byte for byte on 2026-11-03, so it carries
 #1301's no-bot wording.
-**Owner:** #1116, #990, #1011, #979, #1282.
+**Owner:** #1116, #990, #1011, #1282.
 
 ▶ Next: cs-toolkit installed kit `d994f8eb` (in-parallel-oy/cs-toolkit#3091, merged 2026-11-07), after `1eddf599`
 (in-parallel-oy/cs-toolkit#3056), which dropped its `test_systemize_config.py` patch. Its next upgrade runs from
@@ -325,5 +325,5 @@ repository sources in place. It
 takes #1381's lite wrap-up changes (kit `d4d94ab3`) by hand, since lite has no upgrade path yet. Its nested service repos
 (`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`) are then decided one at a time: each has a tracker, which lite does
 not drive, so the full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in
-`adopt`. #1381's review rounds showed that a prose list of config stops does not converge; the executable lite config
-validator and the findings left open are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
+`adopt`. #1381's review rounds showed that a prose list of config stops does not converge; the findings left open, and a
+proposed shared validator for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
