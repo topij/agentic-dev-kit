@@ -215,7 +215,7 @@ was removed. #1116 carries the identity follow-ups, including the cs-toolkit upg
 timeout and report-containment findings.
 An adopter's real scheduled runs on 2026-10-23 each wrote a receipt that its wrapper re-checked against the expected
 invocation, as read on 2026-10-27 (sources in `saved_plans/adopter-upgrade-prep_2026-10-27.md`). Neither run reached
-completed-state retirement; #979 and #1305 (both closed) record its removal.
+completed-state retirement; #979 and #1305 record its removal, and both are done.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify the documented trusted launcher boundary for the adopter's scheduled calls.
