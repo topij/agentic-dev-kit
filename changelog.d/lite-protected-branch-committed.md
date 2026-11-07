@@ -8,8 +8,9 @@ committed straight to the branch the key protects. The protected branch is the o
 copy names, and copies naming different branches are a hard stop. A committed config
 that Git cannot show was already a hard stop through the risk tier's read.
 
-BREAKING (gate semantics): a key outside the lite config schema at any level, or a key
-given twice at one level, in any copy, is now a hard stop for the lite `wrap-up`. The
+BREAKING (gate semantics): a key outside the lite config schema at any level, a key
+given twice at one level, or a section of the wrong shape (such as `vcs: main`), in any
+copy, is now a hard stop for the lite `wrap-up`. The
 schema is `profile`, `kit.version`, `paths.handoff`, `paths.friction_log`,
 `friction.down_route`, `review.safety_critical_paths` and `vcs.protected_branch`.
 `paths` is a mapping, and `kit`, `friction`, `review` and `vcs` are each a mapping or

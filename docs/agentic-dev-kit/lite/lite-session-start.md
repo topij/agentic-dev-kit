@@ -30,8 +30,8 @@ Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
 
 The lite `wrap-up` reads `vcs.protected_branch` from every copy of the config
 (committed, staged and working tree), and refuses to start when a copy holds a key
-outside the lite config schema or a key twice, names an unusable branch, or names a
-different branch from another copy. Its *Read the configuration* lists the schema and
+outside the lite config schema, a key twice or a section of the wrong shape, names an
+unusable branch, or names a different branch from another copy. Its *Read the configuration* lists the schema and
 the reads. Check every copy the same way here. Report each such stop as a 🔴 Now item
 to fix by the way out that section names. When the copies disagree on whether a
 protected branch is named, say so.

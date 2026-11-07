@@ -659,8 +659,10 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 - **Does a branch take changes only through pull requests?** Ask the operator; Git
   does not record it. The branch becomes `vcs.protected_branch`, and the lite `wrap-up`
   then commits on a session branch and opens the pull request. No such branch leaves
-  the key out, and the lite `wrap-up` reads that absence as "takes direct commits": it
-  commits to the branch checked out without asking. Write no key the L3 config below
+  the key out, and the lite `wrap-up` reads its absence from every copy of the config
+  (committed, staged and working tree) as "takes direct commits": it commits to the
+  branch checked out without asking. A copy that names the branch protects it, so
+  deleting the key from the working tree alone does not open direct commits. Write no key the L3 config below
   does not have; the lite `wrap-up` refuses to start on one.
 - **Reads a session here needs that the lite docs do not make?** A deploy-state check,
   pull requests or issues across related repositories, a roadmap's current phase. Each

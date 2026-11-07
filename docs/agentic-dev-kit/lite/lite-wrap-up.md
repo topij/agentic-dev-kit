@@ -35,8 +35,9 @@ tree's: the committed one by the same read the risk tier uses
 yet), the staged one (`git show :config/dev-model.yaml`), and the working tree's file.
 Otherwise an unstaged edit that deletes the key would send the commit to the branch it
 protects, and the risk tier would not see it, because the tier judges only staged
-paths. A copy that does not exist yet (nothing staged on an unborn branch) is skipped;
-one Git cannot show is the risk tier's unreadable-config stop. `<protected-branch>` is
+paths. Only a copy the working tree or index never had is skipped: the staged one when the
+file is untracked and unstaged, and the committed one before the first commit that
+holds it. One Git cannot show is the risk tier's unreadable-config stop. `<protected-branch>` is
 the branch any copy names. When the copies disagree on whether one is named, tell the
 operator, and treat it as set.
 
@@ -62,12 +63,13 @@ Each of these is a hard stop before any edit; say which to the operator:
   direct commit, and guessing could commit to it;
 - copies whose `vcs.protected_branch` name two different branches: the commit step
   could not tell which one the pull request targets;
-- a key outside the lite config schema at any level, or a key given twice at one level,
-  in any copy. The schema is `profile`, `kit.version`, `paths.handoff`,
+- a key outside the lite config schema at any level, a key given twice at one level,
+  or a section of the wrong shape, in any copy. The schema is `profile`, `kit.version`, `paths.handoff`,
   `paths.friction_log`, `friction.down_route`, `review.safety_critical_paths` and
   `vcs.protected_branch`. `paths` is a mapping; each of `kit`, `friction`, `review`
   and `vcs` is a mapping or null (a bare `vcs:` left after removing its optional
-  line). A lite repository reads no other key, so another one is most likely a
+  line), and any other value, such as `vcs: main` or `review: [deploy/]`, is the wrong
+  shape: read as absent, it would declare nothing it holds. A lite repository reads no other key, so another one is most likely a
   misspelling or a misplaced line: `vsc:`, `protected-branch`, `reveiw:`, a
   `protected_branch` dedented out of `vcs`. A YAML parser keeps only the last of two
   equal keys, so a second `vcs:` left by a merge or a paste drops the first. Read as
@@ -272,8 +274,9 @@ current directory.
 1. **Commit**, on the branch checked out — unless it is `<protected-branch>`, which
    takes no direct commit. The session may have staged a config change since the
    configuration was read, so read the staged copy's `vcs.protected_branch` again
-   first, by *Read the configuration*'s rules: a stop there stops here, and a branch it
-   names joins `<protected-branch>`. On `<protected-branch>`, move to a session branch first, named the way the
+   first, by *Read the configuration*'s rules: a stop there stops here, including a staged branch that differs
+   from the one an earlier copy named (the different-branches stop), and a branch it
+   names where no copy named one becomes `<protected-branch>`. On `<protected-branch>`, move to a session branch first, named the way the
    repository names its branches (for example `chore/<slug>`) and confirmed with the
    operator in one line: `git switch -c <name>`. The staged change and the working tree
    come with it. Either commit everything staged
