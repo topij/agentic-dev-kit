@@ -35,9 +35,8 @@ tree's: the committed one by the same read the risk tier uses
 yet), the staged one (`git show :config/dev-model.yaml`), and the working tree's file.
 Otherwise an unstaged edit that deletes the key would send the commit to the branch it
 protects, and the risk tier would not see it, because the tier judges only staged
-paths. Only a copy the working tree or index never had is skipped: the staged one when the
-file is untracked and unstaged, and the committed one before the first commit that
-holds it. One Git cannot show is the risk tier's unreadable-config stop. `<protected-branch>` is
+paths. A copy that does not exist yet (nothing staged on an unborn branch) is skipped;
+one Git cannot show is the risk tier's unreadable-config stop. `<protected-branch>` is
 the branch any copy names. When the copies disagree on whether one is named, tell the
 operator, and treat it as set.
 
@@ -85,7 +84,9 @@ once the operator has read the config and said to go ahead, they commit the corr
 `config/dev-model.yaml` on its own. They make that commit on a new branch and open a
 pull request for it, unless they say the branch checked out takes direct commits. A
 committed copy is wrong until that commit lands, and editing the working tree does not
-clear the stop. A key outside the schema is corrected by fixing its spelling or place,
+clear the stop. A stop that only the staged or working-tree copy causes clears when
+that copy is corrected: restage the fixed file, or unstage it with
+`git restore --staged config/dev-model.yaml`. A key outside the schema is corrected by fixing its spelling or place,
 by deleting it, or, when something of the repository's own reads it, by moving its
 value to a file of the repository's own: a lite config holds only the kit's keys. A
 newer kit that adds a key installs, in the same change, the wrap-up that reads it. The
@@ -304,7 +305,8 @@ current directory.
 
 1. **Push and open the pull request**, only when `<protected-branch>` is set. Push the
    branch to the remote `<protected-branch>` lives on (`git push -u origin HEAD` when
-   that is `origin`), then open a pull request against `<protected-branch>` with the
+   that is `origin`). When it lives on more than one remote, ask the operator which
+   one takes the pull request, and push there. Then open a pull request against `<protected-branch>` with the
    forge's own tool (`gh pr create --base <protected-branch>` on GitHub), or let the
    push update the one already open for this branch. Its description says what changed
    and the review's result; when the risk tier ran, it also carries what
