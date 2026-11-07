@@ -659,8 +659,11 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 - **Does a branch take changes only through pull requests?** Ask the operator; Git
   does not record it. The branch becomes `vcs.protected_branch`, and the lite `wrap-up`
   then commits on a session branch and opens the pull request. No such branch leaves
-  the key out, and the lite `wrap-up` reads that absence as "takes direct commits": it
-  commits to the branch checked out without asking.
+  the key out, and the lite `wrap-up` reads its absence from every copy of the config
+  (committed, staged and working tree) as "takes direct commits": it commits to the
+  branch checked out without asking. A copy that names the branch protects it, so
+  deleting the key from the working tree alone does not open direct commits. Write no key the L3 config below
+  does not have; the lite `wrap-up` refuses to start on one.
 - **Reads a session here needs that the lite docs do not make?** A deploy-state check,
   pull requests or issues across related repositories, a roadmap's current phase. Each
   becomes a repository source in the `AGENTS.md` section L3 writes, under the workflow
@@ -681,6 +684,10 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 - **`config/dev-model.yaml`.** If one exists without `profile: lite`, stop and ask: it
   is a full install's config or the repository's own file. If one exists with
   `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
+  Judge it now, every copy, by the lite `wrap-up`'s configuration stops (a key outside
+  the schema or given twice, an unusable `vcs.protected_branch`, copies naming
+  different branches). Settle each with the operator, and commit the corrected file
+  with the install, or the first wrap-up after it refuses to start.
 - **`AGENTS.md` and `CLAUDE.md`.** Note which exist, and whether `CLAUDE.md` imports
   `AGENTS.md` (an `@AGENTS.md` line).
 

@@ -27,8 +27,20 @@ by that section's rules, never the working tree's copy. `<protected-branch>` is
 requests. **An absent key is a declaration, not an unknown:** the repository takes
 direct commits, and the commit goes to the branch checked out without asking. A
 repository whose branch takes changes only through pull requests must set the key;
-`adopt` asks for it. Each of these is a hard stop before any edit; say which to the
-operator:
+`adopt` asks for it.
+
+Read `vcs.protected_branch` from **every copy** of the config, not only the working
+tree's: the committed one by the same read the risk tier uses
+(`git show HEAD:config/dev-model.yaml`, or the staged file on a branch with no commit
+yet), the staged one (`git show :config/dev-model.yaml`), and the working tree's file.
+Otherwise an unstaged edit that deletes the key would send the commit to the branch it
+protects, and the risk tier would not see it, because the tier judges only staged
+paths. A copy that does not exist yet (nothing staged on an unborn branch) is skipped;
+one Git cannot show is the risk tier's unreadable-config stop. `<protected-branch>` is
+the branch any copy names. When the copies disagree on whether one is named, tell the
+operator, and treat it as set.
+
+Each of these is a hard stop before any edit; say which to the operator:
 
 - a missing config file, a missing `paths` key, or an unreadable document;
 - a `<declared-paths>` the risk tier cannot read, by its rules in `lite-review.md`,
@@ -37,14 +49,49 @@ operator:
   the way out;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
-- a `vcs.protected_branch` key that is present but unusable: null or empty, blank
-  after trimming, not a string, a template placeholder still in angle brackets, or a
-  name that is no branch here (both `git rev-parse --verify -q "refs/heads/<name>"`
-  and `git rev-parse --verify -q "refs/remotes/origin/<name>"` print nothing). The
-  commit step could not tell which branch takes no direct commit, and guessing could
-  commit to it;
+- a `vcs.protected_branch` key, in any copy, that is present but unusable: null or
+  empty, blank after trimming, not a string, a template placeholder still in angle
+  brackets, a name holding any character other than ASCII letters, digits, `.`, `_`,
+  `/` and `-`, or a name that is no branch here. Judge the characters first, by reading
+  the value, before it reaches any command: a value is data, and only one that passes
+  goes into these checks, in double quotes. It is a branch here when
+  `git check-ref-format --branch "<name>"` exits 0 and either
+  `git show-ref --verify -q "refs/heads/<name>"` exits 0 or
+  `git for-each-ref --format='%(refname)' "refs/remotes/*/<name>"` prints a ref, on
+  whichever remote holds it. The commit step could not tell which branch takes no
+  direct commit, and guessing could commit to it;
+- copies whose `vcs.protected_branch` name two different branches: the commit step
+  could not tell which one the pull request targets;
+- a key outside the lite config schema at any level, a key given twice at one level,
+  or a section of the wrong shape, in any copy. The schema is `profile`, `kit.version`, `paths.handoff`,
+  `paths.friction_log`, `friction.down_route`, `review.safety_critical_paths` and
+  `vcs.protected_branch`. `paths` is a mapping; each of `kit`, `friction`, `review`
+  and `vcs` is a mapping or null (a bare `vcs:` left after removing its optional
+  line), and any other value, such as `vcs: main` or `review: [deploy/]`, is the wrong
+  shape: read as absent, it would declare nothing it holds. A lite repository reads no other key, so another one is most likely a
+  misspelling or a misplaced line: `vsc:`, `protected-branch`, `reveiw:`, a
+  `protected_branch` dedented out of `vcs`. A YAML parser keeps only the last of two
+  equal keys, so a second `vcs:` left by a merge or a paste drops the first. Read as
+  absent, either would silently switch off what the key was written to declare: the
+  branch it was meant to protect would take the commit, or the paths it declared would
+  skip the risk tier;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
+
+**The way out of the `vcs.protected_branch` and schema stops above** is outside the
+lite workflows, as the risk tier's is (*Risk tier* in [`lite-review.md`](lite-review.md)):
+once the operator has read the config and said to go ahead, they commit the corrected
+`config/dev-model.yaml` on its own. They make that commit on a new branch and open a
+pull request for it, unless they say the branch checked out takes direct commits. A
+committed copy is wrong until that commit lands, and editing the working tree does not
+clear the stop. A stop that only the staged or working-tree copy causes clears when
+that copy is corrected: restage the fixed file, or unstage it with
+`git restore --staged config/dev-model.yaml`. A key outside the schema is corrected by fixing its spelling or place,
+by deleting it, or, when something of the repository's own reads it, by moving its
+value to a file of the repository's own: a lite config holds only the kit's keys. A
+newer kit that adds a key installs, in the same change, the wrap-up that reads it. The
+other stops are not the config's to fix: no `profile: lite` means this workflow does
+not apply, and a missing document or a detached HEAD is fixed where it is.
 
 ## Steps
 
@@ -226,7 +273,11 @@ current directory.
    review of the staged change, and the operator's go-ahead before the commit.
 
 1. **Commit**, on the branch checked out — unless it is `<protected-branch>`, which
-   takes no direct commit. Then move to a session branch first, named the way the
+   takes no direct commit. The session may have staged a config change since the
+   configuration was read, so read the staged copy's `vcs.protected_branch` again
+   first, by *Read the configuration*'s rules: a stop there stops here, including a staged branch that differs
+   from the one an earlier copy named (the different-branches stop), and a branch it
+   names where no copy named one becomes `<protected-branch>`. On `<protected-branch>`, move to a session branch first, named the way the
    repository names its branches (for example `chore/<slug>`) and confirmed with the
    operator in one line: `git switch -c <name>`. The staged change and the working tree
    come with it. Either commit everything staged
@@ -254,7 +305,8 @@ current directory.
 
 1. **Push and open the pull request**, only when `<protected-branch>` is set. Push the
    branch to the remote `<protected-branch>` lives on (`git push -u origin HEAD` when
-   that is `origin`), then open a pull request against `<protected-branch>` with the
+   that is `origin`). When it lives on more than one remote, ask the operator which
+   one takes the pull request, and push there. Then open a pull request against `<protected-branch>` with the
    forge's own tool (`gh pr create --base <protected-branch>` on GitHub), or let the
    push update the one already open for this branch. Its description says what changed
    and the review's result; when the risk tier ran, it also carries what
