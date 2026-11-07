@@ -2833,11 +2833,14 @@ def test_session_starting_entry_retires_completed_live_state_and_drafts(
 
 
 def change_config(root: Path) -> None:
-    """Change a configuration value the triage run does not read, as a later
-    PR does to `config/dev-model.yaml`: the effective config fingerprint moves."""
+    """Change a configuration value the triage run's fingerprint covers, as a
+    later PR to `config/dev-model.yaml` can: the config fingerprint moves. Since
+    #1303 the fingerprint covers only what the triage engines read, so this edits
+    the `notify` section (read whole) rather than an unread key such as `review.*`,
+    whose change leaves the fingerprint where it was."""
     config = root / "config/dev-model.yaml"
     before = config.read_text(encoding="utf-8")
-    after = before.replace('systemize_branch_pattern: "chore/systemize-{date}"', 'systemize_branch_pattern: "chore/systemize-{date}-later"')
+    after = before.replace("  backend: slack\n", "  backend: email\n")
     assert after != before
     config.write_text(after, encoding="utf-8")
 

@@ -277,6 +277,8 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_triage_outcome_receipts.py", "test"),
     ("scripts/tests/test_triage_caller.py", "test"),
     ("scripts/tests/test_finalize_triage.py", "test"),
+    ("scripts/tests/test_triage_forge_reconcile.py", "test"),
+    ("scripts/tests/test_triage_config_scope.py", "test"),
     # Post-merge-systemize engines: installed together or not at all (the
     # workflow stops on a partial set), with their installed verification.
     ("scripts/fetch_merged_prs.py", "engine"),

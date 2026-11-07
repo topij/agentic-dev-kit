@@ -228,10 +228,81 @@ def _repo_path(root: Path, value: Any, name: str) -> Path:
     return candidate
 
 
+# The configuration a triage run's `config_fingerprint` binds (#1303): every key
+# `load_settings` reads into `Settings`, and nothing else. A change to a key the
+# triage engines never read (`review.*`, say) no longer strands a held session,
+# while a change to one they act on still refuses it. `models.tiers` is read only
+# to check that `triage.analysis_tier` names a tier, a load-time precondition
+# rather than a value the run acts on, so it is left out. A test pins this list
+# against the `_required` calls below, so a key read later cannot be missed.
+FINGERPRINT_SCOPE = "triage-consumed-config/v1"
+FINGERPRINT_KEYS = (
+    "paths.engines",
+    "paths.friction_log",
+    "paths.friction_log_archive",
+    "state.dirname",
+    "triage.state_path",
+    "triage.gate_path",
+    "triage.recovery_bundle_pattern",
+    "triage.frozen_inbox_pattern",
+    "triage.report_root",
+    "triage.report_pattern",
+    "triage.analysis_tier",
+    "triage.pr_draft",
+    "triage.commit_subject",
+    "triage.draft_engine",
+    "triage.finalize_engine",
+    "vcs.protected_branch",
+    "vcs.triage_branch_pattern",
+    "tracker",
+    "notify",
+)
+VALIDATION_ONLY_KEYS = ("models.tiers",)
+
+
+def scoped_fingerprint(config: dict[str, Any]) -> str:
+    """The `config_fingerprint` of a merged config: the digest of the
+    `FINGERPRINT_KEYS` values only, tagged with `FINGERPRINT_SCOPE` so it can never
+    equal a whole-config digest. A missing key raises, as `load_settings` does."""
+    values = {key: _required(config, key) for key in FINGERPRINT_KEYS}
+    return digest({"scope": FINGERPRINT_SCOPE, "values": values})
+
+
+def legacy_fingerprint(config: dict[str, Any]) -> str:
+    """The `config_fingerprint` every engine before #1303 recorded: the digest of
+    the whole merged config. Only the config-rebind route computes it, from
+    configuration bytes the operator supplies, to prove a held session's record."""
+    return digest(config)
+
+
+def recorded_gate_fingerprints(settings: Settings) -> tuple[str, str]:
+    """The configuration identities a gate an earlier invocation left may carry:
+    the current fingerprint, or the whole-config digest of the current
+    configuration, which an engine before #1303 wrote. The second proves the gate
+    was written under byte-for-byte this configuration, so a dead owner's gate
+    from before an upgrade stays recoverable. A session's state never takes it
+    this way; see the config-rebind route."""
+    return (settings.fingerprint, legacy_fingerprint(settings.config))
+
+
+def changed_fingerprint_keys(before: dict[str, Any], after: dict[str, Any]) -> list[str]:
+    """The `FINGERPRINT_KEYS` whose values differ between two merged configs; a key
+    missing from either side counts as changed."""
+    changed = []
+    for key in FINGERPRINT_KEYS:
+        try:
+            same = get(before, key) == get(after, key)
+        except (KeyError, TypeError):
+            same = False
+        if not same:
+            changed.append(key)
+    return changed
+
+
 def load_settings(start: Path | None = None) -> Settings:
     root = repo_root(start).resolve()
     config = load_config(root / "config/dev-model.yaml")
-    fingerprint = digest(config)
+    fingerprint = scoped_fingerprint(config)
     engine_dir = root / _fragment(_required(config, "paths.engines"), "paths.engines")
     if engine_dir.exists() and (engine_dir.is_symlink() or not engine_dir.is_dir()):
         raise TriageError("paths.engines must be a contained directory")
@@ -592,7 +663,223 @@ def terminal_pr_watch_receipt(receipt: Any, *, head: str, url: str) -> bool:
     )
 
 
-def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool = False) -> dict[str, Any]:
+CONFIG_REBIND_KIND = "triage-config-rebind"
+CONFIG_REBIND_DECISION = "rebind-config"
+
+
+def config_rebind_approval(core_digest: str, approver: str) -> dict[str, Any]:
+    """The exact approval record a config rebind carries."""
+    return {"decision": CONFIG_REBIND_DECISION, "source": "current-session", "approver_identity": approver, "core_digest": core_digest}
+
+
+def validate_config_rebind(record: Any, value: dict[str, Any]) -> None:
+    """A `config_rebind` record (#1303): an approval-bound proof that a session
+    recorded under the legacy whole-config fingerprint was drafted under a
+    configuration whose `FINGERPRINT_KEYS` values equal the ones the rebind
+    names. The engine wrote the proof only after recomputing the legacy digest
+    from operator-supplied bytes and comparing the scoped subset; validation
+    re-checks the record's own bindings, never the bytes, which it does not keep."""
+    identity = value["run_identity"]
+    core_keys = {
+        "kind", "scope", "session", "legacy_fingerprint", "scoped_fingerprint",
+        "legacy_config_digest", "legacy_local_config_digest", "captured_state_digest",
+    }
+    if not isinstance(record, dict) or set(record) != {"core", "core_digest", "approval"}:
+        raise TriageError("config rebind record is malformed", outcome="operator-held", code="configuration-identity")
+    core = record["core"]
+    if (
+        not isinstance(core, dict)
+        or set(core) != core_keys
+        or core["kind"] != CONFIG_REBIND_KIND
+        or core["scope"] != FINGERPRINT_SCOPE
+        or core["session"] != identity.get("session")
+        or core["legacy_fingerprint"] != identity.get("config_fingerprint")
+        or core["legacy_fingerprint"] == core["scoped_fingerprint"]
+        or any(
+            not isinstance(core[name], str) or SHA256_RE.fullmatch(core[name]) is None
+            for name in ("legacy_fingerprint", "scoped_fingerprint", "legacy_config_digest", "captured_state_digest")
+        )
+        or not (
+            core["legacy_local_config_digest"] is None
+            or (isinstance(core["legacy_local_config_digest"], str) and SHA256_RE.fullmatch(core["legacy_local_config_digest"]))
+        )
+        or record["core_digest"] != digest(core)
+    ):
+        raise TriageError("config rebind record does not bind this session", outcome="operator-held", code="configuration-identity")
+    approval = record["approval"]
+    if (
+        not isinstance(approval, dict)
+        or not isinstance(approval.get("approver_identity"), str)
+        or not approval["approver_identity"]
+        or approval != config_rebind_approval(record["core_digest"], approval["approver_identity"])
+    ):
+        raise TriageError("config rebind approval does not bind its core", outcome="operator-held", code="configuration-identity")
+
+
+LOCAL_COMMIT_DISCARD_KIND = "local-commit-discard"
+LOCAL_COMMIT_DISCARD_DECISION = "discard-local-commit"
+DISCARD_READ_BACK_KEYS = {
+    "branch", "base", "worktree", "paths", "local_head", "local_parents", "local_paths",
+    "worktree_present", "worktree_registered", "worktree_branch", "worktree_head",
+    "worktree_clean", "other_checkouts", "remote_branch_absent", "pull_requests",
+}
+
+
+def local_commit_discard_approval(plan_digest: str, approver: str) -> dict[str, Any]:
+    """The exact approval record a local-commit discard carries."""
+    return {"decision": LOCAL_COMMIT_DISCARD_DECISION, "source": "current-session", "approver_identity": approver, "plan_digest": plan_digest}
+
+
+def local_commit_discard_refusal(read_back: Any, operations: Any) -> str | None:
+    """Why a finalization chain may not be discarded, or None when it may (#1302).
+
+    Only a chain whose `branch-create` verified and whose `commit` is
+    `ambiguous` qualifies, and only when the read-back proves the commit never
+    left the machine: no remote branch of that name, no pull request from it, and
+    a local branch that is the recorded base or exactly one commit on it touching
+    only the two recorded paths (and, when the ambiguous attempt read a commit
+    back, that very commit). A present worktree must be the recorded one, clean,
+    on that branch. The branch may be checked out nowhere else."""
+    if (
+        not isinstance(operations, list)
+        or [item.get("kind") if isinstance(item, dict) else None for item in operations] != ["branch-create", "commit"]
+        or [item.get("status") for item in operations] != ["verified", "ambiguous"]
+        or not isinstance(operations[0].get("read_back"), dict)
+        or not isinstance(operations[1].get("intent"), dict)
+    ):
+        return "only a verified branch-create followed by an ambiguous commit can be discarded"
+    branch_read_back = operations[0]["read_back"]
+    commit_intent = operations[1]["intent"]
+    if not isinstance(read_back, dict) or set(read_back) != DISCARD_READ_BACK_KEYS:
+        return "discard read-back is malformed"
+    base = branch_read_back.get("base")
+    branch = branch_read_back.get("branch")
+    if (
+        read_back["branch"] != branch
+        or read_back["base"] != base
+        or branch_read_back.get("head") != base
+        or read_back["worktree"] != branch_read_back.get("worktree")
+        or read_back["paths"] != commit_intent.get("paths")
+        or not isinstance(base, str)
+        or OID_RE.fullmatch(base) is None
+    ):
+        return "discard read-back does not name the recorded branch, base, worktree and paths"
+    if read_back["remote_branch_absent"] is not True:
+        return "a remote branch of that name exists, so the commit may have left the machine"
+    if read_back["pull_requests"] != []:
+        return "a pull request from that branch exists"
+    if read_back["other_checkouts"] != []:
+        return "the branch is checked out in another worktree"
+    local_head = read_back["local_head"]
+    recorded = operations[1].get("read_back")
+    recorded_commit = recorded.get("commit") if isinstance(recorded, dict) else None
+    if local_head is None:
+        pass
+    elif not isinstance(local_head, str) or OID_RE.fullmatch(local_head) is None:
+        return "local branch head is malformed"
+    elif local_head != base:
+        local_paths = read_back["local_paths"]
+        if read_back["local_parents"] != [base]:
+            return "the local branch is not exactly one commit on the recorded base"
+        if (
+            not isinstance(local_paths, list)
+            or not local_paths
+            or any(path not in commit_intent.get("paths", []) for path in local_paths)
+        ):
+            return "the local commit touches a path other than the two recorded ones"
+        if isinstance(recorded_commit, str) and local_head != recorded_commit:
+            return "the local branch head is not the commit the ambiguous attempt read back"
+    if read_back["worktree_present"] is True:
+        if (
+            read_back["worktree_registered"] is not True
+            or read_back["worktree_branch"] != f"refs/heads/{branch}"
+            or read_back["worktree_head"] != local_head
+            or read_back["worktree_clean"] is not True
+        ):
+            return "the recorded worktree is not a clean checkout of that branch"
+    elif read_back["worktree_present"] is not False or not isinstance(read_back["worktree_registered"], bool):
+        return "discard read-back is malformed"
+    return None
+
+
+def discard_completed(read_back: Any, plan_read_back: dict[str, Any]) -> bool:
+    """Whether a post-discard read-back proves the branch, the worktree and its
+    registration gone, and still no remote branch or pull request."""
+    return (
+        isinstance(read_back, dict)
+        and set(read_back) == DISCARD_READ_BACK_KEYS
+        and all(read_back[name] == plan_read_back[name] for name in ("branch", "base", "worktree", "paths"))
+        and read_back["local_head"] is None
+        and read_back["worktree_present"] is False
+        and read_back["worktree_registered"] is False
+        and read_back["other_checkouts"] == []
+        and read_back["remote_branch_absent"] is True
+        and read_back["pull_requests"] == []
+    )
+
+
+def validate_finalization_reconciliations(records: Any, value: dict[str, Any]) -> None:
+    """The append-only history of discarded local-only finalization chains (#1302).
+
+    Every record binds a plan (the read-back that proved the commit local-only and
+    the digest of the chain it supersedes) and an exact approval of that plan. A
+    `discarded` record keeps the superseded chain byte-for-byte and the read-back
+    that proved its branch and worktree gone; the live chain restarted after it.
+    Only the last record may still be `discarding`, and then the live chain is
+    the one its plan names, unchanged."""
+    if not isinstance(records, list) or not records:
+        raise TriageError("finalization reconciliation history is malformed", outcome="operator-held")
+    session = value["run_identity"].get("session")
+    for position, record in enumerate(records):
+        if (
+            not isinstance(record, dict)
+            or set(record) != {"plan", "plan_digest", "approval", "status", "superseded_operations", "discard_read_back"}
+            or not isinstance(record["plan"], dict)
+            or set(record["plan"]) != {"kind", "session", "superseded_operations_digest", "read_back"}
+            or record["plan"]["kind"] != LOCAL_COMMIT_DISCARD_KIND
+            or record["plan"]["session"] != session
+            or record["plan_digest"] != digest(record["plan"])
+            or record["status"] not in {"discarding", "discarded"}
+        ):
+            raise TriageError("finalization reconciliation record is malformed", outcome="operator-held")
+        approval = record["approval"]
+        if (
+            not isinstance(approval, dict)
+            or not isinstance(approval.get("approver_identity"), str)
+            or not approval["approver_identity"]
+            or approval != local_commit_discard_approval(record["plan_digest"], approval["approver_identity"])
+        ):
+            raise TriageError("finalization reconciliation approval does not bind its plan", outcome="operator-held")
+        plan = record["plan"]
+        if record["status"] == "discarding":
+            superseded = value.get("finalization_operations")
+            if position != len(records) - 1 or record["superseded_operations"] is not None or record["discard_read_back"] is not None:
+                raise TriageError("only the last finalization reconciliation may be in progress", outcome="operator-held")
+        else:
+            superseded = record["superseded_operations"]
+            if not discard_completed(record["discard_read_back"], plan["read_back"]):
+                raise TriageError("finalization reconciliation lacks a proven discard", outcome="operator-held")
+        if digest(superseded) != plan["superseded_operations_digest"]:
+            raise TriageError("finalization reconciliation does not bind the chain it supersedes", outcome="operator-held")
+        refusal = local_commit_discard_refusal(plan["read_back"], superseded)
+        if refusal is not None:
+            raise TriageError(f"finalization reconciliation plan is not eligible: {refusal}", outcome="operator-held")
+
+
+def validate_state(
+    value: Any,
+    *,
+    settings: Settings,
+    mode: str,
+    retiring: bool = False,
+    config_identity: bool = True,
+) -> dict[str, Any]:
+    """Validate a complete state against the current settings.
+
+    `config_identity=False` skips only the comparison of the recorded
+    configuration fingerprint with the current one; the config-rebind route
+    (#1303) uses it to read a held session it is about to prove and rebind.
+    Every other check applies."""
     if (
         not isinstance(value, dict)
         or value.get("kind") != "triage-run-state"
@@ -620,14 +907,28 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
             required = BASE_KEYS | {"proposal_payloads", "proposal_payload_digests", "approval", "notification_thread_reference", "notification_operations", "decisions", "operations", "completion"}
         elif route == "archive-sweep":
             required = BASE_KEYS | {"proposal_payloads", "proposal_payload_digests", "approval", "notification_thread_reference", "notification_operations", "decisions", "operations", "finalization_operations", "archive_sweep", "completion"}
-    if set(value) != required:
+    # Two optional keys (#1302, #1303): `config_rebind`, in any phase, once an
+    # operator rebinds a session recorded under the whole-config fingerprint; and
+    # `finalization_reconciliations`, wherever finalization evidence lives, once
+    # an operator discards a local-only sweep commit. Each is absent until its
+    # route runs, so a state written before either existed still validates.
+    optional = {"config_rebind"}
+    if "finalization_operations" in required:
+        optional.add("finalization_reconciliations")
+    if set(value) - (optional & set(value)) != required:
         raise TriageError("triage state has missing or extra phase fields", outcome="operator-held")
     identity = value.get("run_identity")
     if not isinstance(identity, dict) or set(identity) != {"repository_identity", "friction_log", "protected_branch_head", "mode", "session", "config_fingerprint"}:
         raise TriageError("invalid run identity", outcome="operator-held")
     if identity["mode"] != mode or value.get("mode") != mode:
         raise TriageError("cross-mode state", outcome="operator-held")
-    if identity["config_fingerprint"] != settings.fingerprint or value.get("config_fingerprint") != settings.fingerprint:
+    rebind = value.get("config_rebind")
+    if rebind is not None:
+        validate_config_rebind(rebind, value)
+    effective_fingerprint = rebind["core"]["scoped_fingerprint"] if rebind is not None else identity["config_fingerprint"]
+    if value.get("config_fingerprint") != identity["config_fingerprint"]:
+        raise TriageError("configuration identity mismatch", outcome="operator-held", code="configuration-identity")
+    if config_identity and effective_fingerprint != settings.fingerprint:
         # A completed run holds nothing pending, so a config change made after it
         # finished must not stop a session-starting entry from retiring it (the
         # retirement would otherwise block every later run of the mode). The run
@@ -1011,6 +1312,8 @@ def validate_state(value: Any, *, settings: Settings, mode: str, retiring: bool 
         ]
         if value["repository_evidence"] != expected_repository_evidence or value["pull_request_evidence"] != expected_pull_request_evidence:
             raise TriageError("finalization evidence accounting mismatch", outcome="operator-held")
+        if "finalization_reconciliations" in value:
+            validate_finalization_reconciliations(value["finalization_reconciliations"], value)
     elif value["repository_evidence"] or value["pull_request_evidence"]:
         raise TriageError("forge evidence exists before finalization", outcome="operator-held")
     completion = value.get("completion")
@@ -1206,15 +1509,18 @@ def _forge_predecessor_matches(
     return False
 
 
-def canonical_state(raw: bytes, *, settings: Settings, mode: str, retiring: bool = False) -> dict[str, Any]:
+def canonical_state(
+    raw: bytes, *, settings: Settings, mode: str, retiring: bool = False, config_identity: bool = True
+) -> dict[str, Any]:
     """Parse and validate state bytes. `retiring` is for a session-starting entry
     only: it lets a `completed` state written under an earlier configuration
-    validate so that it can be retired (see `validate_state`)."""
+    validate so that it can be retired (see `validate_state`). `config_identity`
+    is False only for the config-rebind route (see `validate_state`)."""
     try:
         value = loads_exact(raw)
     except CanonicalError as exc:
         raise TriageError(str(exc), outcome="operator-held") from exc
-    return validate_state(value, settings=settings, mode=mode, retiring=retiring)
+    return validate_state(value, settings=settings, mode=mode, retiring=retiring, config_identity=config_identity)
 
 
 def today_string() -> str:

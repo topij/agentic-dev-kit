@@ -2285,12 +2285,12 @@ _SPLIT_WORKFLOW_SUMMARIES = {
     },
     "triage-friction-log": {
         "recovery.md": (
-            "*Completed-state retirement*, *Gate-only input precedence*, *Test input "
-            "precedence*, *State-present held-evidence procedure* and *Invalid-state "
-            "recovery*."
+            "*Completed-state retirement*, *Configuration rebind*, *Gate-only input "
+            "precedence*, *Test input precedence*, *State-present held-evidence procedure* "
+            "and *Invalid-state recovery*."
         ),
         "state-schema.md": "the exact state, phase and single-writer gate shapes.",
-        "finalize.md": "*Tracker writes and accounting* and *Finalize and sweep*.",
+        "finalize.md": "*Tracker writes and accounting*, *Finalize and sweep* and *Local commit reconciliation*.",
         "engine-cli.md": "the engines' invocations, outputs and *Invocation outcome receipts*.",
     },
 }
@@ -2315,6 +2315,7 @@ _SPLIT_WORKFLOW_SECTIONS = {
     "triage-friction-log": {
         "recovery.md": (
             "Completed-state retirement",
+            "Configuration rebind",
             "Gate-only input precedence",
             "Test input precedence",
             "State-present held-evidence procedure",
@@ -2328,7 +2329,7 @@ _SPLIT_WORKFLOW_SECTIONS = {
             "Validity and abandonability",
             "The single-writer gate file",
         ),
-        "finalize.md": ("Tracker writes and accounting", "Finalize and sweep"),
+        "finalize.md": ("Tracker writes and accounting", "Finalize and sweep", "Local commit reconciliation"),
         "engine-cli.md": ("Engine CLI", "Dispositions", "Invocation outcome receipts", "Scheduled caller enforcement"),
     },
 }
@@ -5387,6 +5388,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "approved-payload-changed": ("require-new-exact-payload-approval",),
         "linear-project-mismatch": ("refuse-before-proposal-publication-or-attempt",),
         "ambiguous-external-write": ("read-back-before-retry-or-operator-hold",),
+        "local-only-commit-reconciliation": ("read-back-local-only-then-approval-bound-discard-and-restart-append-only",),
+        "legacy-config-fingerprint": ("prove-legacy-digest-and-unchanged-scope-then-approval-bound-rebind",),
         "partial-tracker-batch": ("hold-before-archive-sweep",),
         "test-mode-external-write": (
             "prohibit-tracker-friction-archive-branch-commit-push-pr",
@@ -5475,6 +5478,8 @@ def _assert_triage_semantics(workflow: str, resolved_state_root: Path) -> None:
         "No argument, valid active state in any other phase",
         "resume, neither valid active state nor gate-only receipt",
         "resume, valid active state",
+        "resume with config_rebind, active state valid but for a legacy whole-config fingerprint",
+        "Finalization resume, branch-create verified and commit ambiguous",
         "new, neither active state nor gate-only receipt",
         "new, valid completed live state",
         "new, active live state in any other phase",

@@ -27,9 +27,11 @@ def validate_record(
     record: Any,
     *,
     repository_identity: dict[str, Any] | None = None,
-    config_fingerprint: str | None = None,
+    config_fingerprint: str | tuple[str, ...] | None = None,
     own_root: str | None = None,
 ) -> dict[str, Any]:
+    """Validate a gate owner record; `config_fingerprint` is the fingerprint, or
+    the tuple of fingerprints, the record's configuration identity may carry."""
     if not isinstance(record, dict) or set(record) != {"kind", "schema_version", "gate_claim_core", "gate_claim_core_digest", *GATE_CORE_KEYS}:
         raise TriageError("gate owner record has the wrong shape", outcome="operator-held")
     core = record.get("gate_claim_core")
@@ -55,7 +57,8 @@ def validate_record(
         raise TriageError("gate run identity is malformed", outcome="operator-held")
     if repository_identity is not None and not repository_identity_matches(core["repository_identity"], repository_identity, own_root=own_root):
         raise TriageError("gate repository identity is foreign", outcome="operator-held", code="repository-identity")
-    if config_fingerprint is not None and core["config_fingerprint"] != config_fingerprint:
+    accepted = (config_fingerprint,) if isinstance(config_fingerprint, str) else config_fingerprint
+    if accepted is not None and core["config_fingerprint"] not in accepted:
         raise TriageError("gate configuration identity is foreign", outcome="operator-held", code="configuration-identity")
     return record
 

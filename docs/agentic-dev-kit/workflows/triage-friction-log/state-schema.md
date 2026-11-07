@@ -73,10 +73,47 @@ fixes the mode and `receipt-to-reserved` cutpoint; no other phase may carry it. 
 before replacement leaves the receipt authoritative, while a crash after replacement
 resumes the reserved state. No ordinary phase
 action is allowed until current gate bytes match the persisted binding.
-No extra state fields are accepted. That includes a `proposal_correction` receipt,
-which only the removed `correct-project` route wrote. A state that still carries one is
-held as `operator-held`, like any state with an extra field, and is not retired.
-`config_fingerprint` equals `run_identity.config_fingerprint`.
+No extra state fields are accepted, other than the two optional keys below. That
+includes a `proposal_correction` receipt, which only the removed `correct-project` route
+wrote. A state that still carries one is held as `operator-held`, like any state with an
+extra field, and is not retired.
+`config_fingerprint` equals `run_identity.config_fingerprint`, the fingerprint the
+workflow's *Resolve and validate configuration* defines. A session the current engine
+drafts must match the current configuration's fingerprint; a session an engine before
+#1303 drafted carries a whole-config digest instead, which matches only through a
+`config_rebind` record.
+
+Two optional keys exist only once their route has run, so a state written before either
+existed still validates without it:
+
+- `config_rebind`, in any phase: exactly `core`, `core_digest`, and `approval`. The
+  core has exactly `kind` (`triage-config-rebind`), `scope`
+  (`triage-consumed-config/v1`), `session`, `legacy_fingerprint`,
+  `scoped_fingerprint`, `legacy_config_digest`, `legacy_local_config_digest` (JSON null
+  when no overlay was supplied), and `captured_state_digest`. Its session equals
+  `run_identity.session`, its legacy fingerprint equals the recorded
+  `config_fingerprint`, which `run_identity` keeps unchanged, and `core_digest` is the
+  recomputed digest of the core. The approval is exactly
+  `{"decision": "rebind-config", "source": "current-session", "approver_identity": <non-empty>, "core_digest": <core_digest>}`.
+  With the record, the session matches the current configuration when its
+  `scoped_fingerprint` equals the current fingerprint; a bound key that changes after the
+  rebind refuses it as before. A second rebind is refused.
+- `finalization_reconciliations`, in `forge-finalize`, `archive-sweep`, and an
+  `archive-sweep` completion: a non-empty append-only array of local-commit discards
+  (*Local commit reconciliation* in `finalize.md`). Each record has exactly `plan`,
+  `plan_digest`, `approval`, `status`, `superseded_operations`, and `discard_read_back`.
+  The plan has exactly `kind` (`local-commit-discard`), `session`,
+  `superseded_operations_digest`, and `read_back`, and `plan_digest` is its recomputed
+  digest. The approval is exactly
+  `{"decision": "discard-local-commit", "source": "current-session", "approver_identity": <non-empty>, "plan_digest": <plan_digest>}`.
+  The plan's read-back must prove the superseded chain eligible as that section
+  defines. Only the last record may be `discarding`: its superseded operations and
+  discard read-back are JSON null, and the live `finalization_operations` are still the
+  chain its plan's digest names. A `discarded` record keeps that chain byte-for-byte in
+  `superseded_operations`, and its discard read-back proves the local branch, the
+  worktree, and its registration absent and still no remote branch or pull request. The
+  live chain, and the repository and PR evidence derived from it, restart empty after
+  it.
 `config_fingerprint` and `frozen_inbox_digest` are lowercase SHA-256 strings, and
 `protected_branch_head` is a lowercase full commit identifier. Reject a missing, extra,
 mistyped, non-canonical, foreign, or cross-binding-mismatched base field.

@@ -5,11 +5,14 @@ from __future__ import annotations
 import difflib
 import os
 import re
+import tempfile
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+from kitconfig import load_config
 
 from .approval import ApprovalContext, approval_record, parse_commands
 from .canonical import (
@@ -26,16 +29,27 @@ from .gate import GateLease, acquire, owner_status, validate_record
 from .inbox import Candidate, _inline_literal, parse, snapshot_content
 from .model import (
     CAPABILITIES,
+    CONFIG_REBIND_KIND,
+    FINGERPRINT_SCOPE,
+    LOCAL_COMMIT_DISCARD_KIND,
     OID_RE,
     SHA256_RE,
     SWEEP_CLEANUP_ARTIFACTS,
     Settings,
     TriageError,
     canonical_state,
+    changed_fingerprint_keys,
+    config_rebind_approval,
+    discard_completed,
+    legacy_fingerprint,
     load_settings,
+    local_commit_discard_approval,
+    local_commit_discard_refusal,
     new_run_identity,
+    recorded_gate_fingerprints,
     repository_identity,
     repository_identity_matches,
+    scoped_fingerprint,
     state_base,
     terminal_pr_watch_receipt,
     today_string,
@@ -83,6 +97,7 @@ def _request_shape_error(request: dict[str, Any]) -> str | None:
     allowed = {
         "operator_identity", "source", "proposals", "approval",
         "recovery_approval", "finalize", "worktree",
+        "config_rebind", "commit_reconciliation",
     }
     unexpected = sorted(set(request) - allowed)
     if unexpected:
@@ -100,6 +115,9 @@ def _request_shape_error(request: dict[str, Any]) -> str | None:
     recovery = request.get("recovery_approval")
     if recovery is not None and not isinstance(recovery, dict):
         return "request recovery_approval must be an object"
+    for name in ("config_rebind", "commit_reconciliation"):
+        if name in request and not isinstance(request[name], dict):
+            return f"request {name} must be an object"
     if "finalize" in request and not isinstance(request["finalize"], bool):
         return "request finalize must be a boolean"
     if "worktree" in request and not isinstance(request["worktree"], str):
@@ -310,7 +328,7 @@ def _prepared_gate_only_bundle(
         validate_record(
             record,
             repository_identity=repository_identity(store.settings),
-            config_fingerprint=store.settings.fingerprint,
+            config_fingerprint=recorded_gate_fingerprints(store.settings),
             own_root=str(store.settings.paths.repo),
         )
         if (
@@ -1594,6 +1612,7 @@ def validate_session_state(
     mode: str,
     retiring: bool,
     retain: Callable[[dict[str, Any], Path], None] | None = None,
+    config_identity: bool = True,
 ) -> tuple[dict[str, Any], Path]:
     """The validity predicate a session-starting entry applies before it retires.
 
@@ -1606,7 +1625,7 @@ def validate_session_state(
     forge-prefix failure can still report it; that failure is raised as
     `ForgePrefixError` with its message and outcome kept.
     """
-    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
+    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring, config_identity=config_identity)
     frozen_path = _validate_frozen_artifact(store, state)
     if retain is not None:
         retain(state, frozen_path)
@@ -1718,6 +1737,215 @@ def _complete_archive_sweep(
     return completed, state_digest, outcome
 
 
+def _current_session_approval(
+    supplied: Any, context: ApprovalContext | None, expected: dict[str, Any], *, digest_name: str, what: str
+) -> dict[str, Any]:
+    """Check an operator approval the request carries against the record it must
+    equal and the runtime-attested current-session read-back, as
+    `_recovery_approval` does for recovery."""
+    if context is None or context.source != "current-session" or not context.operator_identity:
+        raise TriageError(f"{what} approval requires the trusted current-session operator", outcome="operator-held")
+    if supplied != expected:
+        raise TriageError(f"{what} approval does not bind the presented plan", outcome="operator-held")
+    read_back = context.source_read_back
+    if (
+        not isinstance(read_back, dict)
+        or read_back.get("decision") != expected["decision"]
+        or read_back.get(digest_name) != expected[digest_name]
+        or read_back.get("approver_identity") != context.operator_identity
+    ):
+        raise TriageError(f"{what} approval source read-back mismatch", outcome="operator-held")
+    return expected
+
+
+def _read_operator_file(value: Any, name: str) -> bytes:
+    if not isinstance(value, str) or not Path(value).is_absolute():
+        raise TriageError(f"config_rebind.{name} must be an absolute path", outcome="operator-held", code="invalid-invocation")
+    try:
+        _, raw = observe(Path(value))
+    except (OSError, TriageError) as exc:
+        raise TriageError(f"config_rebind.{name} is not a readable single-link regular file: {exc}", outcome="operator-held", code="invalid-invocation") from exc
+    if raw is None:
+        raise TriageError(f"config_rebind.{name} does not exist", outcome="operator-held", code="invalid-invocation")
+    return raw
+
+
+def _config_rebind(
+    store: ArtifactStore,
+    settings: Settings,
+    state_raw: bytes,
+    request: dict[str, Any],
+    approval_context: ApprovalContext | None,
+    plan_out: dict[str, Any],
+    retain: Callable[[dict[str, Any], Path], None],
+) -> bytes | None:
+    """Rebind a session recorded under the legacy whole-config fingerprint to the
+    scoped one (#1303), or present the plan for it.
+
+    The operator supplies the configuration bytes the session was drafted under
+    (the tracked file, and the local overlay when one existed). The engine merges
+    them as `load_config` does, requires their whole-config digest to equal the
+    session's recorded fingerprint, which proves they are that configuration,
+    and requires their `FINGERPRINT_KEYS` values to equal the current ones. A
+    first call returns the plan; a call carrying the exact current-session
+    approval of its core digest adds `config_rebind` to the state, a
+    digest-checked replacement that leaves every other field as it was. A
+    legacy fingerprint is never accepted any other way. Returns the new state
+    bytes, or None when only the plan was presented."""
+    spec = request["config_rebind"]
+    if set(spec) - {"legacy_config", "legacy_local_config", "approval"} or "legacy_config" not in spec:
+        raise TriageError("config_rebind carries legacy_config, optional legacy_local_config and optional approval only", outcome="operator-held", code="invalid-invocation")
+    state, _ = validate_session_state(store, settings, state_raw, mode=store.mode, retiring=False, retain=retain, config_identity=False)
+    if "config_rebind" in state:
+        raise TriageError("the session is already rebound; a second rebind is refused", outcome="operator-held", code="configuration-identity")
+    recorded = state["run_identity"]["config_fingerprint"]
+    if recorded == settings.fingerprint:
+        raise TriageError("the session already matches the current configuration; config_rebind is not needed", outcome="operator-held", code="invalid-invocation")
+    tracked_raw = _read_operator_file(spec["legacy_config"], "legacy_config")
+    local_value = spec.get("legacy_local_config")
+    local_raw = None if local_value is None else _read_operator_file(local_value, "legacy_local_config")
+    try:
+        with tempfile.TemporaryDirectory(prefix="triage-legacy-config-") as scratch:
+            tracked_path = Path(scratch) / "dev-model.yaml"
+            tracked_path.write_bytes(tracked_raw)
+            if local_raw is not None:
+                (Path(scratch) / "dev-model.local.yaml").write_bytes(local_raw)
+            legacy = load_config(tracked_path)
+    except (OSError, ValueError, UnicodeDecodeError) as exc:
+        raise TriageError(f"the supplied configuration cannot be read: {exc}", outcome="operator-held", code="configuration-identity") from exc
+    if legacy_fingerprint(legacy) != recorded:
+        raise TriageError(
+            "the supplied configuration does not reproduce the session's recorded fingerprint",
+            outcome="operator-held", code="configuration-identity",
+        )
+    changed = changed_fingerprint_keys(legacy, settings.config)
+    try:
+        legacy_scoped = scoped_fingerprint(legacy)
+    except TriageError:
+        legacy_scoped = None
+    if changed or legacy_scoped != settings.fingerprint:
+        raise TriageError(
+            "a configuration key the triage engines read changed since the session was drafted: " + ", ".join(changed or ["(scope)"]),
+            outcome="operator-held", code="configuration-identity",
+        )
+    core = {
+        "kind": CONFIG_REBIND_KIND,
+        "scope": FINGERPRINT_SCOPE,
+        "session": state["run_identity"]["session"],
+        "legacy_fingerprint": recorded,
+        "scoped_fingerprint": settings.fingerprint,
+        "legacy_config_digest": digest_bytes(tracked_raw),
+        "legacy_local_config_digest": None if local_raw is None else digest_bytes(local_raw),
+        "captured_state_digest": digest_bytes(state_raw),
+    }
+    core_digest = digest(core)
+    plan_out["plan"] = {"kind": "config-rebind", "core": core, "core_digest": core_digest}
+    supplied = spec.get("approval")
+    if supplied is None:
+        return None
+    operator = approval_context.operator_identity if approval_context is not None else ""
+    approval = _current_session_approval(
+        supplied, approval_context, config_rebind_approval(core_digest, operator),
+        digest_name="core_digest", what="config rebind",
+    )
+    rebound = {**state, "config_rebind": {"core": core, "core_digest": core_digest, "approval": approval}}
+    validate_state(rebound, settings=settings, mode=store.mode)
+    raw = dumps(rebound)
+    atomic_replace(store.state_path, raw, expected_digest=digest_bytes(state_raw))
+    return raw
+
+
+def _discardable_chain(operations: list[dict[str, Any]]) -> bool:
+    return [item.get("kind") for item in operations] == ["branch-create", "commit"] and [
+        item.get("status") for item in operations
+    ] == ["verified", "ambiguous"]
+
+
+def _reconcile_local_commit(
+    settings: Settings,
+    store: ArtifactStore,
+    lease: GateLease,
+    state: dict[str, Any],
+    state_digest: str,
+    request: dict[str, Any],
+    capabilities: dict[str, dict[str, str]],
+    forge: ForgeProvider,
+    approval_context: ApprovalContext | None,
+    plan_out: dict[str, Any],
+) -> tuple[dict[str, Any], str, bool]:
+    """Discard an ambiguous sweep commit that never left the machine (#1302).
+
+    The read-back must show the commit local-only (`local_commit_discard_refusal`).
+    With the exact current-session approval of that read-back's plan digest, the
+    engine persists a `discarding` record, removes the recorded worktree and the
+    local branch (each guarded), persists the record `discarded` with the
+    superseded chain kept byte-for-byte, and restarts finalization from
+    `branch-create` on the current protected head. It restarts rather than
+    re-committing on the recorded base because that base may be stale: the inbox
+    takes new sections at the top, where the sweep writes its marker, so a sweep
+    on an old base conflicts with them. A crash after `discarding` resumes the
+    discard without a new approval; the provider re-reads before it acts.
+    Returns the state, its digest, and whether finalization may continue."""
+    reconciliations = list(state.get("finalization_reconciliations", []))
+    pending = reconciliations[-1] if reconciliations and reconciliations[-1]["status"] == "discarding" else None
+    operations = state["finalization_operations"]
+    branch_read_back = operations[0]["read_back"]
+    host, repository = _forge_destination(state["run_identity"]["repository_identity"]["remote"])
+    request_core = {
+        "host": host, "repository": repository, "branch": branch_read_back["branch"],
+        "base": branch_read_back["base"], "worktree": branch_read_back["worktree"],
+        "paths": operations[1]["intent"]["paths"],
+    }
+    resume = 'resume with {"finalize": true, "worktree": "<new absolute path>", "commit_reconciliation": <approval of plan_digest>}'
+    if pending is None:
+        read_back = forge.authority("commit-discard-read-back", request_core)
+        refusal = local_commit_discard_refusal(read_back, operations)
+        plan = {
+            "kind": LOCAL_COMMIT_DISCARD_KIND,
+            "session": state["run_identity"]["session"],
+            "superseded_operations_digest": digest(operations),
+            "read_back": read_back,
+        }
+        plan_digest = digest(plan)
+        plan_out["plan"] = {"kind": "commit-reconciliation", "plan": plan, "plan_digest": plan_digest, "eligible": refusal is None, "refusal": refusal}
+        if refusal is not None:
+            capabilities["forge-pr-write-readback"] = {"status": "operator-held", "mechanism": f"ambiguous commit cannot be discarded: {refusal}"}
+            return state, state_digest, False
+        supplied = request.get("commit_reconciliation")
+        if supplied is None:
+            capabilities["forge-pr-write-readback"] = {"status": "operator-held", "mechanism": "ambiguous local-only commit awaits an approved discard"}
+            plan_out["waiting_on"] = "recovery-approval"
+            plan_out["resume_action"] = resume
+            return state, state_digest, False
+        operator = approval_context.operator_identity if approval_context is not None else ""
+        approval = _current_session_approval(
+            supplied, approval_context, local_commit_discard_approval(plan_digest, operator),
+            digest_name="plan_digest", what="commit reconciliation",
+        )
+        worktree = request.get("worktree")
+        if not isinstance(worktree, str) or not Path(worktree).is_absolute() or os.path.lexists(worktree):
+            raise TriageError("an approved discard must carry the new isolated worktree, an absolute path that does not exist", outcome="operator-held")
+        pending = {"plan": plan, "plan_digest": plan_digest, "approval": approval, "status": "discarding", "superseded_operations": None, "discard_read_back": None}
+        reconciliations.append(pending)
+        state = {**state, "finalization_reconciliations": reconciliations}
+        state_digest = _persist(store, lease, state, previous_digest=state_digest)
+    plan = pending["plan"]
+    observed = forge.perform("commit-discard", {**request_core, "expected_local_head": plan["read_back"]["local_head"]})
+    if observed.status != "verified" or not discard_completed(observed.read_back, plan["read_back"]):
+        capabilities["forge-pr-write-readback"] = {"status": "operator-held", "mechanism": f"local-commit discard did not complete ({observed.status}); a rerun resumes it"}
+        return state, state_digest, False
+    done = {**pending, "status": "discarded", "superseded_operations": operations, "discard_read_back": observed.read_back}
+    restarted = {
+        **state,
+        "finalization_reconciliations": [*reconciliations[:-1], done],
+        "finalization_operations": [],
+        "repository_evidence": [],
+        "pull_request_evidence": [],
+    }
+    state_digest = _persist(store, lease, restarted, previous_digest=state_digest)
+    return restarted, state_digest, True
+
+
 def _advance_finalize(
     settings: Settings,
     store: ArtifactStore,
@@ -1727,7 +1955,11 @@ def _advance_finalize(
     request: dict[str, Any],
     capabilities: dict[str, dict[str, str]],
     forge: ForgeProvider | None,
+    approval_context: ApprovalContext | None = None,
+    plan_out: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], str, str]:
+    if plan_out is None:
+        plan_out = {}
     if store.mode == "test":
         return state, state_digest, "operator-held"
     if forge is None or request.get("finalize") is not True:
@@ -1746,6 +1978,14 @@ def _advance_finalize(
         return state, state_digest, "operator-held"
     operations = state["finalization_operations"]
     _validate_forge_prefix(operations, state, settings)
+    reconciliations = state.get("finalization_reconciliations", [])
+    if _discardable_chain(operations) or (reconciliations and reconciliations[-1]["status"] == "discarding"):
+        state, state_digest, restarted = _reconcile_local_commit(
+            settings, store, lease, state, state_digest, request, capabilities, forge, approval_context, plan_out
+        )
+        if not restarted:
+            return state, state_digest, "operator-held"
+        operations = state["finalization_operations"]
     order = ["branch-create", "commit", "push", "pull-request", "pr-watch", "merge-read-back"]
     failed_branch_create = (
         len(operations) == 1
@@ -1882,7 +2122,7 @@ def _advance_finalize(
         capabilities["forge-pr-write-readback"] = {"status": "ready", "mechanism": "ready pull request and exact-head review read back"}
         capabilities["pr-watch"] = {"status": "ready", "mechanism": "terminal receipt persisted before merge"}
         return swept, state_digest, "operator-held"
-    return _advance_finalize(settings, store, lease, state, state_digest, request, capabilities, forge)
+    return _advance_finalize(settings, store, lease, state, state_digest, request, capabilities, forge, approval_context, plan_out)
 
 
 def run(
@@ -2058,6 +2298,22 @@ def run(
                 if parsed.get("proposal_payloads"):
                     result_report = parsed["proposal_payloads"][0]["report_binding"]["path"]
 
+            plan_out: dict[str, Any] = {}
+            if request.get("config_rebind") is not None:
+                if entry != "resume":
+                    raise TriageError("config_rebind is accepted only with resume", code="invalid-invocation")
+                rebound = _config_rebind(store, settings, state_raw, request, approval_context, plan_out, retain)
+                if rebound is None:
+                    lease.release()
+                    return _result(
+                        capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode,
+                        report=result_report, frozen=result_frozen,
+                        resume_action='resume with {"config_rebind": {..., "approval": <approval of core_digest>}}',
+                        detail="config rebind plan presented; the legacy fingerprint and the read configuration were proven",
+                        recovery_plan=plan_out["plan"], waiting_on="recovery-approval",
+                        identifiers=(result_state or {}).get("verified_tracker_identifiers"),
+                    )
+                state_raw = rebound
             # A session-starting entry retires a completed state below, so it may
             # accept one written under an earlier configuration; see `validate_state`.
             state, frozen_path = validate_session_state(
@@ -2192,11 +2448,11 @@ def run(
                     observed_protected_head = _observe_protected_head(
                         settings, state, head_authority or forge
                     )
-                state, state_digest, terminal = _advance_finalize(settings, store, lease, state, state_digest, request, capabilities, forge)
+                state, state_digest, terminal = _advance_finalize(settings, store, lease, state, state_digest, request, capabilities, forge, approval_context, plan_out)
             if report_path is not None:
                 _write_report(report_path, state, capabilities, terminal)
             lease.release()
-            return _result(capabilities, terminal, mode=mode, engine_mode=state["engine_mode"], report=str(report_path) if report_path else None, frozen=str(frozen_path), resume_action=_active_resume_action(state), detail="active session resumed", identifiers=state.get("verified_tracker_identifiers"), observed_protected_head=observed_protected_head, waiting_on=session_waiting_on(state), **_pr_result_fields(state))
+            return _result(capabilities, terminal, mode=mode, engine_mode=state["engine_mode"], report=str(report_path) if report_path else None, frozen=str(frozen_path), resume_action=plan_out.get("resume_action") or _active_resume_action(state), detail="active session resumed", identifiers=state.get("verified_tracker_identifiers"), observed_protected_head=observed_protected_head, waiting_on=plan_out.get("waiting_on") or session_waiting_on(state), recovery_plan=plan_out.get("plan"), **_pr_result_fields(state))
         except TriageError:
             if lease.held:
                 lease.release()

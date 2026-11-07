@@ -76,10 +76,21 @@ is not exactly one. Compare existing targets by device/inode with one another an
 the merged config and source documents. Create parents only after every path check
 passes, and publish frozen snapshot, report, and state by atomic replacement.
 
-Generate a fresh opaque `session` id for a new run. Canonicalize the complete effective
-configuration as RFC 8785 JSON and hash its UTF-8 bytes with SHA-256 as
-`config_fingerprint`. Reject non-string mapping keys, non-JSON scalars, and non-finite
-numbers rather than coercing them. Construct a run identity binding repository identity,
+Generate a fresh opaque `session` id for a new run. The `config_fingerprint` binds only
+the configuration the triage engines read: the values of `paths.engines`,
+`paths.friction_log`, `paths.friction_log_archive`, `state.dirname`, the `triage` keys
+named above, `vcs.protected_branch`, `vcs.triage_branch_pattern`, and the complete
+`tracker` and `notify` sections, read from the merged configuration. Canonicalize
+`{"scope": "triage-consumed-config/v1", "values": {<dotted key>: <value>}}` as RFC 8785
+JSON and hash its UTF-8 bytes with SHA-256. `models.tiers` is read only to check that
+`triage.analysis_tier` names a tier, so it is not bound. A change to any other key, such
+as `review.*`, leaves the fingerprint unchanged, and a held session survives it; a change
+to a bound key refuses the session with `configuration-identity`. Reject non-string
+mapping keys, non-JSON scalars, and non-finite numbers rather than coercing them.
+Engines before #1303 hashed the complete merged configuration instead; a session they
+recorded resumes only after the approval-bound *Configuration rebind* in
+[`triage-friction-log/recovery.md`](triage-friction-log/recovery.md), never by accepting
+that fingerprint silently. Construct a run identity binding repository identity,
 `<friction-log>`, protected-branch head, execution mode, session id, and config
 fingerprint. Hash the exact frozen inbox bytes separately. State, report, and snapshot
 metadata carry the run identity and frozen digest. A resumed run must match every
@@ -185,6 +196,8 @@ intent or held receipt.
 | No argument, valid active state in any other phase | Resume the recorded phase and mode. |
 | `resume`, neither valid active state nor gate-only receipt | Hard-stop without an external write. |
 | `resume`, valid active state | Resume the recorded phase and mode; never replace the active session. A `completed` state reports its completed receipt without mutation. |
+| `resume` with `config_rebind`, active state valid but for a legacy whole-config fingerprint | Follow *Configuration rebind*: prove the supplied configuration reproduces the recorded fingerprint and leaves every bound key unchanged, present the plan, and add the `config_rebind` record only with exact current-session approval of its core digest. Any other entry with `config_rebind` hard-stops. |
+| Finalization resume, `branch-create` verified and `commit` ambiguous | Follow *Local commit reconciliation* in `finalize.md`: read back that the commit never left the machine, present the plan, and discard the branch and worktree only with exact current-session approval of its digest; then restart finalization from `branch-create`. A remote branch or pull request keeps it operator-held. |
 | `new`, neither active state nor gate-only receipt | Start a new live draft. |
 | `new`, valid `completed` live state | Under the held gate, retire the completed state (*Completed-state retirement*, in `recovery.md`), then start a new live draft. |
 | `new`, active live state in any other phase | Refuse; never overwrite an approval-bound session. |
@@ -231,12 +244,13 @@ or as *above* or *below*, may sit in any of them. **Read every one of them compl
 not in part, before the first action of any run**, whatever its entry, mode or phase.
 
 - [`triage-friction-log/recovery.md`](triage-friction-log/recovery.md) —
-  *Completed-state retirement*, *Gate-only input precedence*, *Test input precedence*,
-  *State-present held-evidence procedure* and *Invalid-state recovery*.
+  *Completed-state retirement*, *Configuration rebind*, *Gate-only input precedence*,
+  *Test input precedence*, *State-present held-evidence procedure* and *Invalid-state
+  recovery*.
 - [`triage-friction-log/state-schema.md`](triage-friction-log/state-schema.md) — the
   exact state, phase and single-writer gate shapes.
 - [`triage-friction-log/finalize.md`](triage-friction-log/finalize.md) — *Tracker writes
-  and accounting* and *Finalize and sweep*.
+  and accounting*, *Finalize and sweep* and *Local commit reconciliation*.
 - [`triage-friction-log/engine-cli.md`](triage-friction-log/engine-cli.md) — the
   engines' invocations, outputs and *Invocation outcome receipts*.
 
@@ -289,6 +303,8 @@ conditional capability ready before its trigger.
 | `approved-payload-changed` | `require-new-exact-payload-approval` |
 | `linear-project-mismatch` | `refuse-before-proposal-publication-or-attempt` |
 | `ambiguous-external-write` | `read-back-before-retry-or-operator-hold` |
+| `local-only-commit-reconciliation` | `read-back-local-only-then-approval-bound-discard-and-restart-append-only` |
+| `legacy-config-fingerprint` | `prove-legacy-digest-and-unchanged-scope-then-approval-bound-rebind` |
 | `partial-tracker-batch` | `hold-before-archive-sweep` |
 | `test-mode-external-write` | `prohibit-tracker-friction-archive-branch-commit-push-pr` |
 | `archive-sweep-boundary` | `sweep-only-approved-accounted-byte-identical-frozen-blocks` |

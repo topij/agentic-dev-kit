@@ -78,6 +78,11 @@ def session_waiting_on(state: dict[str, Any]) -> str | None:
         if operations and operations[-1].get("status") != "verified":
             return "reconciliation"
     if phase == "forge-finalize":
+        reconciliations = state.get("finalization_reconciliations") or []
+        if reconciliations and reconciliations[-1].get("status") == "discarding":
+            # An approved local-commit discard (#1302) that stopped partway: the
+            # next finalize run resumes it without another approval.
+            return "finalize"
         operations = state.get("finalization_operations") or []
         if operations and operations[-1].get("status") != "verified" and not (
             operations[-1].get("status") == "unsettled" and operations[-1].get("kind") in _FORGE_POLLED

@@ -1642,7 +1642,7 @@ def test_recover_refuses_a_completed_state_valid_but_for_a_later_config_change(
     root, state_path, _worktree, _terminal = _engine_completed_sweep(tmp_path, monkeypatch)
     config = root / "config/dev-model.yaml"
     config.write_text(
-        config.read_text(encoding="utf-8").replace("bot_pending_grace_minutes: 15", "bot_pending_grace_minutes: 16"),
+        config.read_text(encoding="utf-8").replace("  backend: slack\n", "  backend: email\n"),
         encoding="utf-8",
     )
     raw = state_path.read_bytes()
@@ -1676,7 +1676,7 @@ def _drop_frozen_artifact(root: Path, terminal: dict, *, drift: bool) -> None:
     if drift:
         config = root / "config/dev-model.yaml"
         config.write_text(
-            config.read_text(encoding="utf-8").replace("bot_pending_grace_minutes: 15", "bot_pending_grace_minutes: 16"),
+            config.read_text(encoding="utf-8").replace("  backend: slack\n", "  backend: email\n"),
             encoding="utf-8",
         )
 
@@ -1881,7 +1881,7 @@ def test_a_stale_gate_plan_preserves_a_finished_sweep_valid_but_for_a_later_conf
     _land_sweep(root, worktree)
     config = root / "config/dev-model.yaml"
     before = config.read_text(encoding="utf-8")
-    after = before.replace('systemize_branch_pattern: "chore/systemize-{date}"', 'systemize_branch_pattern: "chore/systemize-{date}-later"')
+    after = before.replace("  backend: slack\n", "  backend: email\n")
     assert after != before
     config.write_text(after, encoding="utf-8")
     settings = load_settings(root)

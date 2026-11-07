@@ -14,6 +14,7 @@ from .model import (
     Settings,
     TriageError,
     canonical_state,
+    recorded_gate_fingerprints,
     repository_identity,
     repository_identity_matches,
 )
@@ -46,7 +47,7 @@ def _gate_capture(store: ArtifactStore, *, require_terminated: bool = True) -> t
         record = loads_exact(raw)
     except Exception as exc:
         raise TriageError("blocking gate is malformed", outcome="operator-held") from exc
-    validate_record(record, repository_identity=repository_identity(store.settings), config_fingerprint=store.settings.fingerprint, own_root=str(store.settings.paths.repo))
+    validate_record(record, repository_identity=repository_identity(store.settings), config_fingerprint=recorded_gate_fingerprints(store.settings), own_root=str(store.settings.paths.repo))
     if require_terminated and owner_status(record) != "terminated":
         raise TriageError("blocking gate owner is active or uncertain", outcome="operator-held")
     aliases: list[dict[str, Any]] = []

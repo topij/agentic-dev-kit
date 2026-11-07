@@ -19,6 +19,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 from .canonical import decode_bytes, digest, digest_bytes
 from .model import (
     TriageError,
+    discard_completed,
     terminal_pr_watch_receipt,
     tracker_payload_matches,
     worktree_conflicts_with_checkout,
@@ -491,6 +492,7 @@ class FakeForge:
         self.observations = list(observations)
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.branch_create_absence = {"local_branch_absent": True, "worktree_absent": True, "remote_branch_absent": True}
+        self.discard_read_backs: list[dict[str, Any]] = []
 
     def authority(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((f"authority:{action}", request))
@@ -502,6 +504,10 @@ class FakeForge:
             }
         if action == "branch-create-absent":
             return dict(self.branch_create_absence)
+        if action == "commit-discard-read-back":
+            if not self.discard_read_backs:
+                raise AssertionError("no fake commit-discard read-back configured")
+            return self.discard_read_backs.pop(0)
         if not self.observations or not isinstance(self.observations[0].read_back, dict):
             raise AssertionError(f"no fake forge authority source configured for {action}")
         read_back = self.observations[0].read_back
@@ -522,6 +528,15 @@ class FakeForge:
 
 class GitHubForge:
     """Explicitly enabled git/GitHub provider. It never issues a merge."""
+
+    # The sweep commit runs no hook (#1302). A linked worktree shares the
+    # repository's hooks, so an adopter's formatting pre-commit hook re-staged the
+    # engine's files between the attested `write-tree` and the commit, and every
+    # sweep commit read back a tree other than the attested one: `ambiguous`, with
+    # no route out. `core.hooksPath=/dev/null` disables every commit hook,
+    # including `prepare-commit-msg` and `post-commit`, which `--no-verify` alone
+    # leaves running. The pull request's CI still checks the committed bytes.
+    COMMIT_ARGV = ("git", "-c", "core.hooksPath=/dev/null", "commit", "--no-verify", "-m")
 
     def __init__(self, repo: Path, runner: Runner = subprocess_runner, *, pr_watch: Path | None = None) -> None:
         self.repo = repo.resolve()
@@ -670,6 +685,8 @@ class GitHubForge:
         if action == "worktree-clean":
             worktree = Path(request["worktree"]).resolve()
             return {"clean": self._git(worktree, "status", "--porcelain") == ""}
+        if action == "commit-discard-read-back":
+            return self._discard_read_back(request)
         if action == "commit":
             worktree = Path(request["worktree"]).resolve()
             import tempfile
@@ -734,7 +751,7 @@ class GitHubForge:
             staged_tree = self._git(worktree, "write-tree")
             if staged != paths or staged_tree != intent["authority_read_back"]["staged_tree"]:
                 return ProviderObservation("ambiguous", None, {"staged_paths": staged, "staged_tree": staged_tree})
-            committed = self._run(["git", "commit", "-m", intent["subject"]], worktree)
+            committed = self._run([*self.COMMIT_ARGV, intent["subject"]], worktree)
             if committed.returncode:
                 return ProviderObservation("failed", {"stderr": committed.stderr}, {"effect": "unverified"})
             read_back = {"commit": self._git(worktree, "rev-parse", "HEAD"), "tree": self._git(worktree, "rev-parse", "HEAD^{tree}"), "subject": self._git(worktree, "show", "-s", "--format=%s", "HEAD"), "paths": self._git(worktree, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD").splitlines(), "worktree": str(worktree), "branch": intent["branch"], "repository": intent["repository"], "base": intent["base"]}
@@ -786,7 +803,111 @@ class GitHubForge:
             return ProviderObservation("verified" if merged and exact else "unsettled" if not merged and exact else "ambiguous", None, {**read_back, "merged": merged})
         if action == "sweep-cleanup":
             return ProviderObservation("verified", None, self._sweep_cleanup(intent))
+        if action == "commit-discard":
+            return self._commit_discard(intent)
         raise TriageError(f"unsupported forge action {action}", outcome="operator-held")
+
+    def _worktree_records(self) -> list[dict[str, str]]:
+        listed = self._run(["git", "worktree", "list", "--porcelain"], self.repo)
+        if listed.returncode:
+            raise TriageError("worktree list read-back failed", outcome="operator-held")
+        records: list[dict[str, str]] = []
+        for line in listed.stdout.splitlines():
+            if line.startswith("worktree "):
+                records.append({"worktree": line[len("worktree "):]})
+            elif records and " " in line:
+                key, value = line.split(" ", 1)
+                records[-1][key] = value
+        return records
+
+    def _discard_read_back(self, request: dict[str, Any]) -> dict[str, Any]:
+        """What a local-only sweep commit left, read from git, the filesystem and
+        the forge (#1302): the local branch and its one commit, the recorded
+        worktree and its registration, any other checkout of the branch, the
+        remote branch, and every pull request from it. A read that fails raises
+        rather than reporting absence."""
+        branch = request["branch"]
+        base = request["base"]
+        worktree = Path(request["worktree"])
+        target = os.path.realpath(worktree)
+        local = self._run(["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], self.repo)
+        if local.returncode not in (0, 1):
+            raise TriageError("local branch read-back failed", outcome="operator-held")
+        local_head = local.stdout.strip() if local.returncode == 0 else None
+        local_parents: list[str] | None = None
+        local_paths: list[str] | None = None
+        if local_head is not None and local_head != base:
+            local_parents = self._git(self.repo, "rev-list", "--parents", "-n", "1", local_head).split()[1:]
+            local_paths = self._git(self.repo, "diff-tree", "--no-commit-id", "--name-only", "-r", local_head).splitlines()
+        records = self._worktree_records()
+        registered = any(os.path.realpath(record["worktree"]) == target for record in records)
+        other_checkouts = sorted(
+            record["worktree"] for record in records
+            if record.get("branch") == f"refs/heads/{branch}" and os.path.realpath(record["worktree"]) != target
+        )
+        present = os.path.lexists(worktree)
+        worktree_branch = worktree_head = worktree_clean = None
+        if present and registered:
+            symbolic = self._run(["git", "symbolic-ref", "-q", "HEAD"], worktree)
+            worktree_branch = symbolic.stdout.strip() if symbolic.returncode == 0 else None
+            worktree_head = self._git(worktree, "rev-parse", "HEAD")
+            worktree_clean = self._git(worktree, "status", "--porcelain") == ""
+        remote = self._run(["git", "ls-remote", "origin", f"refs/heads/{branch}"], self.repo)
+        if remote.returncode:
+            raise TriageError("remote branch read-back failed", outcome="operator-held")
+        listed = self._run([
+            "gh", "pr", "list", "--repo", f"{request['host']}/{request['repository']}",
+            "--head", branch, "--state", "all", "--json", "number,url,state",
+        ], self.repo)
+        if listed.returncode:
+            raise TriageError("pull-request list read-back failed", outcome="operator-held")
+        try:
+            pull_requests = json.loads(listed.stdout)
+        except json.JSONDecodeError as exc:
+            raise TriageError("pull-request list read-back returned invalid JSON", outcome="operator-held") from exc
+        if not isinstance(pull_requests, list):
+            raise TriageError("pull-request list read-back is malformed", outcome="operator-held")
+        read_back = {
+            "branch": branch, "base": base, "worktree": request["worktree"], "paths": request["paths"],
+            "local_head": local_head, "local_parents": local_parents, "local_paths": local_paths,
+            "worktree_present": present, "worktree_registered": registered,
+            "worktree_branch": worktree_branch, "worktree_head": worktree_head, "worktree_clean": worktree_clean,
+            "other_checkouts": other_checkouts,
+            "remote_branch_absent": not remote.stdout.strip(),
+            "pull_requests": pull_requests,
+        }
+        return read_back
+
+    def _commit_discard(self, intent: dict[str, Any]) -> ProviderObservation:
+        """Discard a local-only sweep commit's branch and worktree, guarded and
+        idempotent (#1302). It re-reads before acting: nothing runs while a remote
+        branch, a pull request or another checkout exists, the worktree is removed
+        without `--force` (so a dirty one stays), and the branch is deleted only by
+        a compare-and-delete from the approved head. A rerun after a partial
+        discard reads the finished steps back as absent."""
+        before = self._discard_read_back(intent)
+        expected = intent["expected_local_head"]
+        if before["remote_branch_absent"] is not True or before["pull_requests"] or before["other_checkouts"]:
+            return ProviderObservation("ambiguous", {"reason": "the branch is no longer local-only"}, before)
+        if before["local_head"] not in (None, expected):
+            return ProviderObservation("ambiguous", {"reason": "the local branch moved since the approved read-back"}, before)
+        if before["worktree_present"] and not before["worktree_registered"]:
+            return ProviderObservation("ambiguous", {"reason": "an unregistered directory occupies the worktree path"}, before)
+        if before["worktree_present"] and before["worktree_branch"] != f"refs/heads/{intent['branch']}":
+            return ProviderObservation("ambiguous", {"reason": "the recorded worktree is not on the sweep branch"}, before)
+        response: dict[str, Any] = {"worktree_remove": None, "branch_delete": None}
+        if before["worktree_registered"]:
+            removed = self._run(["git", "worktree", "remove", intent["worktree"]], self.repo)
+            response["worktree_remove"] = {"returncode": removed.returncode, "stderr": removed.stderr}
+            if removed.returncode:
+                return ProviderObservation("failed", response, self._discard_read_back(intent))
+        if before["local_head"] is not None:
+            deleted = self._run(["git", "update-ref", "-d", f"refs/heads/{intent['branch']}", expected], self.repo)
+            response["branch_delete"] = {"returncode": deleted.returncode, "stderr": deleted.stderr}
+            if deleted.returncode:
+                return ProviderObservation("failed", response, self._discard_read_back(intent))
+        after = self._discard_read_back(intent)
+        return ProviderObservation("verified" if discard_completed(after, before) else "ambiguous", response, after)
 
     def _sweep_cleanup(self, intent: dict[str, Any]) -> dict[str, Any]:
         """Retire this sweep's own worktree, local branch, and remote branch
