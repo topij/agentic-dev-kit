@@ -26,7 +26,10 @@ Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
   operator's go-ahead before the commit.
 - `vcs.protected_branch` — optional: the branch that takes changes only through pull
   requests. The lite `wrap-up` then commits on a session branch and opens the pull
-  request; absent, it commits to the branch checked out.
+  request; absent, it commits to the branch checked out. The lite `wrap-up` reads it
+  from the committed config and from the working tree, and refuses to start when
+  either copy holds any other key under `vcs`. Report such a key as a 🔴 Now item to
+  fix, and say so when the two copies name different branches.
 
 A missing config file, an unreadable `<handoff>` or `<friction-log>`, or a missing
 `paths` key is a hard stop: name what is missing and do not render a briefing.

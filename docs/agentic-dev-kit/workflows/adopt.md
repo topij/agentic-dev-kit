@@ -660,7 +660,8 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   does not record it. The branch becomes `vcs.protected_branch`, and the lite `wrap-up`
   then commits on a session branch and opens the pull request. No such branch leaves
   the key out, and the lite `wrap-up` reads that absence as "takes direct commits": it
-  commits to the branch checked out without asking.
+  commits to the branch checked out without asking. Write no other key under `vcs`;
+  the lite `wrap-up` refuses to start on one.
 - **Reads a session here needs that the lite docs do not make?** A deploy-state check,
   pull requests or issues across related repositories, a roadmap's current phase. Each
   becomes a repository source in the `AGENTS.md` section L3 writes, under the workflow

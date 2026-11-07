@@ -27,8 +27,17 @@ by that section's rules, never the working tree's copy. `<protected-branch>` is
 requests. **An absent key is a declaration, not an unknown:** the repository takes
 direct commits, and the commit goes to the branch checked out without asking. A
 repository whose branch takes changes only through pull requests must set the key;
-`adopt` asks for it. Each of these is a hard stop before any edit; say which to the
-operator:
+`adopt` asks for it.
+
+Read `vcs.protected_branch` **as committed** too, by the same read the risk tier uses
+(`git show HEAD:config/dev-model.yaml`, or `git show :config/dev-model.yaml` on a branch
+with no commit yet). Otherwise an unstaged edit that deletes the key would send the
+commit to the branch it protects, and the risk tier would not see it, because the tier
+judges only staged paths. Read the working tree's copy as well. When the two copies
+differ, tell the operator, and treat the branch checked out as `<protected-branch>`
+when either copy names it.
+
+Each of these is a hard stop before any edit; say which to the operator:
 
 - a missing config file, a missing `paths` key, or an unreadable document;
 - a `<declared-paths>` the risk tier cannot read, by its rules in `lite-review.md`,
@@ -37,12 +46,18 @@ operator:
   the way out;
 - a `profile` other than `lite`, or none: this is not a lite repository, and this
   workflow does not apply to it;
-- a `vcs.protected_branch` key that is present but unusable: null or empty, blank
-  after trimming, not a string, a template placeholder still in angle brackets, or a
-  name that is no branch here (both `git rev-parse --verify -q "refs/heads/<name>"`
-  and `git rev-parse --verify -q "refs/remotes/origin/<name>"` print nothing). The
-  commit step could not tell which branch takes no direct commit, and guessing could
-  commit to it;
+- a `vcs.protected_branch` key, in either copy, that is present but unusable: null or
+  empty, blank after trimming, not a string, a template placeholder still in angle
+  brackets, or a name that is no branch here (both
+  `git rev-parse --verify -q "refs/heads/<name>"` and
+  `git rev-parse --verify -q "refs/remotes/origin/<name>"` print nothing). The commit
+  step could not tell which branch takes no direct commit, and guessing could commit
+  to it;
+- a `vcs` key, in either copy, that is neither null (a bare `vcs:` left after removing
+  the optional line) nor a mapping, or a mapping that holds any key other than
+  `protected_branch`. A lite repository reads no other `vcs` key, so another key is
+  most likely a misspelling (`protected-branch`, `protectedBranch`). Read as absent, it
+  would send the commit to the branch it was meant to protect;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
 
