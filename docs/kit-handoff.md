@@ -171,21 +171,6 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 ▶ Next: #883 — the *Completed-state retirement* doctrine's residual precision points.
 
-### Triage one-run cleanup
-
-**Status:** #978 and its cs-toolkit installation removed the one-run recovery paths. The last
-shape check in `model.py`, kept so that cs-toolkit's completed LIVE state with a
-`proposal_correction` receipt could still retire, is removed by #1305's change. The
-evidence that no state root holds the field is cs-toolkit's report of 2026-10-29, recorded
-on #1305: the state retired and the retired file was deleted with the operator's
-approval. It covers the operator's machine only. A state that still carries the field
-is now held as `operator-held`.
-
-**Owner:** [#979](https://github.com/topij/agentic-dev-kit/issues/979),
-[#1305](https://github.com/topij/agentic-dev-kit/issues/1305).
-
-▶ Next: once #1305's pull request merges, the operator decides whether this workstream ends.
-
 ### Handoff workstream naming
 
 **Status:** #1028 (`50145a23`) names workstreams by subject and files a batch per pull request; cs-toolkit's batch-named entries were folded by in-parallel-oy/cs-toolkit#2609. #1030 holds the residual single-workstream wording, the half-pinned clauses, the run-mode carve-out, and a kept entry that cannot be named.
@@ -230,7 +215,7 @@ was removed. #1116 carries the identity follow-ups, including the cs-toolkit upg
 timeout and report-containment findings.
 An adopter's real scheduled runs on 2026-10-23 each wrote a receipt that its wrapper re-checked against the expected
 invocation, as read on 2026-10-27 (sources in `saved_plans/adopter-upgrade-prep_2026-10-27.md`). Neither run reached
-completed-state retirement; see *Triage one-run cleanup*.
+completed-state retirement.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify the documented trusted launcher boundary for the adopter's scheduled calls.
@@ -311,22 +296,18 @@ LIVE state failing `canonical_state` on its configuration fingerprint (not #1111
 `validate_session_state(..., retiring=True)`. That implies, without having been run, that a session-starting entry
 there retires it. Its `state-present-held` bundle `6d1168cb…` is keyed to the quarantined gate's digest, so it blocks
 nothing while no gate is present. The
-scheduled-run findings are under *Triage one-run cleanup*. Separate
+scheduled-run findings are on #1116. Separate
 adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
 reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-toolkit#3014, merged 2026-10-29), which
 contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-parallel-oy/cs-toolkit#3020, merged
 2026-10-30). Its installed `pr_followup_hook.py` matched kit `69f30eb6` byte for byte on 2026-11-03, so it carries
 #1301's no-bot wording.
-**Owner:** #1116, #990, #1011, #979, #1282.
+**Owner:** #1116, #990, #1011, #1282.
 
-▶ Next: cs-toolkit installed kit `69f30eb6` (in-parallel-oy/cs-toolkit#3047, merged 2026-10-31), which is past
-#1301, keeping `test_systemize_config.py` as a local patch until #1313 shipped. Its next upgrade targets `48cdc699` or
-later, which carries #1352's Step 1 guards and #1350's `review_owed` field. Following `upgrade.md`, it takes the kit's
-copy of that test and drops the patch (see the `installed-tests-adopter-config` changelog fragment), and lands #1329's
-change before any `retire-evidence` reclaim of its sealed evidence. That upgrade's Step 0 runs from the installed copy,
-so run the new kit block by hand, as `changelog.d/upgrade-kit-clone-path.md` describes; don't delete `$KIT` after
-Step 3 has copied from it (#1355). #1340 completed #576.
+▶ Next: cs-toolkit installed kit `d994f8eb` (in-parallel-oy/cs-toolkit#3091, merged 2026-11-07), after `1eddf599`
+(in-parallel-oy/cs-toolkit#3056), which dropped its `test_systemize_config.py` patch. Its next upgrade runs from
+`d994f8eb` by `upgrade.md`. #1355 stays open.
 
 ### Lite install profile
 
@@ -335,14 +316,14 @@ lite workflow docs in `docs/agentic-dev-kit/lite/`. Phase 3 is two pull requests
 the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, executed shell-block tests) and #1359
 (the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). A lite
 repository has no upgrade path yet: `upgrade.md` Step 0 stops on one. `topij/home-server` is the first lite
-install (topij/home-server#31, at kit `78f10709`); its field reports are #1361 to #1365. The operator chose on
+install (topij/home-server#31, first installed at kit `78f10709`); its field reports are #1361 to #1365. The operator chose on
 2026-11-05 that lite supports pull-request repositories through `vcs.protected_branch` (#1362).
 **Owner:** #1320.
 
-▶ Next: home-server takes the changes from #1367 and from the pull request that records the lite baseline's skills
-(by hand: lite has no upgrade path yet). It sets `vcs.protected_branch`, moves its `AGENTS.md` reads under the
-repository-sources headings, and re-runs `kit_doctor.py --record-install --from-kit` (with `--keep` for a skill it
-kept) so its baseline records the six skills. Its nested service repos (`brain`, `mcp-voice-notes`,
-`obsidian-vault-mcp`) are decided one at a time after that: each has a tracker, which lite does not drive, so the
-full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in `adopt`. The
-parser-based guard on lite docs' links and engine names is #1347.
+▶ Next: home-server's `kit-manifest.json` read `c932a3aa` on 2026-11-07, with `vcs.protected_branch` set and its
+repository sources in place. It
+takes #1381's lite wrap-up changes (kit `d4d94ab3`) by hand, since lite has no upgrade path yet. Its nested service repos
+(`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`) are then decided one at a time: each has a tracker, which lite does
+not drive, so the full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in
+`adopt`. #1381's review rounds showed that a prose list of config stops does not converge; the findings left open, and a
+proposed shared validator for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
