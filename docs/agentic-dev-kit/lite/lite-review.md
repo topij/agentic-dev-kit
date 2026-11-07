@@ -110,7 +110,9 @@ applies:
 show is unreadable, not absent, and reading the working tree instead would let the
 change judge itself. The way out is outside the lite workflows, which stop in this
 state: once the operator has read the config and said to go ahead, commit
-`config/dev-model.yaml` on its own with a plain `git commit`. That commit sets the
+`config/dev-model.yaml` on its own with a plain `git commit`, on a new branch with a
+pull request for it unless the operator says the branch checked out takes direct
+commits. That commit sets the
 list, so no list judges it; the operator's reading is its review. A repository
 installed by `adopt.md`'s *Lite profile* starts with the config committed: its L6
 step commits the config with the rest of the install.

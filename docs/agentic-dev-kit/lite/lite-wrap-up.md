@@ -33,9 +33,9 @@ Read `vcs.protected_branch` **as committed** too, by the same read the risk tier
 (`git show HEAD:config/dev-model.yaml`, or `git show :config/dev-model.yaml` on a branch
 with no commit yet). Otherwise an unstaged edit that deletes the key would send the
 commit to the branch it protects, and the risk tier would not see it, because the tier
-judges only staged paths. Read the working tree's copy as well. When the two copies
-differ, tell the operator, and treat the branch checked out as `<protected-branch>`
-when either copy names it.
+judges only staged paths. Read the working tree's copy as well. `<protected-branch>` is
+the branch either copy names. When only one copy names it, tell the operator, and
+treat it as set.
 
 Each of these is a hard stop before any edit; say which to the operator:
 
@@ -53,13 +53,27 @@ Each of these is a hard stop before any edit; say which to the operator:
   `git rev-parse --verify -q "refs/remotes/origin/<name>"` print nothing). The commit
   step could not tell which branch takes no direct commit, and guessing could commit
   to it;
-- a `vcs` key, in either copy, that is neither null (a bare `vcs:` left after removing
-  the optional line) nor a mapping, or a mapping that holds any key other than
-  `protected_branch`. A lite repository reads no other `vcs` key, so another key is
-  most likely a misspelling (`protected-branch`, `protectedBranch`). Read as absent, it
-  would send the commit to the branch it was meant to protect;
+- two copies whose `vcs.protected_branch` names two different branches: the commit
+  step could not tell which one the pull request targets;
+- a key outside the lite config schema, at any level, in either copy. The schema is
+  `profile`, `kit.version`, `paths.handoff`, `paths.friction_log`,
+  `friction.down_route`, `review.safety_critical_paths` and `vcs.protected_branch`.
+  Each of `kit`, `paths`, `friction`, `review` and `vcs` is a mapping or, for an
+  optional one, null (a bare `vcs:` left after removing its optional line). A
+  lite repository reads no other key, so another one is most likely a misspelling or a
+  misplaced line: `vsc:`, `protected-branch`, `reveiw:`, a `protected_branch`
+  dedented out of `vcs`. Read as absent, it would silently switch off what it was
+  written to declare: the branch it was meant to protect would take the commit, or
+  the paths it declared would skip the risk tier;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
+
+**The way out of a stop the config causes** is outside the lite workflows, as the risk
+tier's is (*Risk tier* in [`lite-review.md`](lite-review.md)): once the operator has
+read the config and said to go ahead, they commit the corrected `config/dev-model.yaml`
+on its own. They make that commit on a new branch and open a pull request for it,
+unless they say the branch checked out takes direct commits. A committed copy is wrong
+until that commit lands, and editing the working tree does not clear the stop.
 
 ## Steps
 
