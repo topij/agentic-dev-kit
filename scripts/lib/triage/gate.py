@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import CanonicalError, digest, digest_bytes, dumps, loads_exact
-from .model import TOKEN_RE, TriageError, repository_identity_matches
+from .model import TOKEN_RE, TriageError, recorded_gate_fingerprints, repository_identity_matches
 from .storage import ArtifactStore, exclusive_create, observe, unlink_inode
 
 GATE_CORE_KEYS = {
@@ -114,7 +114,7 @@ def _cleanup_orphaned_temporaries(
     store: ArtifactStore,
     *,
     repository_identity: dict[str, Any],
-    config_fingerprint: str,
+    config_fingerprint: str | tuple[str, ...],
     own_root: str | None,
 ) -> None:
     gate = store.gate_path
@@ -190,10 +190,15 @@ def acquire(
 ) -> GateLease:
     gate = store.gate_path
     gate.parent.mkdir(parents=True, exist_ok=True)
+    # An orphaned temporary was written by an earlier invocation, possibly an
+    # engine from before #1303, so it may carry the whole-config digest of this
+    # same configuration (`recorded_gate_fingerprints`). The new gate below
+    # always records the caller's fingerprint.
+    recorded = recorded_gate_fingerprints(store.settings) if config_fingerprint == store.settings.fingerprint else (config_fingerprint,)
     _cleanup_orphaned_temporaries(
         store,
         repository_identity=repository_identity,
-        config_fingerprint=config_fingerprint,
+        config_fingerprint=recorded,
         own_root=own_root,
     )
     token = uuid.uuid4().hex

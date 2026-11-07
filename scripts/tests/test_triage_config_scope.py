@@ -301,3 +301,37 @@ def test_a_dead_gate_an_earlier_engine_left_stays_recoverable_under_the_same_con
     else:
         assert planned["recovery_plan"] is None
         assert planned["detail"] == "gate configuration identity is foreign"
+
+
+_ORPHAN_CHILD = _DEAD_GATE_CHILD + r'''
+import json
+store = ArtifactStore(settings, "live")
+token = json.loads(store.gate_path.read_bytes())["owner_token"]
+store.gate_path.rename(store.gate_path.with_name(f".{store.gate_path.name}.{token}.tmp"))
+'''
+
+
+@pytest.mark.parametrize("written", ["legacy-current", "foreign"])
+def test_an_orphaned_gate_temporary_an_earlier_engine_left_is_cleaned_under_the_same_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, written: str
+) -> None:
+    """A process stopped between writing its gate temporary and linking it leaves
+    the temporary behind; the next acquisition removes it once its owner is dead.
+    One written by an engine before #1303 under this same configuration carries
+    the whole-config digest and is cleaned as before; any other stays foreign."""
+    import os
+
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    environment = {**os.environ, "PYTHONPATH": str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)}
+    subprocess.run([sys.executable, "-c", _ORPHAN_CHILD, str(root), written], check=True, env=environment)
+    assert not (state_root / "triage/triage-pipeline-gate_live.lock").exists()
+    assert list((state_root / "triage").glob(".triage-pipeline-gate_live.lock.*.tmp"))
+    draft_request, _ = proposal_request(root)
+    result = run("new", context="interactive", request=draft_request, start=root)
+    if written == "legacy-current":
+        assert result["refusal_code"] is None, result
+        assert not list((state_root / "triage").glob(".triage-pipeline-gate_live.lock.*.tmp"))
+    else:
+        assert result["refusal_code"] == "configuration-identity"

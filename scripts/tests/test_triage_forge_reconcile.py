@@ -42,11 +42,13 @@ from triage.engine import run  # noqa: E402
 from triage.model import (  # noqa: E402
     TriageError,
     canonical_state,
+    discard_completed,
     legacy_fingerprint,
     load_settings,
     local_commit_discard_approval,
     local_commit_discard_refusal,
 )
+from triage.outcome import session_waiting_on  # noqa: E402
 from triage.providers import GitHubForge  # noqa: E402
 
 GITHUB_URL = "https://github.com/topij/agentic-dev-kit.git"
@@ -94,6 +96,9 @@ class LocalForge:
             rewritten = ["git", "-c", f"url.{self.bare}.insteadOf={GITHUB_URL}", *argv[1:]]
             return subprocess.run(rewritten, cwd=cwd, check=False, capture_output=True, text=True)
         if argv[:3] == ["gh", "pr", "list"]:
+            # The read-back must ask for pull requests in every state: a closed or
+            # merged one still means the commit left the machine.
+            assert argv[argv.index("--state") + 1] == "all", argv
             return self._done(argv, json.dumps(self.pull_requests))
         if argv[:3] == ["gh", "pr", "create"]:
             branch = argv[argv.index("--head") + 1]
@@ -516,7 +521,7 @@ def test_a_commit_that_may_have_left_the_machine_is_never_discarded(
     assert git(root, "rev-parse", f"refs/heads/{branch}") == stranded["finalization_operations"][1]["read_back"]["commit"]
 
 
-@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "no-worktree"])
+@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "no-worktree", "existing-worktree"])
 def test_a_discard_needs_the_exact_current_session_approval_of_the_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
@@ -530,6 +535,8 @@ def test_a_discard_needs_the_exact_current_session_approval_of_the_plan(
     request = {"finalize": True, "commit_reconciliation": supplied}
     if fault != "no-worktree":
         request["worktree"] = str(tmp_path / "new")
+    if fault == "existing-worktree":
+        (tmp_path / "new").mkdir()
     result = run("resume", context="interactive", request=request, start=root, approval_context=context, forge=forge, head_authority=forge)
     assert result["outcome"] == "operator-held"
     assert loads_exact(state_path.read_bytes())["finalization_operations"] == stranded["finalization_operations"]
@@ -560,6 +567,7 @@ def test_a_discard_that_stopped_partway_resumes_without_a_second_approval(
     assert stopped["detail"] == "synthetic stop mid-discard"
     mid = loads_exact(state_path.read_bytes())
     assert mid["finalization_reconciliations"][-1]["status"] == "discarding"
+    assert session_waiting_on(mid) == "finalize"
     assert mid["finalization_operations"] == stranded["finalization_operations"]
     resumed = run("resume", context="interactive", request={"finalize": True, "worktree": str(tmp_path / "new")}, start=root, forge=forge, head_authority=forge)
     assert loads_exact(state_path.read_bytes())["phase"] == "archive-sweep", resumed
@@ -641,3 +649,15 @@ def test_a_discard_the_provider_cannot_prove_stays_discarding_and_says_so(
     state = loads_exact(state_path.read_bytes())
     assert state["finalization_reconciliations"][-1]["status"] == "discarding"
     assert state["finalization_operations"] == stranded["finalization_operations"]
+
+
+def test_a_discard_is_complete_only_once_the_worktree_registration_is_gone() -> None:
+    done = {
+        "branch": "b", "base": "0" * 40, "worktree": "/w", "paths": PATHS,
+        "local_head": None, "local_parents": None, "local_paths": None,
+        "worktree_present": False, "worktree_registered": False,
+        "worktree_branch": None, "worktree_head": None, "worktree_clean": None,
+        "other_checkouts": [], "remote_branch_absent": True, "pull_requests": [],
+    }
+    assert discard_completed(done, done)
+    assert not discard_completed({**done, "worktree_registered": True}, done)

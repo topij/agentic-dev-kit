@@ -117,7 +117,8 @@ identity, its fingerprint, and every binding over them stay as recorded. The sam
 invocation then continues as an ordinary `resume`.
 
 A blocking gate an earlier engine left carries the same kind of whole-config digest.
-When capturing a gate for recovery, and when checking the replacement-gate record a
+When capturing a gate for recovery, when removing a dead owner's orphaned gate
+temporary before acquiring a gate, and when checking the replacement-gate record a
 `gate-only-operator-held` receipt keeps, the engine accepts either the current
 fingerprint or the whole-config digest of the current configuration. The second proves
 the gate was written under exactly this configuration, so a dead owner's gate from before

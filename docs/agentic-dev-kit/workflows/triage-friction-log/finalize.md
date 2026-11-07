@@ -221,6 +221,9 @@ because that base can be stale: new inbox sections arrive at the top, where the 
 writes its marker, so a sweep committed on an old base conflicts with them. The restarted
 chain must again pass the byte-identical frozen-block check against the current inbox. A
 process stop after `discarding` resumes the same discard on the next finalization run
-without another approval. Nothing in this route pushes, deletes a remote branch, or
+without another approval. The route covers only a commit that landed: an ambiguous
+`commit` that staged its bytes but never committed them, such as one refused on a
+staged-tree mismatch, leaves a dirty worktree, which the read-back refuses, so that run
+stays operator-held. Nothing in this route pushes, deletes a remote branch, or
 touches a pull request; the discarded commit is reproducible from the superseded
 commit intent the record keeps.
