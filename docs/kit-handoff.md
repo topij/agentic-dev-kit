@@ -215,7 +215,7 @@ was removed. #1116 carries the identity follow-ups, including the cs-toolkit upg
 timeout and report-containment findings.
 An adopter's real scheduled runs on 2026-10-23 each wrote a receipt that its wrapper re-checked against the expected
 invocation, as read on 2026-10-27 (sources in `saved_plans/adopter-upgrade-prep_2026-10-27.md`). Neither run reached
-completed-state retirement; #979 and #1305 record its removal, and both are done.
+completed-state retirement; the one-run recovery removal is #979 and #1305.
 **Owner:** [#1116](https://github.com/topij/agentic-dev-kit/issues/1116).
 
 ▶ Next: verify the documented trusted launcher boundary for the adopter's scheduled calls.
@@ -296,7 +296,7 @@ LIVE state failing `canonical_state` on its configuration fingerprint (not #1111
 `validate_session_state(..., retiring=True)`. That implies, without having been run, that a session-starting entry
 there retires it. Its `state-present-held` bundle `6d1168cb…` is keyed to the quarantined gate's digest, so it blocks
 nothing while no gate is present. The
-scheduled-run findings are on #979 and #1305. Separate
+scheduled-run findings are on #1116. Separate
 adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
 reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-toolkit#3014, merged 2026-10-29), which
@@ -305,10 +305,9 @@ contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-paralle
 #1301's no-bot wording.
 **Owner:** #1116, #990, #1011, #979, #1282.
 
-▶ Next: cs-toolkit installed kit `1eddf599` (in-parallel-oy/cs-toolkit#3056, merged 2026-11-03), and dropped its
-`test_systemize_config.py` patch. Its next upgrade runs from `1eddf599` to `d4d94ab3` or later by
-`upgrade.md`; `1eddf599` already carries the kit-clone-path change, so Step 0 runs from the installed copy as
-written. #1355 stays open.
+▶ Next: cs-toolkit installed kit `d994f8eb` (in-parallel-oy/cs-toolkit#3091, merged 2026-11-07), after `1eddf599`
+(in-parallel-oy/cs-toolkit#3056), which dropped its `test_systemize_config.py` patch. Its next upgrade runs from
+`d994f8eb` by `upgrade.md`. #1355 stays open.
 
 ### Lite install profile
 
