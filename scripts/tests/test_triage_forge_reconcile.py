@@ -320,13 +320,23 @@ def test_the_discard_read_back_admits_only_a_commit_that_never_left_the_machine(
         assert refusal is not None and REFUSED[leftover] in refusal, (refusal, read_back)
 
 
-@pytest.mark.parametrize("leftover", ["as-left", "worktree-gone", "remote-branch", "pull-request", "dirty-worktree", "moved-branch"])
+@pytest.mark.parametrize("leftover", ["as-left", "worktree-gone", "remote-branch", "pull-request", "dirty-worktree", "moved-branch", "repointed-worktree"])
 def test_the_discard_removes_only_a_local_only_branch_and_its_worktree(tmp_path: Path, leftover: str) -> None:
     root, worktree, runner, operations, request_core = _ambiguous_local_commit(tmp_path)
-    if leftover != "moved-branch":
+    if leftover not in {"moved-branch", "repointed-worktree"}:
         _leave(root, worktree, runner, leftover, request_core)
     forge = GitHubForge(root, runner)
     expected = operations[1]["read_back"]["commit"]
+    if leftover == "repointed-worktree":
+        # A resumed discard finds the recorded worktree on another branch: the
+        # worktree is someone's checkout now, so nothing is removed.
+        git(worktree, "switch", "--quiet", "-c", "someone-elses-work")
+        observed = forge.perform("commit-discard", {**request_core, "expected_local_head": expected})
+        assert observed.status == "ambiguous"
+        assert observed.response["reason"] == "the recorded worktree is not on the sweep branch"
+        assert git(worktree, "symbolic-ref", "HEAD") == "refs/heads/someone-elses-work"
+        assert git(root, "rev-parse", f"refs/heads/{request_core['branch']}") == expected
+        return
     if leftover == "moved-branch":
         # The approved head is not the branch's head: nothing is removed.
         observed = forge.perform("commit-discard", {**request_core, "expected_local_head": request_core["base"]})
@@ -523,7 +533,13 @@ def test_a_commit_that_may_have_left_the_machine_is_never_discarded(
     assert git(root, "rev-parse", f"refs/heads/{branch}") == stranded["finalization_operations"][1]["read_back"]["commit"]
 
 
-@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "no-worktree", "existing-worktree", "worktree-in-checkout"])
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "no-context", "notification-source", "other-digest", "foreign-read-back", "read-back-other-decision",
+        "read-back-other-approver", "no-worktree", "existing-worktree", "worktree-in-checkout",
+    ],
+)
 def test_a_discard_needs_the_exact_current_session_approval_of_the_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
@@ -534,6 +550,10 @@ def test_a_discard_needs_the_exact_current_session_approval_of_the_plan(
     context = None if fault == "no-context" else _context("discard-local-commit", "plan_digest", "f" * 64 if fault == "foreign-read-back" else plan_digest)
     if fault == "notification-source":
         context = ApprovalContext("notification-thread", context.operator_identity, context.source_read_back)
+    if fault == "read-back-other-decision":
+        context = _context("rebind-config", "plan_digest", plan_digest)
+    if fault == "read-back-other-approver":
+        context = ApprovalContext(context.source, context.operator_identity, {**context.source_read_back, "approver_identity": "someone-else"})
     request = {"finalize": True, "commit_reconciliation": supplied}
     if fault != "no-worktree":
         request["worktree"] = str(tmp_path / "new")

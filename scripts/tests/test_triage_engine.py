@@ -28,7 +28,9 @@ from triage.model import (  # noqa: E402
     CAPABILITIES,
     TriageError,
     canonical_state,
+    legacy_fingerprint,
     load_settings,
+    scoped_fingerprint,
     tracker_destination,
 )
 from triage.providers import FakeForge, FakeTracker, ProviderObservation  # noqa: E402
@@ -2193,19 +2195,33 @@ print('ready',flush=True); time.sleep(300)
     assert not (state_root / "triage/triage-pipeline-gate_test.lock").exists()
 
 
+# An engine before #1303 recorded every gate under the whole-config digest. The
+# pre-upgrade cases stop such an engine's transition at the two cutpoints that
+# leave its replacement gate behind, then restart it with the upgraded engine,
+# which must still accept that gate as its own (`recorded_gate_fingerprints`).
+PRE_UPGRADE_ENGINE = "import triage.model as _model; _model.scoped_fingerprint = _model.legacy_fingerprint\n"
+
+
 @pytest.mark.parametrize(
-    "cutpoint",
-    ["prepared", "intent", "old-quarantine", "replacement-gate", "held-receipt", "released"],
+    ("cutpoint", "engine_version"),
+    [
+        *[(cutpoint, "current") for cutpoint in ["prepared", "intent", "old-quarantine", "replacement-gate", "held-receipt", "released"]],
+        ("replacement-gate", "pre-upgrade"),
+        ("held-receipt", "pre-upgrade"),
+    ],
 )
 def test_gate_only_transition_restarts_from_each_durable_cutpoint(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cutpoint: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cutpoint: str, engine_version: str
 ) -> None:
     root = repository(tmp_path)
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)
-    owner_child = r'''
+    pre_upgrade = PRE_UPGRADE_ENGINE if engine_version == "pre-upgrade" else ""
+    if pre_upgrade:
+        monkeypatch.setattr("triage.model.scoped_fingerprint", legacy_fingerprint)
+    owner_child = pre_upgrade + r'''
 import sys,time
 from pathlib import Path
 from triage.gate import acquire
@@ -2239,7 +2255,7 @@ print('ready',flush=True); time.sleep(300)
         "source_read_back": {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest},
     }
     marker = tmp_path / f"gate-only-{cutpoint}"
-    transition_child = r'''
+    transition_child = pre_upgrade + r'''
 import sys,time
 from pathlib import Path
 import triage.gate as gate
@@ -2305,6 +2321,13 @@ run('recover',context='interactive',request=request,start=root,approval_context=
         process.wait(timeout=10)
     gate_path = state_root / "triage/triage-pipeline-gate_live.lock"
     stale_gate = gate_path.read_bytes() if gate_path.exists() else None
+    if pre_upgrade:
+        # The replacement gate left behind carries the whole-config digest.
+        monkeypatch.setattr("triage.model.scoped_fingerprint", scoped_fingerprint)
+        upgraded = load_settings(root)
+        assert stale_gate is not None
+        recorded = loads_exact(stale_gate)["gate_claim_core"]["config_fingerprint"]
+        assert recorded == legacy_fingerprint(upgraded.config) != upgraded.fingerprint
 
     if cutpoint == "intent":
         state_path = state_root / "triage/triage-pipeline-state_live.json"
@@ -2335,6 +2358,9 @@ print(dumps(run('recover',context='interactive',request={},start=Path(sys.argv[1
     )
     restarted = loads_exact(restarted_process.stdout.strip().encode())
     assert restarted["outcome"] == "operator-held"
+    # A refused receipt check is operator-held too: only the detail says the
+    # recorded receipt was accepted as this transition's own.
+    assert restarted["detail"] == "gate-only-operator-held", restarted
     receipt = loads_exact((state_root / "triage/triage-pipeline-state_live.json").read_bytes())
     assert receipt["kind"] == "gate-only-operator-held"
     if cutpoint == "held-receipt":

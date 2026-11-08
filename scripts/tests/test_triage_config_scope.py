@@ -197,7 +197,10 @@ def test_a_rebind_requires_the_drafted_configuration_and_an_unchanged_read_scope
     assert state_path.read_bytes() == raw
 
 
-@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "not-resume", "new-entry"])
+@pytest.mark.parametrize(
+    "fault",
+    ["no-context", "notification-source", "other-digest", "foreign-read-back", "read-back-other-decision", "read-back-other-approver", "not-resume", "new-entry"],
+)
 def test_a_rebind_needs_the_exact_current_session_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str) -> None:
     root, state_path, raw = _held_session(tmp_path, monkeypatch, legacy=True)
     spec = {"legacy_config": str(_legacy_config_file(tmp_path, root)), "legacy_local_config": None}
@@ -205,6 +208,10 @@ def test_a_rebind_needs_the_exact_current_session_approval(tmp_path: Path, monke
     approval, context = _approve("0" * 64 if fault == "other-digest" else core_digest, read_back_digest="f" * 64 if fault == "foreign-read-back" else None)
     if fault == "notification-source":
         context = ApprovalContext("notification-thread", context.operator_identity, context.source_read_back)
+    if fault == "read-back-other-decision":
+        context = ApprovalContext(context.source, context.operator_identity, {**context.source_read_back, "decision": "discard-local-commit"})
+    if fault == "read-back-other-approver":
+        context = ApprovalContext(context.source, context.operator_identity, {**context.source_read_back, "approver_identity": "someone-else"})
     result = run(
         {"not-resume": None, "new-entry": "new"}.get(fault, "resume"), context="interactive",
         request={"config_rebind": {**spec, "approval": approval}}, start=root,
