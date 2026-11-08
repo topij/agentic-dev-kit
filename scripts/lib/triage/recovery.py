@@ -253,7 +253,7 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
             validate_record(
                 replacement_record,
                 repository_identity=repository_identity(settings),
-                config_fingerprint=settings.fingerprint,
+                config_fingerprint=recorded_gate_fingerprints(settings),
                 own_root=str(settings.paths.repo),
             )
             if replacement_record.get("owner_run_identity") != replacement_run_identity:
@@ -691,13 +691,14 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         # state valid but for a later configuration change is one the next
         # session-starting entry retires, so it is preserved here, not held
         # (#1272). The tolerance covers completed states only.
-        canonical_state(state_raw, settings=settings, mode=store.mode, retiring=True)
+        live = store.mode == "live"
+        canonical_state(state_raw, settings=settings, mode=store.mode, retiring=True, config_identity=not live)
         parses = True
         # `recover`'s own predicate: a completed state whose frozen artifact
         # is gone is not preserved as valid, because the entry `recover` would
         # send the operator to hard-stops on it (#859). An in-flight state
         # keeps `canonical_state` alone, so it stays restorable.
-        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=True)
+        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=True, config_identity=not live)
         valid = True
     except TriageError:
         pass

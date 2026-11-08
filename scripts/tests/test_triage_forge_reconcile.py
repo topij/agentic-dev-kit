@@ -436,6 +436,7 @@ def test_the_held_adopter_session_finishes_through_engine_routes_after_an_upgrad
         start=root, approval_context=_context("rebind-config", "core_digest", core_digest),
     )
     assert rebound["refusal_code"] is None, rebound
+    assert rebound["recovery_plan"] is None
     after_rebind = loads_exact(state_path.read_bytes())
     assert after_rebind["config_rebind"]["core"]["scoped_fingerprint"] == load_settings(root).fingerprint
     assert after_rebind["run_identity"] == stranded["run_identity"]
@@ -453,6 +454,7 @@ def test_the_held_adopter_session_finishes_through_engine_routes_after_an_upgrad
         start=root, approval_context=_context("discard-local-commit", "plan_digest", plan_digest), forge=forge, head_authority=forge,
     )
     assert finished["outcome"] == "operator-held", finished
+    assert finished["recovery_plan"] is None
     swept = loads_exact(state_path.read_bytes())
     assert swept["phase"] == "archive-sweep", finished
     record = swept["finalization_reconciliations"][0]
@@ -521,7 +523,7 @@ def test_a_commit_that_may_have_left_the_machine_is_never_discarded(
     assert git(root, "rev-parse", f"refs/heads/{branch}") == stranded["finalization_operations"][1]["read_back"]["commit"]
 
 
-@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "no-worktree", "existing-worktree"])
+@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "no-worktree", "existing-worktree", "worktree-in-checkout"])
 def test_a_discard_needs_the_exact_current_session_approval_of_the_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
@@ -537,6 +539,8 @@ def test_a_discard_needs_the_exact_current_session_approval_of_the_plan(
         request["worktree"] = str(tmp_path / "new")
     if fault == "existing-worktree":
         (tmp_path / "new").mkdir()
+    if fault == "worktree-in-checkout":
+        request["worktree"] = str(root / "sweep-inside-the-checkout")
     result = run("resume", context="interactive", request=request, start=root, approval_context=context, forge=forge, head_authority=forge)
     assert result["outcome"] == "operator-held"
     assert loads_exact(state_path.read_bytes())["finalization_operations"] == stranded["finalization_operations"]
@@ -574,7 +578,7 @@ def test_a_discard_that_stopped_partway_resumes_without_a_second_approval(
     assert loads_exact(state_path.read_bytes())["finalization_reconciliations"][-1]["status"] == "discarded"
 
 
-@pytest.mark.parametrize("tamper", ["remote-present-in-plan", "superseded-chain-edited", "superseded-bytes-edited", "approval-digest", "discard-not-proven"])
+@pytest.mark.parametrize("tamper", ["remote-present-in-plan", "superseded-chain-edited", "superseded-bytes-edited", "approval-digest", "discard-not-proven", "status-not-a-string", "plan-read-back-null"])
 def test_a_reconciliation_record_that_does_not_bind_its_evidence_is_invalid(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tamper: str
 ) -> None:
@@ -600,6 +604,13 @@ def test_a_reconciliation_record_that_does_not_bind_its_evidence_is_invalid(
         record["superseded_operations"][1]["response"] = {"stdout": "rewritten history"}
     elif tamper == "approval-digest":
         record["approval"]["plan_digest"] = "0" * 64
+    elif tamper == "status-not-a-string":
+        record["status"] = ["discarded"]
+    elif tamper == "plan-read-back-null":
+        # Self-consistent digest and approval over a null read-back.
+        record["plan"]["read_back"] = None
+        record["plan_digest"] = digest(record["plan"])
+        record["approval"]["plan_digest"] = record["plan_digest"]
     else:
         record["discard_read_back"]["local_head"] = record["plan"]["read_back"]["local_head"]
     with pytest.raises(TriageError):
@@ -646,6 +657,7 @@ def test_a_discard_the_provider_cannot_prove_stays_discarding_and_says_so(
     )
     assert held["outcome"] == "operator-held"
     assert held["capabilities"]["forge-pr-write-readback"]["mechanism"].startswith("local-commit discard did not complete (ambiguous)")
+    assert held["waiting_on"] == "reconciliation"
     state = loads_exact(state_path.read_bytes())
     assert state["finalization_reconciliations"][-1]["status"] == "discarding"
     assert state["finalization_operations"] == stranded["finalization_operations"]
@@ -661,3 +673,23 @@ def test_a_discard_is_complete_only_once_the_worktree_registration_is_gone() -> 
     }
     assert discard_completed(done, done)
     assert not discard_completed({**done, "worktree_registered": True}, done)
+
+
+
+def test_the_discard_never_removes_the_invoking_checkout(tmp_path: Path) -> None:
+    root, worktree, runner, operations, request_core = _ambiguous_local_commit(tmp_path)
+    observed = GitHubForge(worktree, runner).perform("commit-discard", {**request_core, "expected_local_head": operations[1]["read_back"]["commit"]})
+    assert observed.status == "ambiguous"
+    assert worktree.exists()
+
+
+def test_the_read_back_finds_a_recorded_worktree_whose_path_holds_a_newline(tmp_path: Path) -> None:
+    root, bare = sweep_repository(tmp_path)
+    runner = LocalForge(bare)
+    forge = GitHubForge(root, runner)
+    base = git(root, "rev-parse", "HEAD")
+    worktree = tmp_path / "sweep\nwith a newline"
+    assert forge.perform("branch-create", {"repository": REPOSITORY, "branch": "chore/triage-2099-01-01", "worktree": str(worktree), "finalize_base_head": base}).status == "verified"
+    read_back = forge.authority("commit-discard-read-back", {"host": "github.com", "repository": REPOSITORY, "branch": "chore/triage-2099-01-01", "base": base, "worktree": str(worktree), "paths": PATHS})
+    assert read_back["worktree_registered"] is True
+    assert read_back["other_checkouts"] == []

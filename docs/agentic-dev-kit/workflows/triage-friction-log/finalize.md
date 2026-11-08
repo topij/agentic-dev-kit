@@ -205,10 +205,15 @@ operator, and a new `worktree` that does not exist yet, discards the chain:
 1. Re-read and recompute the plan; approval binds only an unchanged plan digest.
    Persist a `discarding` record in `finalization_reconciliations` before any mutation.
 2. Remove the recorded worktree registration with `git worktree remove` (never `--force`,
-   so a dirty worktree stays), then delete the local branch with a compare-and-delete
+   so a worktree with tracked changes or untracked files stays; files the repository
+   ignores are removed with it, as `git worktree remove` removes them), then delete the local branch with a compare-and-delete
    from the approved head (`git update-ref -d`). The discard re-reads before it acts,
    and refuses when a remote branch, a pull request, or another checkout exists or the
-   branch has moved from the approved head.
+   branch has moved from the approved head, and it never removes the invoking checkout.
+   The new worktree is checked before anything is removed: it must be absolute, absent,
+   and outside the checkout. A discard that cannot complete keeps the record
+   `discarding` and waits on `reconciliation`: a rerun resumes it only once the read-back
+   shows the branch local-only again.
 3. Read back that the branch, the worktree, and its registration are absent and that
    still no remote branch or pull request exists, then persist the record `discarded`
    with the superseded chain kept byte-for-byte and the live chain, repository
@@ -225,5 +230,7 @@ without another approval. The route covers only a commit that landed: an ambiguo
 `commit` that staged its bytes but never committed them, such as one refused on a
 staged-tree mismatch, leaves a dirty worktree, which the read-back refuses, so that run
 stays operator-held. Nothing in this route pushes, deletes a remote branch, or
-touches a pull request; the discarded commit is reproducible from the superseded
-commit intent the record keeps.
+touches a pull request. The record keeps the superseded commit's intent, whose
+bytes are the ones the engine meant to commit, and the read-back's commit and tree
+ids; it does not keep the discarded commit's own bytes, which an adopter hook may have
+changed, and Git may prune that commit once no ref names it.

@@ -231,7 +231,10 @@ def _repo_path(root: Path, value: Any, name: str) -> Path:
 # The configuration a triage run's `config_fingerprint` binds (#1303): every key
 # `load_settings` reads into `Settings`, and nothing else. A change to a key the
 # triage engines never read (`review.*`, say) no longer strands a held session,
-# while a change to one they act on still refuses it. `models.tiers` is read only
+# while a change to one they act on still refuses it. `pr_watch.py`, which the
+# forge provider runs as a subprocess, reads `review.*` itself at watch time; that
+# is deliberate: the review gate the sweep PR must pass is the one current when it
+# is watched, and the triage engine never merges. `models.tiers` is read only
 # to check that `triage.analysis_tier` names a tier, a load-time precondition
 # rather than a value the run acts on, so it is left out. A test pins this list
 # against the `_required` calls below, so a key read later cannot be missed.
@@ -839,6 +842,7 @@ def validate_finalization_reconciliations(records: Any, value: dict[str, Any]) -
             or record["plan"]["kind"] != LOCAL_COMMIT_DISCARD_KIND
             or record["plan"]["session"] != session
             or record["plan_digest"] != digest(record["plan"])
+            or not isinstance(record["status"], str)
             or record["status"] not in {"discarding", "discarded"}
         ):
             raise TriageError("finalization reconciliation record is malformed", outcome="operator-held")
@@ -851,6 +855,10 @@ def validate_finalization_reconciliations(records: Any, value: dict[str, Any]) -
         ):
             raise TriageError("finalization reconciliation approval does not bind its plan", outcome="operator-held")
         plan = record["plan"]
+        # The plan's read-back is checked first, so a malformed one refuses here
+        # rather than raising while the discard read-back is compared with it.
+        if not isinstance(plan["read_back"], dict) or set(plan["read_back"]) != DISCARD_READ_BACK_KEYS:
+            raise TriageError("finalization reconciliation plan read-back is malformed", outcome="operator-held")
         if record["status"] == "discarding":
             superseded = value.get("finalization_operations")
             if position != len(records) - 1 or record["superseded_operations"] is not None or record["discard_read_back"] is not None:
@@ -923,7 +931,7 @@ def validate_state(
     if identity["mode"] != mode or value.get("mode") != mode:
         raise TriageError("cross-mode state", outcome="operator-held")
     rebind = value.get("config_rebind")
-    if rebind is not None:
+    if "config_rebind" in value:
         validate_config_rebind(rebind, value)
     effective_fingerprint = rebind["core"]["scoped_fingerprint"] if rebind is not None else identity["config_fingerprint"]
     if value.get("config_fingerprint") != identity["config_fingerprint"]:

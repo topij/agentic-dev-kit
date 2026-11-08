@@ -1652,8 +1652,16 @@ def validate_recoverable_state(
     *,
     mode: str,
     retiring: bool,
+    config_identity: bool = True,
 ) -> None:
     """The validity `recover`, the `test` entry and `state_action_plan` apply (#859, #1002).
+
+    Live recovery passes `config_identity=False`: a live state valid but for its
+    configuration fingerprint (a session an engine before #1303 recorded, or one
+    whose bound configuration changed) is preserved rather than captured into a
+    terminal hold, and `resume` then refuses it with `configuration-identity`
+    until the operator rebinds it or restores the configuration. The `test`
+    entry keeps the check, since its isolated recovery restarts a test session.
 
     A completed state is judged by `validate_session_state`: its retirement is
     the session-starting path's, so one that path would hard-stop on is not
@@ -1673,7 +1681,7 @@ def validate_recoverable_state(
     entry, and holds it otherwise. A completed state that fails
     `canonical_state` itself is captured as any invalid state.
     """
-    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring)
+    state = canonical_state(state_raw, settings=settings, mode=mode, retiring=retiring, config_identity=config_identity)
     if state.get("phase") != "completed":
         return
     try:
@@ -1813,7 +1821,11 @@ def _config_rebind(
             legacy = load_config(tracked_path)
     except (OSError, ValueError, UnicodeDecodeError) as exc:
         raise TriageError(f"the supplied configuration cannot be read: {exc}", outcome="operator-held", code="configuration-identity") from exc
-    if legacy_fingerprint(legacy) != recorded:
+    try:
+        reproduced = legacy_fingerprint(legacy)
+    except CanonicalError as exc:
+        raise TriageError(f"the supplied configuration cannot be canonicalized: {exc}", outcome="operator-held", code="configuration-identity") from exc
+    if reproduced != recorded:
         raise TriageError(
             "the supplied configuration does not reproduce the session's recorded fingerprint",
             outcome="operator-held", code="configuration-identity",
@@ -1821,7 +1833,7 @@ def _config_rebind(
     changed = changed_fingerprint_keys(legacy, settings.config)
     try:
         legacy_scoped = scoped_fingerprint(legacy)
-    except TriageError:
+    except (TriageError, CanonicalError):
         legacy_scoped = None
     if changed or legacy_scoped != settings.fingerprint:
         raise TriageError(
@@ -1848,6 +1860,7 @@ def _config_rebind(
         supplied, approval_context, config_rebind_approval(core_digest, operator),
         digest_name="core_digest", what="config rebind",
     )
+    plan_out.pop("plan", None)  # applied: nothing awaits approval any more
     rebound = {**state, "config_rebind": {"core": core, "core_digest": core_digest, "approval": approval}}
     validate_state(rebound, settings=settings, mode=store.mode)
     raw = dumps(rebound)
@@ -1923,8 +1936,14 @@ def _reconcile_local_commit(
             digest_name="plan_digest", what="commit reconciliation",
         )
         worktree = request.get("worktree")
-        if not isinstance(worktree, str) or not Path(worktree).is_absolute() or os.path.lexists(worktree):
-            raise TriageError("an approved discard must carry the new isolated worktree, an absolute path that does not exist", outcome="operator-held")
+        if (
+            not isinstance(worktree, str)
+            or not Path(worktree).is_absolute()
+            or os.path.lexists(worktree)
+            or _worktree_conflicts_with_checkout(Path(worktree).resolve(), settings.paths.repo)
+        ):
+            raise TriageError("an approved discard must carry the new isolated worktree: an absolute path outside the checkout that does not exist", outcome="operator-held")
+        plan_out.pop("plan", None)  # approved: the plan no longer awaits a decision
         pending = {"plan": plan, "plan_digest": plan_digest, "approval": approval, "status": "discarding", "superseded_operations": None, "discard_read_back": None}
         reconciliations.append(pending)
         state = {**state, "finalization_reconciliations": reconciliations}
@@ -1932,7 +1951,8 @@ def _reconcile_local_commit(
     plan = pending["plan"]
     observed = forge.perform("commit-discard", {**request_core, "expected_local_head": plan["read_back"]["local_head"]})
     if observed.status != "verified" or not discard_completed(observed.read_back, plan["read_back"]):
-        capabilities["forge-pr-write-readback"] = {"status": "operator-held", "mechanism": f"local-commit discard did not complete ({observed.status}); a rerun resumes it"}
+        capabilities["forge-pr-write-readback"] = {"status": "operator-held", "mechanism": f"local-commit discard did not complete ({observed.status}); a rerun resumes it once the read-back shows the branch local-only again"}
+        plan_out["waiting_on"] = "reconciliation"
         return state, state_digest, False
     done = {**pending, "status": "discarded", "superseded_operations": operations, "discard_read_back": observed.read_back}
     restarted = {
@@ -2149,6 +2169,8 @@ def run(
         return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="invoke with a supported entry keyword", detail="unknown or combined entry keyword", refusal_code="invalid-invocation")
     if not isinstance(context, str) or context not in {"interactive", "unattended"}:
         return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="supply an explicit execution context", detail="invalid execution context", refusal_code="invalid-invocation")
+    if request.get("config_rebind") is not None and entry != "resume":
+        return _result(capabilities, "hard-stop", mode="unknown", engine_mode=None, report=None, frozen=None, resume_action="send config_rebind with resume", detail="config_rebind is accepted only with resume", refusal_code="invalid-invocation")
     mode = "test" if entry == "test" else "live"
     observed_protected_head = None
     result_engine_mode: str | None = None
@@ -2225,7 +2247,7 @@ def run(
                     # completed state that path would hard-stop on is not valid
                     # either, or the refusal below sends the operator to an
                     # entry that fails (#859).
-                    validate_recoverable_state(store, settings, state_raw, mode=mode, retiring=True)
+                    validate_recoverable_state(store, settings, state_raw, mode=mode, retiring=True, config_identity=False)
                 except TriageError as invalid:
                     if _parses(state_raw, settings, mode):
                         # The state itself is valid and fails only the artifact
@@ -2300,8 +2322,7 @@ def run(
 
             plan_out: dict[str, Any] = {}
             if request.get("config_rebind") is not None:
-                if entry != "resume":
-                    raise TriageError("config_rebind is accepted only with resume", code="invalid-invocation")
+                # `run` refuses config_rebind on any other entry before routing.
                 rebound = _config_rebind(store, settings, state_raw, request, approval_context, plan_out, retain)
                 if rebound is None:
                     lease.release()

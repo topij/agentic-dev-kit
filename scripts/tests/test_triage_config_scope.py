@@ -167,7 +167,7 @@ def test_a_legacy_session_is_refused_until_rebound_then_resumes(tmp_path: Path, 
     assert run("resume", context="interactive", request={}, start=root)["refusal_code"] == "configuration-identity"
 
 
-@pytest.mark.parametrize("fault", ["other-bytes", "read-key-changed", "local-overlay-missing"])
+@pytest.mark.parametrize("fault", ["other-bytes", "read-key-changed", "local-overlay-missing", "not-canonicalizable"])
 def test_a_rebind_requires_the_drafted_configuration_and_an_unchanged_read_scope(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str
 ) -> None:
@@ -181,6 +181,10 @@ def test_a_rebind_requires_the_drafted_configuration_and_an_unchanged_read_scope
     elif fault == "read-key-changed":
         _edit(root, *READ)
         expected = "changed since the session was drafted: triage.commit_subject"
+    elif fault == "not-canonicalizable":
+        # An integer RFC 8785 cannot represent: refused, not raised with the gate held.
+        legacy.write_text(legacy.read_text(encoding="utf-8") + "huge: 9007199254740993\n", encoding="utf-8")
+        expected = "cannot be canonicalized"
     else:
         overlay = tmp_path / "legacy-dev-model.local.yaml"
         overlay.write_text('notify:\n  user_key: "U123"\n', encoding="utf-8")
@@ -193,7 +197,7 @@ def test_a_rebind_requires_the_drafted_configuration_and_an_unchanged_read_scope
     assert state_path.read_bytes() == raw
 
 
-@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "not-resume"])
+@pytest.mark.parametrize("fault", ["no-context", "notification-source", "other-digest", "foreign-read-back", "not-resume", "new-entry"])
 def test_a_rebind_needs_the_exact_current_session_approval(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fault: str) -> None:
     root, state_path, raw = _held_session(tmp_path, monkeypatch, legacy=True)
     spec = {"legacy_config": str(_legacy_config_file(tmp_path, root)), "legacy_local_config": None}
@@ -202,7 +206,7 @@ def test_a_rebind_needs_the_exact_current_session_approval(tmp_path: Path, monke
     if fault == "notification-source":
         context = ApprovalContext("notification-thread", context.operator_identity, context.source_read_back)
     result = run(
-        None if fault == "not-resume" else "resume", context="interactive",
+        {"not-resume": None, "new-entry": "new"}.get(fault, "resume"), context="interactive",
         request={"config_rebind": {**spec, "approval": approval}}, start=root,
         approval_context=None if fault == "no-context" else context,
     )
@@ -219,7 +223,7 @@ def test_a_session_already_on_the_scoped_fingerprint_is_not_rebound(tmp_path: Pa
     assert state_path.read_bytes() == raw
 
 
-@pytest.mark.parametrize("tamper", ["scoped", "legacy", "session", "core-digest", "approval"])
+@pytest.mark.parametrize("tamper", ["scoped", "legacy", "session", "core-digest", "approval", "null-record"])
 def test_a_rebind_record_that_does_not_bind_the_session_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tamper: str) -> None:
     root, state_path, raw = _held_session(tmp_path, monkeypatch, legacy=True)
     spec = {"legacy_config": str(_legacy_config_file(tmp_path, root)), "legacy_local_config": None}
@@ -229,7 +233,9 @@ def test_a_rebind_record_that_does_not_bind_the_session_is_refused(tmp_path: Pat
     state = loads_exact(state_path.read_bytes())
     canonical_state(dumps(state), settings=load_settings(root), mode="live")
     record = state["config_rebind"]
-    if tamper == "approval":
+    if tamper == "null-record":
+        state["config_rebind"] = None
+    elif tamper == "approval":
         record["approval"]["core_digest"] = "0" * 64
     elif tamper == "core-digest":
         # The approval still binds the record's digest; only the recomputed
@@ -335,3 +341,32 @@ def test_an_orphaned_gate_temporary_an_earlier_engine_left_is_cleaned_under_the_
         assert not list((state_root / "triage").glob(".triage-pipeline-gate_live.lock.*.tmp"))
     else:
         assert result["refusal_code"] == "configuration-identity"
+
+
+
+_DEAD_LEGACY_GATE_CHILD = r'''
+import sys
+from pathlib import Path
+from triage.gate import acquire
+from triage.model import legacy_fingerprint, load_settings, repository_identity
+from triage.storage import ArtifactStore
+settings = load_settings(Path(sys.argv[1]))
+acquire(ArtifactStore(settings, "live"), repository_identity=repository_identity(settings), config_fingerprint=legacy_fingerprint(settings.config), run_identity=None)
+'''
+
+
+def test_recover_preserves_a_legacy_session_behind_an_earlier_engines_dead_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A session an engine before #1303 recorded, behind a gate that engine's
+    process left when it died, is valid but for its fingerprint. Recovery
+    preserves it and quarantines the gate, rather than capturing it into a
+    terminal hold, so the rebind route stays open."""
+    import os
+
+    root, state_path, raw = _held_session(tmp_path, monkeypatch, legacy=True)
+    environment = {**os.environ, "PYTHONPATH": str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)}
+    subprocess.run([sys.executable, "-c", _DEAD_LEGACY_GATE_CHILD, str(root)], check=True, env=environment)
+    planned = run("recover", context="interactive", request={}, start=root)
+    plan = planned["recovery_plan"]
+    assert plan is not None and plan.get("held") is None, planned
+    assert plan["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate", plan
+    assert state_path.read_bytes() == raw

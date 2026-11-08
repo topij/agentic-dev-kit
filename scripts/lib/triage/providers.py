@@ -808,11 +808,11 @@ class GitHubForge:
         raise TriageError(f"unsupported forge action {action}", outcome="operator-held")
 
     def _worktree_records(self) -> list[dict[str, str]]:
-        listed = self._run(["git", "worktree", "list", "--porcelain"], self.repo)
+        listed = self._run(["git", "worktree", "list", "--porcelain", "-z"], self.repo)
         if listed.returncode:
             raise TriageError("worktree list read-back failed", outcome="operator-held")
         records: list[dict[str, str]] = []
-        for line in listed.stdout.splitlines():
+        for line in listed.stdout.split("\0"):
             if line.startswith("worktree "):
                 records.append({"worktree": line[len("worktree "):]})
             elif records and " " in line:
@@ -893,6 +893,8 @@ class GitHubForge:
             return ProviderObservation("ambiguous", {"reason": "the local branch moved since the approved read-back"}, before)
         if before["worktree_present"] and not before["worktree_registered"]:
             return ProviderObservation("ambiguous", {"reason": "an unregistered directory occupies the worktree path"}, before)
+        if worktree_conflicts_with_checkout(Path(intent["worktree"]).resolve(), self.repo):
+            return ProviderObservation("ambiguous", {"reason": "the recorded worktree is the invoking checkout or contains it"}, before)
         if before["worktree_present"] and before["worktree_branch"] != f"refs/heads/{intent['branch']}":
             return ProviderObservation("ambiguous", {"reason": "the recorded worktree is not on the sweep branch"}, before)
         response: dict[str, Any] = {"worktree_remove": None, "branch_delete": None}
