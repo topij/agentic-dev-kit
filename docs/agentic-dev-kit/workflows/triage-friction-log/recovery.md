@@ -12,6 +12,7 @@ Whether a state is invalid or abandonable is decided by *Validity and abandonabi
 ## Contents
 
 - Completed-state retirement
+- Configuration rebind
 - Gate-only input precedence
 - Test input precedence
 - State-present held-evidence procedure
@@ -79,6 +80,60 @@ session-starting entry accepts a `completed` state whose recorded config fingerp
 differs from the current one, provided its two recorded fingerprints are SHA-256
 digests that agree with each other. Every other validation still applies, and every other phase and entry stays bound
 to the current configuration.
+
+### Configuration rebind
+
+An engine before #1303 recorded `config_fingerprint` as the digest of the whole merged
+configuration, which the current configuration does not reproduce once any key has
+changed, read or not. Such a session stays operator-held with `configuration-identity`
+until the operator rebinds it; the engine never accepts a legacy fingerprint on its own.
+
+Rebind only from `resume`, under the held gate, with a request carrying
+`{"config_rebind": {"legacy_config": "<absolute path>", "legacy_local_config": "<absolute path>" | null}}`.
+The files are the tracked `config/dev-model.yaml` and, if one existed, the local overlay
+as they were when the session was drafted; the tracked file at the run's
+`protected_branch_head` is usually that file (`git show <protected_branch_head>:config/dev-model.yaml`).
+Each must be a single-link regular file. The engine validates the state completely
+except for the fingerprint comparison, then:
+
+1. refuses a state that already carries `config_rebind` (`configuration-identity`), or
+   whose recorded fingerprint already matches the current configuration
+   (`invalid-invocation`);
+2. merges the supplied files as `load_config` merges a tracked file and its overlay, and
+   requires the whole-config digest of the result to equal the recorded fingerprint,
+   which proves the bytes are the drafted configuration;
+3. requires every bound key (*Resolve and validate configuration*) to have the same value
+   in the drafted configuration as in the current one, and otherwise refuses, naming the
+   keys that changed.
+
+Every refusal is `operator-held` and leaves the state byte-identical. A refusal of
+step 2 or 3, or of configuration bytes that cannot be read or canonicalized, carries
+`configuration-identity`; a supplied path that is not an absolute single-link regular
+file carries `invalid-invocation`. `config_rebind` on any entry other than `resume`
+hard-stops before the gate is acquired. When every check passes, the result reports the plan in `recovery_plan`
+(`kind` `config-rebind`) with its `core` and `core_digest` and waits on
+`recovery-approval`. A later `resume` repeating the same files with
+`"approval": {"decision": "rebind-config", "source": "current-session", "approver_identity": <operator>, "core_digest": <core_digest>}`,
+and the runtime-attested current-session read-back of that same decision, digest, and
+operator, repeats every check and adds the `config_rebind` record (`state-schema.md`) by
+a digest-checked replacement of the captured bytes that changes no other field. The run
+identity, its fingerprint, and every binding over them stay as recorded. The same
+invocation then continues as an ordinary `resume`.
+
+A blocking gate an earlier engine left carries the same kind of whole-config digest.
+When capturing a gate for recovery, when removing a dead owner's orphaned gate
+temporary before acquiring a gate, and when checking the replacement-gate record a
+`gate-only-operator-held` receipt keeps, the engine accepts either the current
+fingerprint or the whole-config digest of the current configuration. The second proves
+the gate was written under exactly this configuration, so a dead owner's gate from before
+an upgrade stays recoverable. Any other fingerprint is still foreign. This applies to
+gate records only; a session's state takes a legacy fingerprint only through the rebind
+above. Live recovery, from `recover` or over a dead owner's gate, judges a state's
+validity without its fingerprint: a session valid but for a legacy or changed
+fingerprint is preserved (`preserve-valid-state-and-quarantine-old-gate`, or refused as
+valid) rather than captured into a terminal hold, and `resume` then refuses it with
+`configuration-identity` until it is rebound or its configuration restored. The `test`
+entry keeps the check, since its isolated recovery restarts a test session.
 
 ### Gate-only input precedence
 

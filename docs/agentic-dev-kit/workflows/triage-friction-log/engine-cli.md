@@ -58,6 +58,22 @@ outside the repository checkout and must not exist yet. The first continuation h
 `.claude/worktrees/` directory, or one containing it, operator-held before the branch or
 worktree is created.
 
+Two more request fields carry an operator decision, each presented first as a
+`recovery_plan` that waits on `recovery-approval` and applied only on a later call whose
+`--approval-context` attests the same decision, digest, and operator as
+`{"source":"current-session","operator_identity":"<operator>","source_read_back":{"decision":"<decision>","<digest name>":"<digest>","approver_identity":"<operator>"}}`:
+
+- `config_rebind` (with `resume` only) rebinds a session recorded under the legacy
+  whole-config fingerprint: `{"legacy_config":"<absolute path>","legacy_local_config":null}`
+  presents the plan, and the same object plus
+  `"approval":{"decision":"rebind-config","source":"current-session","approver_identity":"<operator>","core_digest":"<core_digest>"}`
+  applies it (*Configuration rebind*, in `recovery.md`).
+- `commit_reconciliation` (with `finalize: true`) discards an ambiguous local-only sweep
+  commit: a finalization continuation over that chain presents the plan, and
+  `{"decision":"discard-local-commit","source":"current-session","approver_identity":"<operator>","plan_digest":"<plan_digest>"}`,
+  sent with a new absolute `worktree` that does not exist, applies it and restarts
+  finalization (*Local commit reconciliation*, in `finalize.md`).
+
 External adapters are disabled unless selected explicitly. `--enable-tracker` selects
 `github-issues` or `linear` from the merged `tracker.backend`; unsupported backends stop.
 `--enable-github-tracker` remains a GitHub-only compatibility flag; the flags are mutually
@@ -120,7 +136,7 @@ caller whether the run progressed. Every result therefore also carries:
 | Key | Values |
 |---|---|
 | `disposition` | `completed` for `successful-completion` or `degraded-success`; `waiting` when the run left an active session at a phase a later invocation or an operator decision continues, judged by that phase and its last retained write (an unresolved tracker write or an unverified forge write reads `waiting` on `reconciliation`, with the capability map saying why); `refused` for every other result, including a hard stop. |
-| `waiting_on` | for `waiting` only, else null: `analysis` (an interactive resume supplies proposals), `notification-delivery` (a resume reads back the retained notification attempt; one whose read-back stays unresolved may need the operator), `approval`, `tracker-write` (a resume with the tracker adapter selected), `finalize` (a resume carrying `finalize: true`, with `--enable-github-forge`), `recovery-approval`, `rerun` (an applied state-present recovery left state the next ordinary run continues from), or `reconciliation` (the last retained write is unverified. A tracker write is read back on each rerun and advances once the tracker shows exactly the recorded write, which may need the operator, such as removing a duplicate. A forge write other than an unsettled `pr-watch` or `merge-read-back` is not read back again, so no rerun advances it and it needs the operator; the exception is a failed `branch-create`, which a rerun retries once read-back shows it left nothing. A scheduled caller should alert on `reconciliation` rather than wait). A gate-only or test-gate recovery ends in its terminal held receipt, which reads `refused` until the operator acts on it. |
+| `waiting_on` | for `waiting` only, else null: `analysis` (an interactive resume supplies proposals), `notification-delivery` (a resume reads back the retained notification attempt; one whose read-back stays unresolved may need the operator), `approval`, `tracker-write` (a resume with the tracker adapter selected), `finalize` (a resume carrying `finalize: true`, with `--enable-github-forge`), `recovery-approval`, `rerun` (an applied state-present recovery left state the next ordinary run continues from), or `reconciliation` (the last retained write is unverified. A tracker write is read back on each rerun and advances once the tracker shows exactly the recorded write, which may need the operator, such as removing a duplicate. A forge write other than an unsettled `pr-watch` or `merge-read-back` is not read back again, so no rerun advances it and it needs the operator; the exceptions are a failed `branch-create`, which a rerun retries once read-back shows it left nothing, and an ambiguous `commit` after a verified `branch-create`, whose read-back plan waits on `recovery-approval` when it proves the commit local-only; an approved discard that cannot complete waits on `reconciliation`. A scheduled caller should alert on `reconciliation` rather than wait). A gate-only or test-gate recovery ends in its terminal held receipt, which reads `refused` until the operator acts on it. |
 | `refusal_code` | for `refused` only, else null: `repository-identity`, `configuration-identity`, `single-writer-gate` (the gate could not be acquired: another invocation holds it, its owner is not proven dead, or its record cannot be read or validated), `active-state` (`new` against an active session), `invalid-invocation`, or `unclassified`. |
 
 The disposition is derived from the outcome, and an `operator-held` result is `waiting`

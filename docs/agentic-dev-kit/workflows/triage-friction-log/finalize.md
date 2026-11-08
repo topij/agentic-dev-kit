@@ -10,6 +10,7 @@ its reference files.
 
 - Tracker writes and accounting
 - Finalize and sweep
+- Local commit reconciliation
 
 ## Tracker writes and accounting
 
@@ -111,7 +112,11 @@ head, persist it as `finalize_base_head`, and never rewrite the draft run identi
 permitted fast-forward advance still must pass the byte-identical frozen-block check;
 otherwise remain operator-held. Require a clean index, stage only `<friction-log>` and
 `<friction-log-archive>`, and prove the staged path set equals that pair exactly. Commit
-with `triage.commit_subject`, push, and create the pull request ready for review by
+with `triage.commit_subject` and with every commit hook disabled
+(`git -c core.hooksPath=/dev/null commit --no-verify`). A linked worktree shares the
+repository's hooks, and an adopter's formatting hook that re-stages files would make the
+committed tree differ from the attested staged tree, leaving every commit ambiguous; the
+pull request's CI still checks the committed bytes. Push, and create the pull request ready for review by
 binding the validated `false` `triage.pr_draft` directly. Immediately run the native
 `pr-watch --assert-ready` correction, then read back repository, base, branch, commit,
 head, draft bit, PR URL, and changed paths, and require the read-back draft bit to be
@@ -123,7 +128,9 @@ to create the worktree, so a resume verifies rather than assumes. It is the one 
 operation a later finalization resume retries: only when it is the sole recorded
 operation, only after the provider reads back that the local branch, the worktree path,
 and a remote branch of that name are all absent, and only by appending another attempt
-with the same intent. Any of them present keeps it operator-held.
+with the same intent. Any of them present keeps it operator-held. An ambiguous `commit`
+directly after a verified `branch-create` has its own approval-bound route, *Local commit
+reconciliation* below; every other failed or ambiguous forge write stays operator-held.
 
 Run `pr-watch` for the exact head and persist an `unsettled` review observation whenever
 it has not reached terminal exact-head evidence. This workflow never merges the sweep pull request.
@@ -170,3 +177,60 @@ results live in `completion.sweep_cleanup`, outside `receipt_core`, so a complet
 written before this field existed still validates without it, and the field is absent
 whenever it was never computed. Re-running cleanup after a partial prior attempt reads an
 already-removed artifact back as `absent` rather than failing.
+
+## Local commit reconciliation
+
+A commit is recorded `ambiguous` when it landed but its read-back does not match its
+intent, as an engine before #1302 recorded every sweep commit an adopter hook rewrote.
+When the logical operations are exactly a verified `branch-create` and an ambiguous
+`commit`, a finalization resume reads back, without changing anything, what the commit
+left: the local branch head, its parents and changed paths, the recorded worktree (present,
+registered, its branch, head, and cleanliness), any other checkout of the branch, the
+remote branch of that name, and every pull request from that branch in any state. The
+read-back is eligible only when no remote branch and no pull request exist, no other
+worktree has the branch checked out, a present worktree is the recorded one, clean and on
+that branch, and the local branch is absent, at the recorded base, or exactly one commit on
+it that touches only the two recorded paths and is the commit the ambiguous attempt read
+back. A read that fails is not proof of absence and stops operator-held.
+
+The result reports the plan in `recovery_plan` (`kind` `commit-reconciliation`) with its
+`plan_digest` and whether it is eligible. An ineligible plan stays operator-held on
+`reconciliation`; an approval cannot override it. An eligible plan waits on
+`recovery-approval`. A continuation that carries
+`commit_reconciliation` equal to
+`{"decision": "discard-local-commit", "source": "current-session", "approver_identity": <operator>, "plan_digest": <plan_digest>}`,
+the runtime-attested current-session read-back of that same decision, digest, and
+operator, and a new `worktree` that does not exist yet, discards the chain:
+
+1. Re-read and recompute the plan; approval binds only an unchanged plan digest.
+   Persist a `discarding` record in `finalization_reconciliations` before any mutation.
+2. Remove the recorded worktree registration with `git worktree remove` (never `--force`,
+   so a worktree with tracked changes or untracked files stays; files the repository
+   ignores are removed with it, as `git worktree remove` removes them), then delete the local branch with a compare-and-delete
+   from the approved head (`git update-ref -d`). The discard re-reads before it acts,
+   and refuses when a remote branch, a pull request, or another checkout exists or the
+   branch has moved from the approved head, and it never removes the invoking checkout.
+   The new worktree is checked before anything is removed: it must be absolute, absent,
+   and outside the checkout. A discard that cannot complete keeps the record
+   `discarding` and waits on `reconciliation`: a rerun resumes it only once the read-back
+   shows the branch local-only again.
+3. Read back that the branch, the worktree, and its registration are absent and that
+   still no remote branch or pull request exists, then persist the record `discarded`
+   with the superseded chain kept byte-for-byte and the live chain, repository
+   evidence, and PR evidence emptied.
+4. Continue finalization from `branch-create` on the current protected head, with the
+   new worktree, as a first finalization does.
+
+Finalization restarts from `branch-create` rather than re-committing on the recorded base
+because that base can be stale: new inbox sections arrive at the top, where the sweep
+writes its marker, so a sweep committed on an old base conflicts with them. The restarted
+chain must again pass the byte-identical frozen-block check against the current inbox. A
+process stop after `discarding` resumes the same discard on the next finalization run
+without another approval. The route covers only a commit that landed: an ambiguous
+`commit` that staged its bytes but never committed them, such as one refused on a
+staged-tree mismatch, leaves a dirty worktree, which the read-back refuses, so that run
+stays operator-held. Nothing in this route pushes, deletes a remote branch, or
+touches a pull request. The record keeps the superseded commit's intent, whose
+bytes are the ones the engine meant to commit, and the read-back's commit and tree
+ids; it does not keep the discarded commit's own bytes, which an adopter hook may have
+changed, and Git may prune that commit once no ref names it.

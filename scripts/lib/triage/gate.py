@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .canonical import CanonicalError, digest, digest_bytes, dumps, loads_exact
-from .model import TOKEN_RE, TriageError, repository_identity_matches
+from .model import TOKEN_RE, TriageError, recorded_gate_fingerprints, repository_identity_matches
 from .storage import ArtifactStore, exclusive_create, observe, unlink_inode
 
 GATE_CORE_KEYS = {
@@ -27,9 +27,11 @@ def validate_record(
     record: Any,
     *,
     repository_identity: dict[str, Any] | None = None,
-    config_fingerprint: str | None = None,
+    config_fingerprint: str | tuple[str, ...] | None = None,
     own_root: str | None = None,
 ) -> dict[str, Any]:
+    """Validate a gate owner record; `config_fingerprint` is the fingerprint, or
+    the tuple of fingerprints, the record's configuration identity may carry."""
     if not isinstance(record, dict) or set(record) != {"kind", "schema_version", "gate_claim_core", "gate_claim_core_digest", *GATE_CORE_KEYS}:
         raise TriageError("gate owner record has the wrong shape", outcome="operator-held")
     core = record.get("gate_claim_core")
@@ -55,7 +57,8 @@ def validate_record(
         raise TriageError("gate run identity is malformed", outcome="operator-held")
     if repository_identity is not None and not repository_identity_matches(core["repository_identity"], repository_identity, own_root=own_root):
         raise TriageError("gate repository identity is foreign", outcome="operator-held", code="repository-identity")
-    if config_fingerprint is not None and core["config_fingerprint"] != config_fingerprint:
+    accepted = (config_fingerprint,) if isinstance(config_fingerprint, str) else config_fingerprint
+    if accepted is not None and core["config_fingerprint"] not in accepted:
         raise TriageError("gate configuration identity is foreign", outcome="operator-held", code="configuration-identity")
     return record
 
@@ -111,7 +114,7 @@ def _cleanup_orphaned_temporaries(
     store: ArtifactStore,
     *,
     repository_identity: dict[str, Any],
-    config_fingerprint: str,
+    config_fingerprint: str | tuple[str, ...],
     own_root: str | None,
 ) -> None:
     gate = store.gate_path
@@ -187,10 +190,15 @@ def acquire(
 ) -> GateLease:
     gate = store.gate_path
     gate.parent.mkdir(parents=True, exist_ok=True)
+    # An orphaned temporary was written by an earlier invocation, possibly an
+    # engine from before #1303, so it may carry the whole-config digest of this
+    # same configuration (`recorded_gate_fingerprints`). The new gate below
+    # always records the caller's fingerprint.
+    recorded = recorded_gate_fingerprints(store.settings) if config_fingerprint == store.settings.fingerprint else (config_fingerprint,)
     _cleanup_orphaned_temporaries(
         store,
         repository_identity=repository_identity,
-        config_fingerprint=config_fingerprint,
+        config_fingerprint=recorded,
         own_root=own_root,
     )
     token = uuid.uuid4().hex

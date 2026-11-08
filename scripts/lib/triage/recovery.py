@@ -14,6 +14,7 @@ from .model import (
     Settings,
     TriageError,
     canonical_state,
+    recorded_gate_fingerprints,
     repository_identity,
     repository_identity_matches,
 )
@@ -46,7 +47,7 @@ def _gate_capture(store: ArtifactStore, *, require_terminated: bool = True) -> t
         record = loads_exact(raw)
     except Exception as exc:
         raise TriageError("blocking gate is malformed", outcome="operator-held") from exc
-    validate_record(record, repository_identity=repository_identity(store.settings), config_fingerprint=store.settings.fingerprint, own_root=str(store.settings.paths.repo))
+    validate_record(record, repository_identity=repository_identity(store.settings), config_fingerprint=recorded_gate_fingerprints(store.settings), own_root=str(store.settings.paths.repo))
     if require_terminated and owner_status(record) != "terminated":
         raise TriageError("blocking gate owner is active or uncertain", outcome="operator-held")
     aliases: list[dict[str, Any]] = []
@@ -252,7 +253,7 @@ def resume_gate_only(store: ArtifactStore, settings: Settings, envelope: dict[st
             validate_record(
                 replacement_record,
                 repository_identity=repository_identity(settings),
-                config_fingerprint=settings.fingerprint,
+                config_fingerprint=recorded_gate_fingerprints(settings),
                 own_root=str(settings.paths.repo),
             )
             if replacement_record.get("owner_run_identity") != replacement_run_identity:
@@ -690,13 +691,14 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         # state valid but for a later configuration change is one the next
         # session-starting entry retires, so it is preserved here, not held
         # (#1272). The tolerance covers completed states only.
-        canonical_state(state_raw, settings=settings, mode=store.mode, retiring=True)
+        live = store.mode == "live"
+        canonical_state(state_raw, settings=settings, mode=store.mode, retiring=True, config_identity=not live)
         parses = True
         # `recover`'s own predicate: a completed state whose frozen artifact
         # is gone is not preserved as valid, because the entry `recover` would
         # send the operator to hard-stops on it (#859). An in-flight state
         # keeps `canonical_state` alone, so it stays restorable.
-        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=True)
+        validate_recoverable_state(store, settings, state_raw, mode=store.mode, retiring=True, config_identity=not live)
         valid = True
     except TriageError:
         pass
