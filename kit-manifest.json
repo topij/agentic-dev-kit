@@ -904,15 +904,15 @@
     },
     "scripts/tests/test_triage_config_scope.py": {
       "role": "test",
-      "sha256": "1b064eb449f9dd7ec3f9738b05487860cfa4872eafc122925829e4c027b512eb"
+      "sha256": "adfade534abb3c4a8df64f97dd210f82b8eb24f5a4de5f318ef420244e82b883"
     },
     "scripts/tests/test_triage_engine.py": {
       "role": "test",
-      "sha256": "849be31df00ec46d51c617eebb84ea5badb0c7a885126ef1d806451a0d798fc0"
+      "sha256": "281b2ce1edb0fa6ea3c7c0720161172e73122de8608c40fb952b0664830b81a3"
     },
     "scripts/tests/test_triage_forge_reconcile.py": {
       "role": "test",
-      "sha256": "e747a804c6bb86bc772dac812860e105292be9fe6efd05bb6637288ee0fb3be8"
+      "sha256": "d6cbb38d2e900e22cf7a37bbbd740330a1b02dc96678e0de16eb15d87dbf065c"
     },
     "scripts/tests/test_triage_gate.py": {
       "role": "test",
