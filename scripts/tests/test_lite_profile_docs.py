@@ -731,7 +731,16 @@ def _lite_install(tmp_path: Path, shell: str, kit: Path, *, keep: tuple[str, ...
     keep_args = [arg for path in keep for arg in ("--keep", path)]
     record = _doctor("--record-install", "--from-kit", str(kit), "--root", str(repo), *keep_args, env=env)
     assert record.returncode == 0, record.stderr
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "lite install")
     return repo, env
+
+
+def _kept_list(repo: Path, env: dict[str, str]) -> list[str]:
+    """upgrade.md U5's kept-skill listing, run as the doc writes it."""
+    listed = _run("sh", _upgrade_block('.get("kept", [])'), repo, env)
+    assert listed.returncode == 0, listed.stdout + listed.stderr
+    return listed.stdout.split()
 
 
 def _states(repo: Path, env: dict[str, str]) -> dict[str, str]:
@@ -751,30 +760,47 @@ def _take_list(repo: Path, env: dict[str, str]) -> str:
 
 @pytest.mark.parametrize("shell", UPGRADE_SHELLS)
 def test_upgrade_lite_takes_every_stale_file_and_records_an_intact_install(tmp_path: Path, shell: str) -> None:
-    kept = ".claude/skills/review/SKILL.md"
-    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path), keep=(kept,))
+    kept = (".claude/skills/review/SKILL.md", ".agents/skills/wrap-up/SKILL.md")
+    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path), keep=kept)
     before = _states(repo, env)
-    assert before[kept] == "declined"
-    assert {state for path, state in before.items() if path != kept and state != "outside-profile"} == {"stale"}
+    assert {before[path] for path in kept} == {"declined"}
+    assert {state for path, state in before.items() if path not in kept and state != "outside-profile"} == {"stale"}
 
     take = _take_list(repo, env)
-    assert kept not in take and take.count("\n") == 8, take
+    assert not any(path in take for path in kept) and take.count("\n") == 7, take
     env = {**env, "KIT": str(REPO_ROOT), "LITE_TAKE": take}
     result = _run(shell, _copy_block(), repo, env)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert result.stdout.count("took: ") == 8
-    assert (repo / kept).read_text(encoding="utf-8").endswith("Our review.\n")
+    assert result.stdout.count("took: ") == 7
+    for path in kept:
+        assert (repo / path).read_text(encoding="utf-8").endswith("Our review.\n")
 
-    # U5: the kept list is read before the record replaces the manifest.
-    kept_list = _upgrade_block('.get("kept", [])')
-    listed = _run("sh", kept_list, repo, env)
-    assert listed.returncode == 0 and listed.stdout.split() == [kept], listed.stdout + listed.stderr
-    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), "--keep", kept, env=env)
+    # U5: the kept list comes from the committed baseline, by installed path.
+    assert sorted(_kept_list(repo, env)) == sorted(kept)
+    keep_args = [arg for path in kept for arg in ("--keep", path)]
+    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), *keep_args, env=env)
     assert record.returncode == 0, record.stderr
     report = _doctor("--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), env=env)
     assert report.returncode == 0, report.stdout + report.stderr
-    assert "intact for this adoption — lite install, 1 file(s) declined" in report.stdout
-    assert "files: 8 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+    assert "intact for this adoption — lite install, 2 file(s) declined" in report.stdout
+    assert "files: 7 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_kept_list_survives_a_failed_record(tmp_path: Path, shell: str) -> None:
+    """A record that exits 1 rewrites the manifest without `kept`; U5's retry still
+    finds the kept skills, and checking the baseline out undoes the failed record."""
+    kept = (".claude/skills/review/SKILL.md", ".agents/skills/review/SKILL.md")
+    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path), keep=kept)
+    env = {**env, "KIT": str(REPO_ROOT)}
+    failed = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
+    assert failed.returncode == 1, failed.stderr
+    written = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    assert "kept" not in written
+    assert sorted(_kept_list(repo, env)) == sorted(kept)
+
+    _git(repo, env, "checkout", "--", "kit-manifest.json")
+    assert {_states(repo, env)[path] for path in kept} == {"declined"}
 
 
 @pytest.mark.parametrize("shell", UPGRADE_SHELLS)
@@ -834,6 +860,27 @@ def test_upgrade_lite_copy_block_refuses_symlinks_and_a_shadowed_command(tmp_pat
     assert list((outside / "skills").iterdir()) == []
     assert not (repo / ".claude/skills/wrap-up").exists()
     assert command.read_text(encoding="utf-8") == "our command\n"
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_symlinked_ancestor(
+    tmp_path: Path, shell: str
+) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    repo, env = _repo(real, "adopter")
+    linked = tmp_path / "linked"
+    linked.symlink_to(real)
+    env = {
+        **env,
+        "REPO": f"{linked}/adopter/",
+        "KIT": str(REPO_ROOT),
+        "LITE_TAKE": "docs/agentic-dev-kit/lite/lite-review.md",
+    }
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == "took: docs/agentic-dev-kit/lite/lite-review.md\n"
+    assert (repo / "docs/agentic-dev-kit/lite/lite-review.md").is_file()
 
 
 @pytest.mark.parametrize("shell", UPGRADE_SHELLS)

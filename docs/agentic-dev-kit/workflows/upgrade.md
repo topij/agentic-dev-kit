@@ -1208,8 +1208,8 @@ complete, so the material unfinished-work exception in `pr-watch` does not apply
 
 ## Lite profile
 
-A lite install (`adopt.md`, *Lite profile*) holds nine kit files: the three lite
-workflow docs and their six skills. Its config, plan, friction inbox and `AGENTS.md`
+A lite install (`adopt.md`, *Lite profile*) holds the kit's files that `adopt.md`'s
+*Lite profile* L3 copies: the lite workflow docs and their skills. Its config, plan, friction inbox and `AGENTS.md`
 section are the repository's own. Upgrading it means replacing the kit files that
 were not edited here with the kit's newer copies, settling the edited ones with the
 operator, and recording the new baseline. Nothing is installed in the repository to
@@ -1217,15 +1217,20 @@ do it: `uv` on this machine runs the kit clone's `kit_doctor.py` with `--root`.
 
 ### U1 — Branch and kit
 
-Run Step 0's config check. Then choose where the commit goes, by `vcs.protected_branch`
-in any copy of the config (committed, staged or working tree), as the lite `wrap-up`
-reads it:
+Run Step 0's config check. Then read the configuration exactly as *Read the
+configuration* in this repository's own `docs/agentic-dev-kit/lite/lite-wrap-up.md`
+says, every copy of it included (committed, staged and working tree). **Each of that
+section's hard stops stops the upgrade too**, before any write; say which to the
+operator. Do not restate or shorten its rules here: a value that section refuses, such
+as a `vcs.protected_branch` that is null, a placeholder, holds a character it does not
+allow, names no branch here, or differs between copies, never decides where a commit
+goes. Then choose by the `<protected-branch>` that section reads:
 
-- **Set** → run *Select the task worktree* above, with `UPGRADE_BASE` set to that
+- **Named** → run *Select the task worktree* above, with `UPGRADE_BASE` set to that
   branch. U6 opens a pull request.
-- **Absent** → the repository takes direct commits. The upgrade commits to the branch
-  checked out, in the checkout in use, unless the operator names another branch or
-  asks for a task worktree.
+- **Absent from every copy** → the repository takes direct commits. The upgrade
+  commits to the branch checked out, in the checkout in use, unless the operator names
+  another branch or asks for a task worktree.
 
 Then run the **kit block** above. Bind and check both roots before the first write:
 
@@ -1245,8 +1250,10 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 Read, in order:
 
 - **`· profile: lite`.** Any other profile line means this is not a lite install: stop.
-- **`config schema`.** A schema behind the kit's means the lite config has keys to
-  migrate, and no lite migration is written: **stop and tell the operator** (#1320).
+- **`config schema`.** Anything but a `✓` line stops: a schema behind the kit's, an
+  unversioned config or an unreadable one. No lite migration is written, and the
+  `./init.sh` the line may suggest is the full profile's, which a lite repository does
+  not have: **stop and tell the operator** (#1320).
 - **The `baseline:` line.** It names the kit commit this install was recorded from. No
   baseline means the install was never recorded: run `adopt.md`'s *Lite profile* L4
   against the files as they are, with the operator, before upgrading.
@@ -1264,6 +1271,10 @@ Read, in order:
   - `new-upstream` — a lite file the kit added since the baseline. Install it.
   - `removed` — recorded as installed and now absent. Ask the operator whether it goes
     back.
+  - Any other state, such as `differs`, `missing` or `unknown-version`, means the
+    baseline does not describe this tree: stop and ask. The usual cause is a record
+    left by an abandoned attempt at U5, which `git -C "$REPO" checkout -- kit-manifest.json`
+    undoes.
 
 Then run the adapter report, which compares the six skills with the fetched kit's
 renderer: `kit-current` and `kit-stale` are kit copies, `adopter-owned` is the
@@ -1310,7 +1321,7 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
   python3 -c 'import json, sys; [print(f["path"]) for f in json.load(sys.stdin)["files"] if f["state"] in ("stale", "new-upstream")]'
 ```
 
-Then run the block. It replaces only the nine lite paths, never writes through a
+Then run the block. It replaces only the lite docs and skills, never writes through a
 symlink or under a symlinked directory, and skips a Claude skill while
 `.claude/commands/<slug>.md` exists, because the skill would silently shadow that
 command. A refused path prints `refused:` and makes the block exit 1. Its variable is
@@ -1365,12 +1376,20 @@ Done when the block printed `took:` for every path in `LITE_TAKE` and exited 0.
 
 ### U5 — Record the new baseline, then verify
 
-The record replaces `kit-manifest.json`, so first list the skills the old baseline
-keeps as the repository's own, by installed path:
+List the skills the old baseline keeps as the repository's own, by installed path.
+Read them from the **committed** baseline, never the working tree's file: the record
+rewrites `kit-manifest.json` even when it exits 1, and a record that exits 1 leaves no
+`kept` list in what it wrote, so a retry that read the working tree would find none
+and record the repository's own skill as an edit. The committed baseline is the same
+on every retry:
 
 ```bash
-python3 -c 'import json, sys; [print({"claude": ".claude", "codex": ".agents"}[p.split("/")[-3]] + "/skills/" + p.split("/")[-2] + "/SKILL.md") for p in json.load(open(sys.argv[1])).get("kept", [])]' "${REPO:?REPO is not set — re-run Step 0}/kit-manifest.json"
+git -C "${REPO:?REPO is not set — re-run Step 0}" show HEAD:kit-manifest.json |
+  python3 -c 'import json, sys; [print({"claude": ".claude", "codex": ".agents"}[p.split("/")[-3]] + "/skills/" + p.split("/")[-2] + "/SKILL.md") for p in json.load(sys.stdin).get("kept", [])]'
 ```
+
+A traceback here means no baseline is committed, which U2's `baseline:` line should
+already have caught: stop.
 
 Re-record with `--keep <path>` for each of them that U3 did not mark **take**, and for
 each skill U3 marked **keep**:
@@ -1381,7 +1400,8 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 
 Exit 1 names a lite file that is not the kit's copy and was not named with `--keep`:
 an edit U3 did not settle. Settle it with the operator, then re-run; re-running alone
-does not settle it. Then verify with `adopt.md`'s *Lite profile* L5, both commands, and
+does not settle it. To abandon the upgrade after a record, restore the committed
+baseline with `git -C "$REPO" checkout -- kit-manifest.json`. Then verify with `adopt.md`'s *Lite profile* L5, both commands, and
 read the result as L5 says.
 
 Done when the record exited 0, and L5's first command exits 0 and prints
