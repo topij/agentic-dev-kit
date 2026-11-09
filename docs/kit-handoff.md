@@ -316,13 +316,13 @@ lite workflow docs in `docs/agentic-dev-kit/lite/`. Phase 3 is two pull requests
 the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, executed shell-block tests) and #1359
 (the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). Phase 4's
 plugin option was tested on 2026-11-09 and set aside: a plugin's version pin holds per machine, not per
-repository (#1320's comment of that date). Phase 4's lite upgrade path is `upgrade.md`'s *Lite profile*, on branch
-`feat/lite-upgrade-path`; the lite-to-full move is not written. `topij/home-server` is the first lite
+repository (#1320's comment of that date). Phase 4's lite upgrade path is `upgrade.md`'s *Lite profile*; the lite-to-full move
+is not written. `topij/home-server` is the first lite
 install (topij/home-server#31, first installed at kit `78f10709`); its field reports are #1361 to #1365. The operator chose on
 2026-11-05 that lite supports pull-request repositories through `vcs.protected_branch` (#1362).
 **Owner:** #1320.
 
-▶ Next: once the lite upgrade path merges, run it in `topij/home-server` and its nested service repos
+▶ Next: run the lite upgrade path in `topij/home-server` and its nested service repos
 `brain`, `mcp-voice-notes` and `obsidian-vault-mcp`. On 2026-11-09 their `kit-manifest.json` files read lite at
 `c932a3aa` (home-server) and `d994f8eb` (the three service repos), so each takes #1381's lite wrap-up change
 (kit `d4d94ab3`) that way. Then #1399 (an optional backlog file for lite), then the TGuitar pilot, #1400, which the
