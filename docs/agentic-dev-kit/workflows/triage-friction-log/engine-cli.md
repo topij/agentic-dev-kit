@@ -20,7 +20,11 @@ approval, accounting, recovery and continuation, and `<engine-dir>/finalize_tria
 for a `resume`-defaulting finalization invocation; `paths.engines` and the two
 `triage.*_engine` fragments select their installed locations. Both accept canonical RFC 8785
 JSON through `--request`. A request file and an `--approval-context` file must be
-single-link regular files. The approval-context file is a runtime-attested boundary:
+single-link regular files, and every directory above it is refused if it is a symlink
+(for example, an unresolved system temporary-directory alias such as macOS's `/tmp`):
+resolve its path, as for the outcome-receipt and caller-run paths below, before
+passing it. That refusal names the symlinked directory rather than reporting a bare
+OS error. The approval-context file is a runtime-attested boundary:
 an embedding runtime supplies the current operator or independently read notification
 thread there. Proposal or approval JSON cannot establish that identity by repeating a
 name. A person who invokes the CLI directly and creates that file is explicitly
