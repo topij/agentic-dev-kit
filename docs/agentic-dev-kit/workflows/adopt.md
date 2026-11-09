@@ -788,7 +788,8 @@ import `AGENTS.md`, ask the operator where the section goes instead.
 - `config/dev-model.yaml` names the living plan and the friction inbox.
 - The workflows are kit-owned, in `docs/agentic-dev-kit/lite/`. Take the kit's copy
   rather than editing one here. To take a newer kit, follow the *Lite profile* section
-  of the kit's `docs/agentic-dev-kit/workflows/upgrade.md`.
+  of `docs/agentic-dev-kit/workflows/upgrade.md` in the kit,
+  https://github.com/topij/agentic-dev-kit (or the fork this repository adopted from).
 - Reads this repository adds to a workflow are its repository sources, listed below
   under the workflow's name. Each is a source like the doc's own: one that fails is
   reported unavailable, never as empty.

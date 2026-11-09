@@ -1215,31 +1215,39 @@ were not edited here with the kit's newer copies, settling the edited ones with 
 operator, and recording the new baseline. Nothing is installed in the repository to
 do it: `uv` on this machine runs the kit clone's `kit_doctor.py` with `--root`.
 
-### U1 — Branch and kit
+### U1 — Kit, configuration, branch
 
-Run Step 0's config check. Then read the configuration exactly as *Read the
-configuration* in this repository's own `docs/agentic-dev-kit/lite/lite-wrap-up.md`
-says, every copy of it included (committed, staged and working tree). **Each of that
-section's hard stops stops the upgrade too**, before any write; say which to the
-operator. Do not restate or shorten its rules here: a value that section refuses, such
-as a `vcs.protected_branch` that is null, a placeholder, holds a character it does not
-allow, names no branch here, or differs between copies, never decides where a commit
-goes. Then choose by the `<protected-branch>` that section reads:
+Run Step 0's config check, then the **kit block** above, from the checkout you are in
+and before anything else. The configuration rules this upgrade applies are the
+**fetched** kit's: the repository's installed copy of the lite workflows is the one
+being upgraded, and an older one lacks rules a newer one stops on. The kit block
+writes only its clone, inside the git directory. Keep `KIT` bound to that clone for
+the rest of the upgrade; if a new shell loses it, re-run the kit block from this same
+checkout, never from a task worktree made below, where it would clone again.
+
+Then read the configuration of `$REPO` exactly as *Read the configuration* in
+`"${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/lite-wrap-up.md"`
+says, every copy included (committed, staged and working tree). **Each of that
+section's hard stops stops the upgrade**, before any change to the repository and
+before any worktree is made; say which to the operator. Do not restate or shorten its
+rules here: a value that section refuses never decides where a commit goes. Then
+choose by the `<protected-branch>` that section reads:
 
 - **Named** → run *Select the task worktree* above, with `UPGRADE_BASE` set to that
-  branch. U6 opens a pull request.
+  branch. A reused worktree whose branch is `<protected-branch>` is refused: stop. U6
+  opens a pull request.
 - **Absent from every copy** → the repository takes direct commits. The upgrade
   commits to the branch checked out, in the checkout in use, unless the operator names
   another branch or asks for a task worktree.
 
-Then run the **kit block** above. Bind and check both roots before the first write:
+Bind and check both roots before the first write:
 
 ```bash
 echo "REPO=${REPO:?REPO is not set — re-run Step 0}"; echo "KIT=${KIT:?KIT is not set — re-run the kit block in Step 0}"; echo "pwd=$(pwd)"
 ```
 
-Done when `$REPO` is the lite repository on the branch the commit goes to, and `$KIT`
-is a clean clone whose commit the block printed.
+Done when no stop fired, `$REPO` is the lite repository on the branch the commit goes
+to, and `$KIT` is a clean clone whose commit the block printed.
 
 ### U2 — Diff the installation (read-only)
 
@@ -1267,7 +1275,10 @@ Read, in order:
     lost. For a skill only, the operator may instead keep it as the repository's own
     (U5's `--keep`). A doc cannot be kept.
   - `declined` — a skill the baseline records as the repository's own (`--keep` at
-    adopt or at an earlier upgrade). Leave it.
+    adopt or at an earlier upgrade). Leave it, if it is still there: a kept skill
+    deleted from disk reads `declined` too, and U5's `--keep` refuses it. Check that
+    the file exists; when it does not, ask the operator whether U3 takes the kit's copy
+    or leaves the skill absent, and leave it out of U5's `--keep` either way.
   - `new-upstream` — a lite file the kit added since the baseline. Install it.
   - `removed` — recorded as installed and now absent. Ask the operator whether it goes
     back.
@@ -1276,13 +1287,10 @@ Read, in order:
     left by an abandoned attempt at U5, which `git -C "$REPO" checkout -- kit-manifest.json`
     undoes.
 
-Then run the adapter report, which compares the six skills with the fetched kit's
-renderer: `kit-current` and `kit-stale` are kit copies, `adopter-owned` is the
-repository's own.
-
-```bash
-uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "${REPO:?REPO is not set — re-run Step 0}" --adapter-report --adapter-source "${KIT:?KIT is not set — re-run the kit block in Step 0}"
-```
+Do not decide from the adapter report here. For a lite skill it reads only
+`kit-current` or `adopter-owned`, so an unedited copy from an older kit reads as the
+repository's own. The states above decide; L5 runs the report after U4, when every
+taken skill reads `kit-current`.
 
 Then read what the new copies do differently: run *Then read what the new files will do
 differently* from Step 1, with `"${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "$REPO"`
@@ -1290,18 +1298,14 @@ wherever it runs `"$REPO"/<engine-dir>/kit_doctor.py`. Only entries about the li
 skills, the lite config keys or `adopt.md`'s *Lite profile* concern this repository; say
 which those are, and that the rest are outside the profile.
 
-Last, two things the report does not judge:
+Last, one thing the report does not judge: **the `AGENTS.md` section** headed
+`## Session discipline (agentic-dev-kit, lite profile)`, against the same section in
+`$KIT`'s `adopt.md` L3. A changed bullet is offered in U3. The repository sources
+listed under the section are the repository's, and stay. (The configuration was
+judged in U1, by the fetched kit's rules.)
 
-- **The config, every copy**, by the configuration stops in the fetched kit's
-  `docs/agentic-dev-kit/lite/lite-wrap-up.md`: a newer kit can add a stop that this
-  config fails, and the first wrap-up after the upgrade would refuse to start.
-- **The `AGENTS.md` section** headed `## Session discipline (agentic-dev-kit, lite
-  profile)`, against the same section in `$KIT`'s `adopt.md` L3. A changed bullet is
-  offered in U3. The repository sources listed under the section are the
-  repository's, and stay.
-
-Done when every lite file has a state, and the changelog entries, config stops and
-section difference that concern this repository are listed.
+Done when every lite file has a state, and the changelog entries and section
+difference that concern this repository are listed.
 
 ### U3 — Propose the plan, then wait
 
@@ -1322,9 +1326,9 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 ```
 
 Then run the block. It replaces only the lite docs and skills, never writes through a
-symlink or under a symlinked directory, and skips a Claude skill while
-`.claude/commands/<slug>.md` exists, because the skill would silently shadow that
-command. A refused path prints `refused:` and makes the block exit 1. Its variable is
+symlink, under a symlinked directory or onto a directory, and refuses a Claude skill
+while `.claude/commands/<slug>.md` exists, as a file or a symlink, because the skill
+would silently shadow that command. A refused path prints `refused:` and makes the block exit 1. Its variable is
 `rel`, never `path`: zsh ties `path` to `PATH`, so assigning it empties the command
 search path and the symlink check never ends.
 
@@ -1345,6 +1349,7 @@ refused=0
 take_one() {
   dst="$REPO/$1"
   if [ -L "$dst" ]; then echo "refused: $dst is a symlink"; refused=1; return; fi
+  if [ -d "$dst" ]; then echo "refused: $dst is a directory"; refused=1; return; fi
   if under_link "$dst"; then echo "refused: a directory on the path of $dst is a symlink"; refused=1; return; fi
   mkdir -p "$(dirname "$dst")" || exit 1
   cp "$2" "$dst" || exit 1
@@ -1410,7 +1415,9 @@ Done when the record exited 0, and L5's first command exits 0 and prints
 ### U6 — Commit and hand off
 
 Stage by name every path U4 took, `kit-manifest.json`, and each config or `AGENTS.md`
-edit U3 approved. Commit on U1's branch. When `vcs.protected_branch` is set, push and
+edit U3 approved. Run the lite `review` workflow on the staged change, as the lite
+`AGENTS.md` section requires before a commit, and settle what it finds. Commit on
+U1's branch, which is never `<protected-branch>`. When `vcs.protected_branch` is set, push and
 open a ready pull request from the task branch and leave the merge to the operator.
 Delete `$KIT` once the commit has landed. Report the kit commit before and after, what
 was taken, kept and settled, and the changelog entries that concern this repository.

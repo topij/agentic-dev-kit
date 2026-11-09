@@ -677,14 +677,17 @@ def _copy_block() -> str:
     return _upgrade_block("LITE_TAKE is not set")
 
 
-def _old_kit(tmp_path: Path) -> Path:
+def _old_kit(tmp_path: Path, *, without: tuple[str, ...] = ()) -> Path:
     """A git checkout holding every lite file one line longer than the kit's, with a
-    manifest that records those copies: the kit an install is upgraded from."""
+    manifest that records those copies: the kit an install is upgraded from. A path in
+    `without` is one the old kit did not have yet."""
     env = _git_env(tmp_path)
     kit = tmp_path / "old-kit"
     kit.mkdir()
     files = {}
     for rel in _lite_sources():
+        if rel in without:
+            continue
         target = kit / rel
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes((REPO_ROOT / rel).read_bytes() + b"\nAn older kit's line.\n")
@@ -752,7 +755,7 @@ def _states(repo: Path, env: dict[str, str]) -> dict[str, str]:
 
 def _take_list(repo: Path, env: dict[str, str]) -> str:
     """upgrade.md U4's listing command, run as the doc writes it."""
-    listing = _upgrade_block('f["state"] in ("stale", "new-upstream")')
+    listing = _upgrade_block('--json |')
     result = _run("sh", listing, repo, {**env, "KIT": str(REPO_ROOT)})
     assert result.returncode == 0, result.stderr
     return result.stdout
@@ -881,6 +884,83 @@ def test_upgrade_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_syml
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout == "took: docs/agentic-dev-kit/lite/lite-review.md\n"
     assert (repo / "docs/agentic-dev-kit/lite/lite-review.md").is_file()
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_installs_a_doc_the_kit_added_since_the_baseline(tmp_path: Path, shell: str) -> None:
+    added = "docs/agentic-dev-kit/lite/lite-review.md"
+    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path, without=(added,)))
+    assert not (repo / added).exists()
+    # A baseline recorded by an older kit_doctor, which did not know the path at all.
+    manifest = repo / "kit-manifest.json"
+    baseline = json.loads(manifest.read_text(encoding="utf-8"))
+    baseline["not_installed"].remove(added)
+    manifest.write_text(json.dumps(baseline), encoding="utf-8")
+    _git(repo, env, "commit", "-qam", "baseline from an older kit_doctor")
+    assert _states(repo, env)[added] == "new-upstream"
+    take = _take_list(repo, env)
+    assert added in take.split()
+    result = _run(shell, _copy_block(), repo, {**env, "KIT": str(REPO_ROOT), "LITE_TAKE": take})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"took: {added}" in result.stdout
+    assert (repo / added).read_bytes() == (REPO_ROOT / added).read_bytes()
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_refuses_a_dangling_command_symlink_and_a_directory(
+    tmp_path: Path, shell: str
+) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    command = repo / ".claude/commands/review.md"
+    command.parent.mkdir(parents=True)
+    command.symlink_to(tmp_path / "nowhere.md")
+    directory = repo / "docs/agentic-dev-kit/lite/lite-wrap-up.md"
+    directory.mkdir(parents=True)
+    take = ".claude/skills/review/SKILL.md docs/agentic-dev-kit/lite/lite-wrap-up.md"
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout.count("refused: ") == 2, result.stdout
+    assert "took: " not in result.stdout
+    assert not (repo / ".claude/skills/review").exists()
+    assert list(directory.iterdir()) == []
+
+
+@pytest.mark.skipif(hasattr(os, "geteuid") and os.geteuid() == 0, reason="root writes a read-only directory")
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_stops_on_a_failed_copy(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    lite = repo / "docs/agentic-dev-kit/lite"
+    lite.mkdir(parents=True)
+    lite.chmod(0o500)
+    env = {
+        **env,
+        "REPO": str(repo),
+        "KIT": str(REPO_ROOT),
+        "LITE_TAKE": "docs/agentic-dev-kit/lite/lite-review.md .agents/skills/review/SKILL.md",
+    }
+    try:
+        result = _run(shell, _copy_block(), repo, env)
+    finally:
+        lite.chmod(0o700)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "took: " not in result.stdout
+    assert not (repo / ".agents").exists()
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_stops_when_a_directory_cannot_be_made(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    (repo / ".agents").write_text("a file where a directory belongs\n", encoding="utf-8")
+    env = {
+        **env,
+        "REPO": str(repo),
+        "KIT": str(REPO_ROOT),
+        "LITE_TAKE": ".agents/skills/review/SKILL.md .agents/skills/wrap-up/SKILL.md",
+    }
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "took: " not in result.stdout
 
 
 @pytest.mark.parametrize("shell", UPGRADE_SHELLS)

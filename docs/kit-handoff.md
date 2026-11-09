@@ -324,7 +324,7 @@ install (topij/home-server#31, first installed at kit `78f10709`); its field rep
 
 ▶ Next: run the lite upgrade path in `topij/home-server` and its nested service repos
 `brain`, `mcp-voice-notes` and `obsidian-vault-mcp`. On 2026-11-09 their `kit-manifest.json` files read lite at
-`c932a3aa` (home-server) and `d994f8eb` (the three service repos), so each takes #1381's lite wrap-up change
+`c932a3aa` (home-server) and `d994f8eb` (`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`), so each takes #1381's lite wrap-up change
 (kit `d4d94ab3`) that way. Then #1399 (an optional backlog file for lite), then the TGuitar pilot, #1400, which the
 operator chose over tNote for phase 5 on 2026-11-09. The lite-to-full move is not written. #1381's review rounds
 showed that a prose list of config stops does not converge; the findings left open, and a proposed shared validator
