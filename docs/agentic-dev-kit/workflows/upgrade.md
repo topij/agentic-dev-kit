@@ -43,9 +43,9 @@ test -f "$REPO/config/dev-model.yaml" && echo "has config" || echo "NO CONFIG"
   *ancestor*, or a partial hand-install). **Stop and run `/adopt` instead** — there is no
   schema to migrate from. Say so plainly rather than guessing a config into existence.
 - **Config present with `profile: lite`** → a lite install (`adopt.md`, *Lite profile*).
-  This workflow upgrades a full install: its steps refresh engines, hooks and
-  `init.sh`, none of which a lite repository has. **Stop and tell the operator** that the
-  lite upgrade path is not written yet (#1320). Do not run these steps on it.
+  Steps 1–6 refresh engines, hooks and `init.sh`, none of which a lite repository has.
+  **Follow *Lite profile* at the end of this workflow instead**; it says which parts of
+  this step it uses. Do not run Steps 1–6 on a lite repository.
 - **Config present** → continue. `kit.version` tells you the schema generation; its
   absence means v1 (pre-`runtime:`, pre-`models.tiers`).
 
@@ -1205,3 +1205,198 @@ touches the machinery every other workflow runs on. Ready status invites review 
 does not authorize merge. Run `pr-watch --assert-ready` immediately after creation,
 before its normal watch-and-fix loop. This step runs after the upgrade and PR body are
 complete, so the material unfinished-work exception in `pr-watch` does not apply.
+
+## Lite profile
+
+A lite install (`adopt.md`, *Lite profile*) holds nine kit files: the three lite
+workflow docs and their six skills. Its config, plan, friction inbox and `AGENTS.md`
+section are the repository's own. Upgrading it means replacing the kit files that
+were not edited here with the kit's newer copies, settling the edited ones with the
+operator, and recording the new baseline. Nothing is installed in the repository to
+do it: `uv` on this machine runs the kit clone's `kit_doctor.py` with `--root`.
+
+### U1 — Branch and kit
+
+Run Step 0's config check. Then choose where the commit goes, by `vcs.protected_branch`
+in any copy of the config (committed, staged or working tree), as the lite `wrap-up`
+reads it:
+
+- **Set** → run *Select the task worktree* above, with `UPGRADE_BASE` set to that
+  branch. U6 opens a pull request.
+- **Absent** → the repository takes direct commits. The upgrade commits to the branch
+  checked out, in the checkout in use, unless the operator names another branch or
+  asks for a task worktree.
+
+Then run the **kit block** above. Bind and check both roots before the first write:
+
+```bash
+echo "REPO=${REPO:?REPO is not set — re-run Step 0}"; echo "KIT=${KIT:?KIT is not set — re-run the kit block in Step 0}"; echo "pwd=$(pwd)"
+```
+
+Done when `$REPO` is the lite repository on the branch the commit goes to, and `$KIT`
+is a clean clone whose commit the block printed.
+
+### U2 — Diff the installation (read-only)
+
+```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "${REPO:?REPO is not set — re-run Step 0}" --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json"
+```
+
+Read, in order:
+
+- **`· profile: lite`.** Any other profile line means this is not a lite install: stop.
+- **`config schema`.** A schema behind the kit's means the lite config has keys to
+  migrate, and no lite migration is written: **stop and tell the operator** (#1320).
+- **The `baseline:` line.** It names the kit commit this install was recorded from. No
+  baseline means the install was never recorded: run `adopt.md`'s *Lite profile* L4
+  against the files as they are, with the operator, before upgrading.
+- **Each lite file's state**, at its installed path:
+  - `unchanged` — the kit has not changed it. Nothing to do.
+  - `stale` — byte-identical to what was installed, and the kit has moved on.
+    Replace it; nothing local is lost.
+  - `locally-edited` or `stale-and-edited` — someone edited it here. The lite
+    `AGENTS.md` section says to take the kit's copy rather than edit one here, so the
+    edit is either moved to a repository source or the plan, with the operator, or
+    lost. For a skill only, the operator may instead keep it as the repository's own
+    (U5's `--keep`). A doc cannot be kept.
+  - `declined` — a skill the baseline records as the repository's own (`--keep` at
+    adopt or at an earlier upgrade). Leave it.
+  - `new-upstream` — a lite file the kit added since the baseline. Install it.
+  - `removed` — recorded as installed and now absent. Ask the operator whether it goes
+    back.
+
+Then run the adapter report, which compares the six skills with the fetched kit's
+renderer: `kit-current` and `kit-stale` are kit copies, `adopter-owned` is the
+repository's own.
+
+```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "${REPO:?REPO is not set — re-run Step 0}" --adapter-report --adapter-source "${KIT:?KIT is not set — re-run the kit block in Step 0}"
+```
+
+Then read what the new copies do differently: run *Then read what the new files will do
+differently* from Step 1, with `"$KIT/scripts/kit_doctor.py" --root "$REPO"` wherever it
+runs `"$REPO"/<engine-dir>/kit_doctor.py`. Only entries about the lite docs, the lite
+skills, the lite config keys or `adopt.md`'s *Lite profile* concern this repository; say
+which those are, and that the rest are outside the profile.
+
+Last, two things the report does not judge:
+
+- **The config, every copy**, by the configuration stops in the fetched kit's
+  `docs/agentic-dev-kit/lite/lite-wrap-up.md`: a newer kit can add a stop that this
+  config fails, and the first wrap-up after the upgrade would refuse to start.
+- **The `AGENTS.md` section** headed `## Session discipline (agentic-dev-kit, lite
+  profile)`, against the same section in `$KIT`'s `adopt.md` L3. A changed bullet is
+  offered in U3. The repository sources listed under the section are the
+  repository's, and stay.
+
+Done when every lite file has a state, and the changelog entries, config stops and
+section difference that concern this repository are listed.
+
+### U3 — Propose the plan, then wait
+
+Show one row per lite file whose state is not `unchanged` or `declined`: **take** the
+kit's copy, or **keep** (a skill only, recorded with `--keep`), with where an edit
+being replaced goes. Add a row for each config change and each section bullet the
+operator would take, and name the branch from U1. Wait for the operator's go-ahead.
+
+### U4 — Take the kit's copies
+
+Set `LITE_TAKE` to the installed paths of the rows U3 marked **take**, separated by
+spaces or newlines; a path the block does not know is ignored, and U5's report then
+still shows its file as it was. The `stale` and `new-upstream` rows can be listed with:
+
+```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "${REPO:?REPO is not set — re-run Step 0}" --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json" --json |
+  python3 -c 'import json, sys; [print(f["path"]) for f in json.load(sys.stdin)["files"] if f["state"] in ("stale", "new-upstream")]'
+```
+
+Then run the block. Its variable is `rel`, not `path`: zsh ties `path` to `PATH`, so
+assigning it there empties the command search path. It replaces only the nine lite paths, never writes through a
+symlink or under a symlinked directory, and skips a Claude skill while
+`.claude/commands/<slug>.md` exists, because the skill would silently shadow that
+command. A refused path prints `refused:` and makes the block exit 1.
+
+```bash
+REPO="${REPO:?REPO is not set — re-run Step 0}"
+while [ "$REPO" != / ] && [ "${REPO%/}" != "$REPO" ]; do REPO="${REPO%/}"; done
+: "${LITE_TAKE:?LITE_TAKE is not set — list the rows U3 marked take}"
+take=" $(printf '%s' "$LITE_TAKE" | tr '\n\t' '  ') "
+under_link() {
+  d=$(dirname "$1")
+  while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
+    if [ -L "$d" ]; then return 0; fi
+    d=$(dirname "$d")
+  done
+  return 1
+}
+refused=0
+for pair in \
+  docs/agentic-dev-kit/lite/lite-session-start.md:docs/agentic-dev-kit/lite/lite-session-start.md \
+  docs/agentic-dev-kit/lite/lite-wrap-up.md:docs/agentic-dev-kit/lite/lite-wrap-up.md \
+  docs/agentic-dev-kit/lite/lite-review.md:docs/agentic-dev-kit/lite/lite-review.md \
+  .claude/skills/session-start/SKILL.md:docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md \
+  .claude/skills/wrap-up/SKILL.md:docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md \
+  .claude/skills/review/SKILL.md:docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md \
+  .agents/skills/session-start/SKILL.md:docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md \
+  .agents/skills/wrap-up/SKILL.md:docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md \
+  .agents/skills/review/SKILL.md:docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md
+do
+  rel=${pair%%:*}; src=${pair#*:}
+  case "$take" in *" $rel "*) ;; *) continue ;; esac
+  dst="$REPO/$rel"
+  if [ -L "$dst" ]; then echo "refused: $dst is a symlink"; refused=1; continue; fi
+  if under_link "$dst"; then echo "refused: a directory on the path of $dst is a symlink"; refused=1; continue; fi
+  case "$rel" in
+    .claude/skills/*)
+      slug=${rel#.claude/skills/}; slug=${slug%/SKILL.md}
+      cmd="$REPO/.claude/commands/$slug.md"
+      if [ -e "$cmd" ] || [ -L "$cmd" ]; then echo "refused: $cmd would be shadowed by $dst"; refused=1; continue; fi
+      ;;
+  esac
+  mkdir -p "$(dirname "$dst")" || exit 1
+  cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/$src" "$dst" || exit 1
+  echo "took: $rel"
+done
+[ "$refused" = 0 ] || exit 1
+```
+
+Settle each `refused:` path with the operator; never remove a symlink or a command
+yourself. Make the config changes and section edits U3 approved by hand.
+
+Done when the block printed `took:` for every path in `LITE_TAKE` and exited 0.
+
+### U5 — Record the new baseline, then verify
+
+The record replaces `kit-manifest.json`, so first list the skills the old baseline
+keeps as the repository's own, by installed path:
+
+```bash
+python3 -c 'import json, sys; [print(p.replace("docs/agentic-dev-kit/lite/adapters/claude/", ".claude/skills/").replace("docs/agentic-dev-kit/lite/adapters/codex/", ".agents/skills/")) for p in json.load(open(sys.argv[1])).get("kept", [])]' "${REPO:?REPO is not set — re-run Step 0}/kit-manifest.json"
+```
+
+Re-record with `--keep <path>` for each of them that U3 did not mark **take**, and for
+each skill U3 marked **keep**:
+
+```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "${REPO:?REPO is not set — re-run Step 0}"
+```
+
+Exit 1 names a lite file that is not the kit's copy and was not named with `--keep`:
+an edit U3 did not settle. Settle it with the operator, then re-run; re-running alone
+does not settle it. Then verify with `adopt.md`'s *Lite profile* L5, both commands, and
+read the result as L5 says.
+
+Done when the record exited 0, and L5's first command exits 0 and prints
+`intact for this adoption — lite install`, with `declined` only for kept skills.
+
+### U6 — Commit and hand off
+
+Stage by name every path U4 took, `kit-manifest.json`, and each config or `AGENTS.md`
+edit U3 approved. Commit on U1's branch. When `vcs.protected_branch` is set, push and
+open a ready pull request from the task branch and leave the merge to the operator.
+Delete `$KIT` once the commit has landed. Report the kit commit before and after, what
+was taken, kept and settled, and the changelog entries that concern this repository.
+Record friction the upgrade surfaced in the repository's friction inbox
+(`paths.friction_log`), and report a kit-side fault upstream.
+A move from lite to the full profile is not this workflow: its path is not written yet
+(#1320).

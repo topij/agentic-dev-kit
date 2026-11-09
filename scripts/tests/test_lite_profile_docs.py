@@ -652,3 +652,195 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
     assert states[".agents/skills/wrap-up/SKILL.md"] == "removed"
     assert states[".claude/skills/session-start/SKILL.md"] == "locally-edited"
     assert states[".claude/skills/review/SKILL.md"] == "declined"
+
+
+# upgrade.md's *Lite profile*, run from the doc's own blocks against a lite install
+# recorded from an older kit.
+
+UPGRADE = REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md"
+UPGRADE_SHELLS = [s for s in ("sh", "bash", "zsh") if shutil.which(s)]
+
+
+def _upgrade_block(needle: str) -> str:
+    text = UPGRADE.read_text(encoding="utf-8")
+    section = text[text.index("\n## Lite profile\n") :]
+    blocks = [
+        textwrap.dedent(m.group(1))
+        for m in re.finditer(r"^```bash\n(.*?)^```", section, re.MULTILINE | re.DOTALL)
+        if needle in m.group(1)
+    ]
+    assert len(blocks) == 1, f"upgrade.md's lite block with {needle!r} is missing or repeated"
+    return blocks[0]
+
+
+def _copy_block() -> str:
+    return _upgrade_block("LITE_TAKE is not set")
+
+
+def _old_kit(tmp_path: Path) -> Path:
+    """A git checkout holding every lite file one line longer than the kit's, with a
+    manifest that records those copies: the kit an install is upgraded from."""
+    env = _git_env(tmp_path)
+    kit = tmp_path / "old-kit"
+    kit.mkdir()
+    files = {}
+    for rel in _lite_sources():
+        target = kit / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((REPO_ROOT / rel).read_bytes() + b"\nAn older kit's line.\n")
+        files[rel] = {"sha256": _sha256(target), "role": "lite"}
+    manifest = json.loads((REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8"))
+    (kit / "kit-manifest.json").write_text(
+        json.dumps({"kit_version": manifest["kit_version"], "files": files}), encoding="utf-8"
+    )
+    _git(kit, env, "-c", "init.defaultBranch=main", "init", "-q")
+    _git(kit, env, "add", "-A")
+    _git(kit, env, "commit", "-qm", "old kit")
+    return kit
+
+
+def _lite_sources() -> list[str]:
+    manifest = json.loads((REPO_ROOT / "kit-manifest.json").read_text(encoding="utf-8"))
+    return list(manifest["profiles"]["lite"])
+
+
+def _sha256(path: Path) -> str:
+    import hashlib
+
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _lite_install(tmp_path: Path, shell: str, kit: Path, *, keep: tuple[str, ...] = ()) -> tuple[Path, dict[str, str]]:
+    """A lite repository installed by adopt.md's own blocks from `kit` and recorded."""
+    repo, env = _repo(tmp_path, "adopter")
+    for path in keep:
+        skill = repo / path
+        skill.parent.mkdir(parents=True)
+        skill.write_text("---\nname: review\ndescription: Ours.\n---\n\nOur review.\n", encoding="utf-8")
+    env = {**env, "REPO": str(repo), "KIT": str(kit)}
+    installed = _run(shell, _adopt_copy_block(), repo, env)
+    assert installed.returncode == 0, installed.stderr
+    (repo / "config").mkdir()
+    (repo / "config/dev-model.yaml").write_text(
+        "profile: lite\nkit:\n  version: 2\npaths:\n  handoff: docs/plan.md\n"
+        "  friction_log: docs/friction-log.md\n",
+        encoding="utf-8",
+    )
+    (repo / "docs/plan.md").write_text("# Plan\n\n## Workstreams\n", encoding="utf-8")
+    (repo / "docs/friction-log.md").write_text("# Friction log\n", encoding="utf-8")
+    keep_args = [arg for path in keep for arg in ("--keep", path)]
+    record = _doctor("--record-install", "--from-kit", str(kit), "--root", str(repo), *keep_args, env=env)
+    assert record.returncode == 0, record.stderr
+    return repo, env
+
+
+def _states(repo: Path, env: dict[str, str]) -> dict[str, str]:
+    report = _doctor(
+        "--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), "--json", env=env
+    )
+    return {row["path"]: row["state"] for row in json.loads(report.stdout)["files"]}
+
+
+def _take_list(repo: Path, env: dict[str, str]) -> str:
+    """upgrade.md U4's listing command, run as the doc writes it."""
+    listing = _upgrade_block('f["state"] in ("stale", "new-upstream")')
+    result = _run("sh", listing, repo, {**env, "KIT": str(REPO_ROOT)})
+    assert result.returncode == 0, result.stderr
+    return result.stdout
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_takes_every_stale_file_and_records_an_intact_install(tmp_path: Path, shell: str) -> None:
+    kept = ".claude/skills/review/SKILL.md"
+    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path), keep=(kept,))
+    before = _states(repo, env)
+    assert before[kept] == "declined"
+    assert {state for path, state in before.items() if path != kept and state != "outside-profile"} == {"stale"}
+
+    take = _take_list(repo, env)
+    assert kept not in take and take.count("\n") == 8, take
+    env = {**env, "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.count("took: ") == 8
+    assert (repo / kept).read_text(encoding="utf-8").endswith("Our review.\n")
+
+    # U5: the kept list is read before the record replaces the manifest.
+    kept_list = _upgrade_block('.get("kept", [])')
+    listed = _run("sh", kept_list, repo, env)
+    assert listed.returncode == 0 and listed.stdout.split() == [kept], listed.stdout + listed.stderr
+    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), "--keep", kept, env=env)
+    assert record.returncode == 0, record.stderr
+    report = _doctor("--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), env=env)
+    assert report.returncode == 0, report.stdout + report.stderr
+    assert "intact for this adoption — lite install, 1 file(s) declined" in report.stdout
+    assert "files: 8 unchanged, 0 differ, 0 missing, 0 unknown" in report.stdout
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_leaves_an_edited_file_to_the_operator(tmp_path: Path, shell: str) -> None:
+    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path))
+    edited = repo / "docs/agentic-dev-kit/lite/lite-wrap-up.md"
+    edited.write_text(edited.read_text(encoding="utf-8") + "Our edit.\n", encoding="utf-8")
+    assert _states(repo, env)["docs/agentic-dev-kit/lite/lite-wrap-up.md"] == "stale-and-edited"
+
+    take = _take_list(repo, env)
+    assert "lite-wrap-up.md" not in take
+    env = {**env, "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+    assert _run(shell, _copy_block(), repo, env).returncode == 0
+    assert edited.read_text(encoding="utf-8").endswith("Our edit.\n")
+
+    # U5: the unsettled edit fails the record until the operator settles it.
+    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
+    assert record.returncode == 1
+    assert "docs/agentic-dev-kit/lite/lite-wrap-up.md" in record.stderr
+    settled = _run(shell, _copy_block(), repo, {**env, "LITE_TAKE": "docs/agentic-dev-kit/lite/lite-wrap-up.md"})
+    assert settled.returncode == 0 and settled.stdout == "took: docs/agentic-dev-kit/lite/lite-wrap-up.md\n"
+    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
+    assert record.returncode == 0, record.stderr
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_refuses_symlinks_and_a_shadowed_command(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    link = repo / "docs/agentic-dev-kit/lite/lite-review.md"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(outside / "review.md")
+    (outside / "skills").mkdir()
+    (repo / ".agents").mkdir()
+    (repo / ".agents/skills").symlink_to(outside / "skills")
+    command = repo / ".claude/commands/wrap-up.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("our command\n", encoding="utf-8")
+    take = "\n".join(
+        [
+            "docs/agentic-dev-kit/lite/lite-review.md",
+            ".agents/skills/review/SKILL.md",
+            ".claude/skills/wrap-up/SKILL.md",
+            ".claude/skills/session-start/SKILL.md",
+            "README.md",
+        ]
+    )
+    env = {**env, "REPO": f"{repo}/", "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout.count("refused: ") == 3, result.stdout
+    assert "took: .claude/skills/session-start/SKILL.md" in result.stdout
+    assert "README.md" not in result.stdout
+    assert link.is_symlink() and not (outside / "review.md").exists()
+    assert list((outside / "skills").iterdir()) == []
+    assert not (repo / ".claude/skills/wrap-up").exists()
+    assert command.read_text(encoding="utf-8") == "our command\n"
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_refuses_to_run_without_a_list(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode != 0
+    assert "LITE_TAKE is not set" in result.stderr
+    assert not (repo / "docs").exists()
