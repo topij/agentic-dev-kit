@@ -1274,8 +1274,8 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
 ```
 
 Then read what the new copies do differently: run *Then read what the new files will do
-differently* from Step 1, with `"$KIT/scripts/kit_doctor.py" --root "$REPO"` wherever it
-runs `"$REPO"/<engine-dir>/kit_doctor.py`. Only entries about the lite docs, the lite
+differently* from Step 1, with `"${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "$REPO"`
+wherever it runs `"$REPO"/<engine-dir>/kit_doctor.py`. Only entries about the lite docs, the lite
 skills, the lite config keys or `adopt.md`'s *Lite profile* concern this repository; say
 which those are, and that the rest are outside the profile.
 
@@ -1310,11 +1310,12 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
   python3 -c 'import json, sys; [print(f["path"]) for f in json.load(sys.stdin)["files"] if f["state"] in ("stale", "new-upstream")]'
 ```
 
-Then run the block. Its variable is `rel`, not `path`: zsh ties `path` to `PATH`, so
-assigning it there empties the command search path. It replaces only the nine lite paths, never writes through a
+Then run the block. It replaces only the nine lite paths, never writes through a
 symlink or under a symlinked directory, and skips a Claude skill while
 `.claude/commands/<slug>.md` exists, because the skill would silently shadow that
-command. A refused path prints `refused:` and makes the block exit 1.
+command. A refused path prints `refused:` and makes the block exit 1. Its variable is
+`rel`, never `path`: zsh ties `path` to `PATH`, so assigning it empties the command
+search path and the symlink check never ends.
 
 ```bash
 REPO="${REPO:?REPO is not set — re-run Step 0}"
@@ -1330,32 +1331,29 @@ under_link() {
   return 1
 }
 refused=0
-for pair in \
-  docs/agentic-dev-kit/lite/lite-session-start.md:docs/agentic-dev-kit/lite/lite-session-start.md \
-  docs/agentic-dev-kit/lite/lite-wrap-up.md:docs/agentic-dev-kit/lite/lite-wrap-up.md \
-  docs/agentic-dev-kit/lite/lite-review.md:docs/agentic-dev-kit/lite/lite-review.md \
-  .claude/skills/session-start/SKILL.md:docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md \
-  .claude/skills/wrap-up/SKILL.md:docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md \
-  .claude/skills/review/SKILL.md:docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md \
-  .agents/skills/session-start/SKILL.md:docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md \
-  .agents/skills/wrap-up/SKILL.md:docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md \
-  .agents/skills/review/SKILL.md:docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md
-do
-  rel=${pair%%:*}; src=${pair#*:}
-  case "$take" in *" $rel "*) ;; *) continue ;; esac
-  dst="$REPO/$rel"
-  if [ -L "$dst" ]; then echo "refused: $dst is a symlink"; refused=1; continue; fi
-  if under_link "$dst"; then echo "refused: a directory on the path of $dst is a symlink"; refused=1; continue; fi
-  case "$rel" in
-    .claude/skills/*)
-      slug=${rel#.claude/skills/}; slug=${slug%/SKILL.md}
-      cmd="$REPO/.claude/commands/$slug.md"
-      if [ -e "$cmd" ] || [ -L "$cmd" ]; then echo "refused: $cmd would be shadowed by $dst"; refused=1; continue; fi
-      ;;
-  esac
+take_one() {
+  dst="$REPO/$1"
+  if [ -L "$dst" ]; then echo "refused: $dst is a symlink"; refused=1; return; fi
+  if under_link "$dst"; then echo "refused: a directory on the path of $dst is a symlink"; refused=1; return; fi
   mkdir -p "$(dirname "$dst")" || exit 1
-  cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/$src" "$dst" || exit 1
-  echo "took: $rel"
+  cp "$2" "$dst" || exit 1
+  echo "took: $1"
+}
+for doc in lite-session-start lite-wrap-up lite-review; do
+  rel="docs/agentic-dev-kit/lite/$doc.md"
+  case "$take" in *" $rel "*) ;; *) continue ;; esac
+  take_one "$rel" "${KIT:?KIT is not set — re-run the kit block in Step 0}/$rel"
+done
+for slug in session-start wrap-up review; do
+  for pair in "claude:.claude/skills" "codex:.agents/skills"; do
+    runtime=${pair%%:*}; rel="${pair#*:}/$slug/SKILL.md"
+    case "$take" in *" $rel "*) ;; *) continue ;; esac
+    cmd="$REPO/.claude/commands/$slug.md"
+    if [ "$runtime" = claude ] && { [ -e "$cmd" ] || [ -L "$cmd" ]; }; then
+      echo "refused: $cmd would be shadowed by $REPO/$rel"; refused=1; continue
+    fi
+    take_one "$rel" "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md"
+  done
 done
 [ "$refused" = 0 ] || exit 1
 ```
@@ -1371,7 +1369,7 @@ The record replaces `kit-manifest.json`, so first list the skills the old baseli
 keeps as the repository's own, by installed path:
 
 ```bash
-python3 -c 'import json, sys; [print(p.replace("docs/agentic-dev-kit/lite/adapters/claude/", ".claude/skills/").replace("docs/agentic-dev-kit/lite/adapters/codex/", ".agents/skills/")) for p in json.load(open(sys.argv[1])).get("kept", [])]' "${REPO:?REPO is not set — re-run Step 0}/kit-manifest.json"
+python3 -c 'import json, sys; [print({"claude": ".claude", "codex": ".agents"}[p.split("/")[-3]] + "/skills/" + p.split("/")[-2] + "/SKILL.md") for p in json.load(open(sys.argv[1])).get("kept", [])]' "${REPO:?REPO is not set — re-run Step 0}/kit-manifest.json"
 ```
 
 Re-record with `--keep <path>` for each of them that U3 did not mark **take**, and for
