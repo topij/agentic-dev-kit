@@ -1277,8 +1277,22 @@ Read, in order:
   run `adopt.md`'s L4 to make one. L4 records against `$KIT`, and `$KIT` is the newer
   kit, so a record from it would describe none of the older files as installed, under the
   new kit's commit, with no committed baseline to restore (#1320).
+- **Whether a record is still owed.** Compare the commit the **committed** baseline
+  names with `$KIT`'s:
+
+  ```bash
+  git -C "${REPO:?REPO is not set — re-run Step 0}" show HEAD:kit-manifest.json | python3 -c 'import json, sys; print(json.load(sys.stdin).get("kit_commit"))'
+  git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse HEAD
+  ```
+
+  When the two differ, U5 and U6 are owed even if no file below needs taking. That is
+  also the case when a session stopped after U4: its copies read `unchanged` against the
+  new kit, but the baseline still holds the old hashes, and a later kit change would read
+  as a local edit. The upgrade is done only when the committed baseline names `$KIT`'s
+  commit.
 - **Each lite file's state**, at its installed path:
-  - `unchanged` — the kit has not changed it. Nothing to do.
+  - `unchanged` — the file matches the kit's copy. Nothing to take; see the record
+    check above.
   - `stale` — byte-identical to what was installed, and the kit has moved on.
     Replace it; nothing local is lost.
   - `locally-edited` or `stale-and-edited` — someone edited it here. The lite
@@ -1324,13 +1338,19 @@ difference that concern this repository are listed.
 Show one row per lite file whose state is not `unchanged` or `declined`: **take** the
 kit's copy, or **keep** (a skill only, recorded with `--keep`), with where an edit
 being replaced goes. Add a row for each config change and each section bullet the
-operator would take, and name the branch from U1. Wait for the operator's go-ahead.
+operator would take, and name the branch from U1. Say whether U5's record is owed (U2).
+Wait for the operator's go-ahead. With no **take** row, skip U4 and go to U5 when the
+record is owed.
 
 ### U4 — Take the kit's copies
 
 Set `LITE_TAKE` to the installed paths of the rows U3 marked **take**, separated by
-spaces or newlines; a path the block does not know is ignored, and U5's report then
-still shows its file as it was. The `stale` and `new-upstream` rows can be listed with:
+spaces or newlines, exactly as U2 printed them. An entry that is not one of the lite
+paths, such as `./docs/...` or a typo, stops the block with `unknown:` before anything
+is copied: a skipped `new-upstream` file would otherwise be recorded as declined in U5
+and never offered again. Before taking a `locally-edited` or `stale-and-edited` file,
+move its edit where U3 said it goes; the copy overwrites it. The `stale` and
+`new-upstream` rows can be listed with:
 
 ```bash
 uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "${REPO:?REPO is not set — re-run Step 0}" --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json" --json |
@@ -1355,6 +1375,14 @@ on=$(git -C "$REPO" symbolic-ref --quiet --short HEAD) || { echo "refused: $REPO
 [ "$on" != "$LITE_PROTECTED" ] || { echo "refused: $on is the protected branch"; exit 1; }
 : "${LITE_TAKE:?LITE_TAKE is not set — list the rows U3 marked take}"
 take=" $(printf '%s' "$LITE_TAKE" | tr '\n\t' '  ') "
+known=" docs/agentic-dev-kit/lite/lite-session-start.md docs/agentic-dev-kit/lite/lite-wrap-up.md docs/agentic-dev-kit/lite/lite-review.md"
+for slug in session-start wrap-up review; do known="$known .claude/skills/$slug/SKILL.md .agents/skills/$slug/SKILL.md"; done
+known="$known "
+unknown=$(printf '%s\n' "$LITE_TAKE" | tr ' \t' '\n\n' | while IFS= read -r e; do
+  [ -n "$e" ] || continue
+  case "$known" in (*" $e "*) ;; (*) printf 'unknown: %s\n' "$e" ;; esac
+done)
+if [ -n "$unknown" ]; then printf '%s\n' "$unknown"; echo "nothing copied: LITE_TAKE names a path that is not a lite file"; exit 1; fi
 under_link() {
   d=$(dirname "$1")
   while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
@@ -1395,7 +1423,8 @@ done
 Settle each `refused:` path with the operator; never remove a symlink or a command
 yourself. Make the config changes and section edits U3 approved by hand.
 
-Done when the block printed `took:` for every path in `LITE_TAKE` and exited 0.
+Done when the block printed `took:` for every path in `LITE_TAKE` and exited 0. U5 is
+owed next: until it runs, the baseline still describes the old copies.
 
 ### U5 — Record the new baseline, then verify
 
@@ -1414,8 +1443,9 @@ git -C "${REPO:?REPO is not set — re-run Step 0}" show HEAD:kit-manifest.json 
 A traceback here means no baseline is committed, which U2's `baseline:` line should
 already have caught: stop.
 
-Re-record with `--keep <path>` for each of them that U3 did not mark **take**, and for
-each skill U3 marked **keep**, added to the last line. The block runs U1's write-target
+Re-record with `--keep <path>` for each of them that U3 did not mark **take** and that
+is still on disk (a kept skill deleted from disk is left out, as U2's `declined` bullet
+says), and for each skill U3 marked **keep**, added to the last line. The block runs U1's write-target
 check first and records nothing when that refuses:
 
 ```bash
@@ -1425,7 +1455,7 @@ REPO="${REPO:?REPO is not set — re-run Step 0}"
 on=$(git -C "$REPO" symbolic-ref --quiet --short HEAD) || { echo "refused: $REPO is not on a branch"; exit 1; }
 [ "$on" = "$LITE_BRANCH" ] || { echo "refused: $REPO is on $on, not $LITE_BRANCH"; exit 1; }
 [ "$on" != "$LITE_PROTECTED" ] || { echo "refused: $on is the protected branch"; exit 1; }
-uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "$REPO"
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "${REPO:?REPO is not set — re-run Step 0}"
 ```
 
 Exit 1 names a lite file that is not the kit's copy and was not named with `--keep`:

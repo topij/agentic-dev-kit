@@ -9,8 +9,10 @@ kit clone. It stops when the config schema is behind the kit's: no lite config
 migration exists, and when the install has no recorded baseline. Its copy and
 record blocks refuse to write unless `REPO` is the top of a checkout on the branch
 bound as `LITE_BRANCH`, and that branch is not the one bound as `LITE_PROTECTED`
-(empty when the repository names none); U1 says how to bind both. A full
-install's upgrade is unchanged.
+(empty when the repository names none); U1 says how to bind both. The copy block
+stops with `unknown:` and copies nothing when `LITE_TAKE` names a path that is not a
+lite file. The upgrade is done only when the committed baseline names the kit clone's
+commit; U2 says how to check. A full install's upgrade is unchanged.
 
 CHANGED: the `AGENTS.md` section `adopt.md`'s *Lite profile* writes gains a sentence
 naming that upgrade path. To take it into an existing lite install, run the upgrade:

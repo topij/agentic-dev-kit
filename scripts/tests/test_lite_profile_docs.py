@@ -857,7 +857,6 @@ def test_upgrade_lite_copy_block_refuses_symlinks_and_a_shadowed_command(tmp_pat
             ".agents/skills/review/SKILL.md",
             ".claude/skills/wrap-up/SKILL.md",
             ".claude/skills/session-start/SKILL.md",
-            "README.md",
         ]
     )
     env = {**env, "REPO": f"{repo}/", "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": take}
@@ -866,7 +865,6 @@ def test_upgrade_lite_copy_block_refuses_symlinks_and_a_shadowed_command(tmp_pat
     assert result.returncode == 1, result.stdout + result.stderr
     assert result.stdout.count("refused: ") == 3, result.stdout
     assert "took: .claude/skills/session-start/SKILL.md" in result.stdout
-    assert "README.md" not in result.stdout
     assert link.is_symlink() and not (outside / "review.md").exists()
     assert list((outside / "skills").iterdir()) == []
     assert not (repo / ".claude/skills/wrap-up").exists()
@@ -1086,3 +1084,90 @@ def test_upgrade_lite_record_block_records_nothing_on_a_wrong_target(tmp_path: P
     assert WRONG_TARGETS[how] in result.stdout + result.stderr
     assert (repo / "kit-manifest.json").read_bytes() == before
     assert not (Path(env["REPO"]) / "kit-manifest.json").exists() or Path(env["REPO"]) == repo
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "./docs/agentic-dev-kit/lite/lite-review.md",
+        "x/docs/agentic-dev-kit/lite/lite-review.md.bak",
+        "docs/agentic-dev-kit/lite/lite-review",
+        "README.md",
+    ],
+)
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_stops_on_an_entry_that_is_not_a_lite_path(
+    tmp_path: Path, shell: str, entry: str
+) -> None:
+    """A near miss is not skipped: skipped, a new-upstream doc would be recorded as
+    declined by U5 and never offered again."""
+    repo, env = _repo(tmp_path, "adopter")
+    take = f".claude/skills/review/SKILL.md\n{entry}"
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": take}
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert result.stdout.splitlines()[0] == f"unknown: {entry}", result.stdout
+    assert "took: " not in result.stdout
+    assert not (repo / "docs").exists() and not (repo / ".claude").exists()
+
+
+def _installed_lite_paths() -> set[str]:
+    paths = set()
+    for rel in _lite_sources():
+        parts = rel.split("/")
+        if "adapters" in parts:
+            runtime, slug = parts[-3], parts[-2]
+            paths.add({"claude": ".claude", "codex": ".agents"}[runtime] + f"/skills/{slug}/SKILL.md")
+        else:
+            paths.add(rel)
+    return paths
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_knows_every_lite_path(tmp_path: Path, shell: str) -> None:
+    """Every installed path of the lite profile is one the block takes, so the
+    unknown-entry stop cannot refuse a real lite file."""
+    installed = _installed_lite_paths()
+    assert len(installed) == 9, installed
+    repo, env = _repo(tmp_path, "adopter")
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": "\n".join(sorted(installed))}
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(line.removeprefix("took: ") for line in result.stdout.splitlines()) == sorted(installed)
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_owes_the_record_until_the_baseline_names_the_kit(tmp_path: Path, shell: str) -> None:
+    """A session that stopped after U4: every file reads unchanged, and U2's record
+    check still says U5 is owed; after U5 and a commit it no longer does."""
+    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path))
+    env = _uv_stub(tmp_path, {**env, "KIT": str(REPO_ROOT), **TARGET})
+    assert _run(shell, _copy_block(), repo, {**env, "LITE_TAKE": _take_list(repo, env)}).returncode == 0
+    assert {s for s in _states(repo, env).values() if s != "outside-profile"} == {"unchanged"}
+    check = _upgrade_block_indented('.get("kit_commit")')
+
+    def owed() -> bool:
+        out = _run(shell, check, repo, env)
+        assert out.returncode == 0, out.stderr
+        baseline, kit = out.stdout.split()
+        return baseline != kit
+
+    assert owed()
+    assert _run(shell, _record_block(), repo, env).returncode == 0
+    assert owed(), "an uncommitted record is not the end of the upgrade"
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "upgrade")
+    assert not owed()
+
+
+def _upgrade_block_indented(needle: str) -> str:
+    """A bash block nested in a list item of upgrade.md's lite section."""
+    text = UPGRADE.read_text(encoding="utf-8")
+    section = text[text.index("\n## Lite profile\n") :]
+    blocks = [
+        textwrap.dedent(m.group(2))
+        for m in re.finditer(r"^( +)```bash\n(.*?)^\1```", section, re.MULTILINE | re.DOTALL)
+        if needle in m.group(2)
+    ]
+    assert len(blocks) == 1, f"upgrade.md's nested lite block with {needle!r} is missing or repeated"
+    return blocks[0]
