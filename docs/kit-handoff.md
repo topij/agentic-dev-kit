@@ -314,16 +314,18 @@ contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-paralle
 **Status:** the operator's decisions and the phase 1 probe are #1320's comments of 2026-11-03. Phase 2 added the
 lite workflow docs in `docs/agentic-dev-kit/lite/`. Phase 3 is two pull requests: #1358 (the optional risk tier,
 the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, executed shell-block tests) and #1359
-(the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). A lite
-repository has no upgrade path yet: `upgrade.md` Step 0 stops on one. `topij/home-server` is the first lite
+(the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). Phase 4's
+plugin option was tested on 2026-11-09 and set aside: a plugin's version pin holds per machine, not per
+repository (#1320's comment of that date). Phase 4's lite upgrade path is `upgrade.md`'s *Lite profile*; the lite-to-full move
+is not written. `topij/home-server` is the first lite
 install (topij/home-server#31, first installed at kit `78f10709`); its field reports are #1361 to #1365. The operator chose on
 2026-11-05 that lite supports pull-request repositories through `vcs.protected_branch` (#1362).
 **Owner:** #1320.
 
-▶ Next: home-server's `kit-manifest.json` read `c932a3aa` on 2026-11-07, with `vcs.protected_branch` set and its
-repository sources in place. It
-takes #1381's lite wrap-up changes (kit `d4d94ab3`) by hand, since lite has no upgrade path yet. Its nested service repos
-(`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`) are then decided one at a time: each has a tracker, which lite does
-not drive, so the full profile may fit better. Then #1320 phase 4: a lite upgrade path and the lite-to-full move in
-`adopt`. #1381's review rounds showed that a prose list of config stops does not converge; the findings left open, and a
-proposed shared validator for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
+▶ Next: run the lite upgrade path in `topij/home-server` and its nested service repos
+`brain`, `mcp-voice-notes` and `obsidian-vault-mcp`. On 2026-11-09 their `kit-manifest.json` files read lite at
+`c932a3aa` (home-server) and `d994f8eb` (`brain`, `mcp-voice-notes`, `obsidian-vault-mcp`), so each takes #1381's lite wrap-up change
+(kit `d4d94ab3`) that way. Then #1399 (an optional backlog file for lite), then the TGuitar pilot, #1400, which the
+operator chose over tNote for phase 5 on 2026-11-09. The lite-to-full move is not written. #1381's review rounds
+showed that a prose list of config stops does not converge; the findings left open, and a proposed shared validator
+for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
