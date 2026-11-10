@@ -213,6 +213,7 @@ import json
 import os
 import re
 import shlex
+import stat
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -429,6 +430,9 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # blocks (#1320). It needs the full workflows beside the lite docs, which only
     # the kit's own checkout has, so it stays repo-only.
     ("scripts/tests/test_lite_profile_docs.py", REPO_ONLY_ROLE),
+    # Builds a kit clone from the kit's own lite docs, adopt.md and upgrade.md to
+    # run `--upgrade-lite` from (#1406): repo-only for the same reason.
+    ("scripts/tests/test_kit_doctor_upgrade_lite.py", REPO_ONLY_ROLE),
     # Installs the kit's own tracked tree into fresh repositories, so it asserts
     # nothing an adopter's tree could answer.
     ("scripts/tests/test_adoption_fixtures.py", REPO_ONLY_ROLE),
@@ -2664,8 +2668,13 @@ def record_install_manifest(
     kit_commit: str | None,
     source_files: dict | None = None,
     kept: frozenset[str] = frozenset(),
+    digests: dict[str, str] | None = None,
 ) -> tuple[dict, list[str]]:
     """Record what is ACTUALLY INSTALLED in an adopter as its drift baseline.
+
+    `digests` maps a kit path to the digest its file WILL have, read in place of
+    the file, which need not exist yet: `--upgrade-lite --apply` predicts the
+    record of the tree after its takes with it, before it copies anything.
 
     This is the step that was missing, and its absence is why the three-way
     split below could not be trusted. `/adopt` and `/upgrade` copy kit files in
@@ -2719,14 +2728,15 @@ def record_install_manifest(
         # locally, so this manifest and the kit's are keyed identically and
         # `inspect` can look both up with one key. The remap is applied to the
         # lookup, never to the key.
-        if not target.is_file():
+        predicted = (digests or {}).get(rel)
+        if predicted is None and not target.is_file():
             # The declared install set (#286), recorded rather than asked for:
             # this loop already walks every kit-owned path and already knows
             # which ones are absent — it just dropped that fact. Keeping it is
             # what lets a later run tell a deliberate omission from a deletion.
             not_installed.append(rel)
             continue
-        digest = sha256_of(target)
+        digest = predicted if predicted is not None else sha256_of(target)
         if rel in kept:
             # `kept` holds lite skill source paths only: `main` builds it from
             # `--keep`, which it refuses on a full repository or any other path.
@@ -4335,6 +4345,940 @@ def render(report: Report) -> str:
     return "\n".join(lines)
 
 
+# --- The lite upgrade: `--upgrade-lite` (#1406) ------------------------------
+#
+# `upgrade.md`'s *Lite profile* used to run its copy and its record as shell
+# blocks, and the agent carried state between them: the take list, the kept
+# list, the write target, and whether the record was still owed. Each review
+# round on #1401 found a defect in a different one of those, and the first live
+# run found that an agent harness keeps no shell variable between commands at
+# all (#1410). So the operation is one command whose every input is an argument
+# on that call: the target (`--root`, `--branch`), the kit (the clone this
+# script runs from), the kit commit the operator approved (`--kit-commit`) and
+# the operator's decisions (`--take`, `--keep`, `--leave-absent`). The only
+# state carried between calls is the repository's committed baseline.
+
+KIT_ROOT = Path(__file__).resolve().parent.parent
+LITE_AGENTS_HEADING = "## Session discipline (agentic-dev-kit, lite profile)"
+LITE_ADOPT_DOC = "docs/agentic-dev-kit/workflows/adopt.md"
+# The lite profile's first commit is the one that added this file. No lite
+# install can predate it, so it bounds a changelog range whose baseline names
+# no commit. The lite profile also postdates the `changelog.d/` cutover (#1009),
+# so a lite range never needs the frozen `CHANGELOG.md`.
+LITE_PROFILE_MARKER = "docs/agentic-dev-kit/lite/lite-wrap-up.md"
+# States a lite row can be in without the baseline failing to describe the tree.
+# Any other (`differs`, `missing`, `unknown-version`, ...) stops the upgrade.
+_LITE_KNOWN_STATES = frozenset(
+    {"unchanged", "stale", "new-upstream", "locally-edited", "stale-and-edited", "declined", "removed"}
+)
+_FRAGMENT = re.compile(r"changelog\.d/[^/.][^/]*\.md")
+
+
+class LiteUpgradeStop(Exception):
+    """A refusal. Printed as `refused: <message>`; nothing is written after one."""
+
+
+class LiteUpgradeUsage(Exception):
+    """A flag the operation cannot act on. Printed as `error: <message>`, exit 2."""
+
+
+# Git's repository-local environment variables, as `git rev-parse --local-env-vars`
+# printed them: an inherited `GIT_DIR`, `GIT_WORK_TREE` or `GIT_INDEX_FILE` makes
+# `git -C <path>` read another repository, so the target check could pass on one
+# tree while the branch and the committed baseline came from another. Every lite
+# git call drops them; the live list is added to this one at first use, so a newer
+# git's additions are dropped too.
+_GIT_LOCAL_ENV: tuple[str, ...] = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_CONFIG", "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT", "GIT_OBJECT_DIRECTORY", "GIT_DIR", "GIT_WORK_TREE",
+    "GIT_IMPLICIT_WORK_TREE", "GIT_GRAFT_FILE", "GIT_INDEX_FILE", "GIT_NO_REPLACE_OBJECTS",
+    "GIT_REPLACE_REF_BASE", "GIT_PREFIX", "GIT_SHALLOW_FILE", "GIT_COMMON_DIR",
+)
+_git_clean_env: dict[str, str] | None = None
+
+
+def _git_env() -> dict[str, str]:
+    global _git_clean_env
+    if _git_clean_env is None:
+        drop = set(_GIT_LOCAL_ENV)
+        drop |= {k for k in os.environ if k.startswith("GIT_CONFIG_KEY_") or k.startswith("GIT_CONFIG_VALUE_")}
+        base = {k: v for k, v in os.environ.items() if k not in drop}
+        try:
+            live = subprocess.run(
+                ["git", "rev-parse", "--local-env-vars"], capture_output=True, text=True,
+                timeout=15, check=False, env=base,
+            )
+            drop |= set(live.stdout.split())
+        except (OSError, subprocess.SubprocessError):
+            pass
+        # No terminal credential prompt either: an https origin that asks for one
+        # fails instead of waiting for a terminal the agent does not have. An ssh
+        # origin's own prompts (host key, passphrase) are ssh's, not covered here.
+        _git_clean_env = {k: v for k, v in os.environ.items() if k not in drop} | {"GIT_TERMINAL_PROMPT": "0"}
+    return _git_clean_env
+
+
+def _git_run(cwd: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
+    """`git -C <cwd> <args>`, captured, with no inherited repository-local variable.
+
+    A git that cannot start reads as a failure.
+    """
+    try:
+        return subprocess.run(
+            ["git", "-C", str(cwd), *args],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            check=False,
+            env=_git_env(),
+            stdin=subprocess.DEVNULL,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return subprocess.CompletedProcess(["git", *args], 1, "", str(exc))
+
+
+def _lite_head(checkout: Path) -> str | None:
+    """`_git_head`, through `_git_run`'s scrubbed environment."""
+    done = _git_run(checkout, "rev-parse", "HEAD", timeout=15)
+    sha = done.stdout.strip()
+    if done.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", sha):
+        return None
+    return sha
+
+
+def _lite_config_copies(root: Path) -> list[tuple[str, str]]:
+    """Each copy of `config/dev-model.yaml` that exists: committed, staged, working tree.
+
+    A copy Git cannot show is a refusal, never a skipped copy: skipped, it could
+    hide the only copy that names the protected branch.
+    """
+    rel = "config/dev-model.yaml"
+    copies: list[tuple[str, str]] = []
+    if _git_run(root, "rev-parse", "--verify", "-q", "HEAD").returncode == 0:
+        listed = _git_run(root, "ls-tree", "HEAD", "--", rel)
+        if listed.returncode != 0:
+            raise LiteUpgradeStop(f"cannot list {rel} at HEAD: {listed.stderr.strip()}")
+        if listed.stdout.strip():
+            shown = _git_run(root, "show", f"HEAD:{rel}")
+            if shown.returncode != 0:
+                raise LiteUpgradeStop(f"cannot read the committed {rel}: {shown.stderr.strip()}")
+            copies.append(("committed", shown.stdout))
+    staged = _git_run(root, "ls-files", "--stage", "--", rel)
+    if staged.returncode != 0:
+        raise LiteUpgradeStop(f"cannot read the index for {rel}: {staged.stderr.strip()}")
+    if staged.stdout.strip():
+        shown = _git_run(root, "show", f":{rel}")
+        if shown.returncode != 0:
+            raise LiteUpgradeStop(f"cannot read the staged {rel}: {shown.stderr.strip()}")
+        copies.append(("staged", shown.stdout))
+    working = root / rel
+    if working.is_file():
+        try:
+            copies.append(("working tree", working.read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError) as exc:
+            raise LiteUpgradeStop(f"cannot read the working tree's {rel}: {exc}") from exc
+    return copies
+
+
+def _lite_protected_branches(root: Path) -> dict[str, list[str]]:
+    """Every branch any copy of the config names as `vcs.protected_branch`, with the copies.
+
+    A guard, not U1's configuration read: it reads only this one key. A copy that
+    does not parse, a `vcs` that is not a mapping, or a key present but not a
+    plain branch name refuses, because the branch it was written to protect cannot
+    be known. It does not see what U1's stops exist for: a second `vcs:` block or
+    key (a YAML parser keeps the last), a misspelled or misplaced key, or a name
+    that is no branch here. Those are U1's, and U1 runs first.
+    """
+    import yaml
+
+    named: dict[str, list[str]] = {}
+    for copy, text in _lite_config_copies(root):
+        try:
+            document = yaml.safe_load(text)
+        except yaml.YAMLError as exc:
+            raise LiteUpgradeStop(
+                f"the {copy} config/dev-model.yaml does not parse, so the protected branch "
+                f"is unknown — U1's configuration stops come first: {exc}"
+            ) from exc
+        if document is None:
+            continue
+        if not isinstance(document, dict):
+            raise LiteUpgradeStop(
+                f"the {copy} config/dev-model.yaml is not a mapping, so the protected branch is unknown"
+            )
+        vcs = document.get("vcs")
+        if vcs is None:
+            continue
+        if not isinstance(vcs, dict):
+            raise LiteUpgradeStop(
+                f"`vcs` in the {copy} config/dev-model.yaml is not a mapping, so the protected "
+                "branch is unknown — U1's configuration stops come first"
+            )
+        if "protected_branch" not in vcs:
+            continue
+        value = vcs["protected_branch"]
+        # lite-wrap-up.md's character rule: anything else, a `<placeholder>` among
+        # them, is a value U1 stops on, never a name to compare a branch with.
+        if not isinstance(value, str) or not re.fullmatch(r"[A-Za-z0-9._/-]+", value.strip()):
+            raise LiteUpgradeStop(
+                f"vcs.protected_branch in the {copy} config/dev-model.yaml is {value!r}, which "
+                "names no branch — U1's configuration stops come first"
+            )
+        named.setdefault(value.strip(), []).append(copy)
+    return named
+
+
+def _lite_target(root: Path, branch: str) -> tuple[str, dict[str, list[str]]]:
+    """The write-target check every call runs: checkout top, branch, not protected."""
+    top = _git_run(root, "rev-parse", "--show-toplevel")
+    try:
+        is_top = top.returncode == 0 and os.path.samefile(top.stdout.strip(), root)
+    except OSError:
+        is_top = False
+    if not is_top:
+        raise LiteUpgradeStop(f"{root} is not the top of a checkout")
+    # The full ref, never `--short`: that shortens against tags too, so with a tag
+    # `main` beside the branch it prints `heads/main`, which no protected name
+    # equals and which the refusal below would then tell the agent to pass.
+    on = _git_run(root, "symbolic-ref", "--quiet", "HEAD")
+    ref = on.stdout.strip()
+    if on.returncode != 0 or not ref.startswith("refs/heads/"):
+        raise LiteUpgradeStop(f"{root} is not on a branch")
+    current = ref.removeprefix("refs/heads/")
+    if current != branch:
+        raise LiteUpgradeStop(f"{root} is on {current}, not {branch}")
+    protected = _lite_protected_branches(root)
+    # Case-folded: on a case-insensitive filesystem `refs/heads/Main` is the
+    # branch `main`, so a configured `Main` protects it.
+    hits = [name for name in protected if name.casefold() == current.casefold()]
+    if hits:
+        raise LiteUpgradeStop(
+            f"{current} is the protected branch (vcs.protected_branch {hits[0]} in the "
+            f"{', '.join(protected[hits[0]])} config)"
+        )
+    return current, protected
+
+
+def _lite_kit(kit: Path, kit_commit: str | None) -> tuple[str, str | None, list[str]]:
+    """The kit check: a clean clone, and either current with its origin (#1405) or
+    at the commit the operator approved, `--kit-commit` (#1410).
+
+    Without `--kit-commit` (U2's read) it refuses a clone whose HEAD is not its
+    origin's: a clone left by an upgrade that stopped early would otherwise read
+    every file `unchanged` and conclude there is nothing to do. With it (U4's
+    apply, U5's read) it pins that commit instead. An origin that moved after U3
+    is named, not refused: U3 approved that commit, and the next upgrade takes
+    the rest.
+    """
+    head = _lite_head(kit)
+    if head is None:
+        raise LiteUpgradeStop(
+            f"{kit} is not a git checkout — run this from the kit clone Step 0's kit block made"
+        )
+    status = _git_run(kit, "status", "--porcelain", "--untracked-files=all")
+    if status.returncode != 0 or status.stdout.strip():
+        raise LiteUpgradeStop(
+            f"the kit clone {kit} is not clean: delete it and re-run Step 0's kit block"
+        )
+    remote = _git_run(kit, "ls-remote", "origin", "HEAD", timeout=120)
+    words = remote.stdout.split() if remote.returncode == 0 else []
+    upstream = words[0] if words else None
+    notes: list[str] = []
+    if kit_commit is None:
+        if upstream is None:
+            raise LiteUpgradeStop(
+                f"cannot read the HEAD of {kit}'s origin, so whether the clone is current is "
+                f"unknown: {remote.stderr.strip() or 'no HEAD advertised'}"
+            )
+        if head != upstream:
+            raise LiteUpgradeStop(
+                f"the kit clone {kit} is at {head[:12]} and its origin at {upstream[:12]}: "
+                "delete the clone and re-run Step 0's kit block"
+            )
+        return head, upstream, notes
+    wanted = kit_commit.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{7,64}", wanted) or not head.startswith(wanted):
+        raise LiteUpgradeStop(
+            f"the kit clone {kit} is at {head[:12]}, not --kit-commit {kit_commit}: "
+            "U3's plan was made against another kit — run the read mode again"
+        )
+    if upstream is None:
+        notes.append(
+            f"note: cannot read the HEAD of {kit}'s origin; applying {head[:12]}, the commit "
+            "--kit-commit names"
+        )
+    elif upstream != head:
+        notes.append(
+            f"note: the kit's origin has moved to {upstream[:12]} since; this applies "
+            f"{head[:12]}, the commit U3 approved, and the next upgrade takes the rest"
+        )
+    return head, upstream, notes
+
+
+def _lite_committed_baseline(root: Path) -> dict | None:
+    """The baseline at HEAD, never the working tree's, or None when none is committed.
+
+    The working tree's can be a record an abandoned attempt left, or one that
+    exited 1 without its `kept` list; the committed one is the same on every
+    retry, which is what lets a rerun carry the kept skills.
+    """
+    shown = _git_run(root, "show", f"HEAD:{MANIFEST_NAME}")
+    if shown.returncode != 0:
+        return None
+    try:
+        parsed = json.loads(shown.stdout)
+    except json.JSONDecodeError:
+        return None
+    return parsed if _was_written_by_record_install(parsed) else None
+
+
+def _lite_paths(config: dict) -> dict[str, str]:
+    """Installed path → kit source path, for every lite file."""
+    engines_dir = str(get(config, "paths.engines", KIT_ENGINE_PREFIX))
+    return {_installed_path(rel, engines_dir, "lite"): rel for rel in LITE_PROFILE_PATHS}
+
+
+@dataclass
+class LiteRow:
+    path: str
+    source: str
+    state: str
+    action: str  # none | take | keep | leave-absent | decide | stop
+    detail: str = ""
+    options: tuple[str, ...] = ()
+
+
+def _lite_rows(
+    root: Path,
+    report: Report,
+    paths: dict[str, str],
+    kept_committed: set[str],
+    take: set[str],
+    keep: set[str],
+    leave: set[str],
+) -> list[LiteRow]:
+    """One row per lite file: its state against the committed baseline, and what happens to it.
+
+    The rows that need the operator are `decide`, with the flags that settle
+    them. The flags never override a state the baseline cannot describe.
+    """
+    rows: list[LiteRow] = []
+    by_path = {f.path: f for f in report.files}
+    skills = set(LITE_ADAPTER_INSTALL_PATHS.values())
+    for path, source in paths.items():
+        status = by_path.get(path)
+        state = status.state if status else "unknown"
+        present = (root / path).is_file()
+        kept = source in kept_committed
+        if state not in _LITE_KNOWN_STATES:
+            rows.append(
+                LiteRow(path, source, state, "stop",
+                        "the committed baseline does not describe this file — stop and ask")
+            )
+            continue
+        if path in leave:
+            if present:
+                raise LiteUpgradeUsage(f"--leave-absent names {path}, which is there")
+            if state not in ("removed", "declined"):
+                raise LiteUpgradeUsage(
+                    f"--leave-absent names {path}, which is {state}: only a removed file or a "
+                    "kept skill gone from disk is left absent"
+                )
+            rows.append(LiteRow(path, source, state, "leave-absent"))
+            continue
+        if path in take:
+            rows.append(LiteRow(path, source, state, "take"))
+            continue
+        if path in keep:
+            if not present:
+                raise LiteUpgradeUsage(f"--keep names a skill that is not there: {path}")
+            rows.append(LiteRow(path, source, state, "keep", "the repository's own"))
+            continue
+        if state == "unchanged":
+            rows.append(LiteRow(path, source, state, "none"))
+        elif state in ("stale", "new-upstream"):
+            rows.append(LiteRow(path, source, state, "take"))
+        elif state in ("locally-edited", "stale-and-edited"):
+            options = (f"--take {path}", f"--keep {path}") if path in skills else (f"--take {path}",)
+            rows.append(LiteRow(path, source, state, "decide", "edited here", options))
+        elif state == "declined" and kept and present:
+            rows.append(LiteRow(path, source, state, "keep", "kept by the committed baseline"))
+        elif state == "declined" and kept:
+            rows.append(
+                LiteRow(path, source, state, "decide", "a kept skill no longer on disk",
+                        (f"--take {path}", f"--leave-absent {path}"))
+            )
+        elif state == "declined":
+            rows.append(LiteRow(path, source, state, "none", "not installed when recorded"))
+        else:  # removed
+            rows.append(
+                LiteRow(path, source, state, "decide", "recorded as installed, now absent",
+                        (f"--take {path}", f"--leave-absent {path}"))
+            )
+    return rows
+
+
+def _lite_target_refusal(path: Path) -> str | None:
+    """Why `atomic_write.stage_text` would refuse to replace `path`, or None.
+
+    The same refusals, checked before any copy, so a target it would refuse stops
+    the apply before the first file is taken: a symlink (it would write through
+    it), a directory or another non-regular file, a hardlink, or a file this user
+    cannot write. Ownership it cannot carry, and a directory a temp file cannot
+    be created in, still stop at the copy itself, after the takes before it.
+    """
+    if path.is_symlink():
+        return f"{path} is a symlink"
+    try:
+        status = path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return f"cannot inspect {path}: {exc}"
+    if stat.S_ISDIR(status.st_mode):
+        return f"{path} is a directory"
+    if not stat.S_ISREG(status.st_mode):
+        return f"{path} is not a regular file"
+    if status.st_nlink > 1:
+        return f"{path} is hardlinked: replacing it would leave its other names behind"
+    if not os.access(path, os.W_OK):
+        return f"{path} is read-only"
+    return None
+
+
+def _lite_take_refusals(root: Path, rows: list[LiteRow]) -> list[str]:
+    """Every reason a take or the record would be refused, found before any copy.
+
+    All-or-nothing: one refused path refuses the whole apply, so a refusal of
+    these kinds never leaves a half-taken tree. `_lite_target_refusal` names the
+    failures that can still stop at the copy.
+    """
+    refusals: list[str] = []
+    for row in rows:
+        if row.action != "take":
+            continue
+        dst = root / row.path
+        ancestors = []
+        parent = dst.parent
+        while parent != root and parent != parent.parent:
+            ancestors.append(parent)
+            parent = parent.parent
+        if any(a.is_symlink() for a in ancestors):
+            refusals.append(f"a directory on the path of {dst} is a symlink")
+        elif blocker := next((a for a in reversed(ancestors) if a.exists() and not a.is_dir()), None):
+            refusals.append(f"{blocker} is not a directory, so {dst} cannot be written")
+        elif refusal := _lite_target_refusal(dst):
+            refusals.append(refusal)
+        else:
+            # A Claude skill would silently shadow a command of the same name,
+            # including a dangling symlink there. Only the Claude runtime has
+            # commands: a Codex skill beside one is not shadowed.
+            claude = {
+                local: rel for rel, local in LITE_ADAPTER_INSTALL_PATHS.items()
+                if rel.split("/")[-3] == "claude"
+            }
+            if row.path in claude:
+                slug = row.path.split("/")[-2]
+                command = root / ".claude" / "commands" / f"{slug}.md"
+                if command.exists() or command.is_symlink():
+                    refusals.append(f"{command} would be shadowed by {dst}")
+    if refusal := _lite_target_refusal(root / MANIFEST_NAME):
+        refusals.append(f"{refusal}, so the baseline cannot be recorded")
+    return refusals
+
+
+def _lite_bullets(lines: list[str]) -> list[str]:
+    """A section's bullets, each with its wrapped lines joined and whitespace collapsed."""
+    bullets: list[str] = []
+    for line in lines:
+        if line.startswith("- "):
+            bullets.append(line[2:])
+        elif line.strip() and bullets:
+            bullets[-1] += " " + line.strip()
+        elif line.strip():
+            bullets.append(line.strip())
+    return [" ".join(b.split()) for b in bullets]
+
+
+def _lite_agents_section(root: Path, kit: Path) -> dict:
+    """The `AGENTS.md` section's kit-owned bullets against `adopt.md` L3's (#1409).
+
+    The repository's section stops at its first heading: the repository sources
+    under `### session-start` and `### wrap-up` are the repository's and stay.
+    Bullets are compared with whitespace collapsed, so a rewrap is not a change.
+    """
+    try:
+        adopt = (kit / LITE_ADOPT_DOC).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        return {"status": "unknown", "file": None, "diff": f"cannot read the kit's {LITE_ADOPT_DOC}: {exc}"}
+    found = re.search(
+        r"^```markdown\n" + re.escape(LITE_AGENTS_HEADING) + r"\n(.*?)^```", adopt, re.MULTILINE | re.DOTALL
+    )
+    if not found:
+        return {"status": "unknown", "file": None, "diff": f"the kit's {LITE_ADOPT_DOC} has no lite section"}
+    kit_bullets = _lite_bullets(found.group(1).splitlines())
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        candidate = root / name
+        if not candidate.is_file():
+            continue
+        try:
+            lines = candidate.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeDecodeError):
+            continue
+        starts = [i for i, line in enumerate(lines) if line.rstrip() == LITE_AGENTS_HEADING]
+        if not starts:
+            continue
+        body: list[str] = []
+        for line in lines[starts[0] + 1 :]:
+            if re.match(r"#{1,6} ", line):
+                break
+            body.append(line)
+        ours = _lite_bullets(body)
+        if ours == kit_bullets:
+            return {"status": "match", "file": name, "diff": ""}
+        import difflib
+
+        diff = "\n".join(
+            difflib.unified_diff(kit_bullets, ours, f"kit ({LITE_ADOPT_DOC} L3)", name, lineterm="", n=0)
+        )
+        return {"status": "differs", "file": name, "diff": diff}
+    return {"status": "missing", "file": None, "diff": ""}
+
+
+def _lite_changelog(kit: Path, head: str, baseline_commit: str | None) -> dict:
+    """The `changelog.d/` fragments the kit wrote after the baseline (#1408).
+
+    Deepens the clone first, which writes only into the kit clone's git
+    directory: a `--depth 1` clone has no history, and its range would be empty.
+    """
+    result: dict = {"base": None, "bound": None, "entries": [], "warnings": []}
+    shallow = _git_run(kit, "rev-parse", "--is-shallow-repository")
+    if shallow.stdout.strip() == "true":
+        deepened = _git_run(kit, "fetch", "-q", "--unshallow", timeout=600)
+        if deepened.returncode != 0:
+            deepened = _git_run(kit, "fetch", "-q", "--depth=1000", timeout=600)
+        if deepened.returncode != 0:
+            result["warnings"].append(
+                f"cannot deepen the kit clone, so no changelog range is read: {deepened.stderr.strip()}"
+            )
+            return result
+    base = None
+    if baseline_commit and _git_run(kit, "merge-base", "--is-ancestor", baseline_commit, head).returncode == 0:
+        base, result["bound"] = baseline_commit, "baseline"
+    else:
+        first = _git_run(kit, "log", "--diff-filter=A", "--format=%H", head, "--", LITE_PROFILE_MARKER)
+        firsts = first.stdout.split()
+        if not firsts:
+            result["warnings"].append("the kit has no lite profile commit, so no changelog range is read")
+            return result
+        base, result["bound"] = firsts[-1], "lite-profile"
+        result["warnings"].append(
+            ("the committed baseline names no kit commit" if not baseline_commit
+             else f"the baseline's kit commit {baseline_commit[:12]} is not in this kit's history")
+            + f"; reading from the lite profile's first commit, {base[:12]}"
+        )
+    result["base"] = base
+    commits = _git_run(kit, "rev-list", f"{base}..{head}", "--", "changelog.d/")
+    for commit in commits.stdout.split():
+        at = _git_run(kit, "log", "-1", "--format=%h %s", commit).stdout.strip()
+        names = _git_run(
+            kit, "diff-tree", "-c", "--no-commit-id", "--diff-filter=AMT", "--name-only", "-r", "-z",
+            commit, "--", "changelog.d/",
+        ).stdout
+        for name in [n for n in names.split("\0") if n]:
+            if _FRAGMENT.fullmatch(name) and name.isprintable():
+                text = _git_run(kit, "show", f"{commit}:{name}").stdout
+                result["entries"].append({"commit": at, "path": name, "text": text})
+            else:
+                result["warnings"].append(
+                    f"{name!r} ({at}) is not a changelog.d/<name>.md fragment — read it by hand"
+                )
+    return result
+
+
+def _lite_load_config(root: Path) -> dict:
+    config_path = root / "config" / "dev-model.yaml"
+    if refusal := _config_path_refusal(config_path):
+        raise LiteUpgradeStop(refusal)
+    try:
+        config = load_config(config_path)
+    except (OSError, ValueError) as exc:
+        raise LiteUpgradeStop(f"cannot read {config_path}: {exc}") from exc
+    try:
+        profile = profile_of(config)
+    except ProfileError as exc:
+        raise LiteUpgradeStop(str(exc)) from exc
+    if profile != "lite":
+        raise LiteUpgradeStop(
+            f"profile: {profile} — this is not a lite install; follow upgrade.md's Steps 1-6"
+        )
+    return config
+
+
+def _lite_schema_stop(config: dict, kit_manifest: dict) -> str | None:
+    raw = get(config, "kit.version", None)
+    version = _as_version(raw) if raw is not None else None
+    shipped = _as_version(kit_manifest.get("kit_version"))
+    if raw is not None and version is None:
+        return f"config schema: kit.version is {raw!r}, not an integer"
+    if version is None:
+        return "config schema: no kit.version — no lite migration is written: stop and tell the operator"
+    if shipped is not None and version != shipped:
+        return (
+            f"config schema: v{version}, the kit ships v{shipped} — no lite migration is "
+            "written: stop and tell the operator"
+        )
+    return None
+
+
+def upgrade_lite(
+    root: Path,
+    branch: str,
+    *,
+    apply: bool = False,
+    kit_commit: str | None = None,
+    take: tuple[str, ...] = (),
+    keep: tuple[str, ...] = (),
+    leave: tuple[str, ...] = (),
+    as_json: bool = False,
+    kit: Path = KIT_ROOT,
+    out=None,
+) -> int:
+    """`--upgrade-lite`: read the lite upgrade (U2), or apply it (U4 and U5).
+
+    Exit 0 when nothing stops, 1 on a refusal or stop (nothing written after it),
+    2 for a flag the operation cannot act on.
+    """
+    out = out or sys.stdout
+
+    def say(line: str = "") -> None:
+        print(line, file=out)
+
+    try:
+        return _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say)
+    except LiteUpgradeUsage as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    except LiteUpgradeStop as exc:
+        # `--json` promises a parseable plan, so its refusal is JSON too.
+        say(json.dumps({"refused": str(exc)}) if as_json and not apply else f"refused: {exc}")
+        return 1
+
+
+def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say) -> int:
+    # Flags first: a path that is not a lite file is refused before anything is
+    # read, so a near miss (`./docs/...`, a typo) can never be silently skipped
+    # and later recorded as declined.
+    known = {LITE_ADAPTER_INSTALL_PATHS.get(rel, rel) for rel in LITE_PROFILE_PATHS}
+    skills = set(LITE_ADAPTER_INSTALL_PATHS.values())
+    for flag, values in (("--take", take), ("--keep", keep), ("--leave-absent", leave)):
+        for value in values:
+            if value not in known:
+                raise LiteUpgradeUsage(
+                    f"{flag} {value!r} is not a lite path; the lite paths are: {', '.join(sorted(known))}"
+                )
+    for value in keep:
+        if value not in skills:
+            raise LiteUpgradeUsage(f"--keep takes a lite skill path; {value} is a doc, which cannot be kept")
+    flagged = [*take, *keep, *leave]
+    if twice := sorted({p for p in flagged if flagged.count(p) > 1}):
+        raise LiteUpgradeUsage(f"a path is named by more than one decision flag: {', '.join(twice)}")
+
+    current, protected = _lite_target(root, branch)
+    # Read mode pins too when given `--kit-commit`: U5 re-reads after U4 against the
+    # commit U4 applied, which an origin that moved since must not refuse.
+    head, upstream, notes = _lite_kit(kit, kit_commit)
+    config = _lite_load_config(root)
+    try:
+        kit_manifest = json.loads((kit / MANIFEST_NAME).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise LiteUpgradeStop(f"cannot read the kit's {MANIFEST_NAME}: {exc}") from exc
+    if not isinstance(kit_manifest, dict) or not isinstance(kit_manifest.get("files"), dict):
+        raise LiteUpgradeStop(f"the kit's {MANIFEST_NAME} has no files map")
+
+    stops: list[str] = []
+    if schema := _lite_schema_stop(config, kit_manifest):
+        stops.append(schema)
+    baseline = _lite_committed_baseline(root)
+    if baseline is None:
+        # Never recorded here, and not by adopt.md L4 from this kit either: L4
+        # would record the older files under the newer kit's commit (#1320).
+        raise LiteUpgradeStop(
+            f"no committed {MANIFEST_NAME} written by --record-install at HEAD: this install was "
+            "never recorded — stop and ask the operator; do not run adopt.md L4 from this kit"
+        )
+    baseline_commit = baseline.get("kit_commit") if isinstance(baseline.get("kit_commit"), str) else None
+    try:
+        report = inspect(root, kit_manifest, config, baseline)
+    except OSError as exc:
+        raise LiteUpgradeStop(f"cannot read the installed files: {exc}") from exc
+    if report.baseline_profile_mismatch is not None:
+        stops.append(
+            f"the committed baseline was recorded as {report.baseline_profile_mismatch}, "
+            "not lite — stop and ask the operator"
+        )
+    raw_kept = baseline.get("kept") if isinstance(baseline.get("kept"), list) else []
+    kept_committed = {k for k in raw_kept if isinstance(k, str) and k in LITE_ADAPTER_INSTALL_PATHS}
+    rows = _lite_rows(root, report, _lite_paths(config), kept_committed, set(take), set(keep), set(leave))
+    stops += [f"{r.path} is {r.state}: {r.detail}" for r in rows if r.action == "stop"]
+
+    owed = baseline_commit != head
+    working = None
+    try:
+        working = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        working = None
+    uncommitted = working is not None and working != baseline
+    # A record U4 wrote and U6 has not committed: one for this kit, complete, and
+    # not the committed one. Owed or not: a `--keep` or `--leave-absent` records
+    # when nothing else is owed, and U5 reads this line after it.
+    recorded_here = (
+        uncommitted
+        and isinstance(working, dict)
+        and working.get("kit_commit") == head
+        and "not_installed" in working
+    )
+
+    if apply:
+        for note in notes:
+            say(note)
+        return _lite_apply(root, kit, config, kit_manifest, head, rows, owed or bool(keep or leave), stops, say)
+
+    agents = _lite_agents_section(root, kit)
+    changelog = _lite_changelog(kit, head, baseline_commit)
+    date = _git_run(kit, "log", "-1", "--format=%cs", head).stdout.strip()
+    decide = [r for r in rows if r.action == "decide"]
+    apply_command = (
+        # Quoted: an agent runs this line as printed, and a root with a space or a
+        # branch name with a shell metacharacter would otherwise split or run.
+        f"uv run {shlex.quote(str(kit / 'scripts' / 'kit_doctor.py'))} --upgrade-lite "
+        f"--root {shlex.quote(str(root))} --branch {shlex.quote(current)} "
+        f"--apply --kit-commit {head}"
+    )
+    if as_json:
+        say(json.dumps({
+            "kit": {"path": str(kit), "commit": head, "date": date, "origin": upstream,
+                    "pinned": kit_commit is not None, "notes": notes},
+            "target": {"root": str(root), "branch": current, "protected": protected},
+            "profile": "lite",
+            "baseline": {"kit_commit": baseline_commit, "working_tree_differs": uncommitted},
+            "record": "recorded-uncommitted" if recorded_here else ("owed" if owed else "not-owed"),
+            "files": [
+                {"path": r.path, "state": r.state, "action": r.action, "detail": r.detail,
+                 "options": list(r.options)}
+                for r in rows
+            ],
+            "kept": sorted(LITE_ADAPTER_INSTALL_PATHS[k] for k in kept_committed),
+            "agents_section": agents,
+            "changelog": changelog,
+            "stops": stops,
+            "apply": apply_command,
+        }, indent=1))
+        return 1 if stops else 0
+
+    if kit_commit is None:
+        say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone, current with its origin")
+    else:
+        say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone at --kit-commit")
+        for note in notes:
+            say(f"  {note}")
+    protection = (
+        "; ".join(f"protected branch {name} ({', '.join(c)})" for name, c in protected.items())
+        or "no protected branch named — direct commits"
+    )
+    say(f"target: {root} on {current} — {protection}")
+    say("profile: lite")
+    if baseline_commit:
+        say(f"baseline (committed): installed from kit {baseline_commit[:12]}")
+    else:
+        say("baseline (committed): recorded, install provenance unknown — the record is owed")
+    if uncommitted:
+        say(
+            f"  note: the working tree's {MANIFEST_NAME} is not the committed one — an "
+            "uncommitted or abandoned record; everything here reads the committed one"
+        )
+    if recorded_here:
+        say(f"record: recorded in the working tree for kit {head[:12]}, not committed yet — U6 commits it")
+    elif owed:
+        say(
+            f"record: owed — the committed baseline names {baseline_commit[:12] if baseline_commit else 'no commit'}, "
+            f"the kit is at {head[:12]}"
+        )
+    else:
+        say("record: not owed — the committed baseline names the kit's commit")
+    say("files:")
+    labels = {
+        "none": "nothing to do",
+        "take": "take the kit's copy",
+        "keep": "keep",
+        "leave-absent": "leave absent",
+        "decide": "decide",
+        "stop": "STOP",
+    }
+    for r in rows:
+        detail = f" ({r.detail})" if r.detail else ""
+        options = f": {' | '.join(r.options)}" if r.options else ""
+        say(f"  {r.state:<17} {r.path} → {labels[r.action]}{detail}{options}")
+    say("kept skills (committed baseline):")
+    if kept_committed:
+        for k in sorted(kept_committed):
+            local = LITE_ADAPTER_INSTALL_PATHS[k]
+            where = "on disk, kept unless --take" if (root / local).is_file() else "not on disk"
+            say(f"  {local} — {where}")
+    else:
+        say("  none")
+    if agents["status"] == "match":
+        say(f"AGENTS.md section: {agents['file']}'s kit bullets match the kit's")
+    elif agents["status"] == "differs":
+        say(f"AGENTS.md section: {agents['file']}'s kit bullets differ from the kit's (- kit, + here):")
+        for line in agents["diff"].splitlines():
+            say(f"  {line}")
+    elif agents["status"] == "missing":
+        say(f"AGENTS.md section: no `{LITE_AGENTS_HEADING}` in AGENTS.md or CLAUDE.md")
+    else:
+        say(f"AGENTS.md section: ⚠ {agents['diff']}")
+    if changelog["base"]:
+        say(f"changelog: changelog.d/ fragments from {changelog['base'][:12]}..{head[:12]}, newest first:")
+        for entry in changelog["entries"]:
+            say(f"── {entry['path']} ({entry['commit']})")
+            say(entry["text"].rstrip("\n"))
+            say()
+        if not changelog["entries"]:
+            say("  none — no commit in range changed changelog.d/")
+    for warning in changelog["warnings"]:
+        say(f"  ⚠ changelog: {warning}")
+    for stop in stops:
+        say(f"stop: {stop}")
+    if not stops:
+        flags = " ".join(f"[{' | '.join(r.options)}]" for r in decide)
+        say(f"apply (U4): {apply_command}" + (f" {flags}" if flags else ""))
+    return 1 if stops else 0
+
+
+def _lite_apply(root, kit, config, kit_manifest, head, rows, owed, stops, say) -> int:
+    # `owed` is true too when a `--keep` or `--leave-absent` was given: those change
+    # only the record, so a run that skipped it would drop the decision and leave
+    # the row undecided on every later run.
+    from atomic_write import AtomicWriteRefused, stage_text
+
+    for stop in stops:
+        say(f"refused: {stop}")
+    undecided = [r for r in rows if r.action == "decide"]
+    for r in undecided:
+        say(f"refused: {r.path} is {r.state} ({r.detail}) — decide it: {' | '.join(r.options)}")
+    if stops or undecided:
+        say("nothing taken, nothing recorded")
+        return 1
+    takes = [r for r in rows if r.action == "take"]
+    if not takes and not owed:
+        say(f"nothing to do: the committed baseline names kit {head[:12]} and every lite file is settled")
+        return 0
+    refusals = _lite_take_refusals(root, rows)
+    if refusals:
+        for refusal in refusals:
+            say(f"refused: {refusal}")
+        say("nothing taken, nothing recorded — settle each refused path with the operator, then re-run")
+        return 1
+    raw_version = get(config, "kit.version", None)
+    version = _as_version(raw_version) if raw_version is not None else None
+    if version is None:
+        say(f"refused: kit.version is {raw_version!r}, so the baseline cannot be stamped")
+        return 1
+    # The record's own verdict, predicted before any write: `record_install_manifest`
+    # runs on the tree as it will be after the takes, each take's file read as its
+    # kit source. A kit clone whose bytes are not its manifest's (a checkout made
+    # with `core.autocrlf`, an edited clone), or a lite file the record would refuse,
+    # then refuses here with nothing taken, rather than after the copies (#1411).
+    kept_sources = frozenset(r.source for r in rows if r.action == "keep")
+    sources: dict[str, str] = {}
+    predicted_refusals: list[str] = []
+    for r in takes:
+        try:
+            data = (kit / r.source).read_bytes()
+            sources[r.source] = data.decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            predicted_refusals.append(f"cannot read the kit's {r.source}: {exc}")
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        entry = kit_manifest["files"].get(r.source)
+        if not isinstance(entry, dict) or entry.get("sha256") != digest:
+            predicted_refusals.append(
+                f"the kit clone's {r.source} does not match its own {MANIFEST_NAME} (a checkout "
+                "made with core.autocrlf, or an edited clone): delete the clone and run Step 0's "
+                "kit block again"
+            )
+    if not predicted_refusals:
+        _, predicted = record_install_manifest(
+            root, config, version, head, kit_manifest["files"], kept_sources,
+            digests={r.source: hashlib.sha256(sources[r.source].encode("utf-8")).hexdigest() for r in takes},
+        )
+        predicted_refusals += [f"{path} is not the kit's copy and was not kept" for path in predicted]
+    if predicted_refusals:
+        for refusal in predicted_refusals:
+            say(f"refused: {refusal}")
+        say(
+            "nothing taken, nothing recorded — settle each with the operator (--take, or --keep "
+            "for a skill), then re-run"
+        )
+        return 1
+    taken: list[str] = []
+    for r in takes:
+        dst = root / r.path
+        try:
+            text = sources[r.source]
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            stage_text(dst, text, newline="").commit()
+        except (OSError, UnicodeDecodeError, AtomicWriteRefused) as exc:
+            say(f"stopped: cannot write {dst}: {exc}")
+            say(
+                f"nothing recorded: the committed baseline still describes the old copies; "
+                f"{len(taken)} of {len(takes)} taken — fix the cause and re-run"
+            )
+            return 1
+        taken.append(r.path)
+        say(f"took: {r.path}")
+    # Checked again on the real tree: the prediction is the guard, this the backstop
+    # for a file that changed under the run.
+    recorded, unverified = record_install_manifest(
+        root, config, version, head, kit_manifest["files"], kept_sources
+    )
+    if unverified:
+        for path in unverified:
+            say(f"refused: {path} is not the kit's copy and was not kept")
+        say(
+            f"not recorded: {MANIFEST_NAME} is unchanged — settle each with the operator "
+            "(--take, or --keep for a skill), then re-run"
+        )
+        return 1
+    try:
+        stage_text(
+            root / MANIFEST_NAME, json.dumps(recorded, indent=2, sort_keys=True) + "\n", newline=""
+        ).commit()
+    except (OSError, AtomicWriteRefused) as exc:
+        say(f"stopped: cannot write {root / MANIFEST_NAME}: {exc}")
+        say("not recorded: the baseline is unchanged — fix the cause and re-run")
+        return 1
+    for r in rows:
+        if r.action == "keep":
+            say(f"kept: {r.path}")
+        elif r.action == "leave-absent":
+            say(f"left absent: {r.path}")
+    say(f"recorded: {MANIFEST_NAME} for kit {head[:12]}")
+    changed = _git_run(root, "status", "--porcelain", "--untracked-files=all", "--", *taken, MANIFEST_NAME)
+    if changed.returncode == 0 and not changed.stdout.strip():
+        # A take that restored the committed bytes, under a baseline that already
+        # named the kit: U5's `recorded in the working tree` cannot appear, and U6
+        # has nothing to commit.
+        say("unchanged against HEAD: the taken files and the record equal the committed ones — nothing for U6 to commit")
+        return 0
+    for path in [*taken, MANIFEST_NAME]:
+        say(f"stage: {path}")
+    return 0
+
+
 def _stream_aliases_path(stream: object, path: Path) -> bool:
     """True when ``stream``'s current file descriptor is the SAME underlying file as
     ``path`` — same device, same inode, checked with ``os.fstat``/``Path.stat``, not by
@@ -4409,9 +5353,48 @@ def main(argv: list[str] | None = None) -> int:
         default=[],
         metavar="SKILL",
         help=(
-            "(lite, with --record-install) a lite skill path the repository kept as its "
-            "own, such as .claude/skills/review/SKILL.md; repeat for each"
+            "(lite, with --record-install or --upgrade-lite --apply) a lite skill path the "
+            "repository kept as its own, such as .claude/skills/review/SKILL.md; repeat for each"
         ),
+    )
+    parser.add_argument(
+        "--upgrade-lite",
+        action="store_true",
+        help=(
+            "(lite, run from the kit clone) read the lite upgrade of --root: file states, "
+            "whether the record is owed, the AGENTS.md section and the changelog range; "
+            "with --apply, take the kit's copies and record the baseline"
+        ),
+    )
+    parser.add_argument(
+        "--branch", default=None, help="(--upgrade-lite) the branch --root must have checked out"
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="(--upgrade-lite) take the kit's copies and record the new baseline",
+    )
+    parser.add_argument(
+        "--kit-commit",
+        default=None,
+        help=(
+            "(--upgrade-lite) the kit commit the read mode printed and the operator approved: "
+            "required with --apply; on a read, pins that commit in place of the freshness check"
+        ),
+    )
+    parser.add_argument(
+        "--take",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="(--upgrade-lite --apply) take the kit's copy of an edited, removed or kept lite file",
+    )
+    parser.add_argument(
+        "--leave-absent",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="(--upgrade-lite --apply) leave a removed lite file, or a kept skill gone from disk, absent",
     )
     parser.add_argument(
         "--adapter-report",
@@ -4435,6 +5418,61 @@ def main(argv: list[str] | None = None) -> int:
         help="this repo's own installed-state manifest (default: <root>/kit-manifest.json)",
     )
     args = parser.parse_args(argv)
+
+    lite_only = [
+        option
+        for option, present in (
+            ("--branch", args.branch is not None),
+            ("--apply", args.apply),
+            ("--kit-commit", args.kit_commit is not None),
+            ("--take", bool(args.take)),
+            ("--leave-absent", bool(args.leave_absent)),
+        )
+        if present
+    ]
+    if args.upgrade_lite:
+        incompatible = [
+            option
+            for option, present in (
+                ("--generate-manifest", args.generate_manifest),
+                ("--record-install", args.record_install),
+                ("--from-kit", args.from_kit is not None),
+                ("--adapter-report", args.adapter_report),
+                ("--adapter-source", args.adapter_source is not None),
+                ("--manifest", args.manifest is not None),
+                ("--baseline", args.baseline is not None),
+            )
+            if present
+        ]
+        if incompatible:
+            parser.error(f"--upgrade-lite cannot be combined with {', '.join(incompatible)}")
+        # Both named on every call: the target is never inferred from where the
+        # command runs or carried from an earlier one (#1410).
+        if args.root is None or args.branch is None:
+            parser.error("--upgrade-lite requires --root and --branch")
+        # Absolute, so the target never depends on the shell's directory: the
+        # doc writes `<root>` out from U1 rather than as `.` or `$REPO` (#536).
+        if not args.root.is_absolute():
+            parser.error(f"--upgrade-lite takes an absolute --root, not {str(args.root)!r}")
+        decisions = bool(args.take or args.keep or args.leave_absent)
+        if decisions and not args.apply:
+            parser.error("--take, --keep and --leave-absent require --apply")
+        if args.apply and args.kit_commit is None:
+            parser.error("--apply requires --kit-commit, the kit commit the read mode printed")
+        if args.apply and args.json:
+            parser.error("--json reads the plan; --apply prints what it did")
+        return upgrade_lite(
+            args.root.resolve(),
+            args.branch,
+            apply=args.apply,
+            kit_commit=args.kit_commit,
+            take=tuple(args.take),
+            keep=tuple(args.keep),
+            leave=tuple(args.leave_absent),
+            as_json=args.json,
+        )
+    if lite_only:
+        parser.error(f"{', '.join(lite_only)} require --upgrade-lite")
 
     root = (args.root or repo_root()).resolve()
     manifest_path = args.manifest or (root / MANIFEST_NAME)

@@ -5247,11 +5247,15 @@ def test_every_upgrade_engine_invocation_is_repo_anchored():
         f"the shell's cwd: {unanchored}"
     )
 
+    # The one other required form: the lite section's `--upgrade-lite` commands
+    # carry no shell variable (#1410), so `--root` is the `<root>` the doc has the
+    # reader write out, and the engine refuses one that is not absolute.
     bad_root = [
         (cmd, value)
         for cmd in commands
         for value in _ROOT_ARG.findall(cmd)
         if not re.fullmatch(r'\$\{REPO:\?[^}]*\}', value.strip("\"'"))
+        and not ("--upgrade-lite" in cmd and value == "<root>")
     ]
     assert bad_root == [], (
         "upgrade.md passes `--root` something other than the $REPO anchor. It "
