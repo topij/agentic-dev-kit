@@ -661,6 +661,10 @@ UPGRADE = REPO_ROOT / "docs/agentic-dev-kit/workflows/upgrade.md"
 UPGRADE_SHELLS = [s for s in ("sh", "bash", "zsh") if shutil.which(s)]
 
 
+# U1's write target, as U1 binds it: a repository with no protected branch, on main.
+TARGET = {"LITE_BRANCH": "main", "LITE_PROTECTED": ""}
+
+
 def _upgrade_block(needle: str) -> str:
     text = UPGRADE.read_text(encoding="utf-8")
     section = text[text.index("\n## Lite profile\n") :]
@@ -675,6 +679,10 @@ def _upgrade_block(needle: str) -> str:
 
 def _copy_block() -> str:
     return _upgrade_block("LITE_TAKE is not set")
+
+
+def _record_block() -> str:
+    return _upgrade_block("--record-install")
 
 
 def _old_kit(tmp_path: Path, *, without: tuple[str, ...] = ()) -> Path:
@@ -720,7 +728,7 @@ def _lite_install(tmp_path: Path, shell: str, kit: Path, *, keep: tuple[str, ...
         skill = repo / path
         skill.parent.mkdir(parents=True)
         skill.write_text("---\nname: review\ndescription: Ours.\n---\n\nOur review.\n", encoding="utf-8")
-    env = {**env, "REPO": str(repo), "KIT": str(kit)}
+    env = {**env, "REPO": str(repo), "KIT": str(kit), **TARGET}
     installed = _run(shell, _adopt_copy_block(), repo, env)
     assert installed.returncode == 0, installed.stderr
     (repo / "config").mkdir()
@@ -756,7 +764,7 @@ def _states(repo: Path, env: dict[str, str]) -> dict[str, str]:
 def _take_list(repo: Path, env: dict[str, str]) -> str:
     """upgrade.md U4's listing command, run as the doc writes it."""
     listing = _upgrade_block('--json |')
-    result = _run("sh", listing, repo, {**env, "KIT": str(REPO_ROOT)})
+    result = _run("sh", listing, repo, {**env, "KIT": str(REPO_ROOT), **TARGET})
     assert result.returncode == 0, result.stderr
     return result.stdout
 
@@ -771,7 +779,7 @@ def test_upgrade_lite_takes_every_stale_file_and_records_an_intact_install(tmp_p
 
     take = _take_list(repo, env)
     assert not any(path in take for path in kept) and take.count("\n") == 7, take
-    env = {**env, "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+    env = {**env, "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": take}
     result = _run(shell, _copy_block(), repo, env)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stdout.count("took: ") == 7
@@ -795,7 +803,7 @@ def test_upgrade_lite_kept_list_survives_a_failed_record(tmp_path: Path, shell: 
     finds the kept skills, and checking the baseline out undoes the failed record."""
     kept = (".claude/skills/review/SKILL.md", ".agents/skills/review/SKILL.md")
     repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path), keep=kept)
-    env = {**env, "KIT": str(REPO_ROOT)}
+    env = {**env, "KIT": str(REPO_ROOT), **TARGET}
     failed = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
     assert failed.returncode == 1, failed.stderr
     written = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
@@ -815,7 +823,7 @@ def test_upgrade_lite_leaves_an_edited_file_to_the_operator(tmp_path: Path, shel
 
     take = _take_list(repo, env)
     assert "lite-wrap-up.md" not in take
-    env = {**env, "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+    env = {**env, "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": take}
     assert _run(shell, _copy_block(), repo, env).returncode == 0
     assert edited.read_text(encoding="utf-8").endswith("Our edit.\n")
 
@@ -852,7 +860,7 @@ def test_upgrade_lite_copy_block_refuses_symlinks_and_a_shadowed_command(tmp_pat
             "README.md",
         ]
     )
-    env = {**env, "REPO": f"{repo}/", "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+    env = {**env, "REPO": f"{repo}/", "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": take}
 
     result = _run(shell, _copy_block(), repo, env)
     assert result.returncode == 1, result.stdout + result.stderr
@@ -878,6 +886,7 @@ def test_upgrade_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_syml
         **env,
         "REPO": f"{linked}/adopter/",
         "KIT": str(REPO_ROOT),
+        **TARGET,
         "LITE_TAKE": "docs/agentic-dev-kit/lite/lite-review.md",
     }
     result = _run(shell, _copy_block(), repo, env)
@@ -900,7 +909,7 @@ def test_upgrade_lite_installs_a_doc_the_kit_added_since_the_baseline(tmp_path: 
     assert _states(repo, env)[added] == "new-upstream"
     take = _take_list(repo, env)
     assert added in take.split()
-    result = _run(shell, _copy_block(), repo, {**env, "KIT": str(REPO_ROOT), "LITE_TAKE": take})
+    result = _run(shell, _copy_block(), repo, {**env, "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": take})
     assert result.returncode == 0, result.stdout + result.stderr
     assert f"took: {added}" in result.stdout
     assert (repo / added).read_bytes() == (REPO_ROOT / added).read_bytes()
@@ -917,7 +926,7 @@ def test_upgrade_lite_copy_block_refuses_a_dangling_command_symlink_and_a_direct
     directory = repo / "docs/agentic-dev-kit/lite/lite-wrap-up.md"
     directory.mkdir(parents=True)
     take = ".claude/skills/review/SKILL.md docs/agentic-dev-kit/lite/lite-wrap-up.md"
-    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT), "LITE_TAKE": take}
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT), **TARGET, "LITE_TAKE": take}
     result = _run(shell, _copy_block(), repo, env)
     assert result.returncode == 1, result.stdout + result.stderr
     assert result.stdout.count("refused: ") == 2, result.stdout
@@ -937,6 +946,7 @@ def test_upgrade_lite_copy_block_stops_on_a_failed_copy(tmp_path: Path, shell: s
         **env,
         "REPO": str(repo),
         "KIT": str(REPO_ROOT),
+        **TARGET,
         "LITE_TAKE": "docs/agentic-dev-kit/lite/lite-review.md .agents/skills/review/SKILL.md",
     }
     try:
@@ -956,6 +966,7 @@ def test_upgrade_lite_copy_block_stops_when_a_directory_cannot_be_made(tmp_path:
         **env,
         "REPO": str(repo),
         "KIT": str(REPO_ROOT),
+        **TARGET,
         "LITE_TAKE": ".agents/skills/review/SKILL.md .agents/skills/wrap-up/SKILL.md",
     }
     result = _run(shell, _copy_block(), repo, env)
@@ -966,8 +977,112 @@ def test_upgrade_lite_copy_block_stops_when_a_directory_cannot_be_made(tmp_path:
 @pytest.mark.parametrize("shell", UPGRADE_SHELLS)
 def test_upgrade_lite_copy_block_refuses_to_run_without_a_list(tmp_path: Path, shell: str) -> None:
     repo, env = _repo(tmp_path, "adopter")
-    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT), **TARGET}
     result = _run(shell, _copy_block(), repo, env)
     assert result.returncode != 0
     assert "LITE_TAKE is not set" in result.stderr
     assert not (repo / "docs").exists()
+
+
+def _check_lines(block: str) -> list[str]:
+    lines = block.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.startswith(': "${LITE_BRANCH'))
+    end = next(i for i, line in enumerate(lines) if "is the protected branch" in line)
+    return lines[start : end + 1]
+
+
+def test_upgrade_lite_copy_and_record_blocks_run_the_same_write_target_check() -> None:
+    """One check, written twice: a drift between U4's and U5's copies is a write
+    target one of them no longer refuses."""
+    copy, record = _check_lines(_copy_block()), _check_lines(_record_block())
+    assert copy == record
+    assert len(copy) == 5, copy
+
+
+def _wrong_target(repo: Path, env: dict[str, str], how: str) -> dict[str, str]:
+    """Bind U1's variables to a target the write-target check must refuse."""
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT), **TARGET}
+    if how == "other-branch":
+        env["LITE_BRANCH"] = "feat/upgrade"
+    elif how == "protected":
+        env["LITE_PROTECTED"] = "main"
+    elif how == "detached":
+        _git(repo, env, "checkout", "-q", "--detach")
+    elif how == "subdirectory":
+        (repo / "sub").mkdir()
+        env["REPO"] = str(repo / "sub")
+    elif how == "not-a-checkout":
+        plain = repo.parent / "plain"
+        plain.mkdir()
+        env["REPO"] = str(plain)
+    elif how == "branch-unset":
+        del env["LITE_BRANCH"]
+    elif how == "protected-unset":
+        del env["LITE_PROTECTED"]
+    else:
+        raise AssertionError(how)
+    return env
+
+
+# Each wrong target and the refusal that must name it, so a guard removed from the
+# check cannot hide behind a later one that happens to refuse the same tree.
+WRONG_TARGETS = {
+    "other-branch": "is on main, not feat/upgrade",
+    "protected": "refused: main is the protected branch",
+    "detached": "is not on a branch",
+    "subdirectory": "is not the top of a checkout",
+    "not-a-checkout": "is not the top of a checkout",
+    "branch-unset": "LITE_BRANCH is not set",
+    "protected-unset": "LITE_PROTECTED is not set",
+}
+
+
+@pytest.mark.parametrize("how", WRONG_TARGETS)
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_copy_block_writes_nothing_to_a_wrong_target(tmp_path: Path, shell: str, how: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    env = _wrong_target(repo, env, how)
+    env["LITE_TAKE"] = "docs/agentic-dev-kit/lite/lite-review.md .claude/skills/review/SKILL.md"
+    result = _run(shell, _copy_block(), repo, env)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert WRONG_TARGETS[how] in result.stdout + result.stderr
+    assert "took: " not in result.stdout
+    target = Path(env["REPO"])
+    for root in {repo, target}:
+        assert not (root / "docs").exists() and not (root / ".claude").exists()
+
+
+def _uv_stub(tmp_path: Path, env: dict[str, str]) -> dict[str, str]:
+    """A `uv` that runs `uv run <script> <args>` with this interpreter, so the record
+    block runs as written without resolving anything."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    uv = bin_dir / "uv"
+    uv.write_text(f'#!/bin/sh\n[ "$1" = run ] && shift\nexec "{sys.executable}" "$@"\n', encoding="utf-8")
+    uv.chmod(0o755)
+    return {**env, "PATH": f"{bin_dir}{os.pathsep}{env['PATH']}"}
+
+
+@pytest.mark.parametrize("shell", UPGRADE_SHELLS)
+def test_upgrade_lite_record_block_records_on_the_bound_target(tmp_path: Path, shell: str) -> None:
+    repo, env = _lite_install(tmp_path, shell, _old_kit(tmp_path))
+    env = _uv_stub(tmp_path, {**env, "KIT": str(REPO_ROOT), **TARGET})
+    taken = _run(shell, _copy_block(), repo, {**env, "LITE_TAKE": _take_list(repo, env)})
+    assert taken.returncode == 0, taken.stdout + taken.stderr
+    result = _run(shell, _record_block(), repo, env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = _doctor("--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), env=env)
+    assert report.returncode == 0, report.stdout + report.stderr
+    assert "intact for this adoption — lite install" in report.stdout
+
+
+@pytest.mark.parametrize("how", WRONG_TARGETS)
+def test_upgrade_lite_record_block_records_nothing_on_a_wrong_target(tmp_path: Path, how: str) -> None:
+    repo, env = _lite_install(tmp_path, "sh", _old_kit(tmp_path))
+    before = (repo / "kit-manifest.json").read_bytes()
+    env = _uv_stub(tmp_path, _wrong_target(repo, env, how))
+    result = _run("sh", _record_block(), repo, env)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert WRONG_TARGETS[how] in result.stdout + result.stderr
+    assert (repo / "kit-manifest.json").read_bytes() == before
+    assert not (Path(env["REPO"]) / "kit-manifest.json").exists() or Path(env["REPO"]) == repo

@@ -1240,14 +1240,24 @@ choose by the `<protected-branch>` that section reads:
   commits to the branch checked out, in the checkout in use, unless the operator names
   another branch or asks for a task worktree.
 
-Bind and check both roots before the first write:
+Bind the write target. Set `REPO` to the checkout the commit is made in (the task
+worktree, when one was selected), `LITE_BRANCH` to the branch the commit goes to, and
+`LITE_PROTECTED` to `<protected-branch>`, or to the empty string when it is absent from
+every copy. Then check them before the first write:
 
 ```bash
 echo "REPO=${REPO:?REPO is not set — re-run Step 0}"; echo "KIT=${KIT:?KIT is not set — re-run the kit block in Step 0}"; echo "pwd=$(pwd)"
+echo "LITE_BRANCH=${LITE_BRANCH:?LITE_BRANCH is not set — bind it in U1}"; echo "LITE_PROTECTED=${LITE_PROTECTED?LITE_PROTECTED is not set — bind it in U1, empty when none is named}"
 ```
 
-Done when no stop fired, `$REPO` is the lite repository on the branch the commit goes
-to, and `$KIT` is a clean clone whose commit the block printed.
+U4's copy block and U5's record block both start with the same **write-target check**:
+`$REPO` must be the top of a checkout, on `LITE_BRANCH`, and that branch must not be
+`LITE_PROTECTED`. A shell that lost its variables and re-ran Step 0 has `REPO` bound to
+the checkout it ran from, which may be the primary checkout on the protected branch; the
+check refuses it there rather than writing. Re-bind all of them here, never by guessing.
+
+Done when no stop fired, `$REPO` is the lite repository on `LITE_BRANCH`, and `$KIT` is
+a clean clone whose commit the block printed.
 
 ### U2 — Diff the installation (read-only)
 
@@ -1263,8 +1273,10 @@ Read, in order:
   `./init.sh` the line may suggest is the full profile's, which a lite repository does
   not have: **stop and tell the operator** (#1320).
 - **The `baseline:` line.** It names the kit commit this install was recorded from. No
-  baseline means the install was never recorded: run `adopt.md`'s *Lite profile* L4
-  against the files as they are, with the operator, before upgrading.
+  baseline means the install was never recorded: **stop and ask the operator.** Do not
+  run `adopt.md`'s L4 to make one. L4 records against `$KIT`, and `$KIT` is the newer
+  kit, so a record from it would describe none of the older files as installed, under the
+  new kit's commit, with no committed baseline to restore (#1320).
 - **Each lite file's state**, at its installed path:
   - `unchanged` — the kit has not changed it. Nothing to do.
   - `stale` — byte-identical to what was installed, and the kit has moved on.
@@ -1325,7 +1337,8 @@ uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_do
   python3 -c 'import json, sys; [print(f["path"]) for f in json.load(sys.stdin)["files"] if f["state"] in ("stale", "new-upstream")]'
 ```
 
-Then run the block. It replaces only the lite docs and skills, never writes through a
+Then run the block. It first runs U1's write-target check and writes nothing when that
+refuses. It replaces only the lite docs and skills, never writes through a
 symlink, under a symlinked directory or onto a directory, and refuses a Claude skill
 while `.claude/commands/<slug>.md` exists, as a file or a symlink, because the skill
 would silently shadow that command. A refused path prints `refused:` and makes the block exit 1. Its variable is
@@ -1335,6 +1348,11 @@ search path and the symlink check never ends.
 ```bash
 REPO="${REPO:?REPO is not set — re-run Step 0}"
 while [ "$REPO" != / ] && [ "${REPO%/}" != "$REPO" ]; do REPO="${REPO%/}"; done
+: "${LITE_BRANCH:?LITE_BRANCH is not set — bind it in U1}" "${LITE_PROTECTED?LITE_PROTECTED is not set — bind it in U1, empty when none is named}"
+[ "$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null)" -ef "$REPO" ] || { echo "refused: $REPO is not the top of a checkout"; exit 1; }
+on=$(git -C "$REPO" symbolic-ref --quiet --short HEAD) || { echo "refused: $REPO is not on a branch"; exit 1; }
+[ "$on" = "$LITE_BRANCH" ] || { echo "refused: $REPO is on $on, not $LITE_BRANCH"; exit 1; }
+[ "$on" != "$LITE_PROTECTED" ] || { echo "refused: $on is the protected branch"; exit 1; }
 : "${LITE_TAKE:?LITE_TAKE is not set — list the rows U3 marked take}"
 take=" $(printf '%s' "$LITE_TAKE" | tr '\n\t' '  ') "
 under_link() {
@@ -1397,10 +1415,17 @@ A traceback here means no baseline is committed, which U2's `baseline:` line sho
 already have caught: stop.
 
 Re-record with `--keep <path>` for each of them that U3 did not mark **take**, and for
-each skill U3 marked **keep**:
+each skill U3 marked **keep**, added to the last line. The block runs U1's write-target
+check first and records nothing when that refuses:
 
 ```bash
-uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "${REPO:?REPO is not set — re-run Step 0}"
+REPO="${REPO:?REPO is not set — re-run Step 0}"
+: "${LITE_BRANCH:?LITE_BRANCH is not set — bind it in U1}" "${LITE_PROTECTED?LITE_PROTECTED is not set — bind it in U1, empty when none is named}"
+[ "$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null)" -ef "$REPO" ] || { echo "refused: $REPO is not the top of a checkout"; exit 1; }
+on=$(git -C "$REPO" symbolic-ref --quiet --short HEAD) || { echo "refused: $REPO is not on a branch"; exit 1; }
+[ "$on" = "$LITE_BRANCH" ] || { echo "refused: $REPO is on $on, not $LITE_BRANCH"; exit 1; }
+[ "$on" != "$LITE_PROTECTED" ] || { echo "refused: $on is the protected branch"; exit 1; }
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "$REPO"
 ```
 
 Exit 1 names a lite file that is not the kit's copy and was not named with `--keep`:
