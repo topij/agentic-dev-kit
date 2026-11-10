@@ -1231,9 +1231,9 @@ and before anything else. The configuration rules this upgrade applies are the
 being upgraded, and an older one lacks rules a newer one stops on. The kit block
 writes only its clone, inside the git directory, and prints `KIT=<path> at <sha>`:
 that path is **the kit** for the rest of the upgrade. Run every command below from it,
-never from another clone. `--upgrade-lite` refuses a clone that is not clean or is not
-at its origin's HEAD (#1405): when it does, delete the clone and run the kit block
-again, from this same checkout.
+never from another clone. `--upgrade-lite` refuses a clone that is not clean, and U2's
+read refuses one that is not at its origin's HEAD (#1405): when it does, delete the
+clone and run the kit block again, from this same checkout.
 
 Then read the configuration of the repository exactly as *Read the configuration* in
 the kit's `docs/agentic-dev-kit/lite/lite-wrap-up.md` says, every copy included
@@ -1361,11 +1361,12 @@ read. Then, in order, and nothing is written until each step before it passed:
 
 1. **Every row is settled.** An undecided `decide` row, or a state the baseline cannot
    describe, is a `refused:` line.
-2. **Every take can be written.** A target that is a symlink, a directory, under a
-   symlinked directory, behind a path that is not a directory, or hardlinked is
-   refused, and so is a Claude skill while `.claude/commands/<slug>.md` exists, as a
-   file or a symlink, because the skill would silently shadow that command. One
-   refusal refuses the whole run: `nothing taken, nothing recorded`.
+2. **Every take, and the record, can be written.** A target that is a symlink, a
+   directory or another non-regular file, under a symlinked directory, behind a path
+   that is not a directory, hardlinked or read-only is refused. So is a Claude skill
+   while `.claude/commands/<slug>.md` exists, as a file or a symlink, because the
+   skill would silently shadow that command. One refusal refuses the whole run:
+   `nothing taken, nothing recorded`.
 3. **The copies.** Each lands by rename, and prints `took: <path>`. A copy that fails
    prints `stopped:` and records nothing.
 4. **The record.** `kit-manifest.json` is rewritten by rename for the kit's commit,
@@ -1385,10 +1386,12 @@ Done when the command exited 0, and L5's first command exits 0 and prints
 
 ### U5 — Check before the commit
 
-Run U2's command again. It repeats the write-target check on the checkout U6 commits
-in, and must exit 0 and print `record: recorded in the working tree`. Its rows still
-read the committed baseline, so a row U4 settled with `--leave-absent` still reads
-`decide` until U6 commits.
+Run U2's command again with `--kit-commit <sha>`, the commit U4 applied, added to it. It
+pins that commit in place of U2's freshness check, so a kit origin that moved since U4
+is named in a `note:` rather than refused. It repeats the write-target check on the
+checkout U6 commits in, and must exit 0 and print
+`record: recorded in the working tree`. Its rows still read the committed baseline, so
+a row U4 settled with `--leave-absent` still reads `decide` until U6 commits.
 
 ### U6 — Commit and hand off
 

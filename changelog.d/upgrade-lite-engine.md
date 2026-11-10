@@ -5,7 +5,8 @@ clone, reads a lite install's upgrade: each lite file's state against the **comm
 baseline and what happens to it, whether the record is owed, the kept skills, the
 `AGENTS.md` lite section's bullets against `adopt.md` L3's, and the `changelog.d/`
 fragments since the baseline. Add `--json` for a machine-readable plan. With `--apply
---kit-commit <sha>` it takes the kit's copies and records `kit-manifest.json`. You
+--kit-commit <sha>` it takes the kit's copies and records `kit-manifest.json`. A read
+given `--kit-commit` pins that commit instead of checking the clone against its origin. You
 answer only the rows that need your decision: `--take` or `--keep` for an edited file
 (`--keep` for a skill only), and `--take` or `--leave-absent` for a removed file or a
 kept skill gone from disk. Kept skills carry over from the committed baseline. Exit 0:
@@ -14,17 +15,22 @@ act on.
 
 CHANGED: every call refuses a `--root` that is not the top of a checkout on `--branch`,
 or a branch named by `vcs.protected_branch` in the committed, staged or working-tree
-config. A config copy that does not parse, or a key that names no branch, refuses too.
-The read refuses a kit clone that is not clean or whose HEAD is not its origin's. Delete
+config. It also refuses a config copy that does not parse, and a key that is not a plain
+branch name. A duplicated or misspelled key is not caught here: it is one of
+`lite-wrap-up.md`'s configuration stops, which upgrade.md's U1 applies first. Every git
+call it makes ignores an inherited `GIT_DIR`, `GIT_WORK_TREE` or other repository-local
+git variable. Every call refuses a kit clone that is not clean, and a read without
+`--kit-commit` refuses one whose HEAD is not its origin's. Delete
 the clone and run Step 0's kit block again. `--apply` refuses a clone that is not at
-`--kit-commit`. One refused target (a symlink, a directory, a path under a symlinked
-directory, a hardlinked file, or a Claude skill a `.claude/commands/<slug>.md` would be
-shadowed by) refuses the whole run, and nothing is copied. A record that cannot be
+`--kit-commit`. One refused target refuses the whole run, and nothing is copied. The
+refused targets are a symlink, a directory or other non-regular file, a path under a
+symlinked directory, a hardlinked or read-only file, and a Claude skill a
+`.claude/commands/<slug>.md` would be shadowed by. A record that cannot be
 complete leaves the old baseline as it was.
 
 CHANGED: `upgrade.md`'s *Lite profile* runs these commands in place of its shell
 blocks. Its steps no longer bind `REPO`, `KIT`, `LITE_BRANCH`, `LITE_PROTECTED` or
 `LITE_TAKE`; every input is on the command line. U4 now takes and records in one step,
-and U5 re-reads before the commit. If you followed the old blocks, re-run U2 with the
+and U5 re-reads before the commit, pinned to the commit U4 applied. If you followed the old blocks, re-run U2 with the
 new command. It reads the committed baseline, so a half-finished earlier attempt needs
 no clean-up first.

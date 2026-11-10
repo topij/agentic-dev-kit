@@ -610,7 +610,7 @@ def test_refuses_a_baseline_that_is_a_symlink(tmp_path: Path, kit_upstream: dict
     before = outside.read_bytes()
     done = _apply(kit, repo, env)
     assert done.returncode == 1, done.stdout + done.stderr
-    assert "kit-manifest.json is not a regular file" in done.stdout
+    assert "kit-manifest.json is a symlink, so the baseline cannot be recorded" in done.stdout
     assert not _has_line(done, "took: ") and outside.read_bytes() == before
 
 
@@ -647,6 +647,124 @@ def test_takes_a_root_with_a_trailing_slash_under_a_symlinked_ancestor(
     assert (repo / DOCS[0]).read_bytes() == (kit / DOCS[0]).read_bytes()
 
 
+@pytest.mark.parametrize("decision", ["--leave-absent", "--keep"])
+def test_a_decision_is_recorded_when_nothing_else_is_owed(
+    tmp_path: Path, kit_upstream: dict, kit: Path, decision: str
+) -> None:
+    """After an upgrade is committed, the record is not owed; a `--keep` or
+    `--leave-absent` still changes the record, so it is written, not dropped."""
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _apply(kit, repo, env).returncode == 0
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "upgrade")
+    if decision == "--leave-absent":
+        path = DOCS[2]
+        (repo / path).unlink()
+    else:
+        path = SKILLS[0]
+        (repo / path).write_text((repo / path).read_text(encoding="utf-8") + "Our edit.\n", encoding="utf-8")
+    _git(repo, env, "commit", "-qam", "change one")
+    assert _plan(kit, repo, env)["record"] == "not-owed"
+    done = _apply(kit, repo, env, decision, path)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not done.stdout.startswith("nothing to do") and _has_line(done, "recorded: ")
+    _git(repo, env, "commit", "-qam", "record the decision")
+    row = {r["path"]: r for r in _plan(kit, repo, env)["files"]}[path]
+    assert row["action"] in ("none", "keep"), row
+    if decision == "--keep":
+        assert json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))["kept"] == [INSTALLED[path]]
+
+
+def test_leave_absent_refuses_a_file_that_is_not_removed(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    """A stale or new-upstream file left absent would be recorded as declined and never
+    offered again."""
+    repo, env = _install(tmp_path, kit_upstream, without=(DOCS[2],))
+    baseline = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    baseline["not_installed"].remove(INSTALLED[DOCS[2]])
+    (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
+    _git(repo, env, "commit", "-qam", "older baseline")
+    assert {r["path"]: r["state"] for r in _plan(kit, repo, env)["files"]}[DOCS[2]] == "new-upstream"
+    done = _apply(kit, repo, env, "--leave-absent", DOCS[2])
+    assert done.returncode == 2 and f"--leave-absent names {DOCS[2]}, which is new-upstream" in done.stderr
+
+
+def test_a_staged_baseline_is_not_the_committed_one(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    repo, env = _install(tmp_path, kit_upstream, keep=(SKILLS[0],))
+    (repo / "kit-manifest.json").write_text(json.dumps({"kit_commit": None, "files": {}}), encoding="utf-8")
+    _git(repo, env, "add", "kit-manifest.json")
+    plan = _plan(kit, repo, env)
+    assert plan["baseline"]["kit_commit"] == kit_upstream["old_commit"]
+    assert plan["kept"] == [SKILLS[0]]
+
+
+def test_the_printed_apply_command_is_shell_quoted(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    import shlex
+
+    spaced = tmp_path / "my projects"
+    spaced.mkdir()
+    repo, env = _install(spaced, kit_upstream)
+    branch = "chore/x;touch${IFS}PWNED"
+    _git(repo, env, "switch", "-qc", branch)
+    plan = _plan(kit, repo, env, branch)
+    # Split as a shell would: `punctuation_chars` makes an unquoted `;` its own token.
+    lexer = shlex.shlex(plan["apply"], posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    argv = list(lexer)
+    assert ";" not in argv, argv
+    assert argv[argv.index("--root") + 1] == str(repo)
+    assert argv[argv.index("--branch") + 1] == branch
+    assert argv[2] == str(kit / "scripts/kit_doctor.py")
+
+
+@pytest.mark.parametrize("how", ["fifo", "read-only", "hardlinked-baseline"])
+def test_a_target_the_atomic_writer_would_refuse_is_refused_before_any_copy(
+    tmp_path: Path, kit_upstream: dict, kit: Path, how: str
+) -> None:
+    if how == "read-only" and hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root writes a read-only file")
+    repo, env = _install(tmp_path, kit_upstream)
+    flags: tuple[str, ...] = ()
+    if how == "fifo":
+        # Not a file, so it reads `removed`; taking it is the decision that reaches the guard.
+        (repo / SKILLS[1]).unlink()
+        os.mkfifo(repo / SKILLS[1])
+        flags = ("--take", SKILLS[1])
+        expected = f"refused: {repo / SKILLS[1]} is not a regular file"
+    elif how == "read-only":
+        (repo / DOCS[1]).chmod(0o444)
+        expected = f"refused: {repo / DOCS[1]} is read-only"
+    else:
+        os.link(repo / "kit-manifest.json", tmp_path / "alias.json")
+        expected = "kit-manifest.json is hardlinked"
+    try:
+        done = _all_or_nothing(repo, kit, env, *flags)
+    finally:
+        if how == "read-only":
+            (repo / DOCS[1]).chmod(0o644)
+    assert expected in done.stdout, done.stdout
+
+
+def test_a_malformed_kept_entry_and_an_unreadable_file_are_refusals_not_tracebacks(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    baseline = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    baseline["kept"] = [["x"], 3]
+    (repo / "kit-manifest.json").write_text(json.dumps(baseline), encoding="utf-8")
+    _git(repo, env, "commit", "-qam", "malformed kept")
+    done = _read(kit, repo, env, json_out=False)
+    assert "Traceback" not in done.stderr and done.returncode == 0, done.stdout + done.stderr
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        return
+    (repo / DOCS[0]).chmod(0o000)
+    try:
+        unreadable = _read(kit, repo, env, json_out=False)
+    finally:
+        (repo / DOCS[0]).chmod(0o644)
+    assert "Traceback" not in unreadable.stderr, unreadable.stderr
+    assert unreadable.returncode == 1 and "refused: cannot read the installed files" in unreadable.stdout
+
+
 # --- The write target ----------------------------------------------------------------
 
 
@@ -681,6 +799,11 @@ def _wrong_target(repo: Path, env: dict[str, str], how: str) -> tuple[Path, str]
         config = repo / "config/dev-model.yaml"
         config.write_text(config.read_text(encoding="utf-8") + "vcs:\n  protected_branch:\n", encoding="utf-8")
         return repo, "main"
+    if how == "placeholder-protected":
+        config = repo / "config/dev-model.yaml"
+        config.write_text(config.read_text(encoding="utf-8") + "vcs:\n  protected_branch: <protected-branch>\n",
+                          encoding="utf-8")
+        return repo, "main"
     if how == "unparseable-config":
         config = repo / "config/dev-model.yaml"
         config.write_text(config.read_text(encoding="utf-8") + "vcs: [\n", encoding="utf-8")
@@ -699,6 +822,7 @@ WRONG_TARGETS = {
     "protected-staged": "refused: main is the protected branch (vcs.protected_branch in the staged config)",
     "protected-working": "refused: main is the protected branch (vcs.protected_branch in the working tree config)",
     "unusable-protected": "vcs.protected_branch in the working tree config/dev-model.yaml is None",
+    "placeholder-protected": "is '<protected-branch>', which names no branch",
     "unparseable-config": "the working tree config/dev-model.yaml does not parse",
 }
 
@@ -784,6 +908,41 @@ def test_a_stale_clone_is_refused_naming_both_commits(tmp_path: Path, kit_upstre
     applied = _apply(kit, repo, env)
     assert applied.returncode == 0, applied.stdout + applied.stderr
     assert f"note: the kit's origin has moved to {later[:12]}" in applied.stdout
+    # U5's re-read pins the same commit, so the moved origin does not refuse it either.
+    pinned = _doctor(kit, env, "--upgrade-lite", "--root", str(repo), "--branch", "main",
+                     "--kit-commit", kit_upstream["head"])
+    assert pinned.returncode == 0, pinned.stdout + pinned.stderr
+    assert "a clean clone at --kit-commit" in pinned.stdout
+    assert f"note: the kit's origin has moved to {later[:12]}" in pinned.stdout
+    assert f"record: recorded in the working tree for kit {kit_upstream['head'][:12]}" in pinned.stdout
+    other = _doctor(kit, env, "--upgrade-lite", "--root", str(repo), "--branch", "main",
+                    "--kit-commit", kit_upstream["old_commit"])
+    assert other.returncode == 1 and "not --kit-commit" in other.stdout
+
+
+@pytest.mark.parametrize("mode", ["read", "apply"])
+def test_inherited_git_location_variables_do_not_redirect_the_operation(
+    tmp_path: Path, kit_upstream: dict, kit: Path, mode: str
+) -> None:
+    """An inherited `GIT_DIR` and `GIT_WORK_TREE` naming another repository must not
+    decide the branch, the committed baseline or the kit's HEAD."""
+    repo, env = _install(tmp_path, kit_upstream)
+    decoy = tmp_path / "decoy"
+    decoy.mkdir()
+    _git(decoy, env, "-c", "init.defaultBranch=main", "init", "-q")
+    (decoy / "f").write_text("decoy\n", encoding="utf-8")
+    _git(decoy, env, "add", "f")
+    _git(decoy, env, "commit", "-qm", "decoy")
+    hostile = {**env, "GIT_DIR": str(decoy / ".git"), "GIT_WORK_TREE": str(repo),
+               "GIT_INDEX_FILE": str(decoy / ".git/index")}
+    if mode == "read":
+        plan = _plan(kit, repo, hostile)
+        assert plan["baseline"]["kit_commit"] == kit_upstream["old_commit"]
+        assert plan["kit"]["commit"] == kit_upstream["head"]
+    else:
+        done = _apply(kit, repo, hostile, commit=kit_upstream["head"])
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert "recorded: " in done.stdout
 
 
 def test_a_dirty_clone_is_refused(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
