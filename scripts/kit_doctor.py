@@ -4405,8 +4405,9 @@ def _git_env() -> dict[str, str]:
             drop |= set(live.stdout.split())
         except (OSError, subprocess.SubprocessError):
             pass
-        # No credential prompt either: `ls-remote` against an origin that asks
-        # for one fails instead of waiting for a terminal the agent does not have.
+        # No terminal credential prompt either: an https origin that asks for one
+        # fails instead of waiting for a terminal the agent does not have. An ssh
+        # origin's own prompts (host key, passphrase) are ssh's, not covered here.
         _git_clean_env = {k: v for k, v in os.environ.items() if k not in drop} | {"GIT_TERMINAL_PROMPT": "0"}
     return _git_clean_env
 
@@ -4533,30 +4534,38 @@ def _lite_target(root: Path, branch: str) -> tuple[str, dict[str, list[str]]]:
         is_top = False
     if not is_top:
         raise LiteUpgradeStop(f"{root} is not the top of a checkout")
-    on = _git_run(root, "symbolic-ref", "--quiet", "--short", "HEAD")
-    if on.returncode != 0 or not on.stdout.strip():
+    # The full ref, never `--short`: that shortens against tags too, so with a tag
+    # `main` beside the branch it prints `heads/main`, which no protected name
+    # equals and which the refusal below would then tell the agent to pass.
+    on = _git_run(root, "symbolic-ref", "--quiet", "HEAD")
+    ref = on.stdout.strip()
+    if on.returncode != 0 or not ref.startswith("refs/heads/"):
         raise LiteUpgradeStop(f"{root} is not on a branch")
-    current = on.stdout.strip()
+    current = ref.removeprefix("refs/heads/")
     if current != branch:
         raise LiteUpgradeStop(f"{root} is on {current}, not {branch}")
     protected = _lite_protected_branches(root)
-    if current in protected:
+    # Case-folded: on a case-insensitive filesystem `refs/heads/Main` is the
+    # branch `main`, so a configured `Main` protects it.
+    hits = [name for name in protected if name.casefold() == current.casefold()]
+    if hits:
         raise LiteUpgradeStop(
-            f"{current} is the protected branch (vcs.protected_branch in the "
-            f"{', '.join(protected[current])} config)"
+            f"{current} is the protected branch (vcs.protected_branch {hits[0]} in the "
+            f"{', '.join(protected[hits[0]])} config)"
         )
     return current, protected
 
 
 def _lite_kit(kit: Path, kit_commit: str | None) -> tuple[str, str | None, list[str]]:
-    """The kit check: a clean clone, current with its origin (#1405), and, when
-    applying, at the commit the operator approved (#1410).
+    """The kit check: a clean clone, and either current with its origin (#1405) or
+    at the commit the operator approved, `--kit-commit` (#1410).
 
-    Read mode refuses a clone whose HEAD is not its origin's: a clone left by an
-    upgrade that stopped early would otherwise read every file `unchanged` and
-    conclude there is nothing to do. Apply mode pins `--kit-commit` instead. An
-    origin that moved after U3 is named, not refused: U3 approved that commit,
-    and the next upgrade takes the rest.
+    Without `--kit-commit` (U2's read) it refuses a clone whose HEAD is not its
+    origin's: a clone left by an upgrade that stopped early would otherwise read
+    every file `unchanged` and conclude there is nothing to do. With it (U4's
+    apply, U5's read) it pins that commit instead. An origin that moved after U3
+    is named, not refused: U3 approved that commit, and the next upgrade takes
+    the rest.
     """
     head = _lite_head(kit)
     if head is None:
@@ -4978,7 +4987,7 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
     config = _lite_load_config(root)
     try:
         kit_manifest = json.loads((kit / MANIFEST_NAME).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise LiteUpgradeStop(f"cannot read the kit's {MANIFEST_NAME}: {exc}") from exc
     if not isinstance(kit_manifest, dict) or not isinstance(kit_manifest.get("files"), dict):
         raise LiteUpgradeStop(f"the kit's {MANIFEST_NAME} has no files map")
@@ -5013,11 +5022,14 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
     working = None
     try:
         working = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         working = None
     uncommitted = working is not None and working != baseline
+    # A record U4 wrote and U6 has not committed: one for this kit, complete, and
+    # not the committed one. Owed or not: a `--keep` or `--leave-absent` records
+    # when nothing else is owed, and U5 reads this line after it.
     recorded_here = (
-        owed
+        uncommitted
         and isinstance(working, dict)
         and working.get("kit_commit") == head
         and "not_installed" in working

@@ -668,6 +668,8 @@ def test_a_decision_is_recorded_when_nothing_else_is_owed(
     done = _apply(kit, repo, env, decision, path)
     assert done.returncode == 0, done.stdout + done.stderr
     assert not done.stdout.startswith("nothing to do") and _has_line(done, "recorded: ")
+    # U5's re-read names the record, owed or not.
+    assert _plan(kit, repo, env)["record"] == "recorded-uncommitted"
     _git(repo, env, "commit", "-qam", "record the decision")
     row = {r["path"]: r for r in _plan(kit, repo, env)["files"]}[path]
     assert row["action"] in ("none", "keep"), row
@@ -765,6 +767,41 @@ def test_a_malformed_kept_entry_and_an_unreadable_file_are_refusals_not_tracebac
     assert unreadable.returncode == 1 and "refused: cannot read the installed files" in unreadable.stdout
 
 
+def test_a_working_tree_baseline_that_is_not_utf8_is_ignored_not_a_traceback(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    (repo / "kit-manifest.json").write_bytes(b"\xff\xfe\x00bad")
+    done = _read(kit, repo, env, json_out=False)
+    assert "Traceback" not in done.stderr and done.returncode == 0, done.stdout + done.stderr
+    applied = _apply(kit, repo, env)
+    assert applied.returncode == 0 and "Traceback" not in applied.stderr, applied.stdout + applied.stderr
+
+
+def test_every_lite_git_call_closes_stdin_and_turns_off_the_terminal_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An https origin that asks for credentials fails instead of waiting for a
+    terminal an agent does not have."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("kit_doctor_probe", REPO_ROOT / "scripts/kit_doctor.py")
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, "kit_doctor_probe", module)
+    spec.loader.exec_module(module)
+    seen: dict = {}
+
+    def fake_run(argv, **kwargs):
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(argv, 0, "", "")
+
+    monkeypatch.setenv("GIT_DIR", "/nowhere")
+    module._git_clean_env = None
+    monkeypatch.setattr(module.subprocess, "run", fake_run)
+    module._git_run(Path("."), "ls-remote", "origin", "HEAD")
+    assert seen["stdin"] is subprocess.DEVNULL
+    assert seen["env"]["GIT_TERMINAL_PROMPT"] == "0"
+    assert "GIT_DIR" not in seen["env"]
+
+
 # --- The write target ----------------------------------------------------------------
 
 
@@ -799,6 +836,14 @@ def _wrong_target(repo: Path, env: dict[str, str], how: str) -> tuple[Path, str]
         config = repo / "config/dev-model.yaml"
         config.write_text(config.read_text(encoding="utf-8") + "vcs:\n  protected_branch:\n", encoding="utf-8")
         return repo, "main"
+    if how in ("protected-beside-a-tag", "protected-in-another-case"):
+        config = repo / "config/dev-model.yaml"
+        name = "main" if how == "protected-beside-a-tag" else "Main"
+        config.write_text(config.read_text(encoding="utf-8") + f"vcs:\n  protected_branch: {name}\n", encoding="utf-8")
+        if how == "protected-beside-a-tag":
+            # `symbolic-ref --short` would print `heads/main` beside a tag `main`.
+            _git(repo, env, "tag", "main")
+        return repo, "main"
     if how == "placeholder-protected":
         config = repo / "config/dev-model.yaml"
         config.write_text(config.read_text(encoding="utf-8") + "vcs:\n  protected_branch: <protected-branch>\n",
@@ -818,11 +863,13 @@ WRONG_TARGETS = {
     "detached": "is not on a branch",
     "subdirectory": "is not the top of a checkout",
     "not-a-checkout": "is not the top of a checkout",
-    "protected-committed": "refused: main is the protected branch (vcs.protected_branch in the committed",
-    "protected-staged": "refused: main is the protected branch (vcs.protected_branch in the staged config)",
-    "protected-working": "refused: main is the protected branch (vcs.protected_branch in the working tree config)",
+    "protected-committed": "refused: main is the protected branch (vcs.protected_branch main in the committed",
+    "protected-staged": "refused: main is the protected branch (vcs.protected_branch main in the staged config)",
+    "protected-working": "refused: main is the protected branch (vcs.protected_branch main in the working tree config)",
     "unusable-protected": "vcs.protected_branch in the working tree config/dev-model.yaml is None",
     "placeholder-protected": "is '<protected-branch>', which names no branch",
+    "protected-beside-a-tag": "refused: main is the protected branch (vcs.protected_branch main in the working tree",
+    "protected-in-another-case": "refused: main is the protected branch (vcs.protected_branch Main in the working tree",
     "unparseable-config": "the working tree config/dev-model.yaml does not parse",
 }
 
