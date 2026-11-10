@@ -167,7 +167,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "baf4c8f3a79f12d8d1ddbc43628dfaebaf18d90f6cd641a4b3a5aceb8d6868ec"
+      "sha256": "23ecc779f7c13084d0c4b10e5106c94ca84cce88e4510c99a2ac6d1406988be0"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -258,7 +258,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "2f0fc0c7e6ea6a7c0519bf1701a4a8e7daca7f9dc80e6c5ef0b3a0f7a07209a9"
+      "sha256": "8224d60d8978a7b1639b0a9348834c210d7431550d584976a1fcd03fcbd91d05"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -354,7 +354,8 @@
     },
     "scripts/lib/atomic_write.py": {
       "required_by": [
-        "scripts/archive_plan_sessions.py"
+        "scripts/archive_plan_sessions.py",
+        "scripts/kit_doctor.py"
       ],
       "role": "engine",
       "sha256": "d7ff12252f974832f17233132e7bcd0cb4cafaa6f15f654b904c29eee8ceff74"
@@ -768,11 +769,15 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "3ef6fabd9bce47821350eb03f2f7dcf6ba396dde96b5c18d13b3bfc6739f097d"
+      "sha256": "f830cb9c245db6130aa7b32bf8ef3051661cea0a1164537420615e89f486c5a8"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "ed139460e40c681a794d6c5553927360eef0876cfa2ccf23f4e13cbe0e904550"
+      "sha256": "edb4a7928bfd43a211edcafd2981ccec4bc1c90dcd2cf849a08ff471f141dd6b"
+    },
+    "scripts/tests/test_kit_doctor_upgrade_lite.py": {
+      "role": "repo-only",
+      "sha256": "a169ce1f8448af6ebe566f9517672a94c46cd079060863e56d42b76d9ef3dce7"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -788,7 +793,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "e5738d5a813143690f71a05d7819835cbd5e19095b8691aefa14e51be5f9d022"
+      "sha256": "0444c357c13eb013230aed0841583fe0064e28c9246f1e70ebf42ad86450f212"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
