@@ -301,20 +301,17 @@ def test_the_text_report_names_each_row_and_the_apply_command(
 def test_a_failed_record_leaves_the_old_baseline_and_a_rerun_still_carries_kept(
     tmp_path: Path, kit_upstream: dict, kit: Path
 ) -> None:
-    """The record goes through `record_install_manifest`; a present lite file that is
-    not the kit's copy and was not kept makes it partial, and the old baseline stays."""
+    """The record goes through `record_install_manifest`, predicted before any copy: a
+    present kit-path file that is not the kit's copy and was not kept refuses with
+    nothing taken, and the old baseline stays."""
     kept = (".claude/skills/review/SKILL.md",)
     repo, env = _install(tmp_path, kit_upstream, keep=kept)
-    before = (repo / "kit-manifest.json").read_bytes()
     # A full-profile file the repository has at a kit path: present, not the kit's copy.
     stray = repo / "docs/agentic-dev-kit/workflows/wrap-up.md"
     stray.parent.mkdir(parents=True)
     stray.write_text("ours\n", encoding="utf-8")
-    failed = _apply(kit, repo, env)
-    assert failed.returncode == 1, failed.stdout + failed.stderr
+    failed = _all_or_nothing(repo, kit, env)
     assert "refused: docs/agentic-dev-kit/workflows/wrap-up.md is not the kit's copy" in failed.stdout
-    assert "not recorded: kit-manifest.json is unchanged" in failed.stdout
-    assert (repo / "kit-manifest.json").read_bytes() == before
     stray.unlink()
     retried = _apply(kit, repo, env)
     assert retried.returncode == 0, retried.stdout + retried.stderr
@@ -800,6 +797,54 @@ def test_every_lite_git_call_closes_stdin_and_turns_off_the_terminal_prompt(monk
     assert seen["stdin"] is subprocess.DEVNULL
     assert seen["env"]["GIT_TERMINAL_PROMPT"] == "0"
     assert "GIT_DIR" not in seen["env"]
+
+
+def test_a_kit_clone_whose_files_are_not_its_manifests_refuses_before_any_copy(
+    tmp_path: Path, kit_upstream: dict
+) -> None:
+    """A clone checked out with `core.autocrlf` is clean to `git status` while its files
+    are not the bytes its manifest names: the record would refuse every take, so the
+    apply refuses before the first one."""
+    env = _env(tmp_path)
+    kit = tmp_path / "kit"
+    _git(tmp_path, env, "clone", "-q", "-c", "core.autocrlf=true", str(kit_upstream["bare"]), str(kit))
+    assert _git(kit, env, "status", "--porcelain", "--untracked-files=all") == ""
+    assert b"\r\n" in (kit / DOCS[0]).read_bytes()
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _read(kit, repo, env).returncode == 0
+    done = _all_or_nothing(repo, kit, env)
+    assert f"refused: the kit clone's {DOCS[0]} does not match its own kit-manifest.json" in done.stdout
+
+
+def test_a_take_that_restores_the_committed_bytes_says_nothing_changed(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _apply(kit, repo, env).returncode == 0
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "upgrade")
+    edited = repo / DOCS[0]
+    edited.write_text(edited.read_text(encoding="utf-8") + "Our edit.\n", encoding="utf-8")
+    done = _apply(kit, repo, env, "--take", DOCS[0])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert _has_line(done, "unchanged against HEAD") and not _has_line(done, "stage: "), done.stdout
+    assert _plan(kit, repo, env)["record"] == "not-owed"
+
+
+def test_a_refusal_under_json_is_json(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    repo, env = _install(tmp_path, kit_upstream, protected="main")
+    done = _read(kit, repo, env)
+    assert done.returncode == 1
+    assert json.loads(done.stdout)["refused"].startswith("main is the protected branch"), done.stdout
+
+
+def test_a_kit_manifest_that_is_not_utf8_is_a_refusal(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    (kit / "kit-manifest.json").write_bytes(b"\xff\xfe\x00bad")
+    _git(kit, env, "commit", "-qam", "a manifest that is not UTF-8")
+    done = _apply(kit, repo, env, commit=_git(kit, env, "rev-parse", "HEAD"))
+    assert "Traceback" not in done.stderr, done.stderr
+    assert done.returncode == 1 and "refused: cannot read the kit's kit-manifest.json" in done.stdout
 
 
 # --- The write target ----------------------------------------------------------------

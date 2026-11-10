@@ -2668,8 +2668,13 @@ def record_install_manifest(
     kit_commit: str | None,
     source_files: dict | None = None,
     kept: frozenset[str] = frozenset(),
+    digests: dict[str, str] | None = None,
 ) -> tuple[dict, list[str]]:
     """Record what is ACTUALLY INSTALLED in an adopter as its drift baseline.
+
+    `digests` maps a kit path to the digest its file WILL have, read in place of
+    the file, which need not exist yet: `--upgrade-lite --apply` predicts the
+    record of the tree after its takes with it, before it copies anything.
 
     This is the step that was missing, and its absence is why the three-way
     split below could not be trusted. `/adopt` and `/upgrade` copy kit files in
@@ -2723,14 +2728,15 @@ def record_install_manifest(
         # locally, so this manifest and the kit's are keyed identically and
         # `inspect` can look both up with one key. The remap is applied to the
         # lookup, never to the key.
-        if not target.is_file():
+        predicted = (digests or {}).get(rel)
+        if predicted is None and not target.is_file():
             # The declared install set (#286), recorded rather than asked for:
             # this loop already walks every kit-owned path and already knows
             # which ones are absent — it just dropped that fact. Keeping it is
             # what lets a later run tell a deliberate omission from a deletion.
             not_installed.append(rel)
             continue
-        digest = sha256_of(target)
+        digest = predicted if predicted is not None else sha256_of(target)
         if rel in kept:
             # `kept` holds lite skill source paths only: `main` builds it from
             # `--keep`, which it refuses on a full repository or any other path.
@@ -4957,7 +4963,8 @@ def upgrade_lite(
         print(f"error: {exc}", file=sys.stderr)
         return 2
     except LiteUpgradeStop as exc:
-        say(f"refused: {exc}")
+        # `--json` promises a parseable plan, so its refusal is JSON too.
+        say(json.dumps({"refused": str(exc)}) if as_json and not apply else f"refused: {exc}")
         return 1
 
 
@@ -5180,11 +5187,48 @@ def _lite_apply(root, kit, config, kit_manifest, head, rows, owed, stops, say) -
     if version is None:
         say(f"refused: kit.version is {raw_version!r}, so the baseline cannot be stamped")
         return 1
+    # The record's own verdict, predicted before any write: `record_install_manifest`
+    # runs on the tree as it will be after the takes, each take's file read as its
+    # kit source. A kit clone whose bytes are not its manifest's (a checkout made
+    # with `core.autocrlf`, an edited clone), or a lite file the record would refuse,
+    # then refuses here with nothing taken, rather than after the copies (#1411).
+    kept_sources = frozenset(r.source for r in rows if r.action == "keep")
+    sources: dict[str, str] = {}
+    predicted_refusals: list[str] = []
+    for r in takes:
+        try:
+            data = (kit / r.source).read_bytes()
+            sources[r.source] = data.decode("utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            predicted_refusals.append(f"cannot read the kit's {r.source}: {exc}")
+            continue
+        digest = hashlib.sha256(data).hexdigest()
+        entry = kit_manifest["files"].get(r.source)
+        if not isinstance(entry, dict) or entry.get("sha256") != digest:
+            predicted_refusals.append(
+                f"the kit clone's {r.source} does not match its own {MANIFEST_NAME} (a checkout "
+                "made with core.autocrlf, or an edited clone): delete the clone and run Step 0's "
+                "kit block again"
+            )
+    if not predicted_refusals:
+        _, predicted = record_install_manifest(
+            root, config, version, head, kit_manifest["files"], kept_sources,
+            digests={r.source: hashlib.sha256(sources[r.source].encode("utf-8")).hexdigest() for r in takes},
+        )
+        predicted_refusals += [f"{path} is not the kit's copy and was not kept" for path in predicted]
+    if predicted_refusals:
+        for refusal in predicted_refusals:
+            say(f"refused: {refusal}")
+        say(
+            "nothing taken, nothing recorded — settle each with the operator (--take, or --keep "
+            "for a skill), then re-run"
+        )
+        return 1
     taken: list[str] = []
     for r in takes:
         dst = root / r.path
         try:
-            text = (kit / r.source).read_bytes().decode("utf-8")
+            text = sources[r.source]
             dst.parent.mkdir(parents=True, exist_ok=True)
             stage_text(dst, text, newline="").commit()
         except (OSError, UnicodeDecodeError, AtomicWriteRefused) as exc:
@@ -5196,7 +5240,8 @@ def _lite_apply(root, kit, config, kit_manifest, head, rows, owed, stops, say) -
             return 1
         taken.append(r.path)
         say(f"took: {r.path}")
-    kept_sources = frozenset(r.source for r in rows if r.action == "keep")
+    # Checked again on the real tree: the prediction is the guard, this the backstop
+    # for a file that changed under the run.
     recorded, unverified = record_install_manifest(
         root, config, version, head, kit_manifest["files"], kept_sources
     )
@@ -5222,6 +5267,13 @@ def _lite_apply(root, kit, config, kit_manifest, head, rows, owed, stops, say) -
         elif r.action == "leave-absent":
             say(f"left absent: {r.path}")
     say(f"recorded: {MANIFEST_NAME} for kit {head[:12]}")
+    changed = _git_run(root, "status", "--porcelain", "--untracked-files=all", "--", *taken, MANIFEST_NAME)
+    if changed.returncode == 0 and not changed.stdout.strip():
+        # A take that restored the committed bytes, under a baseline that already
+        # named the kit: U5's `recorded in the working tree` cannot appear, and U6
+        # has nothing to commit.
+        say("unchanged against HEAD: the taken files and the record equal the committed ones — nothing for U6 to commit")
+        return 0
     for path in [*taken, MANIFEST_NAME]:
         say(f"stage: {path}")
     return 0

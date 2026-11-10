@@ -25,8 +25,13 @@ the clone and run Step 0's kit block again. `--apply` refuses a clone that is no
 `--kit-commit`. One refused target refuses the whole run, and nothing is copied. The
 refused targets are a symlink, a directory or other non-regular file, a path under a
 symlinked directory, a hardlinked or read-only file, and a Claude skill a
-`.claude/commands/<slug>.md` would be shadowed by. A record that cannot be
-complete leaves the old baseline as it was.
+`.claude/commands/<slug>.md` would be shadowed by. The record is predicted before any
+copy, so a kit clone whose files do not match its own manifest (a checkout made with
+`core.autocrlf`, an edited clone) refuses with nothing copied, and so does a lite file
+the record would find is not the kit's copy. A record that cannot be complete leaves
+the old baseline as it was. When nothing changes against HEAD, `--apply` prints
+`unchanged against HEAD`. Under `--json`, a refusal is a JSON object with a `refused`
+key.
 
 CHANGED: `upgrade.md`'s *Lite profile* runs these commands in place of its shell
 blocks. Its steps no longer bind `REPO`, `KIT`, `LITE_BRANCH`, `LITE_PROTECTED` or

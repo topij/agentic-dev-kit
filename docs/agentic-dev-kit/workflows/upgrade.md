@@ -1367,15 +1367,22 @@ read. Then, in order, and nothing is written until each step before it passed:
    while `.claude/commands/<slug>.md` exists, as a file or a symlink, because the
    skill would silently shadow that command. One refusal refuses the whole run:
    `nothing taken, nothing recorded`.
-3. **The copies.** Each lands by rename, and prints `took: <path>`. A copy that fails
+3. **The record would pass.** The record is predicted on the tree as it will be after
+   the takes. A take whose kit file does not match the kit's own `kit-manifest.json`
+   refuses: the clone is not the kit its commit names (a checkout made with
+   `core.autocrlf`, or an edited clone), so delete it and run the kit block again. So
+   does any file the record would find is not the kit's copy and was not kept. The
+   result is again `nothing taken, nothing recorded`.
+4. **The copies.** Each lands by rename, and prints `took: <path>`. A copy that fails
    prints `stopped:` and records nothing.
-4. **The record.** `kit-manifest.json` is rewritten by rename for the kit's commit,
-   carrying each kept skill still on disk that was not taken, and each `--keep`. A
-   lite file that is not the kit's copy and was not kept fails the record, which
-   leaves the committed baseline in place: `not recorded`.
+5. **The record.** `kit-manifest.json` is rewritten by rename for the kit's commit,
+   carrying each kept skill still on disk that was not taken, and each `--keep`. It
+   is checked again on the real tree; a file that changed during the run fails it,
+   which leaves the committed baseline in place: `not recorded`.
 
 It prints `kept:`, `left absent:`, `recorded:`, and a `stage:` line for each path U6
-stages. Every run starts from the committed baseline, so after any refusal settle it
+stages. When the taken files and the record all equal the committed ones, it prints
+`unchanged against HEAD` instead of `stage:` lines, and U6 has nothing to commit. Every run starts from the committed baseline, so after any refusal settle it
 with the operator and run the same command again. Never remove a symlink, a directory
 or a command yourself. Then make the config changes and section edits U3 approved by
 hand, and verify with `adopt.md`'s *Lite profile* L5, both commands, from the kit:
@@ -1390,8 +1397,9 @@ Run U2's command again with `--kit-commit <sha>`, the commit U4 applied, added t
 pins that commit in place of U2's freshness check, so a kit origin that moved since U4
 is named in a `note:` rather than refused. It repeats the write-target check on the
 checkout U6 commits in, and must exit 0 and print
-`record: recorded in the working tree`. Its rows still read the committed baseline, so
-a row U4 settled with `--leave-absent` still reads `decide` until U6 commits.
+`record: recorded in the working tree`, or `record: not owed` after a U4 that printed
+`unchanged against HEAD`. Its rows still read the committed baseline, so a row U4
+settled with `--leave-absent` still reads `decide` until U6 commits.
 
 ### U6 — Commit and hand off
 
