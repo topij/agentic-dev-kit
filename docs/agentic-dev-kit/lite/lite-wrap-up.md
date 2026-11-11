@@ -24,11 +24,13 @@ is `paths.handoff`, `<friction-log>` is `paths.friction_log`, `<down-route>` is
 [`lite-review.md`](lite-review.md) reads: `review.safety_critical_paths` as committed,
 by that section's rules, never the working tree's copy. `<protected-branch>` is
 `vcs.protected_branch` when set: the branch that takes changes only through pull
-requests. `<backlog>` is `backlog.path` when set: the repository's own backlog file,
-read as the lite `session-start`'s *Backlog* section says. **An absent key is a declaration, not an unknown:** the repository takes
+requests. **An absent key is a declaration, not an unknown:** the repository takes
 direct commits, and the commit goes to the branch checked out without asking. A
 repository whose branch takes changes only through pull requests must set the key;
-`adopt` asks for it.
+`adopt` asks for it. `<backlog>` is `backlog.path` when set: the repository's own story
+backlog, which the block in the lite `session-start`'s *Backlog* section reads, key and
+file both. Absent or null, there is no backlog, and every step below that names it is
+skipped.
 
 Read `vcs.protected_branch` from **every copy** of the config, not only the working
 tree's: the committed one by the same read the risk tier uses
@@ -77,15 +79,17 @@ Each of these is a hard stop before any edit; say which to the operator:
   absent, either would silently switch off what the key was written to declare: the
   branch it was meant to protect would take the commit, or the paths it declared would
   skip the risk tier;
-- a `backlog.path`, in any copy, that is present but unusable: not a string, blank
-  after trimming, absolute, holding a `..` component or a single quote, or a template
-  placeholder still in angle brackets. The lite `session-start`'s *Backlog* block
-  quotes it and reads it from the repository root, so only a plain relative path inside
-  the repository can be read as written;
+- a `backlog` the lite `session-start`'s *Backlog* block reports `unusable:`: not a
+  mapping holding one `path`, or a `path` that is not a plain path inside the
+  repository (ASCII letters, digits, `.`, `_`, `/` and `-` only, relative, with no `.`
+  or `..` component and no leading `-`). The block judges the working tree's copy;
+  copies whose `backlog.path` differ are a stop too, judged as for
+  `vcs.protected_branch`, so that one judgement covers them all. Never paste the value
+  into a command to check it: the block reads it itself;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
 
-**The way out of the `vcs.protected_branch` and schema stops above** is outside the
+**The way out of the `vcs.protected_branch`, `backlog` and schema stops above** is outside the
 lite workflows, as the risk tier's is (*Risk tier* in [`lite-review.md`](lite-review.md)):
 once the operator has read the config and said to go ahead, they commit the corrected
 `config/dev-model.yaml` on its own. They make that commit on a new branch and open a
@@ -112,11 +116,12 @@ current directory.
    path that does not exist, so a missing file would leave the record edits in the
    wrong commit.
 
-   When `<backlog>` is configured, run the lite `session-start`'s *Backlog* block too.
-   A block that prints `unavailable:` or exits non-zero is a hard stop here, unlike in
-   the `session-start`: this workflow keeps the backlog's statuses, and the plan
-   records none of them, so a wrap-up that skipped the backlog would lose what the
-   session shipped. Keep its output for the backlog step below.
+   Then run the lite `session-start`'s *Backlog* block. `backlog: not configured`
+   means there is no `<backlog>`. A line beginning `unusable:` is the configuration
+   stop above. A line beginning `unavailable:`, or any other non-zero exit, is a hard
+   stop here, unlike in the `session-start`: this workflow keeps the backlog's
+   statuses, and the plan records none of them, so a wrap-up that skipped the backlog
+   would lose what the session shipped. Keep its output for the backlog step below.
 
 1. **Review what changed this session**, since this session began, not since the plan's
    newest line:
@@ -163,8 +168,8 @@ current directory.
    <!-- lite:end handoff-content -->
 
    When `<backlog>` is configured, a story's status is the backlog's record, kept by
-   the step below: the plan carries no copy of it, and a plan line that restates one
-   is removed.
+   the step below: the plan carries no copy of it, and a line that restates one, in an
+   entry this session updates, is removed.
 
 1. **Update `<handoff>`** with only what the test left.
 
@@ -202,8 +207,9 @@ current directory.
 
    A story this session worked on whose status the block reported as a problem is not
    guessed at: show the operator its `problem` line and ask. Then run the block again:
-   the edit must add no `problem` line and leave every story the session did not work
-   on as it was.
+   the edit must add no `problem` or `blocked` line, and every other story's `story`
+   line must read as it did. The block reads only those lines, so check the diff as
+   well: no line of a story the session did not work on changed.
 
 1. **Route this session's friction**, each finding when it is found. A finding that
    has all three of a **reproduction**, a **named mechanism** and a **proposed fix** is

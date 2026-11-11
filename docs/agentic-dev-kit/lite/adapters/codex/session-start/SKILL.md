@@ -1,6 +1,6 @@
 ---
 name: session-start
-description: Build a short start-of-session briefing from the living plan, the friction inbox and the working tree, for a repository on the kit's lite profile. Use at the beginning of a session, when coming back to work after a gap, or when asked what to do next.
+description: Build a short start-of-session briefing from the living plan, the friction inbox, the working tree and any configured story backlog, for a repository on the kit's lite profile. Use at the beginning of a session, when coming back to work after a gap, or when asked what to do next.
 ---
 
 # Session Start

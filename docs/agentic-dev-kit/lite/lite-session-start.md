@@ -29,13 +29,14 @@ Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
   requests. The lite `wrap-up` then commits on a session branch and opens the pull
   request; absent, it commits to the branch checked out.
 - `backlog.path` — optional: the repository's own backlog file, `<backlog>`, such as
-  `docs/STORIES.md`. *Backlog* below says how it is read; absent, the briefing has no
-  backlog and draws its pick from the plan alone.
+  `docs/STORIES.md`. The block in *Backlog* below reads it, and the key, itself; absent,
+  the briefing has no backlog and draws its pick from the plan alone.
 
 The lite `wrap-up` reads `vcs.protected_branch` from every copy of the config
 (committed, staged and working tree), and refuses to start when a copy holds a key
 outside the lite config schema, a key twice or a section of the wrong shape, names an
-unusable branch, or names a different branch from another copy. Its *Read the configuration* lists the schema and
+unusable branch or `backlog.path`, or names a different branch or backlog from another
+copy. Its *Read the configuration* lists the schema and
 the reads. Check every copy the same way here. Report each such stop as a 🔴 Now item
 to fix by the way out that section names. When the copies disagree on whether a
 protected branch is named, say so.
@@ -66,7 +67,7 @@ change to it will itself take the tier.
 | Friction inbox | read `<friction-log>` whole | hard stop |
 | Working tree | `git status --short`, and `git symbolic-ref --short -q HEAD`; if that prints nothing, `git rev-parse --verify HEAD` and report `DETACHED at <sha>` | hard stop |
 | Recent commits | `git log --oneline -15` | report `recent commits: unavailable (<reason>)` |
-| Backlog | when `backlog.path` is set, the block in *Backlog* below | report `Backlog: unavailable (<reason>)`, and a 🔴 Now item to fix the path or restore the file |
+| Backlog | the block in *Backlog* below | report `Backlog: unavailable (<reason>)`, and a 🔴 Now item to fix the path or restore the file |
 | Repository sources | each read the repository's `AGENTS.md` names for `session-start`, as it says to run it | report `<source>: unavailable (<reason>)` |
 | Forge, tracker, CI, scratch | not part of this profile, unless a repository source reads one | report `not installed (lite)` |
 
@@ -100,43 +101,83 @@ profile.
 
 ## Backlog
 
-Skip this section when `backlog.path` is absent: the briefing's backlog line then says
-`not configured (lite)`. When it is set, `<backlog>` is a Markdown file in the format
-of the bama `user-stories` skill, the first one this read was written for:
+`backlog.path` names the repository's own story backlog, `<backlog>`: a Markdown file
+in the format of the bama `user-stories` skill, the first one this read was written for:
 
-- a story is a `### ` heading whose first word is its id (`### S-012 Complete a task
-  with the keyboard`); a `# ` or `## ` heading, such as a milestone, ends it;
+- a story is a `###` heading whose first word is its id (`### S-012 Complete a task
+  with the keyboard`); a `#` or `##` heading, such as a milestone, ends it;
 - inside a story, one `Status:` line whose first word is `todo`, `doing`, `done` or
   `dropped`, and whatever follows that word is a note (`Status: done (2026-11-08; unit
   23/23)`);
 - at most one `Depends:` line listing the ids that must be `done` first, separated by
-  commas or spaces;
-- the order of the stories in the file is their priority.
+  commas or spaces, or `none` or `-` for none;
+- the order of the stories in the file is their priority;
+- a fenced code block (` ``` ` or `~~~`) and an HTML comment that opens a line are not
+  read, so an example story or a commented-out one is not taken for a real one.
 
-Read it with this block, `<backlog.path>` replaced by the configured value. Lines inside
-a fenced code block are skipped, so an example story is not read as one:
+Run this block whether or not the key is set. It reads `backlog.path` from
+`config/dev-model.yaml` itself, so no value from the config is ever pasted into a
+command, and it refuses one that is not a plain path inside the repository:
 
 ```sh
 (
   cd "$(git rev-parse --show-toplevel)" || exit 1
-  backlog='<backlog.path>'
-  if [ ! -f "$backlog" ] || [ ! -r "$backlog" ]; then
-    echo "unavailable: $backlog is not a readable file" >&2; exit 1
+  config=config/dev-model.yaml
+  if [ ! -f "$config" ] || [ ! -r "$config" ]; then
+    echo "unavailable: $config is not a readable file" >&2; exit 1
+  fi
+  backlog=$(awk '
+    function value(s) {
+      sub(/^[ \t]+path:[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/[ \t\r]+$/, "", s)
+      if (s ~ /^".*"$/ || s ~ /^\047.*\047$/) s = substr(s, 2, length(s) - 2)
+      return s
+    }
+    /^backlog:/ { sections++; inside = 1; if ($0 !~ /^backlog:[ \t]*(\{\}[ \t]*)?(#.*)?\r?$/) wrong = 1; next }
+    inside && /^[ \t]*(#.*)?\r?$/ { next }
+    inside && /^[ \t]/ { if ($0 ~ /^[ \t]+path:/) { paths++; path = value($0) } else wrong = 1; next }
+    { inside = 0 }
+    END {
+      if (wrong || sections > 1 || paths > 1 || (paths && (path == "" || path ~ /^(~|null|Null|NULL)$/))) exit 3
+      print (paths ? path : "-")
+    }
+  ' "$config") || { echo "unusable: backlog in $config is not a mapping with one path" >&2; exit 2; }
+  if [ "$backlog" = - ]; then echo "backlog: not configured"; exit 0; fi
+  case "$backlog" in
+    '' | /* | -* | *[!A-Za-z0-9._/-]*)
+      echo "unusable: backlog.path $backlog is not a plain path inside the repository" >&2; exit 2 ;;
+  esac
+  case "/$backlog/" in
+    */../* | */./* | *//*)
+      echo "unusable: backlog.path $backlog is not a plain path inside the repository" >&2; exit 2 ;;
+  esac
+  if [ -L "$backlog" ] || [ ! -f "$backlog" ] || [ ! -r "$backlog" ]; then
+    echo "unavailable: $backlog is not a readable regular file" >&2; exit 1
   fi
   awk '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
     function flag(i, why) { bad[i] = 1; problems = problems "problem " ids[i] " " why "\n" }
     function done(d) { return (d in at) && !bad[at[d]] && status[at[d]] == "done" }
-    /^```/ { fenced = !fenced; next }
-    fenced { next }
-    /^### / {
+    function fence(s) {
+      if (!match(s, /^ ? ? ?(```+|~~~+)/)) return ""
+      s = substr(s, RSTART, RLENGTH); sub(/^ +/, "", s); return s
+    }
+    NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
+    fenced {
+      f = fence($0); rest = $0; sub(/^ *[`~]+/, "", rest)
+      if (f != "" && substr(f, 1, 1) == fchar && length(f) >= flen && rest ~ /^[ \t\r]*$/) fenced = 0
+      next
+    }
+    comment { if (index($0, "-->")) comment = 0; next }
+    fence($0) != "" { f = fence($0); fenced = 1; fchar = substr(f, 1, 1); flen = length(f); opened = NR; next }
+    /^<!--/ { if (!index(substr($0, 5), "-->")) { comment = 1; opened = NR }; next }
+    /^###([ \t]|\r?$)/ {
       n++; cur = n
-      split(trim(substr($0, 5)), word, /[ \t]+/)
+      split(trim(substr($0, 4)), word, /[ \t]+/)
       ids[n] = (word[1] == "" ? "line-" NR : word[1])
       seen[ids[n]]++; at[ids[n]] = n
       next
     }
-    /^# |^## / { cur = 0; next }
+    /^##?([ \t]|\r?$)/ { cur = 0; next }
     cur && /^Status:/ {
       nstatus[cur]++
       s = trim(substr($0, 8)); sub(/[ (].*$/, "", s); status[cur] = s
@@ -144,6 +185,10 @@ a fenced code block are skipped, so an example story is not read as one:
     }
     cur && /^Depends:/ { ndepends[cur]++; depends[cur] = trim(substr($0, 9)); next }
     END {
+      if (fenced || comment) {
+        printf "unavailable: the %s opened at line %d never closes\n", (fenced ? "code fence" : "HTML comment"), opened | "cat >&2"
+        exit 1
+      }
       for (i = 1; i <= n; i++) {
         if (seen[ids[i]] > 1) flag(i, "duplicate id")
         if (nstatus[i] == 0) flag(i, "no Status line")
@@ -151,17 +196,32 @@ a fenced code block are skipped, so an example story is not read as one:
         else if (status[i] !~ /^(todo|doing|done|dropped)$/) flag(i, "unknown status \"" status[i] "\"")
         if (ndepends[i] > 1) flag(i, "more than one Depends line")
         ndeps[i] = 0; list = ""
+        if (depends[i] == "none" || depends[i] == "-") depends[i] = ""
         k = split(depends[i], part, /[ ,]+/)
         for (j = 1; j <= k; j++) {
           if (part[j] == "") continue
           dep[i, ++ndeps[i]] = part[j]; list = list (list == "" ? "" : ",") part[j]
-          if (!(part[j] in seen)) flag(i, "depends on unknown " part[j])
+          if (part[j] == ids[i]) flag(i, "depends on itself")
+          else if (!(part[j] in seen)) flag(i, "depends on unknown " part[j])
         }
         shown[i] = (list == "" ? "-" : list)
       }
+      for (i = 1; i <= n; i++) can[i] = (!bad[i] && status[i] == "done")
+      for (changed = 1; changed; ) {
+        changed = 0
+        for (i = 1; i <= n; i++) {
+          if (can[i] || bad[i] || (status[i] != "todo" && status[i] != "doing")) continue
+          ok = 1
+          for (j = 1; j <= ndeps[i]; j++) if (!(dep[i, j] in at) || !can[at[dep[i, j]]]) ok = 0
+          if (ok) { can[i] = 1; changed = 1 }
+        }
+      }
       for (i = 1; i <= n; i++)
-        printf "story %s %s %s\n", ids[i], (nstatus[i] == 1 && status[i] != "" ? status[i] : "?"), shown[i]
+        printf "story %s %s %s\n", ids[i], (nstatus[i] == 1 && status[i] ~ /^(todo|doing|done|dropped)$/ ? status[i] : "?"), shown[i]
       printf "%s", problems
+      for (i = 1; i <= n; i++)
+        if (!bad[i] && !can[i] && (status[i] == "todo" || status[i] == "doing"))
+          print "blocked " ids[i] " waits on a story that is dropped, unreadable or in a dependency cycle"
       for (pass = 1; pass <= 2 && pick == ""; pass++)
         for (i = 1; i <= n && pick == ""; i++) {
           if (bad[i] || status[i] != (pass == 1 ? "doing" : "todo")) continue
@@ -171,31 +231,39 @@ a fenced code block are skipped, so an example story is not read as one:
         }
       print "next " (pick == "" ? "none" : pick)
     }
-  ' "$backlog"
+  ' "./$backlog"
 )
 ```
 
-It prints a `story <id> <status> <depends>` line per story in file order (`?` for a
-status it cannot read, `-` for no dependencies), a `problem <id> <reason>` line per
-story it cannot read, and a last line `next <id>`, or `next none`. The next story is the
-first `doing` story, else the first `todo` one, whose own lines read cleanly and whose
-every dependency is a `done` story that reads cleanly. A story with a problem is never
-picked, and neither is one that depends on it. The block decides nothing else.
+It prints `backlog: not configured` when the key is absent or null, and stops there.
+Otherwise it prints a `story <id> <status> <depends>` line per story in file order
+(`?` for a status it cannot read, `-` for no dependencies), a `problem <id> <reason>`
+line per story it cannot read, a `blocked <id> <reason>` line per `todo` or `doing`
+story that can never become ready as written, and a last line `next <id>`, or `next
+none`. The next story is the first `doing` story, else the first `todo` one, whose own
+lines read cleanly and whose every dependency is a `done` story that reads cleanly. A
+story with a problem is never picked, and neither is one that depends on it. The block
+decides nothing else.
 
-A block that prints `unavailable:` or exits non-zero is the source's failure, never an
-empty backlog. What the output means is judgement, and goes into *Classify*:
+A line beginning `unusable:` is a config stop, the one the lite `wrap-up` makes on the
+same value: a 🔴 Now item to correct `backlog` in the config, by the way out its *Read
+the configuration* names. A line beginning `unavailable:`, or any other non-zero exit,
+is the source's failure, never an empty backlog: `Backlog: unavailable (<reason>)`, and
+a 🔴 Now item to restore the file or correct the path. The block reads the working
+tree's config; when the committed or staged copy names a different `backlog.path`, say
+so on the backlog line, as for `vcs.protected_branch`. What the rest of the output
+means is judgement, and goes into *Classify*:
 
 - **The plan and the backlog disagree.** A story the plan calls done that the backlog
   does not mark `done`, or a plan next step naming a story the backlog already marks
-  `done`. Each is a 🟢 housekeeping item pointing at both; the next `wrap-up` corrects
-  whichever is wrong.
+  `done`. Each is a 🟢 housekeeping item pointing at both. Which side is wrong is the
+  operator's call, and correcting it is a task like any other.
 - **A `doing` story** is half-finished work from an earlier session: 🟡 Soon, or 🔴 Now
   when the plan says it blocks.
-- **A `problem` line** is a 🟢 item naming the story and the reason. Name a story that
-  waits on a `dropped` one as well: it can never become ready as written.
+- **A `problem` or `blocked` line** is a 🟢 item naming the story and the reason.
 - **The `next` story** is 🟡 Soon under `backlog:<id>`, and it replaces the plan's next
-  step in the pick below. Offer one alternative beside it: the next ready story, or the
-  plan's next step when that differs.
+  step in the pick below. When the plan names a different next step, offer it as the
+  alternative.
 
 The backlog belongs to the repository, not to this workflow: report what is wrong in
 it, and change nothing.
@@ -213,7 +281,8 @@ a pointer to where it came from (`plan:<section>`, `backlog:<id>`, `friction-log
   story; high- and medium-severity friction entries.
 - 🟢 **Whenever** — the rest of the plan's backlog; low-severity friction entries;
   housekeeping, such as a plan line that names work the recent commits show is done, a
-  plan line the backlog contradicts, or a backlog story the block cannot read.
+  plan line the backlog contradicts, or a backlog story the block cannot read or that
+  can never become ready.
 
 Size is `S` (one small change), `M` (a focused change of about an hour) or `L`
 (several sessions).
@@ -237,7 +306,7 @@ Where things stand
   • <each repository source>: <its result | unavailable: reason>
   • Forge / tracker / CI / scratch: <not installed (lite), for each no repository source reads>
   • Risk tier: <configured — paths | not configured (lite) | unreadable: reason>
-  • Backlog: <path — next <id> | path — no story ready | not configured (lite) | unavailable: reason>
+  • Backlog: <path — next <id> | path — no story ready | not configured (lite) | unusable: reason | unavailable: reason>
 
 What to do next
 🔴 Now

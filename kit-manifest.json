@@ -36,7 +36,7 @@
     },
     "docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md": {
       "role": "lite",
-      "sha256": "6c9052fc4f0f2d6687209b7f42b7bf97d439679fe70763be54b67932894830f3"
+      "sha256": "59b1e50556c253e3bf87b2bc42bbeaaa93b56c494ea83962a33d8737f656027e"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md": {
       "role": "lite",
@@ -48,7 +48,7 @@
     },
     "docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md": {
       "role": "lite",
-      "sha256": "a69159a6a2d62127348971785cdc046992272fea65712cd7a2b45d6f7bfc9928"
+      "sha256": "2f2b525f08de0de7ba331b839055d6011a787ffd9416c2301d60a39430a04b8c"
     },
     "docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md": {
       "role": "lite",
@@ -60,11 +60,11 @@
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "lite",
-      "sha256": "515f1699d0302e19daf599097a9ea488b534df5637112ac9c260d04d59488d80"
+      "sha256": "79fc9473718e5acbcc5506013cacf4a6bbc6fd006d3b6bedf50faf8652624191"
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "lite",
-      "sha256": "2132f1f5c535ebfb1956b4059f44c29c274ff45cd1c7f590ebb168ec9c3d3bde"
+      "sha256": "600d74d3bff3aff9bb208d64c8aad193812cf57e1a0ec61aec9be2891db5b2a7"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -258,7 +258,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "cfe6a0ae0b6f0c0de32ed3c2668d98f0a37e7d745c5e6a241acd3eeed5e432bc"
+      "sha256": "3205578a98ccd4665ebafe5a78b0cff4ef4f58eabebadcb1b7f962d29af632cf"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "de4d4c2cd65c72aa6fca8b8470300e20dcb4403db8ed2439c157bad6e7d7ae9b"
+      "sha256": "8295e38ba55b901aec1a1b6c56358947e381ea5bcaa11d84c15bbd2ec377ff29"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

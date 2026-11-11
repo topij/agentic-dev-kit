@@ -1237,9 +1237,8 @@ class Report:
     # then reads as drift, and the render says how to re-record it.
     lite_kept_unrecorded: tuple[str, ...] = ()
     # A lite repository's own backlog file (#1399), as `(value, state)`: state is
-    # `present`, `missing`, `unusable` or `wrong-shape` (both of which the lite
-    # wrap-up stops on). None
-    # when the key is absent or the profile is full. Text report only, so the JSON
+    # `present`, `missing`, `unusable` or `wrong-shape`, and the lite wrap-up stops on
+    # each of the last three. None when the key is absent or the profile is full. Text report only, so the JSON
     # shape is unchanged; it never moves the exit code: the backlog is the
     # repository's file, not the kit's, and the lite workflows report it themselves.
     lite_backlog: tuple[str, str] | None = None
@@ -4007,7 +4006,7 @@ def render(report: Report) -> str:
                 "or backlog.path is corrected",
                 "unusable": f"  ⚠ backlog: backlog.path is {value}, not a plain path inside the repository "
                 "— the lite wrap-up stops on it",
-                "wrong-shape": f"  ⚠ backlog: backlog is {value}, not a mapping with a path — the lite "
+                "wrong-shape": f"  ⚠ backlog: backlog is {value}, not a mapping holding only a path — the lite "
                 "wrap-up stops on it",
             }[state]
         )
@@ -5037,30 +5036,33 @@ def _lite_load_config(root: Path) -> dict:
 def _lite_backlog(root: Path, config: dict) -> tuple[str, str] | None:
     """`backlog.path` on a lite repository, and whether the file is there (#1399).
 
-    `unusable` follows `lite-wrap-up.md`'s stop on the key: a path the lite
-    `session-start`'s *Backlog* block could not read as written. `wrong-shape` is a
-    `backlog` that is not a mapping, the wrap-up's wrong-shape stop.
+    The predicate is the lite `session-start`'s *Backlog* block's, which is what reads
+    the value at session time: the raw value, never trimmed, must be a plain path
+    inside the repository, and the file a regular file that is not a symbolic link.
+    `wrong-shape` is a `backlog` that is not a mapping holding a `path`.
     """
     if "backlog" not in config or config["backlog"] is None:
         return None
     section = config["backlog"]
-    if not isinstance(section, dict):
+    if not isinstance(section, dict) or set(section) - {"path"}:
         return (repr(section), "wrong-shape")
     if "path" not in section:
         return None
     value = section["path"]
-    if not isinstance(value, str):
+    if not isinstance(value, str) or not _plain_repo_path(value):
         return (repr(value), "unusable")
-    rel = value.strip()
-    if (
-        not rel
-        or rel.startswith("/")
-        or "'" in rel
-        or ".." in Path(rel).parts
-        or (rel.startswith("<") and rel.endswith(">"))
-    ):
-        return (repr(value), "unusable")
-    return (rel, "present" if (root / rel).is_file() else "missing")
+    target = root / value
+    return (value, "present" if target.is_file() and not target.is_symlink() else "missing")
+
+
+def _plain_repo_path(value: str) -> bool:
+    """The *Backlog* block's `case` checks: ASCII letters, digits, `.`, `_`, `/`, `-`,
+    relative, no leading `-`, and no empty, `.` or `..` component."""
+    return (
+        re.fullmatch(r"[A-Za-z0-9._/-]+", value) is not None
+        and not value.startswith(("/", "-"))
+        and all(part not in ("", ".", "..") for part in value.split("/"))
+    )
 
 
 def _lite_schema_stop(config: dict, kit_manifest: dict) -> str | None:
