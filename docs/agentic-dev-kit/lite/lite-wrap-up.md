@@ -69,23 +69,24 @@ Each of these is a hard stop before any edit; say which to the operator:
   or a section of the wrong shape, in any copy. The schema is `profile`, `kit.version`, `paths.handoff`,
   `paths.friction_log`, `friction.down_route`, `review.safety_critical_paths`,
   `vcs.protected_branch` and `backlog.path`. `paths` is a mapping; each of `kit`,
-  `friction`, `review`, `vcs` and `backlog` is a mapping or null (a bare `vcs:` left
-  after removing its optional line), and any other value, such as `vcs: main`,
-  `review: [deploy/]` or `backlog: docs/STORIES.md`, is the wrong shape: read as
-  absent, it would declare nothing it holds. A lite repository reads no other key, so another one is most likely a
+  `friction`, `review` and `vcs` is a mapping or null (a bare `vcs:` left after
+  removing its optional line), and any other value, such as `vcs: main` or `review:
+  [deploy/]`, is the wrong shape: read as absent, it would declare nothing it holds.
+  `backlog` is held to the one form the lite `session-start`'s *Backlog* section
+  declares, by the stop below. A lite repository reads no other key, so another one is most likely a
   misspelling or a misplaced line: `vsc:`, `protected-branch`, `reveiw:`, a
   `protected_branch` dedented out of `vcs`. A YAML parser keeps only the last of two
   equal keys, so a second `vcs:` left by a merge or a paste drops the first. Read as
   absent, either would silently switch off what the key was written to declare: the
   branch it was meant to protect would take the commit, or the paths it declared would
   skip the risk tier;
-- a `backlog` the lite `session-start`'s *Backlog* block reports `unusable:`: not a
-  mapping holding one `path`, or a `path` that is not a plain path inside the
-  repository (ASCII letters, digits, `.`, `_`, `/` and `-` only, relative, with no `.`
-  or `..` component and no leading `-`). The block judges the working tree's copy;
-  copies whose `backlog.path` differ are a stop too, judged as for
-  `vcs.protected_branch`, so that one judgement covers them all. Never paste the value
-  into a command to check it: the block reads it itself;
+- a `backlog` the lite `session-start`'s *Backlog* block reports `unusable:`: not in
+  the form that section declares, or a `path` that is not plain by its rules. The block
+  judges the working tree's copy; copies whose `backlog.path` differ are a stop too,
+  judged as for `vcs.protected_branch`, so that one judgement covers them all. Never
+  paste the value into a command to check it: the block reads it itself. A
+  `backlog.path` naming the same file as `paths.handoff` or `paths.friction_log` stops
+  as well: the commit step splits those files from the backlog;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
 

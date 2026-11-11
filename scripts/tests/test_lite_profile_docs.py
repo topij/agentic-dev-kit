@@ -608,15 +608,17 @@ def test_backlog_block_does_not_count_a_duplicated_done_id_as_done(tmp_path: Pat
     assert nexts == ["next S-070"], result.stdout
 
 
-def test_backlog_block_prints_next_none_for_a_backlog_with_no_story(tmp_path: Path) -> None:
-    repo, env = _backlog(tmp_path, "# Stories\n\nNone yet.\n")
+def test_backlog_block_reports_a_file_with_no_story_heading_as_unavailable(tmp_path: Path) -> None:
+    """A checkbox list or any other format reads as no stories; that is not an empty backlog."""
+    repo, env = _backlog(tmp_path, "# Stories\n\n- [ ] Tuner\n- [x] Metronome\n")
     result, stories, problems, nexts = _read_backlog("sh", repo, env)
-    assert result.returncode == 0, result.stderr
-    assert (stories, problems, nexts) == ([], [], ["next none"])
+    assert result.returncode == 1, result.stdout
+    assert "unavailable: no ### story heading" in result.stderr
+    assert (stories, problems, nexts) == ([], [], [])
 
 
 @pytest.mark.parametrize("shell", SHELLS)
-@pytest.mark.parametrize("how", ["missing", "directory", "symlink"])
+@pytest.mark.parametrize("how", ["missing", "directory", "symlink", "symlinked-directory"])
 def test_backlog_block_reports_an_unreadable_file_as_unavailable(tmp_path: Path, shell: str, how: str) -> None:
     repo, env = _repo(tmp_path, "backlog")
     _config(repo, "backlog:\n  path: docs/STORIES.md\n")
@@ -626,13 +628,41 @@ def test_backlog_block_reports_an_unreadable_file_as_unavailable(tmp_path: Path,
         (repo / "docs").mkdir()
         (repo / "elsewhere.md").write_text("### S-1 a\nStatus: todo\n", encoding="utf-8")
         (repo / "docs/STORIES.md").symlink_to(repo / "elsewhere.md")
+    elif how == "symlinked-directory":
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "STORIES.md").write_text("### S-1 a\nStatus: todo\n", encoding="utf-8")
+        (repo / "docs").symlink_to(outside)
     result, stories, _, nexts = _read_backlog(shell, repo, env)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "unavailable: docs/STORIES.md" in result.stderr
     assert (stories, nexts) == ([], [])
 
 
-@pytest.mark.parametrize("backlog", ["", "backlog:\n", "backlog: {}\n", "backlog:  # none yet\n\nvcs:\n  protected_branch: main\n"])
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("locale", ["C.UTF-8", "en_US.UTF-8"])
+def test_backlog_block_refuses_a_non_ascii_path_in_a_utf8_locale(tmp_path: Path, shell: str, locale: str) -> None:
+    """A bracket range is locale-dependent; the block runs under LC_ALL=C so ASCII means ASCII."""
+    repo, env = _backlog(tmp_path, BACKLOG, rel="docs/\u00e9.md")
+    result = _run(shell, _backlog_block(), repo, {**env, "LC_ALL": locale, "LANG": locale})
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "unusable: backlog.path" in result.stderr
+
+
+def test_backlog_block_stops_outside_a_git_work_tree(tmp_path: Path) -> None:
+    repo, env = _backlog(tmp_path, BACKLOG)
+    outside = tmp_path / "plain"
+    (outside / "config").mkdir(parents=True)
+    (outside / "config/dev-model.yaml").write_text("backlog:\n  path: S.md\n", encoding="utf-8")
+    (outside / "S.md").write_text(BACKLOG, encoding="utf-8")
+    result = _run("sh", _backlog_block(), outside, {**env, "GIT_CEILING_DIRECTORIES": str(tmp_path)})
+    assert result.returncode == 1, result.stdout
+    assert "next " not in result.stdout
+
+
+@pytest.mark.parametrize(
+    "backlog", ["", "backlog:\n", "backlog: null\n", "backlog: ~  # none\n", "backlog:  # none yet\n\nvcs:\n  protected_branch: main\n"]
+)
 def test_backlog_block_says_not_configured_without_a_path(tmp_path: Path, backlog: str) -> None:
     repo, env = _repo(tmp_path, "backlog")
     _config(repo, backlog)
@@ -650,6 +680,14 @@ def test_backlog_block_says_not_configured_without_a_path(tmp_path: Path, backlo
         "backlog:\n  path: docs/STORIES.md\nbacklog:\n  path: docs/OTHER.md\n",
         "backlog:\n  path:\n",
         "backlog:\n  path: null\n",
+        "backlog: {}\n",
+        "backlog: {path: docs/STORIES.md}\n",
+        "\"backlog\":\n  path: docs/STORIES.md\n",
+        "backlog :\n  path: docs/STORIES.md\n",
+        "backlog:\n  path:docs/STORIES.md\n",
+        "backlog:\n\tpath: docs/STORIES.md\n",
+        "backlog:\n  path: docs/STORIES.md\nbacklog:\n",
+        "backlog: null\n  path: docs/STORIES.md\n",
     ],
 )
 def test_backlog_block_stops_on_a_backlog_that_is_not_a_mapping_with_one_path(tmp_path: Path, backlog: str) -> None:
@@ -732,6 +770,7 @@ def test_backlog_block_reads_what_markdown_shows_and_skips_what_it_hides(tmp_pat
         "### S-4 one half of a cycle\nDepends: S-5\nStatus: todo\n"
         "### S-5 the other half\nDepends: S-4\nStatus: doing\n"
         "### S-6b an unknown word\nStatus: finished (yes)\n"
+        "   ### S-7b indented three spaces\nStatus: done, shipped\n"
     )
     repo, env = _backlog(tmp_path, text)
     result, stories, problems, nexts = _read_backlog(shell, repo, env)
@@ -745,6 +784,7 @@ def test_backlog_block_reads_what_markdown_shows_and_skips_what_it_hides(tmp_pat
         "story S-4 todo S-5",
         "story S-5 doing S-4",
         "story S-6b ? -",
+        "story S-7b done -",
     ]
     assert problems == ["problem S-3 depends on itself", 'problem S-6b unknown status "finished"']
     assert [ln.split()[1] for ln in result.stdout.splitlines() if ln.startswith("blocked ")] == ["S-4", "S-5"]
@@ -757,7 +797,7 @@ def test_lite_backlog_key_is_in_the_wrap_up_schema_and_the_adopt_template() -> N
     wrap_up = _normalise((LITE / "lite-wrap-up.md").read_text(encoding="utf-8"))
     assert "`vcs.protected_branch` and `backlog.path`." in wrap_up
     assert "The way out of the `vcs.protected_branch`, `backlog` and schema stops above" in wrap_up
-    assert "each of `kit`, `friction`, `review`, `vcs` and `backlog` is a mapping or null" in wrap_up
+    assert "`backlog` is held to the one form the lite `session-start`'s *Backlog* section declares" in wrap_up
     template = re.search(r"^```yaml\n(profile: lite\n.*?)^```", ADOPT.read_text(encoding="utf-8"), re.M | re.S)
     assert template, "adopt.md's lite config template is missing"
     assert "backlog:\n  path: <backlog path>" in template.group(1)
@@ -1022,17 +1062,20 @@ def _lite_install(tmp_path: Path, shell: str, config_tail: str) -> tuple[Path, d
         ("backlog:\n", True, None),
         ("backlog:\n  path: docs/STORIES.md\n", True, "  ✓ backlog: docs/STORIES.md"),
         ("backlog:\n  path: docs/STORIES.md\n", False, "  ⚠ backlog: docs/STORIES.md missing"),
+        ("backlog: null\n", True, None),
         ("backlog:\n  path: ../STORIES.md\n", True, "  ⚠ backlog: backlog.path is '../STORIES.md', not a plain path"),
         ("backlog:\n  path: /abs/STORIES.md\n", True, "  ⚠ backlog: backlog.path is '/abs/STORIES.md', not a plain path"),
+        ("backlog:\n  path: -STORIES.md\n", True, "  ⚠ backlog: backlog.path is '-STORIES.md', not a plain path"),
         ("backlog:\n  path: '<backlog path>'\n", True, "  ⚠ backlog: backlog.path is '<backlog path>', not a plain path"),
         ("backlog:\n  path: \"x'y.md\"\n", True, "  ⚠ backlog: backlog.path is \"x'y.md\", not a plain path"),
-        ("backlog:\n  path: ''\n", True, "  ⚠ backlog: backlog.path is '', not a plain path"),
         ("backlog:\n  path: ' docs/STORIES.md'\n", True, "  ⚠ backlog: backlog.path is ' docs/STORIES.md', not a plain path"),
         ("backlog:\n  path: docs/\n", True, "  ⚠ backlog: backlog.path is 'docs/', not a plain path"),
-        ("backlog:\n  path: null\n", True, "  ⚠ backlog: backlog.path is None, not a plain path"),
-        ("backlog:\n  path: docs/STORIES.md\n  extra: 1\n", True, "  ⚠ backlog: backlog is {"),
-        ("backlog:\n  path: 3\n", True, "  ⚠ backlog: backlog.path is 3, not a plain path"),
-        ("backlog: docs/STORIES.md\n", True, "  ⚠ backlog: backlog is 'docs/STORIES.md', not a mapping"),
+        ("backlog:\n  path: ''\n", True, "  ⚠ backlog: not written in the form"),
+        ("backlog:\n  path: null\n", True, "  ⚠ backlog: not written in the form"),
+        ("backlog:\n  path: docs/STORIES.md\n  extra: 1\n", True, "  ⚠ backlog: not written in the form"),
+        ("backlog: {path: docs/STORIES.md}\n", True, "  ⚠ backlog: not written in the form"),
+        ("backlog: docs/STORIES.md\n", True, "  ⚠ backlog: not written in the form"),
+        ("backlog:\n  path: 3\n", True, "  ⚠ backlog: 3 missing"),
     ],
 )
 def test_kit_doctor_reports_a_lite_install_intact_with_or_without_a_backlog(
@@ -1049,3 +1092,70 @@ def test_kit_doctor_reports_a_lite_install_intact_with_or_without_a_backlog(
     assert backlog_lines == ([] if line is None else [backlog_lines[0]]), report.stdout
     if line is not None:
         assert backlog_lines[0].startswith(line), report.stdout
+
+
+PARITY_CONFIGS = [
+    "",
+    "backlog:\n",
+    "backlog: null\n",
+    "backlog: ~\n",
+    "backlog: {}\n",
+    "backlog: {path: docs/STORIES.md}\n",
+    "backlog: docs/STORIES.md\n",
+    "\"backlog\":\n  path: docs/STORIES.md\n",
+    "backlog :\n  path: docs/STORIES.md\n",
+    "backlog:\n  path:docs/STORIES.md\n",
+    "backlog:\n\tpath: docs/STORIES.md\n",
+    "backlog:\n  path: docs/STORIES.md\n",
+    "backlog:  # ours\n  # the stories\n\n  path: 'docs/STORIES.md'  # x\nvcs:\n  protected_branch: main\n",
+    "backlog:\n  path: \"docs/STORIES.md\"\n",
+    "backlog:\n  path: docs/STORIES.md\n  extra: 1\n",
+    "backlog:\n  path: docs/STORIES.md\n  path: docs/OTHER.md\n",
+    "backlog:\n  path: docs/STORIES.md\nbacklog:\n",
+    "backlog: null\n  path: docs/STORIES.md\n",
+    "backlog:\n  path:\n",
+    "backlog:\n  path: ~\n",
+    "backlog:\n  path: docs/MISSING.md\n",
+    "backlog:\n  path: linked/STORIES.md\n",
+    "backlog:\n  path: link.md\n",
+    "backlog:\n  path: ../STORIES.md\n",
+    "backlog:\n  path: -STORIES.md\n",
+    "backlog:\n  path: docs//STORIES.md\n",
+    "backlog:\n  path: \" docs/STORIES.md\"\n",
+    "backlog:\n  path: \"docs/é.md\"\n",
+    "backlog:\n  path: 3\n",
+]
+
+
+def _block_class(result: subprocess.CompletedProcess[str]) -> str:
+    if result.returncode == 0 and result.stdout == "backlog: not configured\n":
+        return "none"
+    if result.returncode == 0 and "\nnext " in "\n" + result.stdout:
+        return "present"
+    if result.returncode == 2 and "unusable: backlog in " in result.stderr:
+        return "wrong-shape"
+    if result.returncode == 2 and "unusable: backlog.path " in result.stderr:
+        return "unusable"
+    if result.returncode == 1 and "unavailable: " in result.stderr:
+        return "missing"
+    return f"unexpected: {result.returncode} {result.stdout!r} {result.stderr!r}"
+
+
+@pytest.mark.parametrize("config", PARITY_CONFIGS)
+def test_kit_doctor_and_the_backlog_block_judge_the_key_alike(tmp_path: Path, config: str) -> None:
+    """One predicate, two readers: the block in the doc and kit_doctor's port of it."""
+    sys.path.insert(0, str(KIT_DOCTOR.parent))
+    import kit_doctor
+
+    repo, env = _backlog(tmp_path, BACKLOG)
+    (repo / "docs/é.md").write_text(BACKLOG, encoding="utf-8")
+    (repo / "3").write_text(BACKLOG, encoding="utf-8")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "STORIES.md").write_text(BACKLOG, encoding="utf-8")
+    (repo / "linked").symlink_to(outside)
+    (repo / "link.md").symlink_to(repo / "docs/STORIES.md")
+    _config(repo, config)
+    result = _run("sh", _backlog_block(), repo, env)
+    doctor = kit_doctor._lite_backlog(repo, {"profile": "lite"})
+    assert _block_class(result) == ("none" if doctor is None else doctor[1]), (result.stdout, result.stderr, doctor)

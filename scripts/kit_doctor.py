@@ -4006,8 +4006,8 @@ def render(report: Report) -> str:
                 "or backlog.path is corrected",
                 "unusable": f"  ⚠ backlog: backlog.path is {value}, not a plain path inside the repository "
                 "— the lite wrap-up stops on it",
-                "wrong-shape": f"  ⚠ backlog: backlog is {value}, not a mapping holding only a path — the lite "
-                "wrap-up stops on it",
+                "wrong-shape": "  ⚠ backlog: not written in the form lite-session-start.md's *Backlog* declares "
+                "— the lite wrap-up stops on it",
             }[state]
         )
 
@@ -5036,28 +5036,74 @@ def _lite_load_config(root: Path) -> dict:
 def _lite_backlog(root: Path, config: dict) -> tuple[str, str] | None:
     """`backlog.path` on a lite repository, and whether the file is there (#1399).
 
-    The predicate is the lite `session-start`'s *Backlog* block's, which is what reads
-    the value at session time: the raw value, never trimmed, must be a plain path
-    inside the repository, and the file a regular file that is not a symbolic link.
-    `wrong-shape` is a `backlog` that is not a mapping holding a `path`.
+    Read from the config's text by `_lite_backlog_key`, never from `config`: the lite
+    `session-start`'s *Backlog* block reads the text, and a YAML parser cannot tell
+    the declared form from spellings the block refuses (`backlog: {path: x}`, a
+    quoted key). `wrong-shape` is the block's `unusable: backlog in …`, `unusable`
+    its `unusable: backlog.path …`, and `missing` its `unavailable:` for the file.
+    `config` only says the profile is lite; the parity test holds the two readers
+    to one table.
     """
-    if "backlog" not in config or config["backlog"] is None:
+    try:
+        text = (root / "config/dev-model.yaml").read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
         return None
-    section = config["backlog"]
-    if not isinstance(section, dict) or set(section) - {"path"}:
-        return (repr(section), "wrong-shape")
-    if "path" not in section:
+    key = _lite_backlog_key(text)
+    if key is None:
         return None
-    value = section["path"]
-    if not isinstance(value, str) or not _plain_repo_path(value):
-        return (repr(value), "unusable")
-    target = root / value
-    return (value, "present" if target.is_file() and not target.is_symlink() else "missing")
+    if key is False:
+        return ("backlog", "wrong-shape")
+    if not _plain_repo_path(key):
+        return (repr(key), "unusable")
+    target = root / key
+    try:
+        inside = target.parent.resolve(strict=True).is_relative_to(root.resolve(strict=True))
+    except OSError:
+        inside = False
+    ok = inside and target.is_file() and not target.is_symlink()
+    return (key, "present" if ok else "missing")
+
+
+def _lite_backlog_key(text: str) -> str | bool | None:
+    """The *Backlog* block's config read, line for line: the path, None for no
+    backlog, or False for any spelling outside the declared form."""
+    inside = wrong = empty = False
+    sections = paths = 0
+    path = ""
+    for line in text.split("\n"):
+        if re.match(r"[^ \t#\r]", line):
+            inside = False
+        if re.match(r"[\"']?backlog[\"']?[ \t]*:", line):
+            sections += 1
+            inside = True
+            if re.fullmatch(r"backlog:[ \t]*(null|Null|NULL|~)?[ \t]*(#.*)?\r?", line):
+                empty = empty or re.search(r": *[nN~]", line) is not None
+            else:
+                wrong = True
+            continue
+        if inside and re.fullmatch(r"[ \t]*(#.*)?\r?", line):
+            continue
+        if inside and re.match(r" +path:(?:[ \t]|\r?\Z)", line):
+            paths += 1
+            value = re.sub(r"^ +path:[ \t]*", "", line)
+            value = re.sub(r"[ \t]+#.*$", "", value)
+            value = re.sub(r"[ \t\r]+$", "", value)
+            if re.fullmatch(r'".*"|\'.*\'', value):
+                value = value[1:-1]
+            path = value
+            continue
+        if inside:
+            wrong = True
+    if wrong or sections > 1 or paths > 1 or (empty and paths):
+        return False
+    if paths and path in ("", "null", "Null", "NULL", "~"):
+        return False
+    return path if paths else None
 
 
 def _plain_repo_path(value: str) -> bool:
-    """The *Backlog* block's `case` checks: ASCII letters, digits, `.`, `_`, `/`, `-`,
-    relative, no leading `-`, and no empty, `.` or `..` component."""
+    """The *Backlog* block's `case` checks, under `LC_ALL=C`: ASCII letters, digits,
+    `.`, `_`, `/`, `-`, relative, no leading `-`, no empty, `.` or `..` component."""
     return (
         re.fullmatch(r"[A-Za-z0-9._/-]+", value) is not None
         and not value.startswith(("/", "-"))

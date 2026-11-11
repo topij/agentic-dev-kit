@@ -104,46 +104,65 @@ profile.
 `backlog.path` names the repository's own story backlog, `<backlog>`: a Markdown file
 in the format of the bama `user-stories` skill, the first one this read was written for:
 
-- a story is a `###` heading whose first word is its id (`### S-012 Complete a task
-  with the keyboard`); a `#` or `##` heading, such as a milestone, ends it;
-- inside a story, one `Status:` line whose first word is `todo`, `doing`, `done` or
-  `dropped`, and whatever follows that word is a note (`Status: done (2026-11-08; unit
-  23/23)`);
+- a story is a `###` heading, indented by at most three spaces, whose first word is its
+  id (`### S-012 Complete a task with the keyboard`); a `#` or `##` heading, such as a
+  milestone, ends it;
+- inside a story, one `Status:` line whose first word, its letters up to the first
+  other character, is `todo`, `doing`, `done` or `dropped`; whatever follows that word
+  is a note (`Status: done (2026-11-08; unit 23/23)`, `Status: done, shipped`);
 - at most one `Depends:` line listing the ids that must be `done` first, separated by
   commas or spaces, or `none` or `-` for none;
 - the order of the stories in the file is their priority;
 - a fenced code block (` ``` ` or `~~~`) and an HTML comment that opens a line are not
   read, so an example story or a commented-out one is not taken for a real one.
 
+The key has one declared form: a top-level line `backlog:` followed by one line
+indented with spaces, `path: <path>`, which may be quoted and may carry a trailing
+`# comment`. `backlog:` alone, `backlog: null` or `backlog: ~`, or no `backlog` key,
+means no backlog. Any other spelling is `unusable:`, a flow mapping (`backlog: {path:
+…}`) and a quoted or spaced key among them: the block reads the config as text, and
+`kit_doctor.py` reads it with the same rule. The path is plain: ASCII letters, digits,
+`.`, `_`, `/` and `-`, relative, with no leading `-` and no empty, `.` or `..`
+component, naming a regular file that is not a symbolic link and whose directory
+resolves inside the repository.
+
 Run this block whether or not the key is set. It reads `backlog.path` from
 `config/dev-model.yaml` itself, so no value from the config is ever pasted into a
-command, and it refuses one that is not a plain path inside the repository:
+command, and it judges the key and the path by the rules above:
 
 ```sh
 (
-  cd "$(git rev-parse --show-toplevel)" || exit 1
+  LC_ALL=C; export LC_ALL
+  top=$(git rev-parse --show-toplevel) && cd "$top" || exit 1
   config=config/dev-model.yaml
   if [ ! -f "$config" ] || [ ! -r "$config" ]; then
     echo "unavailable: $config is not a readable file" >&2; exit 1
   fi
   backlog=$(awk '
     function value(s) {
-      sub(/^[ \t]+path:[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/[ \t\r]+$/, "", s)
+      sub(/^ +path:[ \t]*/, "", s); sub(/[ \t]+#.*$/, "", s); sub(/[ \t\r]+$/, "", s)
       if (s ~ /^".*"$/ || s ~ /^\047.*\047$/) s = substr(s, 2, length(s) - 2)
       return s
     }
-    /^backlog:/ { sections++; inside = 1; if ($0 !~ /^backlog:[ \t]*(\{\}[ \t]*)?(#.*)?\r?$/) wrong = 1; next }
+    /^[^ \t#\r]/ { inside = 0 }
+    /^["\047]?backlog["\047]?[ \t]*:/ {
+      sections++; inside = 1
+      if ($0 ~ /^backlog:[ \t]*(null|Null|NULL|~)?[ \t]*(#.*)?\r?$/) { if ($0 ~ /: *[nN~]/) empty = 1 }
+      else wrong = 1
+      next
+    }
     inside && /^[ \t]*(#.*)?\r?$/ { next }
-    inside && /^[ \t]/ { if ($0 ~ /^[ \t]+path:/) { paths++; path = value($0) } else wrong = 1; next }
-    { inside = 0 }
+    inside && /^ +path:([ \t]|\r?$)/ { paths++; path = value($0); next }
+    inside { wrong = 1; next }
     END {
-      if (wrong || sections > 1 || paths > 1 || (paths && (path == "" || path ~ /^(~|null|Null|NULL)$/))) exit 3
+      if (wrong || sections > 1 || paths > 1 || (empty && paths)) exit 3
+      if (paths && (path == "" || path ~ /^(null|Null|NULL|~)$/)) exit 3
       print (paths ? path : "-")
     }
-  ' "$config") || { echo "unusable: backlog in $config is not a mapping with one path" >&2; exit 2; }
+  ' "$config") || { echo "unusable: backlog in $config is not the form *Backlog* declares" >&2; exit 2; }
   if [ "$backlog" = - ]; then echo "backlog: not configured"; exit 0; fi
   case "$backlog" in
-    '' | /* | -* | *[!A-Za-z0-9._/-]*)
+    /* | -* | *[!A-Za-z0-9._/-]*)
       echo "unusable: backlog.path $backlog is not a plain path inside the repository" >&2; exit 2 ;;
   esac
   case "/$backlog/" in
@@ -153,7 +172,12 @@ command, and it refuses one that is not a plain path inside the repository:
   if [ -L "$backlog" ] || [ ! -f "$backlog" ] || [ ! -r "$backlog" ]; then
     echo "unavailable: $backlog is not a readable regular file" >&2; exit 1
   fi
-  awk '
+  here=$(pwd -P) && there=$(cd "$(dirname "./$backlog")" && pwd -P) || exit 1
+  case "$there/" in
+    "$here"/*) ;;
+    *) echo "unavailable: $backlog resolves outside the repository" >&2; exit 1 ;;
+  esac
+  awk -v bom="$(printf '\357\273\277')" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
     function flag(i, why) { bad[i] = 1; problems = problems "problem " ids[i] " " why "\n" }
     function done(d) { return (d in at) && !bad[at[d]] && status[at[d]] == "done" }
@@ -161,7 +185,7 @@ command, and it refuses one that is not a plain path inside the repository:
       if (!match(s, /^ ? ? ?(```+|~~~+)/)) return ""
       s = substr(s, RSTART, RLENGTH); sub(/^ +/, "", s); return s
     }
-    NR == 1 && substr($0, 1, 3) == "\357\273\277" { $0 = substr($0, 4) }
+    NR == 1 && index($0, bom) == 1 { $0 = substr($0, length(bom) + 1) }
     fenced {
       f = fence($0); rest = $0; sub(/^ *[`~]+/, "", rest)
       if (f != "" && substr(f, 1, 1) == fchar && length(f) >= flen && rest ~ /^[ \t\r]*$/) fenced = 0
@@ -169,18 +193,20 @@ command, and it refuses one that is not a plain path inside the repository:
     }
     comment { if (index($0, "-->")) comment = 0; next }
     fence($0) != "" { f = fence($0); fenced = 1; fchar = substr(f, 1, 1); flen = length(f); opened = NR; next }
-    /^<!--/ { if (!index(substr($0, 5), "-->")) { comment = 1; opened = NR }; next }
-    /^###([ \t]|\r?$)/ {
+    /^ ? ? ?<!--/ { if (!index(substr($0, index($0, "<!--") + 4), "-->")) { comment = 1; opened = NR }; next }
+    /^ ? ? ?###([ \t]|\r?$)/ {
       n++; cur = n
-      split(trim(substr($0, 4)), word, /[ \t]+/)
+      h = $0; sub(/^ *###/, "", h)
+      split(trim(h), word, /[ \t]+/)
       ids[n] = (word[1] == "" ? "line-" NR : word[1])
       seen[ids[n]]++; at[ids[n]] = n
       next
     }
-    /^##?([ \t]|\r?$)/ { cur = 0; next }
+    /^ ? ? ?##?([ \t]|\r?$)/ { cur = 0; next }
     cur && /^Status:/ {
       nstatus[cur]++
-      s = trim(substr($0, 8)); sub(/[ (].*$/, "", s); status[cur] = s
+      s = trim(substr($0, 8)); w = (match(s, /^[A-Za-z]+/) ? substr(s, 1, RLENGTH) : s)
+      status[cur] = (substr(s, length(w) + 1) ~ /^([^A-Za-z]|$)/ ? w : s)
       next
     }
     cur && /^Depends:/ { ndepends[cur]++; depends[cur] = trim(substr($0, 9)); next }
@@ -189,6 +215,7 @@ command, and it refuses one that is not a plain path inside the repository:
         printf "unavailable: the %s opened at line %d never closes\n", (fenced ? "code fence" : "HTML comment"), opened | "cat >&2"
         exit 1
       }
+      if (n == 0) { print "unavailable: no ### story heading in the file; is it in the format *Backlog* reads?" | "cat >&2"; exit 1 }
       for (i = 1; i <= n; i++) {
         if (seen[ids[i]] > 1) flag(i, "duplicate id")
         if (nstatus[i] == 0) flag(i, "no Status line")
@@ -239,8 +266,9 @@ It prints `backlog: not configured` when the key is absent or null, and stops th
 Otherwise it prints a `story <id> <status> <depends>` line per story in file order
 (`?` for a status it cannot read, `-` for no dependencies), a `problem <id> <reason>`
 line per story it cannot read, a `blocked <id> <reason>` line per `todo` or `doing`
-story that can never become ready as written, and a last line `next <id>`, or `next
-none`. The next story is the first `doing` story, else the first `todo` one, whose own
+story that reads cleanly but can never become ready as written, and a last line `next
+<id>`, or `next none`. A file with no story heading at all is `unavailable:`, since it
+is most likely in another format, not an empty backlog. The next story is the first `doing` story, else the first `todo` one, whose own
 lines read cleanly and whose every dependency is a `done` story that reads cleanly. A
 story with a problem is never picked, and neither is one that depends on it. The block
 decides nothing else.
@@ -263,7 +291,8 @@ means is judgement, and goes into *Classify*:
 - **A `problem` or `blocked` line** is a 🟢 item naming the story and the reason.
 - **The `next` story** is 🟡 Soon under `backlog:<id>`, and it replaces the plan's next
   step in the pick below. When the plan names a different next step, offer it as the
-  alternative.
+  alternative. With `next none`, or a backlog that is `unusable:` or `unavailable:`,
+  the plan's next step is the pick, as it is without a backlog.
 
 The backlog belongs to the repository, not to this workflow: report what is wrong in
 it, and change nothing.
@@ -323,8 +352,8 @@ Omit an empty bucket. If Now and Soon are both empty, say so plainly.
 
 End with one pick and a one-line reason. When the operator named a task in the
 invocation, that is the pick; a 🔴 item stays in the briefing beside it. Otherwise
-prefer 🔴 Now, then the backlog's next story when a backlog is configured and the
-plan's next step when it is not, then the smallest high-value item.
+prefer 🔴 Now, then the backlog's `next` story when the block printed one, and the
+plan's next step otherwise, then the smallest high-value item.
 
 ```text
 👉 My pick: <item>   [<S/M/L>] — <why this, now>

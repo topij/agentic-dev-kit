@@ -40,7 +40,7 @@
     },
     "docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md": {
       "role": "lite",
-      "sha256": "77aafb3b075160e8fd46d26d8d9296075e03568b4b822b5595d958fafef6a864"
+      "sha256": "eccc62e059d39179b3c4a75ef783671d1482ad19884b19ddcc1b7ec17bb8bc38"
     },
     "docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md": {
       "role": "lite",
@@ -52,7 +52,7 @@
     },
     "docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md": {
       "role": "lite",
-      "sha256": "1c68f9279f1d31f93d74b518161bd141ed7df4b21d9bbd7b568079fe8817c58c"
+      "sha256": "16af7fb5292ffb24563e38adbb42930c4b1edaa0d549f3f65323a50a9d838f44"
     },
     "docs/agentic-dev-kit/lite/lite-review.md": {
       "role": "lite",
@@ -60,11 +60,11 @@
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "lite",
-      "sha256": "79fc9473718e5acbcc5506013cacf4a6bbc6fd006d3b6bedf50faf8652624191"
+      "sha256": "77f6c5a8d0c3a47214b5dc0b4312e8d580ca14307c7aa11e60104bcb42fde3c8"
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "lite",
-      "sha256": "600d74d3bff3aff9bb208d64c8aad193812cf57e1a0ec61aec9be2891db5b2a7"
+      "sha256": "eca22265868c493ce09f5f36e649b31e88df1d483383ec5af8bf8b5bc40f0098"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -258,7 +258,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "3205578a98ccd4665ebafe5a78b0cff4ef4f58eabebadcb1b7f962d29af632cf"
+      "sha256": "fc973834fed68784a71a5c49ae5d48947d6bad2ac62e6c670646bfaef00c5e39"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "8295e38ba55b901aec1a1b6c56358947e381ea5bcaa11d84c15bbd2ec377ff29"
+      "sha256": "474d3e712240da4799519318f3c5aef1558af7f779bf99dfbbda7b47d2abd7c7"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
