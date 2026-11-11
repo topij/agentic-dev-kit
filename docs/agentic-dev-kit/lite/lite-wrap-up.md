@@ -169,8 +169,13 @@ current directory.
    <!-- lite:end handoff-content -->
 
    When `<backlog>` is configured, a story's status is the backlog's record, kept by
-   the step below: the plan carries no copy of it, and a line that restates one, in an
-   entry this session updates, is removed.
+   the step below: the plan carries no copy of it. A line that restates one, in an
+   entry this session updates, is removed once the backlog agrees with it. Where they
+   disagree (the plan calls a story done that the backlog does not mark `done`, or the
+   other way round), show the operator both and ask which is right. Remove the plan's
+   line only once the backlog holds the status the operator named (set by the step
+   below when it does not already), and keep it when they leave it open. Never remove it on the
+   backlog's word alone: the plan may hold the correct record.
 
 1. **Update `<handoff>`** with only what the test left.
 
@@ -204,13 +209,16 @@ current directory.
    convention for the note after the word (`Status: done (<date>; <what checked it>)`
    in the bama format), change no other line of a story, and confirm the changes with
    the operator in one line. A story the session added, or one it found no longer
-   wanted, is changed only on the operator's word (`dropped`).
+   wanted, is changed only on the operator's word (`dropped`). So is a story whose
+   status the plan disagreed with, settled above: set the status the operator named,
+   even when this session did not work on the story.
 
    A story this session worked on whose status the block reported as a problem is not
    guessed at: show the operator its `problem` line and ask. Then run the block again:
    the edit must add no `problem` or `blocked` line, and every other story's `story`
-   line must read as it did. The block reads only those lines, so check the diff as
-   well: no line of a story the session did not work on changed.
+   line must read as it did, apart from a status the operator settled above. The block
+   reads only those lines, so check the diff as well: no line of a story the session did
+   not work on changed, apart from that status line.
 
 1. **Route this session's friction**, each finding when it is found. A finding that
    has all three of a **reproduction**, a **named mechanism** and a **proposed fix** is
