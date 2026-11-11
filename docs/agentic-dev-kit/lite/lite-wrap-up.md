@@ -27,7 +27,11 @@ by that section's rules, never the working tree's copy. `<protected-branch>` is
 requests. **An absent key is a declaration, not an unknown:** the repository takes
 direct commits, and the commit goes to the branch checked out without asking. A
 repository whose branch takes changes only through pull requests must set the key;
-`adopt` asks for it.
+`adopt` asks for it. `<backlog>` is `backlog.path` when set: the repository's own story
+backlog, which the block in the lite `session-start`'s *Backlog* section reads, key and
+file both. Absent or null, there is no backlog: step 1 still runs that block, which
+then prints `backlog: not configured`, and every other step that names `<backlog>` is
+skipped.
 
 Read `vcs.protected_branch` from **every copy** of the config, not only the working
 tree's: the committed one by the same read the risk tier uses
@@ -64,21 +68,29 @@ Each of these is a hard stop before any edit; say which to the operator:
   could not tell which one the pull request targets;
 - a key outside the lite config schema at any level, a key given twice at one level,
   or a section of the wrong shape, in any copy. The schema is `profile`, `kit.version`, `paths.handoff`,
-  `paths.friction_log`, `friction.down_route`, `review.safety_critical_paths` and
-  `vcs.protected_branch`. `paths` is a mapping; each of `kit`, `friction`, `review`
-  and `vcs` is a mapping or null (a bare `vcs:` left after removing its optional
-  line), and any other value, such as `vcs: main` or `review: [deploy/]`, is the wrong
-  shape: read as absent, it would declare nothing it holds. A lite repository reads no other key, so another one is most likely a
+  `paths.friction_log`, `friction.down_route`, `review.safety_critical_paths`,
+  `vcs.protected_branch` and `backlog.path`. `paths` is a mapping; each of `kit`,
+  `friction`, `review` and `vcs` is a mapping or null (a bare `vcs:` left after
+  removing its optional line), and any other value, such as `vcs: main` or `review:
+  [deploy/]`, is the wrong shape: read as absent, it would declare nothing it holds.
+  `backlog` is held to the one form the lite `session-start`'s *Backlog* section
+  declares, by the stop below. A lite repository reads no other key, so another one is most likely a
   misspelling or a misplaced line: `vsc:`, `protected-branch`, `reveiw:`, a
   `protected_branch` dedented out of `vcs`. A YAML parser keeps only the last of two
   equal keys, so a second `vcs:` left by a merge or a paste drops the first. Read as
   absent, either would silently switch off what the key was written to declare: the
   branch it was meant to protect would take the commit, or the paths it declared would
   skip the risk tier;
+- a `backlog` the lite `session-start`'s *Backlog* block reports `unusable:`: not in
+  the form that section declares, or a `path` that is not plain by its rules. The block
+  reads the working tree's copy, which is the backlog this workflow edits; never paste
+  the value into a command to check it. A `backlog.path` naming the same file as
+  `paths.handoff` or `paths.friction_log` stops as well: the commit step splits those
+  files from the backlog;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
 
-**The way out of the `vcs.protected_branch` and schema stops above** is outside the
+**The way out of the `vcs.protected_branch`, `backlog` and schema stops above** is outside the
 lite workflows, as the risk tier's is (*Risk tier* in [`lite-review.md`](lite-review.md)):
 once the operator has read the config and said to go ahead, they commit the corrected
 `config/dev-model.yaml` on its own. They make that commit on a new branch and open a
@@ -104,6 +116,13 @@ current directory.
    edit. The commit step names both paths to `git restore --staged`, which refuses a
    path that does not exist, so a missing file would leave the record edits in the
    wrong commit.
+
+   Then run the lite `session-start`'s *Backlog* block. `backlog: not configured`
+   means there is no `<backlog>`. A line beginning `unusable:` is the configuration
+   stop above. A line beginning `unavailable:`, or any other non-zero exit, is a hard
+   stop here, unlike in the `session-start`: this workflow keeps the backlog's
+   statuses, and the plan records none of them, so a wrap-up that skipped the backlog
+   would lose what the session shipped. Keep its output for the backlog step below.
 
 1. **Review what changed this session**, since this session began, not since the plan's
    newest line:
@@ -149,6 +168,15 @@ current directory.
    - a **new line of work**, or a workstream the operator closed.
    <!-- lite:end handoff-content -->
 
+   When `<backlog>` is configured, a story's status is the backlog's record, kept by
+   the step below: the plan carries no copy of it. A line that restates one, in an
+   entry this session updates, is removed when it agrees with the backlog. Where they
+   disagree (the plan calls a story done that the backlog does not mark `done`, or the
+   other way round), show the operator both and ask which is right. Keep that line
+   when you update `<handoff>`: the backlog step removes it, after the backlog holds
+   the status the operator named, and it stays when they leave it open. Never remove
+   it on the backlog's word alone: the plan may hold the correct record.
+
 1. **Update `<handoff>`** with only what the test left.
 
    - **If `<handoff>` has a `## Workstreams` section**, keep one `### <name>` entry per
@@ -172,6 +200,30 @@ current directory.
    <!-- lite:end record-prose -->
    - **If a command prints it, do not write it.** Counts and statuses go stale; name the
      command, or drop the claim.
+
+1. **Update `<backlog>`**, when it is configured, for each story this session worked
+   on. Set `doing` on a story it started and did not finish, and `done` on one it
+   finished: every acceptance line this session could check was checked, by a command
+   or a person, and passed. The rule below on completion applies: a commit message or
+   a branch name says a story was attempted, not that it is done. Keep the file's own
+   convention for the note after the word (`Status: done (<date>; <what checked it>)`
+   in the bama format), change no other line of a story, and confirm the changes with
+   the operator in one line. A story the session added, or one it found no longer
+   wanted, is changed only on the operator's word (`dropped`). So is a story whose
+   status the plan disagreed with, settled above: set the status the operator named,
+   even when this session did not work on the story, with a note that names the
+   operator's word as what checked it (`Status: done (<date>; the operator's word)`).
+
+   A story this session worked on whose status the block reported as a problem is not
+   guessed at: show the operator its `problem` line and ask. Then run the block again:
+   the edit must add no `problem` or `blocked` line, and every other story's `story`
+   line must read as it did, apart from a status the operator settled above. The block
+   reads only those lines, so check the diff as well: no line of a story the session did
+   not work on changed, apart from that status line.
+
+   Only when that check passes, remove from `<handoff>` each line the operator settled
+   above; the commit step commits it with the other record edits. A line whose backlog
+   edit failed, or that the operator left open, stays.
 
 1. **Route this session's friction**, each finding when it is found. A finding that
    has all three of a **reproduction**, a **named mechanism** and a **proposed fix** is
@@ -217,8 +269,8 @@ current directory.
      Stop on `stop:` or a failing command, as in the review step above. Read the whole
      diff for churn, duplicated blocks, secrets and edits unrelated to
      the session.
-   - Stage each tracked file the session changed by name, the `<handoff>` and
-     `<friction-log>` edits included (`git add -- <path>`). `git status --short` shows
+   - Stage each tracked file the session changed by name, the `<handoff>`,
+     `<friction-log>` and `<backlog>` edits included (`git add -- <path>`). `git status --short` shows
      a changed but unstaged file as ` M`; the commit leaves it behind.
    <!-- lite:begin stage-by-name -->
    - **Then account for every untracked file, and stage by name.** No diff of any
@@ -301,7 +353,7 @@ current directory.
    (`git restore --staged -- <handoff> <friction-log>`), commit the rest, then stage
    those two by name and commit them as `chore: update plan — <one line>`. The second
    commit holds only those two files; any other file a routed finding edited goes in
-   the first.
+   the first, and so does a `<backlog>` edit, beside the work whose status it records.
 
 1. **Push and open the pull request**, only when `<protected-branch>` is set. Push the
    branch to the remote `<protected-branch>` lives on (`git push -u origin HEAD` when
@@ -315,7 +367,8 @@ current directory.
    fails leaves the commits local, and a pull request that fails to open leaves the
    branch pushed with no pull request. Give the command's error either way.
 
-1. **Report** what was recorded and where, what was routed, the pull request when one
+1. **Report** what was recorded and where, the stories whose status changed,
+   what was routed, the pull request when one
    was opened or updated, the review's result (and the risk tier's, when it ran), and
    the next step for each line of work it touched — or that there was nothing to hand
    over, and which commits already say it all.

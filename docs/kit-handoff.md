@@ -326,9 +326,10 @@ install (topij/home-server#31, first installed at kit `78f10709`); its field rep
 2026-11-10), which found #1410, #1408 and #1409. `--upgrade-lite` then ran live in `brain`, `mcp-voice-notes` and
 `obsidian-vault-mcp`, `d994f8eb` → `e35380d0` (topij/brain#38, topij/mcp-voice-notes#21 and
 topij/obsidian-vault-mcp#34, merged 2026-11-10 and 2026-11-11). Those runs found #1414 to #1419, which
-one pull request addresses, with #1412's U4/U5 wording item; #1412's other items stay open. The
+#1421 (`f053066b`) addressed with #1412's U4/U5 wording item; #1412's other items stay open. The
 same failure #1419 found is in the lite install path, `adopt.md`'s *Lite profile*, and is #1420. #1405 stays open for
-the full profile's kit block. Next is #1399 (an optional backlog file for lite), then the TGuitar pilot, #1400, which
+the full profile's kit block. #1399 gave lite an optional story backlog, `backlog.path` (*Backlog* in
+`lite-session-start.md`). Next is #1420, then the TGuitar pilot, #1400, which
 the operator chose over tNote for phase 5 on 2026-11-09. The lite-to-full move is not written. #1381's review rounds
 showed that a prose list of config stops does not converge; the findings left open, and a proposed shared validator
 for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.

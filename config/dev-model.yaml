@@ -180,6 +180,18 @@ vcs:
   triage_branch_pattern: "chore/triage-{date}-{session}"
   systemize_branch_pattern: "chore/systemize-{date}"
 
+# backlog: — lite profile only (#1399); this repository is a full install and sets
+# none. A lite repository may name its own story backlog, which the lite
+# session-start reads for its pick and the lite wrap-up keeps in step:
+#
+#   backlog:
+#     path: docs/STORIES.md   # a plain path relative to the repository root
+#
+# The format, and what each workflow does when the key is absent, the file is
+# missing or a story's status cannot be read, are in
+# docs/agentic-dev-kit/lite/lite-session-start.md (*Backlog*) and lite-wrap-up.md.
+# adopt.md's *Lite profile* (L1, L3) is where a lite install sets it.
+
 triage:
   # Shared triage-friction-log workflow settings. Runtime adapters translate
   # invocation and available mechanisms only; approval and write policy stays in

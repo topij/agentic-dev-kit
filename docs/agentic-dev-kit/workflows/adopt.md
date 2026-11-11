@@ -649,6 +649,12 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   own format. Otherwise the plan is a new `docs/handoff.md`.
 - **A fix log or friction inbox already kept?** If so, `paths.friction_log` points at it.
   Otherwise the inbox is a new `docs/friction-log.md`.
+- **A backlog file already kept?** A story list whose stories carry a `Status:`, such
+  as the `docs/STORIES.md` the bama `user-stories` skill writes. If so, and it is in
+  the format the lite `session-start`'s *Backlog* section reads, `backlog.path` points
+  at it: the lite `session-start` then draws its pick from it and the lite `wrap-up`
+  keeps its statuses. A file in another format is left out of the config; say so to
+  the operator.
 - **Where does a fully explained finding go here?** A fix log with a rule per entry, a
   backlog, an issue tracker. That sentence becomes `friction.down_route`; without one,
   the lite `wrap-up` asks each time.
@@ -684,9 +690,12 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 - **`config/dev-model.yaml`.** If one exists without `profile: lite`, stop and ask: it
   is a full install's config or the repository's own file. If one exists with
   `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
-  Judge it now, every copy, by the lite `wrap-up`'s configuration stops (a key outside
-  the schema or given twice, an unusable `vcs.protected_branch`, copies naming
-  different branches). Settle each with the operator, and commit the corrected file
+  Judge it now by the lite `wrap-up`'s configuration stops: every copy for a key
+  outside the schema or given twice, a section of the wrong shape, an unusable
+  `vcs.protected_branch` and copies naming different branches, and the working tree's
+  copy for a `backlog` the lite `session-start`'s *Backlog* block reports `unusable:`,
+  since that block reads only that copy, and for a `backlog.path` naming the plan or
+  the friction log. Settle each with the operator, and commit the corrected file
   with the install, or the first wrap-up after it refuses to start.
 - **`AGENTS.md` and `CLAUDE.md`.** Note which exist, and whether `CLAUDE.md` imports
   `AGENTS.md` (an `@AGENTS.md` line).
@@ -771,6 +780,8 @@ review:
     - "<path or pattern>"
 vcs:
   protected_branch: <branch>   # optional; the branch that takes changes only through pull requests
+backlog:
+  path: <backlog path>   # optional; a story backlog in the format lite-session-start.md's *Backlog* reads
 ```
 
 Create the plan and inbox only where L2 said **create**: a `# Plan` heading over an

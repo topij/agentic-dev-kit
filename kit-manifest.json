@@ -36,11 +36,11 @@
     },
     "docs/agentic-dev-kit/lite/adapters/claude/session-start/SKILL.md": {
       "role": "lite",
-      "sha256": "6c9052fc4f0f2d6687209b7f42b7bf97d439679fe70763be54b67932894830f3"
+      "sha256": "59b1e50556c253e3bf87b2bc42bbeaaa93b56c494ea83962a33d8737f656027e"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/wrap-up/SKILL.md": {
       "role": "lite",
-      "sha256": "77aafb3b075160e8fd46d26d8d9296075e03568b4b822b5595d958fafef6a864"
+      "sha256": "eccc62e059d39179b3c4a75ef783671d1482ad19884b19ddcc1b7ec17bb8bc38"
     },
     "docs/agentic-dev-kit/lite/adapters/codex/review/SKILL.md": {
       "role": "lite",
@@ -48,11 +48,11 @@
     },
     "docs/agentic-dev-kit/lite/adapters/codex/session-start/SKILL.md": {
       "role": "lite",
-      "sha256": "a69159a6a2d62127348971785cdc046992272fea65712cd7a2b45d6f7bfc9928"
+      "sha256": "2f2b525f08de0de7ba331b839055d6011a787ffd9416c2301d60a39430a04b8c"
     },
     "docs/agentic-dev-kit/lite/adapters/codex/wrap-up/SKILL.md": {
       "role": "lite",
-      "sha256": "1c68f9279f1d31f93d74b518161bd141ed7df4b21d9bbd7b568079fe8817c58c"
+      "sha256": "16af7fb5292ffb24563e38adbb42930c4b1edaa0d549f3f65323a50a9d838f44"
     },
     "docs/agentic-dev-kit/lite/lite-review.md": {
       "role": "lite",
@@ -60,11 +60,11 @@
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "lite",
-      "sha256": "c1a31617ef3d4985bb7df5b7964980383f366b66573d94ebdc4ea34411a11e11"
+      "sha256": "d7df45ec9d3027f268bc6461815400c4724fd001a36b4c08af949cc2266d6408"
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "lite",
-      "sha256": "643c32254ea069a40343f025ac1ed7e92feb0c38b49d6a265ca8f46e8714e8b2"
+      "sha256": "6730d6cb4d20dabced410e0c5cba9f35d8793a7405df168fa2ea9cceeaeab645"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -104,7 +104,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "b03b3a5e27fc699456b26921697d02e7df491757b6ca35256472c6c641aac717"
+      "sha256": "66f16c54ea93be5936ee6d7c2db8df76209b6ffe9abbed68c4878c5c3e98ccaa"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -721,7 +721,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "075e7c0ddf8aa77cc94911e500b37ea6867febb848f8d5143edc9fdbe04a5474"
+      "sha256": "cce521bebbc755bfda4f9a3e0fd0d1bbf0048bbd39d14f39e73eba87e9896ee4"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "0444c357c13eb013230aed0841583fe0064e28c9246f1e70ebf42ad86450f212"
+      "sha256": "5641136729368ab00a505b8b8f411a4677e18bd034c6cadf4312c4cfa67fdb4e"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
