@@ -4800,16 +4800,19 @@ _REPORT_FAILING_STATES = frozenset(
 
 
 def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record: dict) -> tuple[list[str], list[str]]:
-    """adopt.md's *Lite profile* L5, in process, against the record U4 wrote (#1419).
+    """adopt.md's *Lite profile* L5, in process, once U4 has recorded (#1419).
 
     L5's two commands read `KIT` and `REPO` from the shell, which a fresh shell per
     command does not carry. U5 runs this instead, and makes the judgement L5 leaves
-    to its reader. The install must read as a lite install with no file state the
-    main report's exit code counts. A `declined` lite file must be a skill the
-    record keeps, or not on disk: the Claude skill L3 skipped for a kept command,
-    or a file the operator left absent. Each lite binding must be `kit-current`,
-    `adopter-owned` where the record keeps it, or `missing` where the file is
-    declined and absent. Returns the lines to print and the stops.
+    to its reader. As in L5's own command, each file's state is judged against the
+    kit's manifest and the disk; the record supplies the profile and which skills
+    are kept and which files declined. The install must read as a lite install
+    with no file state the main report's exit code counts. A kept skill must be on
+    disk. Any other `declined` lite file must not be: the Claude skill L3 skipped
+    for a kept command, or a file the operator left absent, each named on the
+    summary line. Each lite binding must be `kit-current`, `adopter-owned` where
+    the record keeps it, or `missing` where its file is declined and absent.
+    Returns the lines to print and the stops.
     """
     from runtime_adapters import compare_adapters
 
@@ -4823,24 +4826,30 @@ def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record
         stops.append(f"the record U4 wrote reads {report.baseline_profile_mismatch}, not lite")
     counts: dict[str, int] = {}
     absent_by_decision: set[str] = set()
+    settle = "settle it with the operator, then re-run U4"
     for f in report.files:
         if f.path not in lite:
             if f.state in _REPORT_FAILING_STATES:
-                stops.append(f"{f.path} is {f.state}, outside the lite profile")
+                stops.append(f"{f.path} is {f.state}, outside the lite profile — {settle}")
             continue
         counts[f.state] = counts.get(f.state, 0) + 1
         if f.state == "unchanged":
             continue
-        if f.state == "declined" and not (root / f.path).exists():
+        on_disk = (root / f.path).exists() or (root / f.path).is_symlink()
+        if f.state == "declined" and f.path in kept:
+            if not on_disk:
+                stops.append(f"{f.path} is kept by the record but not on disk — {settle}")
+            continue
+        if f.state == "declined" and not on_disk:
             absent_by_decision.add(f.path)
             continue
-        if f.state == "declined" and f.path in kept:
-            continue
         why = "declined, on disk and not kept" if f.state == "declined" else f.state
-        stops.append(f"{f.path} is {why} against the record U4 wrote — settle it with the operator, then re-run U4")
+        stops.append(f"{f.path} is {why} — {settle}")
     for r in report.dead_registrations:
         stops.append(f"the {r.runtime} registration {r.surface} is {r.state}")
     summary = ", ".join(f"{n} {state}" for state, n in sorted(counts.items())) or "no lite file"
+    if absent_by_decision:
+        summary += f" (not on disk: {', '.join(sorted(absent_by_decision))})"
     lines.append(f"verify (L5): {'NOT intact' if stops else 'intact for this adoption — lite install'}: {summary}")
     try:
         adapters = compare_adapters(kit, root, profile="lite")
@@ -5135,6 +5144,16 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
         except OSError as exc:
             raise LiteUpgradeStop(f"cannot verify the install: {exc}") from exc
         stops += [f"verify (L5): {s}" for s in verify_stops]
+    elif kit_commit is not None:
+        # A pinned read is U5, and U5's exit 0 means L5 passed: one that could
+        # not run it says why rather than exiting 0 without it.
+        if uncommitted and not recorded_here:
+            why = "the working tree holds a record that is not U4's for this kit"
+        elif owed:
+            why = "the working tree holds no record for this kit — run U4"
+        else:
+            why = "a row still needs U4"
+        stops.append(f"verify (L5): not run — {why}")
 
     agents = _lite_agents_section(root, kit)
     changelog = _lite_changelog(kit, head, baseline_commit)

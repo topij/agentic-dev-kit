@@ -384,8 +384,136 @@ def test_u5_stops_when_the_install_is_not_intact_after_u4(
     done = _pinned(kit, repo, env)
     assert done.returncode == 1, done.stdout
     assert _has_line(done, "verify (L5): NOT intact: ")
-    assert f"stop: verify (L5): {DOCS[0]} is removed against the record U4 wrote" in done.stdout
+    assert f"stop: verify (L5): {DOCS[0]} is removed — settle it with the operator" in done.stdout
     assert not _has_line(done, "apply (U4):")
+
+
+CLAUDE_SKILL = ".claude/skills/review/SKILL.md"
+KEPT_SKILL = ".agents/skills/review/SKILL.md"
+
+
+def _tamper_skill_removed(repo: Path) -> list[str]:
+    (repo / CLAUDE_SKILL).unlink()
+    return [f"{CLAUDE_SKILL} is removed", f"adapter {CLAUDE_SKILL} is missing"]
+
+
+def _tamper_declined_on_disk(repo: Path) -> list[str]:
+    # A file there reads `differs`; a directory keeps the record's `declined`.
+    (repo / CLAUDE_SKILL).mkdir(parents=True)
+    return [f"{CLAUDE_SKILL} is declined, on disk and not kept", f"adapter {CLAUDE_SKILL} is adopter-owned"]
+
+
+def _tamper_kept_gone(repo: Path) -> list[str]:
+    (repo / KEPT_SKILL).unlink()
+    return [f"{KEPT_SKILL} is kept by the record but not on disk"]
+
+
+def _edit_record(repo: Path, change) -> None:
+    path = repo / "kit-manifest.json"
+    record = json.loads(path.read_text(encoding="utf-8"))
+    change(record)
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+
+def _tamper_outside_lite(repo: Path) -> list[str]:
+    # A full-profile file the record says is installed, and which is not here.
+    def change(record: dict) -> None:
+        assert isinstance(record["files"], dict)
+        record["files"]["scripts/pr_watch.py"] = dict(next(iter(record["files"].values())))
+    _edit_record(repo, change)
+    return ["scripts/pr_watch.py is removed, outside the lite profile"]
+
+
+def _tamper_profile(repo: Path) -> list[str]:
+    _edit_record(repo, lambda record: record.update(profile="full"))
+    return ["the record U4 wrote reads full, not lite"]
+
+
+def _tamper_registration(repo: Path) -> list[str]:
+    (repo / ".claude/settings.json").write_text("{", encoding="utf-8")
+    return ["registration .claude/settings.json is unreadable"]
+
+
+@pytest.mark.parametrize(
+    ("tamper", "install"),
+    [
+        (_tamper_skill_removed, {}),
+        (_tamper_declined_on_disk, {"without": (CLAUDE_SKILL,)}),
+        (_tamper_kept_gone, {"keep": (KEPT_SKILL,)}),
+        (_tamper_outside_lite, {}),
+        (_tamper_profile, {}),
+        (_tamper_registration, {}),
+    ],
+    ids=["skill-removed", "declined-on-disk", "kept-gone", "outside-lite", "profile", "registration"],
+)
+def test_u5_stops_on_each_way_the_install_is_not_what_l5_expects(
+    tmp_path: Path, kit_upstream: dict, kit: Path, tamper, install: dict
+) -> None:
+    """Each judgement `_lite_verify` makes for L5's reader is a stop of its own (#1419)."""
+    repo, env = _install(tmp_path, kit_upstream, **install)
+    applied = _apply(kit, repo, env)
+    assert applied.returncode == 0, applied.stdout
+    assert _pinned(kit, repo, env).returncode == 0
+    expected = tamper(repo)
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 1, done.stdout
+    for stop in expected:
+        assert any(
+            line.startswith("stop: verify (L5): ") and stop in line for line in done.stdout.splitlines()
+        ), (stop, done.stdout)
+
+
+def test_u5_does_not_exit_0_without_running_l5(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    """A pinned read is U5: when L5 cannot run, it says why and exits 1."""
+    repo, env = _install(tmp_path, kit_upstream)
+    before = _pinned(kit, repo, env)
+    assert before.returncode == 1, before.stdout
+    assert "stop: verify (L5): not run — the working tree holds no record for this kit" in before.stdout
+    assert _apply(kit, repo, env).returncode == 0
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "upgrade")
+    (repo / "kit-manifest.json").write_text(json.dumps({"kit_commit": None, "files": {}}), encoding="utf-8")
+    abandoned = _pinned(kit, repo, env)
+    assert abandoned.returncode == 1, abandoned.stdout
+    assert "not run — the working tree holds a record that is not U4's for this kit" in abandoned.stdout
+    # U2's unpinned read is not U5: the same states are no stop there.
+    assert _read(kit, repo, env, json_out=False).returncode == 0
+
+
+def test_u5_does_not_run_l5_while_the_record_is_owed(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    """Every file copied by hand, so every row is settled, and no record names the
+    kit: L5 against the older baseline would pass and prove nothing."""
+    repo, env = _install(tmp_path, kit_upstream)
+    for path, rel in INSTALLED.items():
+        shutil.copy2(kit / rel, repo / path)
+    _git(repo, env, "commit", "-qam", "copied by hand")
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 1, done.stdout
+    assert _has_line(done, "record: owed")
+    assert not _has_line(done, "verify (L5): intact")
+    assert "stop: verify (L5): not run — the working tree holds no record for this kit" in done.stdout
+
+
+def test_an_adapter_report_that_refuses_is_a_verify_stop(
+    tmp_path: Path, kit_upstream: dict, kit: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _apply(kit, repo, env).returncode == 0
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts" / "lib"))
+    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
+    import kit_doctor
+    import runtime_adapters
+
+    def refuse(*_args, **_kwargs):
+        raise ValueError("cannot read source interface")
+
+    monkeypatch.setattr(runtime_adapters, "compare_adapters", refuse)
+    config = kit_doctor._lite_load_config(repo)
+    manifest = json.loads((kit / "kit-manifest.json").read_text(encoding="utf-8"))
+    record = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    lines, stops = kit_doctor._lite_verify(repo, kit, config, manifest, record)
+    assert stops == ["the adapter report refused: cannot read source interface"], stops
+    assert lines and lines[0].startswith("verify (L5): intact for this adoption — lite install: ")
 
 
 def test_u5_passes_a_skill_the_operator_left_absent(
@@ -404,6 +532,7 @@ def test_u5_passes_a_skill_the_operator_left_absent(
     done = _pinned(kit, repo, env)
     assert done.returncode == 0, done.stdout
     assert _has_line(done, "verify (L5): intact for this adoption — lite install: 1 declined")
+    assert f"(not on disk: {skill})" in done.stdout
     assert _has_line(done, "verify (L5): adapters as L5 expects: ")
 
 
@@ -917,7 +1046,13 @@ def test_a_take_that_restores_the_committed_bytes_says_nothing_changed(
     done = _apply(kit, repo, env, "--take", DOCS[0])
     assert done.returncode == 0, done.stdout + done.stderr
     assert _has_line(done, "unchanged against HEAD") and not _has_line(done, "stage: "), done.stdout
+    assert "U3's config and AGENTS.md edits still go in its commit" in done.stdout
     assert _plan(kit, repo, env)["record"] == "not-owed"
+    # U5 after a U4 with nothing to commit still runs L5, on the committed record.
+    pinned = _pinned(kit, repo, env)
+    assert pinned.returncode == 0, pinned.stdout
+    assert _has_line(pinned, "record: not owed")
+    assert _has_line(pinned, "verify (L5): intact for this adoption — lite install: ")
 
 
 def test_a_refusal_under_json_is_json(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:

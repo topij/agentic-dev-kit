@@ -4,11 +4,13 @@ CHANGED: a `kit_doctor.py --upgrade-lite` read with no `--apply` now runs `adopt
 *Lite profile* L5 checks itself once U4 has nothing left to do. That is when the
 working tree holds U4's record for the kit, or when the committed baseline names the
 kit and every row is settled. It prints two `verify (L5):` lines, for the install and
-for the skill bindings. A lite file that is not intact, a `declined` file that is on
-disk and not kept, or a binding that is neither the kit's render nor a kept skill
-gives a `stop: verify (L5):` line and exit 1. Before that point the read prints no
-`verify (L5):` line. Under `--json` the plan has a `verify` object (`ran`, `lines`),
-and those stops are in `stops`. If your upgrade notes ran L5's two commands after U4,
+for the skill bindings. Each of these gives a `stop: verify (L5):` line and exit 1: a
+lite file that is not intact, a kept skill not on disk, any other `declined` file that
+is on disk, and a binding that is neither the kit's render nor a kept skill. A
+`declined` file not on disk is named on the install line. Before that point an
+unpinned read prints no `verify (L5):` line, and a read given `--kit-commit` (U5)
+prints `stop: verify (L5): not run — <why>` and exits 1. Under `--json` the plan has a
+`verify` object (`ran`, `lines`), and those stops are in `stops`. If your upgrade notes ran L5's two commands after U4,
 read U5's `verify (L5):` lines instead: U4 no longer runs L5.
 
 CHANGED: after a successful U4, U5 no longer prints the "uncommitted or abandoned

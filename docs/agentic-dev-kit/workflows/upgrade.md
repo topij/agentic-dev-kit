@@ -1418,13 +1418,16 @@ checkout U6 commits in, and must exit 0 and print
 baseline, so a row U4 settled with `--leave-absent` still reads `decide` until U6
 commits.
 
-Once U4 has nothing left to do, it also runs `adopt.md`'s *Lite profile* L5 itself,
-against U4's record and the kit, after U3's hand edits (#1419). Its two `verify (L5):`
-lines are the install, which must read `intact for this adoption — lite install`, and
-the skill bindings, which must read `as L5 expects`. A `declined` file there is a kept
-skill or a file not on disk; anything else, and any binding that is neither the kit's
-render nor a kept skill, is a `stop: verify (L5):` line and exit 1. Settle it with the
-operator, then re-run U4 and U5.
+It also runs `adopt.md`'s *Lite profile* L5 itself, with the kit and the record that
+names it, after U3's hand edits (#1419). Its two `verify (L5):` lines are the install,
+which must read `intact for this adoption — lite install`, and the skill bindings,
+which must read `as L5 expects`. A kept skill must be on disk; any other `declined`
+file must not be, and the install line names it, so check each one named is the
+Claude skill a kept command replaced or a file U3 left absent. Anything else, and any
+binding that is neither the kit's render nor a kept skill, is a
+`stop: verify (L5):` line and exit 1. So is a U5 that cannot run L5 because U4 has
+not recorded for this kit, which names why. Settle each with the operator, then
+re-run U4 and U5.
 
 Done when it exited 0 and printed both `verify (L5):` lines.
 
@@ -1443,7 +1446,8 @@ upgrade made false, such as one naming the kit commit, is the kind of doc line
 
 Delete the kit clone, by the path U1 wrote down, once the upgrade has landed: after the
 pull request merges, since a review fix may need U4 and U5 again, or after the commit
-when there is no pull request. Report the kit commit before and after, what was taken,
+when there is no pull request. A session that ends before the merge names the clone's
+path in its report, so whoever finishes the upgrade deletes it. Report the kit commit before and after, what was taken,
 kept and settled, and the changelog entries that concern this repository. Record
 repository-side friction the upgrade surfaced in the friction inbox
 (`paths.friction_log`). Send a kit-side fault one way: file it upstream, or put it in
