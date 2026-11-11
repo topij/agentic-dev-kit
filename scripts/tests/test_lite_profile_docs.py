@@ -718,6 +718,8 @@ def test_backlog_block_says_not_configured_without_a_path(tmp_path: Path, backlo
         "backlog: null#x\n",
         "backlog: ~#x\n",
         "backlog:#x\n",
+        "backlog:null\n",
+        "backlog:~\n",
     ],
 )
 def test_backlog_block_stops_on_a_backlog_that_is_not_a_mapping_with_one_path(tmp_path: Path, backlog: str) -> None:
@@ -807,6 +809,7 @@ def test_backlog_block_reads_what_markdown_shows_and_skips_what_it_hides(tmp_pat
         "<!--> is an empty comment, closed on its own line\n### S-9b after an empty comment\nStatus: todo\n"
         "<!---> is empty too, closed on its own line\n### S-9c after the other empty comment\nStatus: todo\n"
         "~~~\n### S-0y inside\n```\n### S-0z still inside: a backtick line does not close a tilde fence\n~~~\n"
+        "```\n### S-0v inside\n~~~\n### S-0w still inside: a tilde line does not close a backtick fence\n```\n"
         "```text\n### S-0x inside\n``` not a closer\n```\n"
     )
     repo, env = _backlog(tmp_path, text)
