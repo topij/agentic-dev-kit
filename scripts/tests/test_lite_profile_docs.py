@@ -422,6 +422,204 @@ def test_risk_tier_check_lists_a_change_to_the_config_that_declares_the_list(
     assert result.stdout.split() == ["config/dev-model.yaml"]
 
 
+# The lite session-start's *Backlog* block (#1399), run against a backlog in the
+# format of the bama `user-stories` skill, the one TGuitar's docs/STORIES.md uses.
+
+BACKLOG = """\
+# App stories
+
+Intro text, and an example that is not a story:
+
+```markdown
+### S-999 An example
+Status: todo
+```
+
+## M0 Spikes
+
+### S-001 Clicks stay on time
+As the developer, I run a tempo ramp.
+Status: done (2026-11-08; the recorded run was dropped)
+
+### S-002 Slow-down sounds good
+Status: done (2026-11-08, Signalsmith won 9 of 15)
+
+## M1 Drill
+
+### S-010 Start and stop the metronome
+Depends: S-001
+Acceptance:
+- [unit] Clicks are scheduled at sample time.
+Status: done (2026-11-08; unit 23/23)
+
+### S-011 Change the tempo by hand
+Depends: S-010, S-099
+Status: todo
+
+### S-012 Choose the meter
+Depends: S-010
+Status: todo
+
+### S-013 Ramp the tempo
+Depends: S-011 S-012
+Status: todo
+
+## Later
+
+### S-070 Tuner
+Status: todo (later)
+
+## Dropped
+
+### S-080 Share to a friend
+Status: dropped (2026-11-09; not wanted)
+"""
+
+
+def _backlog_block(path: str) -> str:
+    (block,) = _sh_blocks("lite-session-start.md", "backlog='<backlog.path>'")
+    return block.replace("<backlog.path>", path)
+
+
+def _backlog(tmp_path: Path, text: str, rel: str = "docs/STORIES.md") -> tuple[Path, dict[str, str]]:
+    repo, env = _repo(tmp_path, "backlog")
+    (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+    (repo / rel).write_text(text, encoding="utf-8")
+    return repo, env
+
+
+def _read_backlog(shell: str, repo: Path, env: dict[str, str], where: str = ".", rel: str = "docs/STORIES.md"):
+    result = _run(shell, _backlog_block(rel), repo / where, env)
+    lines = result.stdout.splitlines()
+    return result, [ln for ln in lines if ln.startswith("story ")], [
+        ln for ln in lines if ln.startswith("problem ")
+    ], [ln for ln in lines if ln.startswith("next ")]
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("where", [".", "docs"])
+def test_backlog_block_reads_every_story_and_picks_the_first_ready_todo(
+    tmp_path: Path, shell: str, where: str
+) -> None:
+    """S-011 waits on an unknown id, so S-012 is next; the fenced example is not a story."""
+    repo, env = _backlog(tmp_path, BACKLOG)
+    result, stories, problems, nexts = _read_backlog(shell, repo, env, where)
+    assert result.returncode == 0, result.stderr
+    assert stories == [
+        "story S-001 done -",
+        "story S-002 done -",
+        "story S-010 done S-001",
+        "story S-011 todo S-010,S-099",
+        "story S-012 todo S-010",
+        "story S-013 todo S-011,S-012",
+        "story S-070 todo -",
+        "story S-080 dropped -",
+    ]
+    assert problems == ["problem S-011 depends on unknown S-099"]
+    assert nexts == ["next S-012"]
+
+
+def test_backlog_block_prefers_a_ready_doing_story_over_an_earlier_todo(tmp_path: Path) -> None:
+    text = BACKLOG.replace("### S-013 Ramp the tempo\nDepends: S-011 S-012\nStatus: todo", "### S-013 Ramp\nStatus: doing")
+    repo, env = _backlog(tmp_path, text)
+    result, _, _, nexts = _read_backlog("sh", repo, env)
+    assert result.returncode == 0, result.stderr
+    assert nexts == ["next S-013"]
+
+
+def test_backlog_block_skips_a_todo_whose_dependency_is_not_done(tmp_path: Path) -> None:
+    """S-012 waits on S-010, now `doing`, which is picked instead as the doing story."""
+    text = BACKLOG.replace("Status: done (2026-11-08; unit 23/23)", "Status: doing")
+    repo, env = _backlog(tmp_path, text)
+    result, _, problems, nexts = _read_backlog("sh", repo, env)
+    assert result.returncode == 0, result.stderr
+    assert nexts == ["next S-010"]
+    text = text.replace("### S-010 Start and stop the metronome\nDepends: S-001", "### S-010 Start\nDepends: S-002, S-080")
+    (repo / "docs/STORIES.md").write_text(text, encoding="utf-8")
+    result, _, problems, nexts = _read_backlog("sh", repo, env)
+    # S-010 is doing but waits on the dropped S-080, and every todo waits on S-010.
+    assert nexts == ["next S-070"], result.stdout
+
+
+def test_backlog_block_never_counts_a_dropped_story_as_done(tmp_path: Path) -> None:
+    text = BACKLOG.replace("### S-070 Tuner\nStatus: todo (later)", "### S-070 Tuner\nDepends: S-080\nStatus: todo")
+    text = text.replace("Depends: S-010, S-099\n", "").replace("Depends: S-010\nStatus: todo", "Depends: S-099\nStatus: todo")
+    repo, env = _backlog(tmp_path, text)
+    result, _, _, nexts = _read_backlog("sh", repo, env)
+    assert result.returncode == 0, result.stderr
+    # S-011 is ready; with it done, S-013 still waits on S-012 (which waits on an unknown
+    # id), and S-070 on the dropped S-080.
+    assert nexts == ["next S-011"]
+    text = text.replace("### S-011 Change the tempo by hand\nStatus: todo", "### S-011 Change\nStatus: done")
+    (repo / "docs/STORIES.md").write_text(text, encoding="utf-8")
+    result, _, _, nexts = _read_backlog("sh", repo, env)
+    assert nexts == ["next none"], result.stdout
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "problem"),
+    [
+        ("Status: todo\n\n### S-013", "\n\n### S-013", "problem S-012 no Status line"),
+        ("Status: todo\n\n### S-013", "Status: todo\nStatus: doing\n\n### S-013", "problem S-012 more than one Status line"),
+        ("Status: todo\n\n### S-013", "Status: Todo\n\n### S-013", 'problem S-012 unknown status "Todo"'),
+        ("Status: todo\n\n### S-013", "Status: finished\n\n### S-013", 'problem S-012 unknown status "finished"'),
+        ("Status: todo\n\n### S-013", "Status:\n\n### S-013", 'problem S-012 unknown status ""'),
+        ("Depends: S-010\nStatus: todo", "Depends: S-010\nDepends: S-001\nStatus: todo", "problem S-012 more than one Depends line"),
+        ("### S-012 Choose the meter", "### S-002 Choose the meter", "problem S-002 duplicate id"),
+    ],
+)
+def test_backlog_block_reports_a_story_it_cannot_read_and_never_picks_it(
+    tmp_path: Path, old: str, new: str, problem: str
+) -> None:
+    text = BACKLOG.replace("Depends: S-010, S-099\n", "")  # make S-011 ready, ahead of S-012
+    text = text.replace("### S-011 Change the tempo by hand\nStatus: todo", "### S-011 Change\nStatus: done")
+    assert text.count(old) == 1, old
+    repo, env = _backlog(tmp_path, text.replace(old, new))
+    result, _, problems, nexts = _read_backlog("sh", repo, env)
+    assert result.returncode == 0, result.stderr
+    assert problem in problems, result.stdout
+    # S-012 is unreadable or ambiguous, so neither it nor S-013, which waits on it, is next.
+    assert nexts == ["next S-070"], result.stdout
+
+
+def test_backlog_block_does_not_count_a_duplicated_done_id_as_done(tmp_path: Path) -> None:
+    text = BACKLOG.replace("Depends: S-010, S-099", "Depends: S-010").replace("### S-002 Slow-down", "### S-010 Slow-down")
+    repo, env = _backlog(tmp_path, text)
+    result, _, problems, nexts = _read_backlog("sh", repo, env)
+    assert result.returncode == 0, result.stderr
+    assert problems == ["problem S-010 duplicate id", "problem S-010 duplicate id"]
+    assert nexts == ["next S-070"], result.stdout
+
+
+def test_backlog_block_prints_next_none_for_a_backlog_with_no_story(tmp_path: Path) -> None:
+    repo, env = _backlog(tmp_path, "# Stories\n\nNone yet.\n")
+    result, stories, problems, nexts = _read_backlog("sh", repo, env)
+    assert result.returncode == 0, result.stderr
+    assert (stories, problems, nexts) == ([], [], ["next none"])
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("how", ["missing", "directory"])
+def test_backlog_block_reports_an_unreadable_file_as_unavailable(tmp_path: Path, shell: str, how: str) -> None:
+    repo, env = _repo(tmp_path, "backlog")
+    if how == "directory":
+        (repo / "docs/STORIES.md").mkdir(parents=True)
+    result, stories, _, nexts = _read_backlog(shell, repo, env)
+    assert result.returncode != 0
+    assert "unavailable: docs/STORIES.md" in result.stderr
+    assert (stories, nexts) == ([], [])
+
+
+def test_lite_backlog_key_is_in_the_wrap_up_schema_and_the_adopt_template() -> None:
+    """The wrap-up refuses a key outside its schema list, so the key must be on it."""
+    wrap_up = _normalise((LITE / "lite-wrap-up.md").read_text(encoding="utf-8"))
+    assert "`vcs.protected_branch` and `backlog.path`." in wrap_up
+    assert "each of `kit`, `friction`, `review`, `vcs` and `backlog` is a mapping or null" in wrap_up
+    template = re.search(r"^```yaml\n(profile: lite\n.*?)^```", ADOPT.read_text(encoding="utf-8"), re.M | re.S)
+    assert template, "adopt.md's lite config template is missing"
+    assert "backlog:\n  path: <backlog path>" in template.group(1)
+
+
 # adopt.md's *Lite profile*, run end to end from the doc's own copy block.
 
 ADOPT = REPO_ROOT / "docs/agentic-dev-kit/workflows/adopt.md"
@@ -652,3 +850,53 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
     assert states[".agents/skills/wrap-up/SKILL.md"] == "removed"
     assert states[".claude/skills/session-start/SKILL.md"] == "locally-edited"
     assert states[".claude/skills/review/SKILL.md"] == "declined"
+
+
+def _lite_install(tmp_path: Path, shell: str, config_tail: str) -> tuple[Path, dict[str, str]]:
+    repo, env = _repo(tmp_path, "adopter")
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+    result = _run(shell, _adopt_copy_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    (repo / "config").mkdir()
+    (repo / "config/dev-model.yaml").write_text(
+        "profile: lite\nkit:\n  version: 2\npaths:\n  handoff: docs/plan.md\n"
+        "  friction_log: docs/friction-log.md\n" + config_tail,
+        encoding="utf-8",
+    )
+    (repo / "docs/plan.md").write_text("# Plan\n\n## Workstreams\n", encoding="utf-8")
+    (repo / "docs/friction-log.md").write_text("# Friction log\n", encoding="utf-8")
+    (repo / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
+    record = _doctor("--record-install", "--from-kit", str(REPO_ROOT), "--root", str(repo), env=env)
+    assert record.returncode == 0, record.stderr
+    return repo, env
+
+
+@pytest.mark.parametrize(
+    ("config_tail", "stories", "line"),
+    [
+        ("", True, None),
+        ("backlog:\n", True, None),
+        ("backlog:\n  path: docs/STORIES.md\n", True, "  ✓ backlog: docs/STORIES.md"),
+        ("backlog:\n  path: docs/STORIES.md\n", False, "  ⚠ backlog: docs/STORIES.md missing"),
+        ("backlog:\n  path: ../STORIES.md\n", True, "  ⚠ backlog: backlog.path is '../STORIES.md', not a plain path"),
+        ("backlog:\n  path: /abs/STORIES.md\n", True, "  ⚠ backlog: backlog.path is '/abs/STORIES.md', not a plain path"),
+        ("backlog:\n  path: '<backlog path>'\n", True, "  ⚠ backlog: backlog.path is '<backlog path>', not a plain path"),
+        ("backlog:\n  path: 3\n", True, "  ⚠ backlog: backlog.path is 3, not a plain path"),
+        ("backlog: docs/STORIES.md\n", True, "  ⚠ backlog: backlog is 'docs/STORIES.md', not a mapping"),
+    ],
+)
+def test_kit_doctor_reports_a_lite_install_intact_with_or_without_a_backlog(
+    tmp_path: Path, config_tail: str, stories: bool, line: str | None
+) -> None:
+    """The key never moves the exit code: the backlog is the repository's file, not the kit's."""
+    repo, env = _lite_install(tmp_path, "sh", config_tail)
+    if stories:
+        (repo / "docs/STORIES.md").write_text(BACKLOG, encoding="utf-8")
+    report = _doctor("--root", str(repo), "--manifest", str(REPO_ROOT / "kit-manifest.json"), env=env)
+    assert report.returncode == 0, report.stdout + report.stderr
+    assert "intact for this adoption — lite install" in report.stdout
+    backlog_lines = [ln for ln in report.stdout.splitlines() if "backlog:" in ln]
+    assert backlog_lines == ([] if line is None else [backlog_lines[0]]), report.stdout
+    if line is not None:
+        assert backlog_lines[0].startswith(line), report.stdout

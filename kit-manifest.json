@@ -60,11 +60,11 @@
     },
     "docs/agentic-dev-kit/lite/lite-session-start.md": {
       "role": "lite",
-      "sha256": "c1a31617ef3d4985bb7df5b7964980383f366b66573d94ebdc4ea34411a11e11"
+      "sha256": "515f1699d0302e19daf599097a9ea488b534df5637112ac9c260d04d59488d80"
     },
     "docs/agentic-dev-kit/lite/lite-wrap-up.md": {
       "role": "lite",
-      "sha256": "643c32254ea069a40343f025ac1ed7e92feb0c38b49d6a265ca8f46e8714e8b2"
+      "sha256": "2132f1f5c535ebfb1956b4059f44c29c274ff45cd1c7f590ebb168ec9c3d3bde"
     },
     "docs/agentic-dev-kit/live-validation-evidence.md": {
       "role": "repo-only",
@@ -104,7 +104,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "b03b3a5e27fc699456b26921697d02e7df491757b6ca35256472c6c641aac717"
+      "sha256": "82558ea32331c6543e81453c318a8fa3588b12b9fd212f667d3b8a3ed8fdbe1b"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -258,7 +258,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "fc162cc8b420281bd65fbbb483062865647d53793d754a6eed6a39ff0f50b46a"
+      "sha256": "cfe6a0ae0b6f0c0de32ed3c2668d98f0a37e7d745c5e6a241acd3eeed5e432bc"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "0444c357c13eb013230aed0841583fe0064e28c9246f1e70ebf42ad86450f212"
+      "sha256": "de4d4c2cd65c72aa6fca8b8470300e20dcb4403db8ed2439c157bad6e7d7ae9b"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",

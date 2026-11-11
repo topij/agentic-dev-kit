@@ -1236,6 +1236,13 @@ class Report:
     # in a lite baseline that predates its `kept` record (#1373): a skill kept
     # then reads as drift, and the render says how to re-record it.
     lite_kept_unrecorded: tuple[str, ...] = ()
+    # A lite repository's own backlog file (#1399), as `(value, state)`: state is
+    # `present`, `missing`, `unusable` or `wrong-shape` (both of which the lite
+    # wrap-up stops on). None
+    # when the key is absent or the profile is full. Text report only, so the JSON
+    # shape is unchanged; it never moves the exit code: the backlog is the
+    # repository's file, not the kit's, and the lite workflows report it themselves.
+    lite_backlog: tuple[str, str] | None = None
     # The kit commit the baseline says this install came from. None is a real,
     # supported value — a retro-recorded baseline does not know its provenance —
     # and is why this must never be used as the trust signal.
@@ -3581,6 +3588,8 @@ def inspect(
             narrative[str(rel)] = False  # missing — init.sh WILL seed it
             narrative_missing.append(str(rel))
 
+    lite_backlog = _lite_backlog(root, config) if profile == "lite" else None
+
     raw_version = get(config, "kit.version", None)
     raw_manifest_version = manifest.get("kit_version")
     # A trusted baseline with no `profile` key was recorded as full. Trust is
@@ -3631,6 +3640,7 @@ def inspect(
             )
         ),
         declared_scope_known=declared_scope is not None,
+        lite_backlog=lite_backlog,
         # Passed in rather than inferred from paths: `main` knows it from the
         # resolved PATHS, which this function does not see.
         #
@@ -3988,6 +3998,19 @@ def render(report: Report) -> str:
         else:
             unrendered = "still an unrendered template — run ./init.sh"
         lines.append(f"  {'✓' if rendered else '⚠'} {doc}: " + ("in use" if rendered else unrendered))
+    if report.lite_backlog is not None:
+        value, state = report.lite_backlog
+        lines.append(
+            {
+                "present": f"  ✓ backlog: {value}",
+                "missing": f"  ⚠ backlog: {value} missing — the lite wrap-up stops until it is restored "
+                "or backlog.path is corrected",
+                "unusable": f"  ⚠ backlog: backlog.path is {value}, not a plain path inside the repository "
+                "— the lite wrap-up stops on it",
+                "wrong-shape": f"  ⚠ backlog: backlog is {value}, not a mapping with a path — the lite "
+                "wrap-up stops on it",
+            }[state]
+        )
 
     by_state: dict[str, list[FileStatus]] = {}
     for f in report.files:
@@ -5009,6 +5032,35 @@ def _lite_load_config(root: Path) -> dict:
             f"profile: {profile} — this is not a lite install; follow upgrade.md's Steps 1-6"
         )
     return config
+
+
+def _lite_backlog(root: Path, config: dict) -> tuple[str, str] | None:
+    """`backlog.path` on a lite repository, and whether the file is there (#1399).
+
+    `unusable` follows `lite-wrap-up.md`'s stop on the key: a path the lite
+    `session-start`'s *Backlog* block could not read as written. `wrong-shape` is a
+    `backlog` that is not a mapping, the wrap-up's wrong-shape stop.
+    """
+    if "backlog" not in config or config["backlog"] is None:
+        return None
+    section = config["backlog"]
+    if not isinstance(section, dict):
+        return (repr(section), "wrong-shape")
+    if "path" not in section:
+        return None
+    value = section["path"]
+    if not isinstance(value, str):
+        return (repr(value), "unusable")
+    rel = value.strip()
+    if (
+        not rel
+        or rel.startswith("/")
+        or "'" in rel
+        or ".." in Path(rel).parts
+        or (rel.startswith("<") and rel.endswith(">"))
+    ):
+        return (repr(value), "unusable")
+    return (rel, "present" if (root / rel).is_file() else "missing")
 
 
 def _lite_schema_stop(config: dict, kit_manifest: dict) -> str | None:
