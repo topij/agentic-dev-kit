@@ -37,7 +37,11 @@ KIT_PARTS = (
     "scripts/kit_doctor.py",
     "scripts/lib",
     "docs/agentic-dev-kit/lite",
-    "docs/agentic-dev-kit/workflows/adopt.md",
+    # The full workflows and skill bindings: U5's adapter check renders from them,
+    # as `--adapter-report --adapter-source <kit>` does (#1419).
+    "docs/agentic-dev-kit/workflows",
+    ".claude/skills",
+    ".agents/skills",
 )
 
 
@@ -73,7 +77,13 @@ def _env(home: Path) -> dict[str, str]:
 
 
 def _git(cwd: Path, env: dict[str, str], *args: str) -> str:
-    done = subprocess.run(["git", *args], cwd=cwd, env=env, check=True, capture_output=True, text=True)
+    if args[0] == "clone":
+        # Copy objects rather than hardlink them, as the kit block's clone over
+        # https does: a hardlinked local clone was seen missing objects under a
+        # sandboxed temp directory once the fixture kit carried the skill trees.
+        args = ("clone", "--no-local", *args[1:])
+    done = subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True)
+    assert done.returncode == 0, (args, done.stderr)
     return done.stdout.strip()
 
 
@@ -330,9 +340,88 @@ def test_a_working_tree_record_left_by_an_abandoned_attempt_is_not_read(
     plan = _plan(kit, repo, env)
     assert plan["baseline"]["working_tree_differs"] is True
     assert plan["kept"] == list(kept) and plan["record"] == "owed"
+    # A record that is not U4's for this kit keeps its warning (#1416).
+    text = _read(kit, repo, env, json_out=False)
+    assert "an uncommitted or abandoned record" in text.stdout
     done = _apply(kit, repo, env)
     assert done.returncode == 0, done.stdout + done.stderr
     assert f"kept: {kept[0]}" in done.stdout
+
+
+def _pinned(kit: Path, repo: Path, env: dict[str, str], *, json_out: bool = False):
+    """U5: U2's read with the commit U4 applied pinned."""
+    head = _git(kit, env, "rev-parse", "HEAD")
+    args = ["--upgrade-lite", "--root", str(repo), "--branch", "main", "--kit-commit", head]
+    return _doctor(kit, env, *args, *(["--json"] if json_out else []))
+
+
+def test_u5_after_a_successful_u4_verifies_the_install_and_calls_nothing_abandoned(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """U5 runs adopt.md L5 itself (#1419), and U4's own record is not a warning (#1416)."""
+    kept = (".agents/skills/review/SKILL.md",)
+    repo, env = _install(tmp_path, kit_upstream, keep=kept)
+    before = _plan(kit, repo, env)
+    assert before["verify"] == {"ran": False, "lines": []}
+    assert _apply(kit, repo, env).returncode == 0
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "abandoned" not in done.stdout
+    assert f"record: recorded in the working tree for kit {kit_upstream['head'][:12]}" in done.stdout
+    assert _has_line(done, "verify (L5): intact for this adoption — lite install: ")
+    assert _has_line(done, "verify (L5): adapters as L5 expects: ")
+    assert "1 adopter-owned and kept" in done.stdout
+    plan = json.loads(_pinned(kit, repo, env, json_out=True).stdout)
+    assert plan["verify"]["ran"] is True and plan["stops"] == []
+
+
+def test_u5_stops_when_the_install_is_not_intact_after_u4(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _apply(kit, repo, env).returncode == 0
+    (repo / DOCS[0]).unlink()
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 1, done.stdout
+    assert _has_line(done, "verify (L5): NOT intact: ")
+    assert f"stop: verify (L5): {DOCS[0]} is removed against the record U4 wrote" in done.stdout
+    assert not _has_line(done, "apply (U4):")
+
+
+def test_u5_passes_a_skill_the_operator_left_absent(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """`--leave-absent` is a settled outcome: the file reads `declined` and its
+    binding `missing`, and neither is an L5 failure."""
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _apply(kit, repo, env).returncode == 0
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "upgrade")
+    skill = ".claude/skills/review/SKILL.md"
+    (repo / skill).unlink()
+    _git(repo, env, "commit", "-qam", "drop one")
+    assert _apply(kit, repo, env, "--leave-absent", skill).returncode == 0
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 0, done.stdout
+    assert _has_line(done, "verify (L5): intact for this adoption — lite install: 1 declined")
+    assert _has_line(done, "verify (L5): adapters as L5 expects: ")
+
+
+def test_u5_stops_on_a_binding_the_record_does_not_keep(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """A lite skill that is not the kit's render, and not kept, is no L5 pass even
+    when the record would pass: a full binding written over a lite one after U4."""
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _apply(kit, repo, env).returncode == 0
+    skill = ".claude/skills/session-start/SKILL.md"
+    full = REPO_ROOT / skill
+    assert full.is_file(), skill
+    shutil.copy2(full, repo / skill)
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 1, done.stdout
+    assert _has_line(done, "verify (L5): adapters NOT as L5 expects: ")
+    assert f"stop: verify (L5): adapter {skill} is profile-mismatch" in done.stdout
 
 
 def test_owes_the_record_until_the_committed_baseline_names_the_kit(
@@ -1203,6 +1292,11 @@ def test_every_flag_the_lite_section_names_is_one_the_engine_takes(tmp_path: Pat
         "kept skills",
         "AGENTS.md section:",
         "baseline (committed):",
+        "verify (L5):",
+        "intact for this adoption — lite install",
+        "as L5 expects",
+        "nothing to do:",
+        "unchanged against HEAD",
     ],
 )
 def test_each_output_the_lite_section_quotes_is_one_the_engine_prints(phrase: str) -> None:
