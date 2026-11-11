@@ -29,7 +29,8 @@ direct commits, and the commit goes to the branch checked out without asking. A
 repository whose branch takes changes only through pull requests must set the key;
 `adopt` asks for it. `<backlog>` is `backlog.path` when set: the repository's own story
 backlog, which the block in the lite `session-start`'s *Backlog* section reads, key and
-file both. Absent or null, there is no backlog, and every step below that names it is
+file both. Absent or null, there is no backlog: step 1 still runs that block, which
+then prints `backlog: not configured`, and every other step that names `<backlog>` is
 skipped.
 
 Read `vcs.protected_branch` from **every copy** of the config, not only the working

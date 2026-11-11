@@ -34,4 +34,7 @@ backlog:
   path: docs/STORIES.md
 ```
 
-and commit it. Without the key the lite workflows behave as before.
+and commit it. Without the key, the lite workflows report no backlog and draw the next
+step from the plan, as before. The block still runs every session, so a machine whose
+`awk` cannot read the config gets an `unavailable:` line: a 🔴 Now item in the
+`session-start`, and a hard stop in the `wrap-up`.

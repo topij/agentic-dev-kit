@@ -715,6 +715,9 @@ def test_backlog_block_says_not_configured_without_a_path(tmp_path: Path, backlo
         "backlog:\n  path: docs/STORIES.md\nbacklog:\n",
         "backlog: null\n  path: docs/STORIES.md\n",
         "backlog:\tnull\n  path: docs/STORIES.md\n",
+        "backlog: null#x\n",
+        "backlog: ~#x\n",
+        "backlog:#x\n",
     ],
 )
 def test_backlog_block_stops_on_a_backlog_that_is_not_a_mapping_with_one_path(tmp_path: Path, backlog: str) -> None:
@@ -802,6 +805,8 @@ def test_backlog_block_reads_what_markdown_shows_and_skips_what_it_hides(tmp_pat
         "   ### S-7b indented three spaces\nStatus: done, shipped\n#### a sub-heading inside S-7b, not a story\n"
         "```x``` is inline code, not a fence\n### S-8b after inline code\nStatus: todo\n"
         "<!--> is an empty comment, closed on its own line\n### S-9b after an empty comment\nStatus: todo\n"
+        "<!---> is empty too, closed on its own line\n### S-9c after the other empty comment\nStatus: todo\n"
+        "~~~\n### S-0y inside\n```\n### S-0z still inside: a backtick line does not close a tilde fence\n~~~\n"
         "```text\n### S-0x inside\n``` not a closer\n```\n"
     )
     repo, env = _backlog(tmp_path, text)
@@ -819,6 +824,7 @@ def test_backlog_block_reads_what_markdown_shows_and_skips_what_it_hides(tmp_pat
         "story S-7b done -",
         "story S-8b todo -",
         "story S-9b todo -",
+        "story S-9c todo -",
     ]
     assert problems == ["problem S-3 depends on itself", 'problem S-6b unknown status "finished"']
     assert [ln.split()[1] for ln in result.stdout.splitlines() if ln.startswith("blocked ")] == ["S-4", "S-5"]

@@ -35,9 +35,10 @@ Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
 The lite `wrap-up` reads `vcs.protected_branch` from every copy of the config
 (committed, staged and working tree), and refuses to start when a copy holds a key
 outside the lite config schema, a key twice or a section of the wrong shape, names an
-unusable branch or a `backlog` its *Backlog* block reports `unusable:`, or names a
-different branch from another copy. Its *Read the configuration* lists the schema and
-the reads. Check every copy the same way here. Report each such stop as a 🔴 Now item
+unusable branch, or names a different branch from another copy. Its *Read the
+configuration* lists the schema and the reads. Check every copy the same way here. It
+also stops on a `backlog` the *Backlog* block below reports `unusable:`; that block
+reads the working tree's copy only, so judge `backlog` there. Report each such stop as a 🔴 Now item
 to fix by the way out that section names. When the copies disagree on whether a
 protected branch is named, say so.
 
@@ -120,10 +121,13 @@ in the format of the bama `user-stories` skill, the first one this read was writ
 
 The key has one declared form: a top-level line `backlog:` followed by one line
 indented with spaces, `path: <path>`, which may be quoted and may carry a trailing
-`# comment`. `backlog:` alone, `backlog: null` or `backlog: ~`, or no `backlog` key,
-means no backlog. Any other spelling is `unusable:`, a flow mapping (`backlog: {path:
-…}`) and a quoted or spaced key among them: the block reads the config as text, and
-it is the only reader of the key. The path is plain: ASCII letters, digits,
+`# comment` after a blank. `backlog:` alone, `backlog: null` or `backlog: ~`, or no
+`backlog` key, means no backlog. Any other spelling is `unusable:`, a flow mapping
+(`backlog: {path: …}`), a quoted or spaced key and `backlog: null#x` (YAML reads a `#`
+with no blank before it as part of the value) among them. The block reads the config
+as text, and it is the only parser of the key: the lite `wrap-up` uses the path, to
+stage the backlog and to compare it with the plan's and the friction log's paths, only
+once the block has accepted it. The path is plain: ASCII letters, digits,
 `.`, `_`, `/` and `-`, relative, with no leading `-` and no empty, `.` or `..`
 component, naming a regular file that is not a symbolic link and whose directory
 resolves inside the repository.
@@ -149,9 +153,8 @@ command, and it judges the key and the path by the rules above:
     /^[^ \t#\r]/ { inside = 0 }
     /^["\047]?backlog["\047]?[ \t]*:/ {
       sections++; inside = 1
-      if ($0 ~ /^backlog:[ \t]*(null|Null|NULL|~)?[ \t]*(#.*)?\r?$/) {
-        v = $0; sub(/^backlog:[ \t]*/, "", v); sub(/[ \t]*(#.*)?\r?$/, "", v)
-        if (v != "") empty = 1
+      if ($0 ~ /^backlog:([ \t]+(null|Null|NULL|~))?([ \t]+#.*)?[ \t]*\r?$/) {
+        if ($0 ~ /^backlog:[ \t]+(null|Null|NULL|~)([ \t]|\r?$)/) empty = 1
       } else wrong = 1
       next
     }
