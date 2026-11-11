@@ -112,8 +112,9 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 ```
 
-The path depends only on this checkout and its task branch, so the block is safe to re-run
-from any shell or session: it finds this task's clone again instead of making another,
+The path depends only on the checkout the block runs in and the branch checked out there,
+which here is the task worktree and its task branch, so the block is safe to re-run from
+any shell or session: it finds this task's clone again instead of making another,
 which matters once Step 3 has copied from it. That is also what a command's `${KIT:?…}`
 guard tells you to do when `KIT` is unset. A clone it finds must still be a clean clone of
 `KIT_URL`: its `origin` is `KIT_URL`, and `git status` shows no change to a tracked file
@@ -125,9 +126,11 @@ marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone:
 stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any of these
 happened in the clone, delete `$KIT` and re-run the block. It writes into the git
 directory, so a sandbox that allows writes only inside the working tree needs to allow
-this one. No other task's checkout or branch reaches the path, and removing the task
-worktree removes the clone with it. In a long-lived checkout, such as the primary one,
-delete `$KIT` once the upgrade has landed.
+this one. No other task's checkout or branch reaches the path, and when the block ran in
+the task worktree, removing that worktree removes the clone with it. A clone made in a
+long-lived checkout, such as the primary one, stays until it is deleted: delete `$KIT`
+once the upgrade has landed. The *Lite profile* runs this block before any worktree is
+made, so its clone is always of that kind; its U1 and U6 say where it is and when it goes.
 
 Everything below copies **from** that checkout **into** this repo — **two trees, and
 from here every write must name which one.** Bind both roots now, before the first
@@ -1230,7 +1233,11 @@ and before anything else. The configuration rules this upgrade applies are the
 **fetched** kit's: the repository's installed copy of the lite workflows is the one
 being upgraded, and an older one lacks rules a newer one stops on. The kit block
 writes only its clone, inside the git directory, and prints `KIT=<path> at <sha>`:
-that path is **the kit** for the rest of the upgrade. Run every command below from it,
+that path is **the kit** for the rest of the upgrade. The clone is
+`<git-dir>/agentic-dev-kit/<branch>` of the checkout you ran it in, keyed to the branch
+checked out there. On a repository with a protected branch that is normally the primary
+checkout on `<protected-branch>`, not the task worktree selected below, so removing
+that worktree leaves the clone in place: U6 deletes it by its path. Run every command below from it,
 never from another clone. `--upgrade-lite` refuses a clone that is not clean, and U2's
 read refuses one that is not at its origin's HEAD (#1405): when it does, delete the
 clone and run the kit block again, from this same checkout.
@@ -1245,7 +1252,16 @@ that section reads:
 
 - **Named** → run *Select the task worktree* above, with `UPGRADE_BASE` set to that
   branch. A reused worktree whose branch is `<protected-branch>` is refused: stop. U6
-  opens a pull request.
+  opens a pull request. A lite repository usually names a branch only for its
+  wrap-up, and configures no worktree location or scratch roots. When it names none,
+  and the operator names none, `UPGRADE_BRANCH` is `chore/kit-upgrade-<sha>` and
+  `UPGRADE_WORKTREE` is `<checkout>-kit-upgrade-<sha>`, beside the checkout, where
+  `<checkout>` is the checkout's absolute path and `<sha>` the short commit the kit
+  block printed. The kit commit is the unique suffix; a date alone is not. On lite the
+  roots to stay outside are every checkout of this repository and the system temp
+  directory; when the checkout itself is under the system temp directory, the default
+  is too, so ask the operator for a path. When the default branch or path already exists, a previous attempt left
+  it: settle it with the operator, never by deleting it.
 - **Absent from every copy** → the repository takes direct commits. The upgrade
   commits to the branch checked out, in the checkout in use, unless the operator names
   another branch or asks for a task worktree.
@@ -1382,14 +1398,15 @@ read. Then, in order, and nothing is written until each step before it passed:
 
 It prints `kept:`, `left absent:`, `recorded:`, and a `stage:` line for each path U6
 stages. When the taken files and the record all equal the committed ones, it prints
-`unchanged against HEAD` instead of `stage:` lines, and U6 has nothing to commit. Every run starts from the committed baseline, so after any refusal settle it
-with the operator and run the same command again. Never remove a symlink, a directory
-or a command yourself. Then make the config changes and section edits U3 approved by
-hand, and verify with `adopt.md`'s *Lite profile* L5, both commands, from the kit:
-read the result as L5 says.
+`unchanged against HEAD` instead of `stage:` lines: U6 stages none of them, and
+commits only U3's config and `AGENTS.md` edits, if there are any. When the committed
+baseline already names the kit and no row needs anything, it prints `nothing to do:`
+and writes nothing. Every run starts from the committed baseline, so after any refusal
+settle it with the operator and run the same command again. Never remove a symlink, a
+directory or a command yourself. Then make the config changes and section edits U3
+approved by hand. U5 verifies all of it.
 
-Done when the command exited 0, and L5's first command exits 0 and prints
-`intact for this adoption — lite install`, with `declined` only for kept skills.
+Done when the command exited 0.
 
 ### U5 — Check before the commit
 
@@ -1398,19 +1415,47 @@ pins that commit in place of U2's freshness check, so a kit origin that moved si
 is named in a `note:` rather than refused. It repeats the write-target check on the
 checkout U6 commits in, and must exit 0 and print
 `record: recorded in the working tree`, or `record: not owed` after a U4 that printed
-`unchanged against HEAD`. Its rows still read the committed baseline, so a row U4
-settled with `--leave-absent` still reads `decide` until U6 commits.
+`unchanged against HEAD` or `nothing to do:`. Its rows still read the committed
+baseline, so a row U4 settled with `--leave-absent` still reads `decide` until U6
+commits.
+
+It also runs `adopt.md`'s *Lite profile* L5 itself, with the kit and the record that
+names it, after U3's hand edits (#1419). Its two `verify (L5):` lines are the install,
+which must read `intact for this adoption — lite install`, and the skill bindings,
+which must read `as L5 expects`. A kept skill must be on disk; any other `declined`
+file must not be, and the install line names it, so check each one named is the
+Claude skill a kept command replaced or a file U3 left absent. Anything else, and any
+binding that is neither the kit's render, a kept skill, nor a kept command and the
+Claude skill it replaced, is a
+`stop: verify (L5):` line and exit 1. So is a U5 that cannot run L5 because U4 has
+not recorded for this kit, which names why. Settle each with the operator, then
+re-run U4 and U5.
+
+Done when it exited 0 and printed both `verify (L5):` lines.
 
 ### U6 — Commit and hand off
 
-Stage by name every `stage:` path U4 printed, and each config or `AGENTS.md` edit U3
+When U4 printed `nothing to do:` or `unchanged against HEAD` and U3 approved no config
+or `AGENTS.md` edit, there is nothing to commit and no pull request. Remove the task
+worktree and branch U1 made, if it made one, delete the kit clone now, and go on to
+the report below. Otherwise, stage by name every `stage:` path U4 printed, and each config or `AGENTS.md` edit U3
 approved. Run the lite `review` workflow on the staged change, as the lite `AGENTS.md`
 section requires before a commit, and settle what it finds. Commit on U1's branch,
 which is never `<protected-branch>`. When `vcs.protected_branch` is set, push and open
-a ready pull request from the task branch and leave the merge to the operator. Delete
-the kit clone once the commit has landed. Report the kit commit before and after, what
-was taken, kept and settled, and the changelog entries that concern this repository.
-Record friction the upgrade surfaced in the repository's friction inbox
-(`paths.friction_log`), and report a kit-side fault upstream.
+a ready pull request from the task branch and leave the merge to the operator.
+
+The upgrade's commit records the upgrade, so U6 adds nothing to the living plan for
+it; the lite `wrap-up` decides whether anything is left to hand over. A plan line the
+upgrade made false, such as one naming the kit commit, is the kind of doc line
+`review` finds: correct it in the upgrade commit.
+
+Delete the kit clone, by the path U1 wrote down, once the upgrade has landed: after the
+pull request merges, since a review fix may need U4 and U5 again, or after the commit
+when there is no pull request. A session that ends before the merge names the clone's
+path in its report, so whoever finishes the upgrade deletes it. Report the kit commit before and after, what was taken,
+kept and settled, and the changelog entries that concern this repository. Record
+repository-side friction the upgrade surfaced in the friction inbox
+(`paths.friction_log`). Send a kit-side fault one way: file it upstream, or put it in
+the inbox for `wrap-up` to send on, not both.
 A move from lite to the full profile is not this workflow: its path is not written yet
 (#1320).

@@ -4772,22 +4772,115 @@ def _lite_take_refusals(root: Path, rows: list[LiteRow]) -> list[str]:
             refusals.append(f"{blocker} is not a directory, so {dst} cannot be written")
         elif refusal := _lite_target_refusal(dst):
             refusals.append(refusal)
-        else:
-            # A Claude skill would silently shadow a command of the same name,
-            # including a dangling symlink there. Only the Claude runtime has
-            # commands: a Codex skill beside one is not shadowed.
-            claude = {
-                local: rel for rel, local in LITE_ADAPTER_INSTALL_PATHS.items()
-                if rel.split("/")[-3] == "claude"
-            }
-            if row.path in claude:
-                slug = row.path.split("/")[-2]
-                command = root / ".claude" / "commands" / f"{slug}.md"
-                if command.exists() or command.is_symlink():
-                    refusals.append(f"{command} would be shadowed by {dst}")
+        elif command := _lite_shadowing_command(root, row.path):
+            # A Claude skill would silently shadow a command of the same name.
+            refusals.append(f"{command} would be shadowed by {dst}")
     if refusal := _lite_target_refusal(root / MANIFEST_NAME):
         refusals.append(f"{refusal}, so the baseline cannot be recorded")
     return refusals
+
+
+def _lite_shadowing_command(root: Path, path: str) -> Path | None:
+    """The `.claude/commands/<slug>.md` a lite Claude skill at `path` would shadow, or None.
+
+    A dangling symlink there counts. Only the Claude runtime has commands: a Codex
+    skill beside one is not shadowed.
+    """
+    claude = {local for rel, local in LITE_ADAPTER_INSTALL_PATHS.items() if rel.split("/")[-3] == "claude"}
+    if path not in claude:
+        return None
+    command = root / ".claude" / "commands" / f"{path.split('/')[-2]}.md"
+    return command if command.exists() or command.is_symlink() else None
+
+
+# The file states the main report's exit code counts (`Report.drifted`, `Report.broken`).
+_REPORT_FAILING_STATES = frozenset(
+    {"differs", "stale", "locally-edited", "stale-and-edited", "unknown-version", "missing-required", "removed"}
+)
+
+
+def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record: dict) -> tuple[list[str], list[str]]:
+    """adopt.md's *Lite profile* L5, in process, once U4 has recorded (#1419).
+
+    L5's two commands read `KIT` and `REPO` from the shell, which a fresh shell per
+    command does not carry. U5 runs this instead, and makes the judgement L5 leaves
+    to its reader. As in L5's own command, each file's state is judged against the
+    kit's manifest and the disk; the record supplies the profile and which skills
+    are kept and which files declined. The install must read as a lite install
+    with no file state the main report's exit code counts. A kept skill must be on
+    disk. Any other `declined` lite file must not be: the Claude skill L3 skipped
+    for a kept command, or a file the operator left absent, each named on the
+    summary line. Each lite binding must be `kit-current`, `adopter-owned` where
+    the record keeps it or where it is a kept command or the Claude skill that
+    command replaced, or `missing` where its file is declined and absent.
+    Returns the lines to print and the stops.
+    """
+    from runtime_adapters import compare_adapters
+
+    lines: list[str] = []
+    stops: list[str] = []
+    report = inspect(root, kit_manifest, config, record)
+    raw_kept = record.get("kept") if isinstance(record.get("kept"), list) else []
+    kept = {LITE_ADAPTER_INSTALL_PATHS[k] for k in raw_kept if isinstance(k, str) and k in LITE_ADAPTER_INSTALL_PATHS}
+    lite = set(_lite_paths(config))
+    if report.baseline_profile_mismatch is not None:
+        stops.append(f"the record U4 wrote reads {report.baseline_profile_mismatch}, not lite")
+    counts: dict[str, int] = {}
+    absent_by_decision: set[str] = set()
+    settle = "settle it with the operator, then re-run U4"
+    for f in report.files:
+        if f.path not in lite:
+            if f.state in _REPORT_FAILING_STATES:
+                stops.append(f"{f.path} is {f.state}, outside the lite profile — {settle}")
+            continue
+        counts[f.state] = counts.get(f.state, 0) + 1
+        if f.state == "unchanged":
+            continue
+        on_disk = (root / f.path).exists() or (root / f.path).is_symlink()
+        if f.state == "declined" and f.path in kept:
+            if not on_disk:
+                stops.append(f"{f.path} is kept by the record but not on disk — {settle}")
+            continue
+        if f.state == "declined" and not on_disk:
+            absent_by_decision.add(f.path)
+            continue
+        why = "declined, on disk and not kept" if f.state == "declined" else f.state
+        stops.append(f"{f.path} is {why} — {settle}")
+    for r in report.dead_registrations:
+        stops.append(f"the {r.runtime} registration {r.surface} is {r.state}")
+    summary = ", ".join(f"{n} {state}" for state, n in sorted(counts.items())) or "no lite file"
+    if absent_by_decision:
+        summary += f" (not on disk: {', '.join(sorted(absent_by_decision))})"
+    lines.append(f"verify (L5): {'NOT intact' if stops else 'intact for this adoption — lite install'}: {summary}")
+    try:
+        adapters = compare_adapters(kit, root, profile="lite")
+    except ValueError as exc:
+        stops.append(f"the adapter report refused: {exc}")
+        return lines, stops
+    bad: list[str] = []
+    # A kept `.claude/commands/<slug>.md` in place of the lite Claude skill L3
+    # skipped for it (#1365): the command and the absent skill both read
+    # `adopter-owned`, and L5 accepts both.
+    kept_commands: set[str] = set()
+    for path in absent_by_decision:
+        if command := _lite_shadowing_command(root, path):
+            kept_commands |= {path, command.relative_to(root).as_posix()}
+    owned_ok = kept | kept_commands
+    for status in adapters:
+        if status.state in ("kit-current", "outside-profile"):
+            continue
+        if status.state == "adopter-owned" and status.path in owned_ok:
+            continue
+        if status.state == "missing" and status.path in absent_by_decision:
+            continue
+        bad.append(f"adapter {status.path} is {status.state} ({status.detail})")
+    current = sum(1 for s in adapters if s.state == "kit-current")
+    owned = sum(1 for s in adapters if s.state == "adopter-owned" and s.path in owned_ok)
+    lines.append(
+        f"verify (L5): adapters {'NOT as L5 expects' if bad else 'as L5 expects'}: {current} kit-current"
+        + (f", {owned} adopter-owned and kept" if owned else "")
+    )
+    return lines, stops + bad
 
 
 def _lite_bullets(lines: list[str]) -> list[str]:
@@ -5047,6 +5140,30 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
             say(note)
         return _lite_apply(root, kit, config, kit_manifest, head, rows, owed or bool(keep or leave), stops, say)
 
+    # adopt.md L5, once U4 has nothing left to do: its record is waiting for U6,
+    # or the committed one names the kit and every row is settled. Before that
+    # the install is the older kit's, or holds a decision U4 has yet to make,
+    # and L5 against this kit would rightly fail (#1419).
+    verify_lines: list[str] = []
+    settled = all(r.action in ("none", "keep") for r in rows)
+    verify_record = working if recorded_here else (baseline if settled and not owed and not uncommitted else None)
+    if verify_record is not None:
+        try:
+            verify_lines, verify_stops = _lite_verify(root, kit, config, kit_manifest, verify_record)
+        except OSError as exc:
+            raise LiteUpgradeStop(f"cannot verify the install: {exc}") from exc
+        stops += [f"verify (L5): {s}" for s in verify_stops]
+    elif kit_commit is not None:
+        # A pinned read is U5, and U5's exit 0 means L5 passed: one that could
+        # not run it says why rather than exiting 0 without it.
+        if uncommitted and not recorded_here:
+            why = "the working tree holds a record that is not U4's for this kit"
+        elif owed:
+            why = "the working tree holds no record for this kit — run U4"
+        else:
+            why = "a row still needs U4"
+        stops.append(f"verify (L5): not run — {why}")
+
     agents = _lite_agents_section(root, kit)
     changelog = _lite_changelog(kit, head, baseline_commit)
     date = _git_run(kit, "log", "-1", "--format=%cs", head).stdout.strip()
@@ -5074,6 +5191,7 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
             "kept": sorted(LITE_ADAPTER_INSTALL_PATHS[k] for k in kept_committed),
             "agents_section": agents,
             "changelog": changelog,
+            "verify": {"ran": verify_record is not None, "lines": verify_lines},
             "stops": stops,
             "apply": apply_command,
         }, indent=1))
@@ -5095,13 +5213,19 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
         say(f"baseline (committed): installed from kit {baseline_commit[:12]}")
     else:
         say("baseline (committed): recorded, install provenance unknown — the record is owed")
-    if uncommitted:
+    if uncommitted and not recorded_here:
+        # Only for a record that is not U4's for this kit: on the expected path
+        # the record line below says what it is, and "abandoned" read as a
+        # warning beside it (#1416).
         say(
             f"  note: the working tree's {MANIFEST_NAME} is not the committed one — an "
             "uncommitted or abandoned record; everything here reads the committed one"
         )
     if recorded_here:
-        say(f"record: recorded in the working tree for kit {head[:12]}, not committed yet — U6 commits it")
+        say(
+            f"record: recorded in the working tree for kit {head[:12]}, not committed yet — U6 commits it; "
+            "the rows read the committed baseline"
+        )
     elif owed:
         say(
             f"record: owed — the committed baseline names {baseline_commit[:12] if baseline_commit else 'no commit'}, "
@@ -5150,6 +5274,8 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
             say("  none — no commit in range changed changelog.d/")
     for warning in changelog["warnings"]:
         say(f"  ⚠ changelog: {warning}")
+    for line in verify_lines:
+        say(line)
     for stop in stops:
         say(f"stop: {stop}")
     if not stops:
@@ -5272,7 +5398,10 @@ def _lite_apply(root, kit, config, kit_manifest, head, rows, owed, stops, say) -
         # A take that restored the committed bytes, under a baseline that already
         # named the kit: U5's `recorded in the working tree` cannot appear, and U6
         # has nothing to commit.
-        say("unchanged against HEAD: the taken files and the record equal the committed ones — nothing for U6 to commit")
+        say(
+            "unchanged against HEAD: the taken files and the record equal the committed ones — "
+            "nothing of these for U6 to stage; U3's config and AGENTS.md edits still go in its commit"
+        )
         return 0
     for path in [*taken, MANIFEST_NAME]:
         say(f"stage: {path}")
