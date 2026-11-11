@@ -6,7 +6,9 @@ repository's own story backlog, in the format of the bama `user-stories` skill: 
 `doing`, `done` or `dropped`, and an optional `Depends:` line. The lite schema in
 `lite-wrap-up.md` now lists it. It has one declared form, a `backlog:` line and an
 indented `path:` line; `backlog:` alone, `null` or `~` means none, and any other
-spelling, a flow mapping among them, is refused.
+spelling, a flow mapping among them, is refused. One gap: a `- path:` sequence item,
+a `path:` key or a `? path` key written unindented under `backlog:` ends the section
+and reads as no backlog, not as refused (#1368).
 
 ADDED: the lite `session-start` runs a block in its new *Backlog* section that reads
 `backlog.path` from the config itself and then the backlog. It reports the plan and the

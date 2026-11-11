@@ -700,6 +700,25 @@ def test_backlog_block_says_not_configured_without_a_path(tmp_path: Path, backlo
 @pytest.mark.parametrize(
     "backlog",
     [
+        "backlog:\n- path: docs/STORIES.md\n",
+        "backlog:\npath: docs/STORIES.md\n",
+        "backlog:\n? path\n: docs/STORIES.md\n",
+    ],
+)
+def test_backlog_block_reads_an_unindented_line_under_backlog_as_not_configured(tmp_path: Path, backlog: str) -> None:
+    """The gap *Backlog* names: a column-0 line ends the section. #1368's validator is to refuse these."""
+    repo, env = _backlog(tmp_path, BACKLOG)
+    _config(repo, backlog)
+    result = _run("sh", _backlog_block(), repo, env)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "backlog: not configured\n"
+
+
+@pytest.mark.parametrize(
+    "backlog",
+    [
+        "backlog:\n  - path: docs/STORIES.md\n",
+        "backlog:\n  ? path\n  : docs/STORIES.md\n",
         "backlog: docs/STORIES.md\n",
         "backlog:\n  path: docs/STORIES.md\n  extra: 1\n",
         "backlog:\n  path: docs/STORIES.md\n  path: docs/OTHER.md\n",

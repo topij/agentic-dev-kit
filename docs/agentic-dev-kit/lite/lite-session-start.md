@@ -125,9 +125,12 @@ indented with spaces, `path: <path>`, which may be quoted and may carry a traili
 `backlog` key, means no backlog. Any other spelling is `unusable:`, a flow mapping
 (`backlog: {path: …}`), a quoted or spaced key, `backlog: null#x` (YAML reads a `#`
 with no blank before it as part of the value) and `backlog:null` with no blank among
-them. The block reads the config as text, and it alone judges the key's form and its
-path; the lite `wrap-up`'s schema stop also reads `backlog.path`, in every copy, for a
-key outside the schema or given twice. The path is plain: ASCII letters, digits,
+them. One gap remains: a line in column 0 ends the section, so a `- path:` sequence
+item, a `path:` key or a `? path` key written unindented under `backlog:` reads as no
+backlog (`backlog: not configured`), not as `unusable:`. #1368's proposed lite config
+validator is to catch it. The block reads the config as text, and it alone judges the
+key's form and its path; the lite `wrap-up`'s schema stop also reads `backlog.path`, in
+every copy, for a key outside the schema or given twice. The path is plain: ASCII letters, digits,
 `.`, `_`, `/` and `-`, relative, with no leading `-` and no empty, `.` or `..`
 component, naming a regular file that is not a symbolic link and whose directory
 resolves inside the repository.
