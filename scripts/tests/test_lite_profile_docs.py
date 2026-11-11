@@ -1183,9 +1183,13 @@ def test_no_adopt_lite_block_reads_a_variable_an_earlier_command_set() -> None:
     assert "${KIT:?" not in section and "${REPO:?" not in section
     for block in blocks[1:]:
         assert "$" not in block, block
-        assert block.startswith("uv run <kit>/scripts/kit_doctor.py "), block
-    assert "--root <root>" in blocks[1] and "--from-kit <kit>" in blocks[1]
-    assert blocks[2].strip() == "uv run <kit>/scripts/kit_doctor.py --verify-lite --from-kit <kit> --root <root>"
+        # Quoted, so a path with a blank stays one word.
+        assert block.startswith("uv run '<kit>/scripts/kit_doctor.py' "), block
+    assert "--root '<root>'" in blocks[1] and "--from-kit '<kit>'" in blocks[1]
+    assert blocks[2].strip() == (
+        "uv run '<kit>/scripts/kit_doctor.py' --verify-lite --from-kit '<kit>' --root '<root>'"
+    )
+    assert re.search(r"<(?:kit|root)>", re.sub(r"'<(?:kit|root)>[^']*'", "", "".join(blocks[1:]))) is None
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
@@ -1353,14 +1357,86 @@ def test_verify_lite_refuses_without_a_record_l4_wrote_from_this_kit(tmp_path: P
         (["--verify-lite", "--root", "/abs"], "requires --from-kit and --root"),
         (["--verify-lite", "--from-kit", str(REPO_ROOT), "--root", "rel"], "absolute --root"),
         (["--verify-lite", "--from-kit", "rel", "--root", "/abs"], "absolute --from-kit"),
-        (["--verify-lite", "--from-kit", str(REPO_ROOT), "--root", "/abs", "--json"], "cannot be combined"),
-        (["--verify-lite", "--from-kit", str(REPO_ROOT), "--root", "/abs", "--branch", "main"], "cannot be combined"),
     ],
 )
 def test_verify_lite_usage(tmp_path: Path, args: list[str], message: str) -> None:
     result = _doctor(*args, env=_git_env(tmp_path))
     assert result.returncode == 2
     assert message in result.stderr
+
+
+# Every other mode and option: --verify-lite combines with none of them, so none is
+# silently ignored.
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--json"],
+        ["--generate-manifest"],
+        ["--record-install"],
+        ["--upgrade-lite"],
+        ["--keep", ".claude/skills/review/SKILL.md"],
+        ["--adapter-report"],
+        ["--adapter-source", "/abs"],
+        ["--manifest", "/abs/kit-manifest.json"],
+        ["--baseline", "/abs/kit-manifest.json"],
+        ["--branch", "main"],
+        ["--apply"],
+        ["--kit-commit", "abc1234"],
+        ["--take", "docs/agentic-dev-kit/lite/lite-review.md"],
+        ["--leave-absent", "docs/agentic-dev-kit/lite/lite-review.md"],
+    ],
+)
+def test_verify_lite_combines_with_no_other_mode(tmp_path: Path, extra: list[str]) -> None:
+    args = ["--verify-lite", "--from-kit", str(REPO_ROOT), "--root", "/abs", *extra]
+    result = _doctor(*args, env=_git_env(tmp_path))
+    assert result.returncode == 2
+    assert f"--verify-lite cannot be combined with {extra[0]}" in result.stderr
+
+
+def test_adopt_lite_l3_l4_l5_take_a_path_with_a_blank(tmp_path: Path) -> None:
+    """Each placeholder sits inside single quotes, so a written-out path with a
+    blank is one word (adversarial, PR 1423 F3)."""
+    spaced = tmp_path / "sp ace"
+    spaced.mkdir()
+    repo, env = _lite_installed(spaced, "sh")
+    record = subprocess.run(
+        ["sh", "-c", _fill(_adopt_lite_blocks()[1].strip(), str(repo), str(REPO_ROOT)).replace(
+            "uv run ", f"{sys.executable} ", 1
+        )],
+        cwd=repo, env=env, capture_output=True, text=True, timeout=120,
+    )
+    assert record.returncode == 0, record.stderr
+    verify = subprocess.run(
+        ["sh", "-c", _fill(_adopt_lite_blocks()[2].strip(), str(repo), str(REPO_ROOT)).replace(
+            "uv run ", f"{sys.executable} ", 1
+        )],
+        cwd=repo, env=env, capture_output=True, text=True, timeout=120,
+    )
+    assert verify.returncode == 0, verify.stdout + verify.stderr
+    assert "as L5 expects" in verify.stdout
+
+
+def test_verify_lite_names_the_install_not_the_upgrade(tmp_path: Path) -> None:
+    """A config or record L3 or L4 got wrong points back at the install."""
+    repo, env = _lite_installed(tmp_path, "sh")
+    assert _l4(repo, env).returncode == 0
+    config = repo / "config/dev-model.yaml"
+    config.write_text(config.read_text(encoding="utf-8").replace("version: 2", "version: 1"), encoding="utf-8")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1
+    assert "L3 writes the kit's kit_version" in verify.stdout
+    assert "migration" not in verify.stdout and "U4" not in verify.stdout
+    config.write_text(config.read_text(encoding="utf-8").replace("profile: lite", "profile: full"), encoding="utf-8")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1 and verify.stdout.startswith("refused: profile: full")
+    assert "adopt.md L1" in verify.stdout and "upgrade.md" not in verify.stdout
+    config.write_text(config.read_text(encoding="utf-8").replace("profile: full", "profile: lite"), encoding="utf-8")
+    record = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    record["profile"] = "full"
+    (repo / "kit-manifest.json").write_text(json.dumps(record), encoding="utf-8")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1
+    assert "the record L4 wrote reads" in verify.stdout and "U4" not in verify.stdout
 
 
 @pytest.mark.parametrize(

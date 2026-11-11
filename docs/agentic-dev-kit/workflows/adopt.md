@@ -644,7 +644,9 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
 **No step here carries a shell variable to a later one.** An agent harness often
 starts a fresh shell for every command (#1410, #1420). Every command below names its
 inputs as absolute paths you write out: `<kit>`, the kit clone, and `<root>`, the top
-of the checkout the install is committed in. L1 writes them down; copy them from there.
+of the checkout the install is committed in. L1 writes them down; copy them from there,
+inside the single quotes each command keeps around them, so a path with a blank stays
+one word.
 
 ### L1 — Inspect (read-only)
 
@@ -826,7 +828,7 @@ When L1 found repository sources, list them after that section's bullets, under 
 ### L4 — Record the install baseline
 
 ```bash
-uv run <kit>/scripts/kit_doctor.py --record-install --from-kit <kit> --root <root>
+uv run '<kit>/scripts/kit_doctor.py' --record-install --from-kit '<kit>' --root '<root>'
 ```
 
 Add `--keep <skill path>` to it for each skill L2 kept, such as `--keep
@@ -843,7 +845,7 @@ skills alone. Re-running alone does not settle one: it stays exit 1 until then.
 ### L5 — Verify
 
 ```bash
-uv run <kit>/scripts/kit_doctor.py --verify-lite --from-kit <kit> --root <root>
+uv run '<kit>/scripts/kit_doctor.py' --verify-lite --from-kit '<kit>' --root '<root>'
 ```
 
 It writes nothing. It reads the install against the record L4 wrote from this kit, and
@@ -860,7 +862,7 @@ edited file, or keep a skill as the repository's own, then re-run L4 and L5.
 ### L6 — Commit and hand off
 
 Stage every path L3 and L4 wrote by name, and each binding the operator removed for a
-**replace**: `git -C <root> add -- <binding>` stages a tracked one's removal, and
+**replace**: `git -C '<root>' add -- <binding>` stages a tracked one's removal, and
 refuses with `did not match any files` for one Git never tracked, which leaves nothing
 to stage. Commit on the branch L2 named, or open a pull request if the repository takes
 changes that way. Delete the kit clone at `<kit>` once the commit has

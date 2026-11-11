@@ -4831,7 +4831,8 @@ def _lite_verify(
     kept = {LITE_ADAPTER_INSTALL_PATHS[k] for k in raw_kept if isinstance(k, str) and k in LITE_ADAPTER_INSTALL_PATHS}
     lite = set(_lite_paths(config))
     if report.baseline_profile_mismatch is not None:
-        stops.append(f"the record U4 wrote reads {report.baseline_profile_mismatch}, not lite")
+        step = "L4" if install else "U4"
+        stops.append(f"the record {step} wrote reads {report.baseline_profile_mismatch}, not lite")
     counts: dict[str, int] = {}
     absent_by_decision: set[str] = set()
     settle = (
@@ -5041,6 +5042,21 @@ def _lite_schema_stop(config: dict, kit_manifest: dict) -> str | None:
     return None
 
 
+def _lite_install_config(root: Path) -> dict:
+    """The config L3 wrote, read as `_lite_load_config` reads it, with refusals
+    that point at the install rather than the upgrade."""
+    try:
+        return _lite_load_config(root)
+    except LiteUpgradeStop as exc:
+        if str(exc).startswith("profile: "):
+            profile = str(exc).split(" ", 2)[1]
+            raise LiteUpgradeStop(
+                f"profile: {profile} — config/dev-model.yaml is not the lite config L3 writes: "
+                "settle it with the operator (adopt.md L1), then re-run L4"
+            ) from exc
+        raise
+
+
 def verify_lite(root: Path, kit: Path, *, out=None) -> int:
     """`--verify-lite`: adopt.md's *Lite profile* L5 after L4 (#1420).
 
@@ -5059,7 +5075,7 @@ def verify_lite(root: Path, kit: Path, *, out=None) -> int:
         head = _lite_head(kit)
         if head is None:
             raise LiteUpgradeStop(f"{kit} is not a git checkout — run Step 0's kit block and use the path it printed")
-        config = _lite_load_config(root)
+        config = _lite_install_config(root)
         try:
             kit_manifest = json.loads((kit / MANIFEST_NAME).read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -5079,8 +5095,15 @@ def verify_lite(root: Path, kit: Path, *, out=None) -> int:
         say(f"kit: {head[:12]}")
         say(f"root: {root}")
         stops: list[str] = []
-        if schema := _lite_schema_stop(config, kit_manifest):
-            stops.append(schema)
+        # At install the config is the one L3 just wrote, which takes the kit's
+        # `kit_version`: a mismatch is a mistake to correct, not a migration.
+        raw = get(config, "kit.version", None)
+        shipped = kit_manifest.get("kit_version")
+        if raw is None or _as_version(raw) is None or _as_version(raw) != _as_version(shipped):
+            stops.append(
+                f"config schema: kit.version is {raw!r}, the kit ships {shipped!r} — L3 writes the "
+                "kit's kit_version: correct config/dev-model.yaml with the operator, then re-run L4"
+            )
         try:
             lines, verify_stops = _lite_verify(root, kit, config, kit_manifest, record, install=True)
         except OSError as exc:
