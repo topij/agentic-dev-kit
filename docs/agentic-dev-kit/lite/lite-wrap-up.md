@@ -170,12 +170,12 @@ current directory.
 
    When `<backlog>` is configured, a story's status is the backlog's record, kept by
    the step below: the plan carries no copy of it. A line that restates one, in an
-   entry this session updates, is removed once the backlog agrees with it. Where they
+   entry this session updates, is removed when it agrees with the backlog. Where they
    disagree (the plan calls a story done that the backlog does not mark `done`, or the
-   other way round), show the operator both and ask which is right. Remove the plan's
-   line only once the backlog holds the status the operator named (set by the step
-   below when it does not already), and keep it when they leave it open. Never remove it on the
-   backlog's word alone: the plan may hold the correct record.
+   other way round), show the operator both and ask which is right. Keep that line
+   when you update `<handoff>`: the backlog step removes it, after the backlog holds
+   the status the operator named, and it stays when they leave it open. Never remove
+   it on the backlog's word alone: the plan may hold the correct record.
 
 1. **Update `<handoff>`** with only what the test left.
 
@@ -211,7 +211,8 @@ current directory.
    the operator in one line. A story the session added, or one it found no longer
    wanted, is changed only on the operator's word (`dropped`). So is a story whose
    status the plan disagreed with, settled above: set the status the operator named,
-   even when this session did not work on the story.
+   even when this session did not work on the story, with a note that names the
+   operator's word as what checked it (`Status: done (<date>; the operator's word)`).
 
    A story this session worked on whose status the block reported as a problem is not
    guessed at: show the operator its `problem` line and ask. Then run the block again:
@@ -219,6 +220,10 @@ current directory.
    line must read as it did, apart from a status the operator settled above. The block
    reads only those lines, so check the diff as well: no line of a story the session did
    not work on changed, apart from that status line.
+
+   Only when that check passes, remove from `<handoff>` each line the operator settled
+   above; the commit step commits it with the other record edits. A line whose backlog
+   edit failed, or that the operator left open, stays.
 
 1. **Route this session's friction**, each finding when it is found. A finding that
    has all three of a **reproduction**, a **named mechanism** and a **proposed fix** is

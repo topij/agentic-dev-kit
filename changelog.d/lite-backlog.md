@@ -18,7 +18,9 @@ plan's next step. A configured backlog it cannot read, including one with a code
 or HTML comment that never closes, is reported unavailable, with a 🔴 Now item.
 
 ADDED (gate semantics): the lite `wrap-up` sets the status of each story the session
-worked on, and records no story status in the plan. A configured backlog it cannot
+worked on, and records no story status in the plan. Where a plan line and the backlog
+disagree on a story's status, it asks the operator, sets the status they name (on any
+story), and only then removes the plan's line. A configured backlog it cannot
 read is a hard stop. So are a `backlog` outside the declared form, a `backlog.path`
 that is not a plain path inside the repository (ASCII letters, digits, `.`, `_`, `/`
 and `-`, relative, with no `.` or `..` component and no leading `-`, not a symbolic
