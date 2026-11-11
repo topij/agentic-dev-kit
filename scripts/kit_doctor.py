@@ -4811,7 +4811,8 @@ def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record
     disk. Any other `declined` lite file must not be: the Claude skill L3 skipped
     for a kept command, or a file the operator left absent, each named on the
     summary line. Each lite binding must be `kit-current`, `adopter-owned` where
-    the record keeps it, or `missing` where its file is declined and absent.
+    the record keeps it or where it is a kept command or the Claude skill that
+    command replaced, or `missing` where its file is declined and absent.
     Returns the lines to print and the stops.
     """
     from runtime_adapters import compare_adapters
@@ -4857,16 +4858,24 @@ def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record
         stops.append(f"the adapter report refused: {exc}")
         return lines, stops
     bad: list[str] = []
+    # A kept `.claude/commands/<slug>.md` in place of the lite Claude skill L3
+    # skipped for it (#1365): the command and the absent skill both read
+    # `adopter-owned`, and L5 accepts both.
+    kept_commands: set[str] = set()
+    for path in absent_by_decision:
+        if command := _lite_shadowing_command(root, path):
+            kept_commands |= {path, command.relative_to(root).as_posix()}
+    owned_ok = kept | kept_commands
     for status in adapters:
         if status.state in ("kit-current", "outside-profile"):
             continue
-        if status.state == "adopter-owned" and status.path in kept:
+        if status.state == "adopter-owned" and status.path in owned_ok:
             continue
         if status.state == "missing" and status.path in absent_by_decision:
             continue
         bad.append(f"adapter {status.path} is {status.state} ({status.detail})")
     current = sum(1 for s in adapters if s.state == "kit-current")
-    owned = sum(1 for s in adapters if s.state == "adopter-owned" and s.path in kept)
+    owned = sum(1 for s in adapters if s.state == "adopter-owned" and s.path in owned_ok)
     lines.append(
         f"verify (L5): adapters {'NOT as L5 expects' if bad else 'as L5 expects'}: {current} kit-current"
         + (f", {owned} adopter-owned and kept" if owned else "")

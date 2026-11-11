@@ -463,6 +463,25 @@ def test_u5_stops_on_each_way_the_install_is_not_what_l5_expects(
         ), (stop, done.stdout)
 
 
+def test_u5_passes_an_install_that_kept_a_command_for_its_claude_skill(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """adopt.md L3 skips the Claude skill a kept `.claude/commands/<slug>.md` would be
+    shadowed by, and L5 accepts that install: so does U5's L5 (#1365)."""
+    repo, env = _install(tmp_path, kit_upstream, without=(CLAUDE_SKILL,))
+    command = repo / ".claude/commands/review.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("Our review command.\n", encoding="utf-8")
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "our command")
+    assert _apply(kit, repo, env).returncode == 0
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 0, done.stdout
+    assert f"(not on disk: {CLAUDE_SKILL})" in done.stdout
+    assert _has_line(done, "verify (L5): adapters as L5 expects: ")
+    assert "2 adopter-owned and kept" in done.stdout
+
+
 def test_u5_does_not_exit_0_without_running_l5(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
     """A pinned read is U5: when L5 cannot run, it says why and exits 1."""
     repo, env = _install(tmp_path, kit_upstream)

@@ -6,7 +6,8 @@ working tree holds U4's record for the kit, or when the committed baseline names
 kit and every row is settled. It prints two `verify (L5):` lines, for the install and
 for the skill bindings. Each of these gives a `stop: verify (L5):` line and exit 1: a
 lite file that is not intact, a kept skill not on disk, any other `declined` file that
-is on disk, and a binding that is neither the kit's render nor a kept skill. A
+is on disk, and a binding that is neither the kit's render, a kept skill, nor a kept
+`.claude/commands/<slug>.md` and the Claude skill it replaced. A
 `declined` file not on disk is named on the install line. Before that point an
 unpinned read prints no `verify (L5):` line, and a read given `--kit-commit` (U5)
 prints `stop: verify (L5): not run — <why>` and exits 1. Under `--json` the plan has a

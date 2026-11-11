@@ -1259,7 +1259,8 @@ that section reads:
   `<checkout>` is the checkout's absolute path and `<sha>` the short commit the kit
   block printed. The kit commit is the unique suffix; a date alone is not. On lite the
   roots to stay outside are every checkout of this repository and the system temp
-  directory. When the default branch or path already exists, a previous attempt left
+  directory; when the checkout itself is under the system temp directory, the default
+  is too, so ask the operator for a path. When the default branch or path already exists, a previous attempt left
   it: settle it with the operator, never by deleting it.
 - **Absent from every copy** → the repository takes direct commits. The upgrade
   commits to the branch checked out, in the checkout in use, unless the operator names
@@ -1424,7 +1425,8 @@ which must read `intact for this adoption — lite install`, and the skill bindi
 which must read `as L5 expects`. A kept skill must be on disk; any other `declined`
 file must not be, and the install line names it, so check each one named is the
 Claude skill a kept command replaced or a file U3 left absent. Anything else, and any
-binding that is neither the kit's render nor a kept skill, is a
+binding that is neither the kit's render, a kept skill, nor a kept command and the
+Claude skill it replaced, is a
 `stop: verify (L5):` line and exit 1. So is a U5 that cannot run L5 because U4 has
 not recorded for this kit, which names why. Settle each with the operator, then
 re-run U4 and U5.
@@ -1433,7 +1435,10 @@ Done when it exited 0 and printed both `verify (L5):` lines.
 
 ### U6 — Commit and hand off
 
-Stage by name every `stage:` path U4 printed, and each config or `AGENTS.md` edit U3
+When U4 printed `nothing to do:` or `unchanged against HEAD` and U3 approved no config
+or `AGENTS.md` edit, there is nothing to commit and no pull request. Remove the task
+worktree and branch U1 made, if it made one, delete the kit clone now, and go on to
+the report below. Otherwise, stage by name every `stage:` path U4 printed, and each config or `AGENTS.md` edit U3
 approved. Run the lite `review` workflow on the staged change, as the lite `AGENTS.md`
 section requires before a commit, and settle what it finds. Commit on U1's branch,
 which is never `<protected-branch>`. When `vcs.protected_branch` is set, push and open
