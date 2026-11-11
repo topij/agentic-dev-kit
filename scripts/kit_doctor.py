@@ -4850,8 +4850,9 @@ def _lite_verify(
             continue
         on_disk = (root / f.path).exists() or (root / f.path).is_symlink()
         if f.state == "declined" and f.path in kept:
-            if not on_disk:
-                stops.append(f"{f.path} is kept by the record but not on disk — {settle}")
+            # A regular file: a directory or a dangling link in its place is no skill.
+            if not (root / f.path).is_file():
+                stops.append(f"{f.path} is kept by the record but not a file on disk — {settle}")
             continue
         if f.state == "declined" and not on_disk:
             if install and _lite_shadowing_command(root, f.path) is None:
@@ -5111,9 +5112,14 @@ def verify_lite(root: Path, kit: Path, *, out=None) -> int:
     except LiteUpgradeStop as exc:
         say(f"refused: {exc}")
         return 1
+    stops += verify_stops
+    if stops and lines:
+        # The install line says intact only for a run that exits 0.
+        lines[0] = lines[0].replace(
+            "verify (L5): intact for this adoption — lite install", "verify (L5): NOT intact", 1
+        )
     for line in lines:
         say(line)
-    stops += verify_stops
     for stop in stops:
         say(f"stop: verify (L5): {stop}")
     return 1 if stops else 0

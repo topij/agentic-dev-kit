@@ -1220,6 +1220,63 @@ def test_adopt_lite_copy_block_refuses_a_kit_path_that_is_not_the_kit(tmp_path: 
     assert not (repo / "docs").exists()
 
 
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_refuses_an_installed_adopter_as_the_kit(tmp_path: Path, shell: str) -> None:
+    """An adopter carries `kit-manifest.json` after L4, so that is no sign of the kit
+    clone: `<root>` and `<kit>` swapped is refused (adversarial, PR 1423 pass 2 F1)."""
+    (tmp_path / "a").mkdir()
+    adopter, env = _lite_installed(tmp_path / "a", shell)
+    assert _l4(adopter, env).returncode == 0
+    other, _ = _repo(tmp_path, "other")
+    result = _adopt_run(shell, other, {**env, "REPO": str(other), "KIT": str(adopter)})
+    assert result.returncode == 1
+    assert "is not the kit clone" in result.stderr
+    assert not (other / "docs").exists()
+
+
+def test_verify_lite_refuses_a_kit_that_is_not_a_checkout(tmp_path: Path) -> None:
+    repo, env = _lite_installed(tmp_path, "sh")
+    assert _l4(repo, env).returncode == 0
+    copy = tmp_path / "kit-copy"
+    copy.mkdir()
+    shutil.copy(REPO_ROOT / "kit-manifest.json", copy / "kit-manifest.json")
+    verify = _doctor("--verify-lite", "--from-kit", str(copy), "--root", str(repo), env=env)
+    assert verify.returncode == 1
+    assert verify.stdout.startswith(f"refused: {copy} is not a git checkout")
+
+
+def test_verify_lite_install_line_is_not_intact_when_any_stop_prints(tmp_path: Path) -> None:
+    """A run that exits 1 never prints the phrase L5 tells the reader to expect
+    (adversarial, PR 1423 pass 2 F3)."""
+    repo, env = _lite_installed(tmp_path, "sh")
+    assert _l4(repo, env).returncode == 0
+    config = repo / "config/dev-model.yaml"
+    config.write_text(config.read_text(encoding="utf-8").replace("version: 2", "version: 1"), encoding="utf-8")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1
+    assert "intact for this adoption" not in verify.stdout
+    assert "verify (L5): NOT intact" in verify.stdout
+
+
+@pytest.mark.parametrize("replacement", ["directory", "dangling link"])
+def test_verify_lite_stops_on_a_kept_skill_that_is_not_a_file(tmp_path: Path, replacement: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    kept = repo / ".claude/skills/review/SKILL.md"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("---\nname: review\ndescription: Ours.\n---\n\nOur review.\n", encoding="utf-8")
+    repo, env = _lite_installed_at(repo, env)
+    assert _l4(repo, env, "--keep", ".claude/skills/review/SKILL.md").returncode == 0
+    kept.unlink()
+    if replacement == "directory":
+        kept.mkdir()
+    else:
+        kept.symlink_to(tmp_path / "nowhere.md")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1, verify.stdout
+    assert ".claude/skills/review/SKILL.md is kept by the record but not a file on disk" in verify.stdout
+    assert "intact for this adoption" not in verify.stdout
+
+
 def _doc_command(block: str, root: Path) -> list[str]:
     """A one-line L4 or L5 command from the doc, filled in, run by this interpreter."""
     import shlex

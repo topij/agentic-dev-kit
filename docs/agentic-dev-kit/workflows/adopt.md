@@ -48,7 +48,8 @@ the clone once the adoption has landed.
 
 Everything below copies **from** that checkout **into** the current repo (the adopter) —
 **two trees, and from here every write must name which one.** Bind both roots now,
-before the first write, and use them for the rest of the workflow:
+before the first write, and use them for the rest of the workflow. The *Lite profile*
+skips this block: its commands name both paths written out (#1420).
 
 ```bash
 REPO="$(git rev-parse --show-toplevel)"   # the repo being adopted into
@@ -741,7 +742,8 @@ case "$REPO$KIT" in *'<'*) echo "replace <root> and <kit> with the paths L1 wrot
 while [ "$REPO" != / ] && [ "${REPO%/}" != "$REPO" ]; do REPO="${REPO%/}"; done
 top="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null)" && [ "$top" = "$(cd "$REPO" && pwd -P)" ] ||
   { echo "$REPO is not the top of a checkout: use the root L1 wrote down" >&2; exit 1; }
-[ -f "$KIT/kit-manifest.json" ] || { echo "$KIT is not the kit clone: use the path L1 wrote down" >&2; exit 1; }
+[ -f "$KIT/scripts/kit_doctor.py" ] && [ -d "$KIT/docs/agentic-dev-kit/lite/adapters" ] ||
+  { echo "$KIT is not the kit clone: use the path L1 wrote down" >&2; exit 1; }
 under_link() {
   d=$(dirname "$1")
   while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
@@ -848,8 +850,10 @@ skills alone. Re-running alone does not settle one: it stays exit 1 until then.
 uv run '<kit>/scripts/kit_doctor.py' --verify-lite --from-kit '<kit>' --root '<root>'
 ```
 
-It writes nothing. It reads the install against the record L4 wrote from this kit, and
-refuses with a `refused:` line when there is none: run L4. It runs the main report
+It writes nothing. It needs L4's record for this kit's commit, which supplies the
+profile and the kept skills, and refuses with a `refused:` line without one: run L4.
+That check catches a skipped L4; each file is judged against the kit's manifest and
+the disk, not against the record's hashes. It runs the main report
 against the kit's manifest and the adapter report from the kit, and judges them. Each
 lite doc and skill must be the kit's copy, a skill L4 kept with `--keep`, or the
 Claude skill L3 skipped for a `.claude/commands/<slug>.md` L2 kept; every lite binding

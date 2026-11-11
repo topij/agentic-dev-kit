@@ -405,7 +405,20 @@ def _tamper_declined_on_disk(repo: Path) -> list[str]:
 
 def _tamper_kept_gone(repo: Path) -> list[str]:
     (repo / KEPT_SKILL).unlink()
-    return [f"{KEPT_SKILL} is kept by the record but not on disk"]
+    return [f"{KEPT_SKILL} is kept by the record but not a file on disk"]
+
+
+def _tamper_kept_dir(repo: Path) -> list[str]:
+    # A directory or a dangling link in a kept skill's place is no skill.
+    (repo / KEPT_SKILL).unlink()
+    (repo / KEPT_SKILL).mkdir()
+    return [f"{KEPT_SKILL} is kept by the record but not a file on disk"]
+
+
+def _tamper_kept_dangling(repo: Path) -> list[str]:
+    (repo / KEPT_SKILL).unlink()
+    (repo / KEPT_SKILL).symlink_to(repo / "nowhere.md")
+    return [f"{KEPT_SKILL} is kept by the record but not a file on disk"]
 
 
 def _edit_record(repo: Path, change) -> None:
@@ -440,11 +453,16 @@ def _tamper_registration(repo: Path) -> list[str]:
         (_tamper_skill_removed, {}),
         (_tamper_declined_on_disk, {"without": (CLAUDE_SKILL,)}),
         (_tamper_kept_gone, {"keep": (KEPT_SKILL,)}),
+        (_tamper_kept_dir, {"keep": (KEPT_SKILL,)}),
+        (_tamper_kept_dangling, {"keep": (KEPT_SKILL,)}),
         (_tamper_outside_lite, {}),
         (_tamper_profile, {}),
         (_tamper_registration, {}),
     ],
-    ids=["skill-removed", "declined-on-disk", "kept-gone", "outside-lite", "profile", "registration"],
+    ids=[
+        "skill-removed", "declined-on-disk", "kept-gone", "kept-dir", "kept-dangling",
+        "outside-lite", "profile", "registration",
+    ],
 )
 def test_u5_stops_on_each_way_the_install_is_not_what_l5_expects(
     tmp_path: Path, kit_upstream: dict, kit: Path, tamper, install: dict
