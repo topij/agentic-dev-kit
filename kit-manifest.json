@@ -773,7 +773,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "edb4a7928bfd43a211edcafd2981ccec4bc1c90dcd2cf849a08ff471f141dd6b"
+      "sha256": "e8f1763fd4d84f126195159ea244f8b78dd9d4c4226739d4678b4f467bbdf048"
     },
     "scripts/tests/test_kit_doctor_upgrade_lite.py": {
       "role": "repo-only",
@@ -813,7 +813,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "61fc9873d06a31ae427bbe7a9398c012b2930a5b2595e9afe9846701b3dea0d8"
+      "sha256": "439e0d176497356e1e40302ad05f327137cdb3166cb4116215a8732390d4eaaa"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

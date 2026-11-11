@@ -20310,6 +20310,10 @@ def _kit_command_spans(doc: str) -> list[str]:
         re.sub(r"\s+#\s.*$", "", line).strip()  # a trailing comment runs nothing
         for label, block in _fences(doc)
         if label not in _NON_SHELL_FENCES and "git clone" not in block
+        # A block that binds KIT to the path the reader wrote down from the kit
+        # block reads nothing carried from an earlier command (adopt.md's lite L3,
+        # #1420); test_lite_profile_docs pins that it reads only what it assigns.
+        and not re.search(r"^KIT='<kit>'$", block, re.MULTILINE)
         for line in block.splitlines()
     ]
     prose = re.sub(r"^[ \t]*```.*?^[ \t]*```", "", doc, flags=re.MULTILINE | re.DOTALL)
@@ -20327,7 +20331,8 @@ def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) ->
     the shared path. A literal path reads whatever tree sits there, and any other
     expansion of an unset KIT is no better: `git -C ""` reads the current repository
     (#576, PR 1340 rounds 1 and 2). The two flags that choose which kit is compared
-    with or recorded take nothing but `"${KIT:?`. Fences labelled as transcripts or
+    with or recorded take nothing but `"${KIT:?` or `<kit>`, the path the kit block
+    printed, written out (#1420); a block that binds `KIT='<kit>'` itself is not read. Fences labelled as transcripts or
     data are not read."""
     require_kit_paths(workflow)
     offenders = []
@@ -20335,7 +20340,8 @@ def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) ->
         if "/tmp/agentic-dev-kit" in span or _UNGUARDED_KIT.search(span):
             offenders.append(span)
         for arg in re.findall(r"--(?:from-kit|manifest)\s+(\S+)", span):
-            if not arg.startswith('"${KIT:?'):
+            # `<kit>`: the path the kit block printed, written out (#1410, #1420).
+            if not arg.startswith('"${KIT:?') and arg != "<kit>":
                 offenders.append(span)
         # What a guard tells the reader is part of the guard: under a per-run path
         # "re-run Step 0" made a second clone (PR 1340 rounds 2 and 3).
