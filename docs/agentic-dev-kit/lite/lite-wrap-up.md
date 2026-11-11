@@ -82,11 +82,10 @@ Each of these is a hard stop before any edit; say which to the operator:
   skip the risk tier;
 - a `backlog` the lite `session-start`'s *Backlog* block reports `unusable:`: not in
   the form that section declares, or a `path` that is not plain by its rules. The block
-  judges the working tree's copy; copies whose `backlog.path` differ are a stop too,
-  judged as for `vcs.protected_branch`, so that one judgement covers them all. Never
-  paste the value into a command to check it: the block reads it itself. A
-  `backlog.path` naming the same file as `paths.handoff` or `paths.friction_log` stops
-  as well: the commit step splits those files from the backlog;
+  reads the working tree's copy, which is the backlog this workflow edits; never paste
+  the value into a command to check it. A `backlog.path` naming the same file as
+  `paths.handoff` or `paths.friction_log` stops as well: the commit step splits those
+  files from the backlog;
 - no branch checked out: `git symbolic-ref --short -q HEAD` prints nothing, so a
   commit would land on a detached HEAD that no branch keeps.
 

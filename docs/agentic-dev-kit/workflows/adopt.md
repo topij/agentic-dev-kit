@@ -691,8 +691,8 @@ when the repository has none, a section in `AGENTS.md`, and the install baseline
   is a full install's config or the repository's own file. If one exists with
   `profile: lite`, this is a re-run: its keys are L1's answers, and L3 keeps the file.
   Judge it now, every copy, by the lite `wrap-up`'s configuration stops (a key outside
-  the schema or given twice, an unusable `vcs.protected_branch` or `backlog.path`, copies naming
-  different branches). Settle each with the operator, and commit the corrected file
+  the schema or given twice, an unusable `vcs.protected_branch`, a `backlog` the lite
+  `session-start`'s *Backlog* block reports `unusable:`, copies naming different branches). Settle each with the operator, and commit the corrected file
   with the install, or the first wrap-up after it refuses to start.
 - **`AGENTS.md` and `CLAUDE.md`.** Note which exist, and whether `CLAUDE.md` imports
   `AGENTS.md` (an `@AGENTS.md` line).

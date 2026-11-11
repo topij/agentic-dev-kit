@@ -35,8 +35,8 @@ Read `config/dev-model.yaml` directly; a lite repository has no loader. Use:
 The lite `wrap-up` reads `vcs.protected_branch` from every copy of the config
 (committed, staged and working tree), and refuses to start when a copy holds a key
 outside the lite config schema, a key twice or a section of the wrong shape, names an
-unusable branch or `backlog.path`, or names a different branch or backlog from another
-copy. Its *Read the configuration* lists the schema and
+unusable branch or a `backlog` its *Backlog* block reports `unusable:`, or names a
+different branch from another copy. Its *Read the configuration* lists the schema and
 the reads. Check every copy the same way here. Report each such stop as a 🔴 Now item
 to fix by the way out that section names. When the copies disagree on whether a
 protected branch is named, say so.
@@ -114,14 +114,16 @@ in the format of the bama `user-stories` skill, the first one this read was writ
   commas or spaces, or `none` or `-` for none;
 - the order of the stories in the file is their priority;
 - a fenced code block (` ``` ` or `~~~`) and an HTML comment that opens a line are not
-  read, so an example story or a commented-out one is not taken for a real one.
+  read, so an example story or a commented-out one is not taken for a real one. A line
+  that opens with backticks and holds another backtick is inline code, not a fence,
+  as in CommonMark.
 
 The key has one declared form: a top-level line `backlog:` followed by one line
 indented with spaces, `path: <path>`, which may be quoted and may carry a trailing
 `# comment`. `backlog:` alone, `backlog: null` or `backlog: ~`, or no `backlog` key,
 means no backlog. Any other spelling is `unusable:`, a flow mapping (`backlog: {path:
 …}`) and a quoted or spaced key among them: the block reads the config as text, and
-`kit_doctor.py` reads it with the same rule. The path is plain: ASCII letters, digits,
+it is the only reader of the key. The path is plain: ASCII letters, digits,
 `.`, `_`, `/` and `-`, relative, with no leading `-` and no empty, `.` or `..`
 component, naming a regular file that is not a symbolic link and whose directory
 resolves inside the repository.
@@ -147,8 +149,10 @@ command, and it judges the key and the path by the rules above:
     /^[^ \t#\r]/ { inside = 0 }
     /^["\047]?backlog["\047]?[ \t]*:/ {
       sections++; inside = 1
-      if ($0 ~ /^backlog:[ \t]*(null|Null|NULL|~)?[ \t]*(#.*)?\r?$/) { if ($0 ~ /: *[nN~]/) empty = 1 }
-      else wrong = 1
+      if ($0 ~ /^backlog:[ \t]*(null|Null|NULL|~)?[ \t]*(#.*)?\r?$/) {
+        v = $0; sub(/^backlog:[ \t]*/, "", v); sub(/[ \t]*(#.*)?\r?$/, "", v)
+        if (v != "") empty = 1
+      } else wrong = 1
       next
     }
     inside && /^[ \t]*(#.*)?\r?$/ { next }
@@ -157,10 +161,16 @@ command, and it judges the key and the path by the rules above:
     END {
       if (wrong || sections > 1 || paths > 1 || (empty && paths)) exit 3
       if (paths && (path == "" || path ~ /^(null|Null|NULL|~)$/)) exit 3
-      print (paths ? path : "-")
+      if (!paths) exit 4
+      print path
     }
-  ' "$config") || { echo "unusable: backlog in $config is not the form *Backlog* declares" >&2; exit 2; }
-  if [ "$backlog" = - ]; then echo "backlog: not configured"; exit 0; fi
+  ' "$config"); rc=$?
+  case $rc in
+    0) ;;
+    4) echo "backlog: not configured"; exit 0 ;;
+    3) echo "unusable: backlog in $config is not the form *Backlog* declares" >&2; exit 2 ;;
+    *) echo "unavailable: awk could not read $config (exit $rc)" >&2; exit 1 ;;
+  esac
   case "$backlog" in
     /* | -* | *[!A-Za-z0-9._/-]*)
       echo "unusable: backlog.path $backlog is not a plain path inside the repository" >&2; exit 2 ;;
@@ -181,9 +191,11 @@ command, and it judges the key and the path by the rules above:
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t\r]+$/, "", s); return s }
     function flag(i, why) { bad[i] = 1; problems = problems "problem " ids[i] " " why "\n" }
     function done(d) { return (d in at) && !bad[at[d]] && status[at[d]] == "done" }
-    function fence(s) {
+    function fence(s,  f) {
       if (!match(s, /^ ? ? ?(```+|~~~+)/)) return ""
-      s = substr(s, RSTART, RLENGTH); sub(/^ +/, "", s); return s
+      f = substr(s, RSTART, RLENGTH); sub(/^ +/, "", f)
+      if (substr(f, 1, 1) == "`" && index(substr(s, RSTART + RLENGTH), "`")) return ""
+      return f
     }
     NR == 1 && index($0, bom) == 1 { $0 = substr($0, length(bom) + 1) }
     fenced {
@@ -193,7 +205,11 @@ command, and it judges the key and the path by the rules above:
     }
     comment { if (index($0, "-->")) comment = 0; next }
     fence($0) != "" { f = fence($0); fenced = 1; fchar = substr(f, 1, 1); flen = length(f); opened = NR; next }
-    /^ ? ? ?<!--/ { if (!index(substr($0, index($0, "<!--") + 4), "-->")) { comment = 1; opened = NR }; next }
+    /^ ? ? ?<!--/ {
+      c = substr($0, index($0, "<!--") + 4)
+      if (c !~ /^-?>/ && !index(c, "-->")) { comment = 1; opened = NR }
+      next
+    }
     /^ ? ? ?###([ \t]|\r?$)/ {
       n++; cur = n
       h = $0; sub(/^ *###/, "", h)
@@ -279,7 +295,8 @@ the configuration* names. A line beginning `unavailable:`, or any other non-zero
 is the source's failure, never an empty backlog: `Backlog: unavailable (<reason>)`, and
 a 🔴 Now item to restore the file or correct the path. The block reads the working
 tree's config; when the committed or staged copy names a different `backlog.path`, say
-so on the backlog line, as for `vcs.protected_branch`. What the rest of the output
+so on the backlog line: the working tree's copy is the one the block, and the lite
+`wrap-up`, act on. What the rest of the output
 means is judgement, and goes into *Classify*:
 
 - **The plan and the backlog disagree.** A story the plan calls done that the backlog

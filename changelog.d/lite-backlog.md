@@ -20,13 +20,10 @@ worked on, and records no story status in the plan. A configured backlog it cann
 read is a hard stop. So are a `backlog` outside the declared form, a `backlog.path`
 that is not a plain path inside the repository (ASCII letters, digits, `.`, `_`, `/`
 and `-`, relative, with no `.` or `..` component and no leading `-`, not a symbolic
-link, and resolving inside the repository), one naming the plan or the friction log,
-and copies of the config that name different paths.
+link, and resolving inside the repository), and one naming the plan or the friction
+log. The working tree's config is the one read.
 
-ADDED: on a lite repository, `kit_doctor.py`'s text report prints a `backlog:` line
-when the key is set: present, missing, unusable, or a `backlog` outside the declared
-form. It reads the key from the config's text with the block's rule. It
-changes no exit code and no JSON field.
+`kit_doctor.py` is unchanged: it accepts a lite install with the key and without it.
 
 What to do: nothing, unless a lite repository keeps a story backlog. To use one, take
 this kit first (a lite `wrap-up` older than this change stops on the new key as outside
