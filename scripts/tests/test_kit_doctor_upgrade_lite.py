@@ -499,8 +499,9 @@ def test_an_adapter_report_that_refuses_is_a_verify_stop(
 ) -> None:
     repo, env = _install(tmp_path, kit_upstream)
     assert _apply(kit, repo, env).returncode == 0
-    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts" / "lib"))
-    monkeypatch.syspath_prepend(str(REPO_ROOT / "scripts"))
+    engines = engine_dir(Path(__file__))
+    monkeypatch.syspath_prepend(str(engines / "lib"))
+    monkeypatch.syspath_prepend(str(engines))
     import kit_doctor
     import runtime_adapters
 

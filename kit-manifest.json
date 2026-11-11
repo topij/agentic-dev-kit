@@ -777,7 +777,7 @@
     },
     "scripts/tests/test_kit_doctor_upgrade_lite.py": {
       "role": "repo-only",
-      "sha256": "005dbae800e4294631853559cc6b1de21ab5bbb5777a3da280240492223b2a68"
+      "sha256": "63da3356a93d8b5934a7ba95b2b7a1fdf2fd6dff456293bc1ea1501227e74e82"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
