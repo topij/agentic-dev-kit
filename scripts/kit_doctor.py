@@ -165,6 +165,8 @@ Usage (``<engine-dir>`` is ``paths.engines`` in config/dev-model.yaml, default
     uv run <engine-dir>/kit_doctor.py --manifest <kit checkout>/kit-manifest.json
                                                     # compare against upstream, splitting
                                                     # drift by cause
+    uv run <kit checkout>/scripts/kit_doctor.py --verify-lite --from-kit <kit checkout> \
+        --root <adopter>                            # (lite) adopt.md L5 after L4
     uv run <kit checkout>/scripts/kit_doctor.py --root <adopter> \
         --adapter-report --adapter-source <kit checkout>
                                                     # classify runtime bindings by
@@ -4125,8 +4127,8 @@ def render(report: Report) -> str:
         elif n_declined:
             # On lite a declined file is a skill kept with `--keep`, or one absent
             # at record time, such as the Claude skill skipped for the
-            # repository's `.claude/commands/<slug>.md` (#1365, #1372). adopt.md
-            # L5 reads `lite install` from this line.
+            # repository's `.claude/commands/<slug>.md` (#1365, #1372). Anyone
+            # running this report on a lite install reads `lite install` here.
             lines.append(
                 f"  {verdict_mark} intact for this adoption — "
                 + ("lite install, " if lite else "")
@@ -4799,13 +4801,15 @@ _REPORT_FAILING_STATES = frozenset(
 )
 
 
-def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record: dict) -> tuple[list[str], list[str]]:
-    """adopt.md's *Lite profile* L5, in process, once U4 has recorded (#1419).
+def _lite_verify(
+    root: Path, kit: Path, config: dict, kit_manifest: dict, record: dict, *, install: bool = False
+) -> tuple[list[str], list[str]]:
+    """adopt.md's *Lite profile* L5, in process: U5 runs it once U4 has recorded
+    (#1419), and `--verify-lite` runs it once L4 has (#1420).
 
-    L5's two commands read `KIT` and `REPO` from the shell, which a fresh shell per
-    command does not carry. U5 runs this instead, and makes the judgement L5 leaves
-    to its reader. As in L5's own command, each file's state is judged against the
-    kit's manifest and the disk; the record supplies the profile and which skills
+    L5 once was two commands whose output its reader judged; this makes that
+    judgement. As in the main report run against the kit's manifest, each file's
+    state is judged against that manifest and the disk; the record supplies the profile and which skills
     are kept and which files declined. The install must read as a lite install
     with no file state the main report's exit code counts. A kept skill must be on
     disk. Any other `declined` lite file must not be: the Claude skill L3 skipped
@@ -4813,6 +4817,9 @@ def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record
     summary line. Each lite binding must be `kit-current`, `adopter-owned` where
     the record keeps it or where it is a kept command or the Claude skill that
     command replaced, or `missing` where its file is declined and absent.
+    With `install`, nothing was ever left absent by a decision: the only
+    `declined` lite file that may be off disk is the Claude skill L3 skipped
+    for a `.claude/commands/<slug>.md`, and any other is missing.
     Returns the lines to print and the stops.
     """
     from runtime_adapters import compare_adapters
@@ -4827,7 +4834,11 @@ def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record
         stops.append(f"the record U4 wrote reads {report.baseline_profile_mismatch}, not lite")
     counts: dict[str, int] = {}
     absent_by_decision: set[str] = set()
-    settle = "settle it with the operator, then re-run U4"
+    settle = (
+        "take the kit's copy or settle it with the operator, then re-run L4"
+        if install
+        else "settle it with the operator, then re-run U4"
+    )
     for f in report.files:
         if f.path not in lite:
             if f.state in _REPORT_FAILING_STATES:
@@ -4842,6 +4853,9 @@ def _lite_verify(root: Path, kit: Path, config: dict, kit_manifest: dict, record
                 stops.append(f"{f.path} is kept by the record but not on disk — {settle}")
             continue
         if f.state == "declined" and not on_disk:
+            if install and _lite_shadowing_command(root, f.path) is None:
+                stops.append(f"{f.path} is missing — {settle}")
+                continue
             absent_by_decision.add(f.path)
             continue
         why = "declined, on disk and not kept" if f.state == "declined" else f.state
@@ -5025,6 +5039,61 @@ def _lite_schema_stop(config: dict, kit_manifest: dict) -> str | None:
             "written: stop and tell the operator"
         )
     return None
+
+
+def verify_lite(root: Path, kit: Path, *, out=None) -> int:
+    """`--verify-lite`: adopt.md's *Lite profile* L5 after L4 (#1420).
+
+    L5's two commands once read `KIT` and `REPO` from the shell, which a fresh
+    shell per command does not carry, and left the judgement to their reader.
+    This takes both on the command line and runs the same two checks `_lite_verify` runs for U5, against the record
+    L4 wrote in the working tree, and judges them. Exit 0 with two
+    `verify (L5):` lines, 1 on a refusal or a stop. Writes nothing.
+    """
+    out = out or sys.stdout
+
+    def say(line: str = "") -> None:
+        print(line, file=out)
+
+    try:
+        head = _lite_head(kit)
+        if head is None:
+            raise LiteUpgradeStop(f"{kit} is not a git checkout — run Step 0's kit block and use the path it printed")
+        config = _lite_load_config(root)
+        try:
+            kit_manifest = json.loads((kit / MANIFEST_NAME).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise LiteUpgradeStop(f"cannot read the kit's {MANIFEST_NAME}: {exc}") from exc
+        if not isinstance(kit_manifest, dict) or not isinstance(kit_manifest.get("files"), dict):
+            raise LiteUpgradeStop(f"the kit's {MANIFEST_NAME} has no files map")
+        try:
+            record = json.loads((root / MANIFEST_NAME).read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            record = None
+        # The record L4 wrote from this kit, not one an earlier install or another
+        # kit left: every state below is read against it.
+        if not _was_written_by_record_install(record) or record.get("kit_commit") != head:
+            raise LiteUpgradeStop(
+                f"{root / MANIFEST_NAME} is not a record L4 wrote from the kit at {head[:12]} — run L4"
+            )
+        say(f"kit: {head[:12]}")
+        say(f"root: {root}")
+        stops: list[str] = []
+        if schema := _lite_schema_stop(config, kit_manifest):
+            stops.append(schema)
+        try:
+            lines, verify_stops = _lite_verify(root, kit, config, kit_manifest, record, install=True)
+        except OSError as exc:
+            raise LiteUpgradeStop(f"cannot verify the install: {exc}") from exc
+    except LiteUpgradeStop as exc:
+        say(f"refused: {exc}")
+        return 1
+    for line in lines:
+        say(line)
+    stops += verify_stops
+    for stop in stops:
+        say(f"stop: verify (L5): {stop}")
+    return 1 if stops else 0
 
 
 def upgrade_lite(
@@ -5496,6 +5565,14 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--verify-lite",
+        action="store_true",
+        help=(
+            "(lite, run from the kit clone) adopt.md L5: judge the lite install at --root "
+            "against the record L4 wrote from --from-kit"
+        ),
+    )
+    parser.add_argument(
         "--branch", default=None, help="(--upgrade-lite) the branch --root must have checked out"
     )
     parser.add_argument(
@@ -5559,6 +5636,33 @@ def main(argv: list[str] | None = None) -> int:
         )
         if present
     ]
+    if args.verify_lite:
+        incompatible = [
+            option
+            for option, present in (
+                ("--json", args.json),
+                ("--generate-manifest", args.generate_manifest),
+                ("--record-install", args.record_install),
+                ("--upgrade-lite", args.upgrade_lite),
+                ("--keep", bool(args.keep)),
+                ("--adapter-report", args.adapter_report),
+                ("--adapter-source", args.adapter_source is not None),
+                ("--manifest", args.manifest is not None),
+                ("--baseline", args.baseline is not None),
+                *((option, True) for option in lite_only),
+            )
+            if present
+        ]
+        if incompatible:
+            parser.error(f"--verify-lite cannot be combined with {', '.join(incompatible)}")
+        # Both named on the call, as absolute paths: nothing is carried from an
+        # earlier command or read from where this one runs (#1410, #1420).
+        if args.root is None or args.from_kit is None:
+            parser.error("--verify-lite requires --from-kit and --root")
+        for flag, value in (("--from-kit", args.from_kit), ("--root", args.root)):
+            if not value.is_absolute():
+                parser.error(f"--verify-lite takes an absolute {flag}, not {str(value)!r}")
+        return verify_lite(args.root.resolve(), args.from_kit.resolve())
     if args.upgrade_lite:
         incompatible = [
             option

@@ -882,6 +882,22 @@ def _adopt_copy_block() -> str:
     return blocks[0]
 
 
+def _fill(text: str, root: str, kit: str) -> str:
+    """The doc's `<root>` and `<kit>`, replaced as L1 says, by the paths written down."""
+    return text.replace("<root>", root).replace("<kit>", kit)
+
+
+def _fresh(env: dict[str, str]) -> dict[str, str]:
+    """A shell that carries nothing from an earlier command (#1420)."""
+    return {k: v for k, v in env.items() if k not in ("REPO", "KIT")}
+
+
+def _adopt_run(shell: str, repo: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    """adopt.md L3's block, with the paths L1 wrote down, in a fresh shell."""
+    block = _fill(_adopt_copy_block(), env["REPO"], env["KIT"])
+    return _run(shell, block, repo, _fresh(env))
+
+
 def _doctor(*args: str, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(KIT_DOCTOR), *args], env=env, capture_output=True, text=True, timeout=120
@@ -902,7 +918,7 @@ def test_adopt_lite_copy_block_never_writes_through_a_dangling_symlink(tmp_path:
         link.symlink_to(target)
     env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
 
-    result = _run(shell, _adopt_copy_block(), repo, env)
+    result = _adopt_run(shell, repo, env)
     assert result.returncode == 0, result.stderr
     for link, target in links.items():
         assert f"kept: {link}" in result.stdout
@@ -926,7 +942,7 @@ def test_adopt_lite_copy_block_skips_a_target_under_a_symlinked_directory(
     (repo / linked).symlink_to(outside)
     env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
 
-    result = _run(shell, _adopt_copy_block(), repo, env)
+    result = _adopt_run(shell, repo, env)
     assert result.returncode == 0, result.stderr
     assert "skipped, a directory on its path is a symlink" in result.stdout
     assert list(outside.iterdir()) == []
@@ -947,7 +963,7 @@ def test_adopt_lite_copy_block_skips_a_claude_skill_a_command_would_be_shadowed_
         command.write_text("Our session start.\n", encoding="utf-8")
     env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
 
-    result = _run(shell, _adopt_copy_block(), repo, env)
+    result = _adopt_run(shell, repo, env)
     assert result.returncode == 0, result.stderr
     assert f"collision: {command}" in result.stdout
     assert not (repo / ".claude/skills/session-start").exists()
@@ -988,7 +1004,7 @@ def test_adopt_lite_copy_block_keeps_a_skill_directory_that_still_holds_somethin
     env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
 
     try:
-        result = _run(shell, _adopt_copy_block(), repo, env)
+        result = _adopt_run(shell, repo, env)
     finally:
         if left == "unreadable":
             skill.chmod(0o755)
@@ -1006,7 +1022,7 @@ def test_adopt_lite_copy_block_installs_into_an_empty_skill_directory(tmp_path: 
     skill.mkdir(parents=True)
     env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
 
-    result = _run(shell, _adopt_copy_block(), repo, env)
+    result = _adopt_run(shell, repo, env)
     assert result.returncode == 0, result.stderr
     assert "kept:" not in result.stdout
     assert (skill / "SKILL.md").is_file()
@@ -1022,7 +1038,7 @@ def test_adopt_lite_copy_block_takes_a_repo_with_a_trailing_slash_under_a_symlin
     alias.symlink_to(tmp_path)
     env = {**env, "REPO": f"{alias / 'adopter'}{slashes}", "KIT": str(REPO_ROOT)}
 
-    result = _run(shell, _adopt_copy_block(), repo, env)
+    result = _adopt_run(shell, repo, env)
     assert result.returncode == 0, result.stderr
     assert "skipped" not in result.stdout
     assert (repo / "docs/agentic-dev-kit/lite/lite-review.md").is_file()
@@ -1037,11 +1053,11 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
     kept_skill.write_text("---\nname: review\ndescription: Ours.\n---\n\nOur review.\n", encoding="utf-8")
     env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
 
-    result = _run(shell, _adopt_copy_block(), repo, env)
+    result = _adopt_run(shell, repo, env)
     assert result.returncode == 0, result.stderr
     assert f"kept: {kept_skill}" in result.stdout
     assert kept_skill.read_text(encoding="utf-8").endswith("Our review.\n")
-    again = _run(shell, _adopt_copy_block(), repo, env)
+    again = _adopt_run(shell, repo, env)
     assert again.returncode == 0 and again.stdout.count("kept: ") == 9, again.stdout
 
     (repo / "config").mkdir()
@@ -1100,7 +1116,7 @@ def test_adopt_lite_installs_a_profile_kit_doctor_reports_intact(tmp_path: Path,
 def _lite_install(tmp_path: Path, shell: str, config_tail: str) -> tuple[Path, dict[str, str]]:
     repo, env = _repo(tmp_path, "adopter")
     env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
-    result = _run(shell, _adopt_copy_block(), repo, env)
+    result = _adopt_run(shell, repo, env)
     assert result.returncode == 0, result.stderr
     (repo / "config").mkdir()
     (repo / "config/dev-model.yaml").write_text(
@@ -1137,3 +1153,220 @@ def test_kit_doctor_reports_a_lite_install_intact_with_or_without_a_backlog(tmp_
     assert report.returncode == 0, report.stdout + report.stderr
     assert "intact for this adoption — lite install" in report.stdout
     assert "backlog" not in report.stdout
+
+
+# --- adopt.md's lite install carries no shell variable between commands (#1420) ---
+
+
+def _adopt_lite_section() -> str:
+    text = ADOPT.read_text(encoding="utf-8")
+    # The last section: the `## ` heading inside it is the AGENTS.md template's.
+    return text[text.index("\n## Lite profile\n") :]
+
+
+def _adopt_lite_blocks() -> list[str]:
+    return re.findall(r"^```bash\n(.*?)^```", _adopt_lite_section(), re.MULTILINE | re.DOTALL)
+
+
+def test_no_adopt_lite_block_reads_a_variable_an_earlier_command_set() -> None:
+    """Each block reads only the variables it assigns itself: an agent harness may
+    start a fresh shell for every command, so one set by Step 0 is gone (#1420)."""
+    blocks = _adopt_lite_blocks()
+    # L3's copy block, L4 and L5: pinned, so a dropped block fails here.
+    assert len(blocks) == 3, blocks
+    for block in blocks:
+        assigned = set(re.findall(r"(?:^|[\s;(])([A-Za-z_][A-Za-z0-9_]*)=", block, re.MULTILINE))
+        assigned |= set(re.findall(r"\bfor\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\b", block))
+        read = set(re.findall(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)", block))
+        assert read <= assigned, (sorted(read - assigned), block)
+    section = _adopt_lite_section()
+    assert "${KIT:?" not in section and "${REPO:?" not in section
+    for block in blocks[1:]:
+        assert "$" not in block, block
+        assert block.startswith("uv run <kit>/scripts/kit_doctor.py "), block
+    assert "--root <root>" in blocks[1] and "--from-kit <kit>" in blocks[1]
+    assert blocks[2].strip() == "uv run <kit>/scripts/kit_doctor.py --verify-lite --from-kit <kit> --root <root>"
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_refuses_placeholders_left_in(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    result = _run(shell, _adopt_copy_block(), repo, _fresh(env))
+    assert result.returncode == 1
+    assert "replace <root> and <kit>" in result.stderr
+    assert not (repo / "docs").exists()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_refuses_a_root_that_is_not_a_checkout_top(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    (repo / "sub").mkdir()
+    result = _adopt_run(shell, repo, {**env, "REPO": str(repo / "sub"), "KIT": str(REPO_ROOT)})
+    assert result.returncode == 1
+    assert "is not the top of a checkout" in result.stderr
+    assert not (repo / "sub/docs").exists()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_copy_block_refuses_a_kit_path_that_is_not_the_kit(tmp_path: Path, shell: str) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    result = _adopt_run(shell, repo, {**env, "REPO": str(repo), "KIT": str(tmp_path)})
+    assert result.returncode == 1
+    assert "is not the kit clone" in result.stderr
+    assert not (repo / "docs").exists()
+
+
+def _doc_command(block: str, root: Path) -> list[str]:
+    """A one-line L4 or L5 command from the doc, filled in, run by this interpreter."""
+    import shlex
+
+    words = shlex.split(_fill(block.strip(), str(root), str(REPO_ROOT)))
+    assert words[:2] == ["uv", "run"], words
+    return [sys.executable, *words[2:]]
+
+
+def _lite_installed(tmp_path: Path, shell: str) -> tuple[Path, dict[str, str]]:
+    """L3 as the doc runs it, plus the config, plan, inbox and AGENTS.md L3 writes."""
+    repo, env = _repo(tmp_path, "adopter")
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+    result = _adopt_run(shell, repo, env)
+    assert result.returncode == 0, result.stderr
+    (repo / "config").mkdir()
+    (repo / "config/dev-model.yaml").write_text(
+        "profile: lite\nkit:\n  version: 2\npaths:\n  handoff: docs/plan.md\n"
+        "  friction_log: docs/friction-log.md\n",
+        encoding="utf-8",
+    )
+    (repo / "docs/plan.md").write_text("# Plan\n\n## Workstreams\n", encoding="utf-8")
+    (repo / "docs/friction-log.md").write_text("# Friction log\n", encoding="utf-8")
+    (repo / "AGENTS.md").write_text("# Agents\n", encoding="utf-8")
+    (repo / "CLAUDE.md").write_text("@AGENTS.md\n", encoding="utf-8")
+    return repo, _fresh(env)
+
+
+def _l4(repo: Path, env: dict[str, str], *extra: str) -> subprocess.CompletedProcess[str]:
+    cmd = _doc_command(_adopt_lite_blocks()[1], repo) + list(extra)
+    return subprocess.run(cmd, cwd=repo, env=env, capture_output=True, text=True, timeout=120)
+
+
+def _l5(repo: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    cmd = _doc_command(_adopt_lite_blocks()[2], repo)
+    return subprocess.run(cmd, cwd=repo, env=env, capture_output=True, text=True, timeout=120)
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+def test_adopt_lite_l3_l4_l5_each_in_a_fresh_shell_end_intact(tmp_path: Path, shell: str) -> None:
+    repo, env = _lite_installed(tmp_path, shell)
+    record = _l4(repo, env)
+    assert record.returncode == 0, record.stderr
+    verify = _l5(repo, env)
+    assert verify.returncode == 0, verify.stdout + verify.stderr
+    lines = [line for line in verify.stdout.splitlines() if line.startswith("verify (L5):")]
+    assert len(lines) == 2, verify.stdout
+    assert "intact for this adoption — lite install" in lines[0]
+    assert "as L5 expects" in lines[1]
+    assert "stop:" not in verify.stdout
+
+
+def test_verify_lite_passes_a_skill_kept_with_keep(tmp_path: Path) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    kept = repo / ".claude/skills/review/SKILL.md"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("---\nname: review\ndescription: Ours.\n---\n\nOur review.\n", encoding="utf-8")
+    repo, env = _lite_installed_at(repo, env)
+    assert _l4(repo, env, "--keep", ".claude/skills/review/SKILL.md").returncode == 0
+    verify = _l5(repo, env)
+    assert verify.returncode == 0, verify.stdout
+    assert "1 adopter-owned and kept" in verify.stdout
+
+
+def _lite_installed_at(repo: Path, env: dict[str, str]) -> tuple[Path, dict[str, str]]:
+    env = {**env, "REPO": str(repo), "KIT": str(REPO_ROOT)}
+    result = _adopt_run("sh", repo, env)
+    assert result.returncode == 0, result.stderr
+    (repo / "config").mkdir()
+    (repo / "config/dev-model.yaml").write_text(
+        "profile: lite\nkit:\n  version: 2\npaths:\n  handoff: docs/plan.md\n"
+        "  friction_log: docs/friction-log.md\n",
+        encoding="utf-8",
+    )
+    (repo / "docs/plan.md").write_text("# Plan\n\n## Workstreams\n", encoding="utf-8")
+    (repo / "docs/friction-log.md").write_text("# Friction log\n", encoding="utf-8")
+    return repo, _fresh(env)
+
+
+def test_verify_lite_passes_a_claude_skill_l3_skipped_for_a_kept_command(tmp_path: Path) -> None:
+    repo, env = _repo(tmp_path, "adopter")
+    command = repo / ".claude/commands/session-start.md"
+    command.parent.mkdir(parents=True)
+    command.write_text("Our session start.\n", encoding="utf-8")
+    repo, env = _lite_installed_at(repo, env)
+    assert not (repo / ".claude/skills/session-start").exists()
+    assert _l4(repo, env).returncode == 0
+    verify = _l5(repo, env)
+    assert verify.returncode == 0, verify.stdout
+    assert ".claude/skills/session-start/SKILL.md" in verify.stdout
+    assert "as L5 expects" in verify.stdout
+
+
+@pytest.mark.parametrize(
+    "path", ["docs/agentic-dev-kit/lite/lite-review.md", ".agents/skills/wrap-up/SKILL.md", ".claude/skills/review/SKILL.md"]
+)
+def test_verify_lite_stops_on_a_lite_file_missing_at_install(tmp_path: Path, path: str) -> None:
+    """At install nothing was left absent by a decision: a missing file is a stop,
+    not a `declined` row read as accepted (the upgrade's `--leave-absent`)."""
+    repo, env = _lite_installed(tmp_path, "sh")
+    (repo / path).unlink()
+    assert _l4(repo, env).returncode == 0
+    verify = _l5(repo, env)
+    assert verify.returncode == 1, verify.stdout
+    assert f"stop: verify (L5): {path} is missing" in verify.stdout
+    assert "NOT intact" in verify.stdout
+
+
+def test_verify_lite_stops_on_a_skill_edited_after_l4(tmp_path: Path) -> None:
+    repo, env = _lite_installed(tmp_path, "sh")
+    assert _l4(repo, env).returncode == 0
+    edited = repo / ".claude/skills/wrap-up/SKILL.md"
+    edited.write_text(edited.read_text(encoding="utf-8") + "Our edit.\n", encoding="utf-8")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1, verify.stdout
+    assert "stop: verify (L5): .claude/skills/wrap-up/SKILL.md is" in verify.stdout
+
+
+def test_verify_lite_refuses_without_a_record_l4_wrote_from_this_kit(tmp_path: Path) -> None:
+    repo, env = _lite_installed(tmp_path, "sh")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1
+    assert verify.stdout.startswith("refused:") and "run L4" in verify.stdout
+    assert _l4(repo, env).returncode == 0
+    record = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
+    record["kit_commit"] = "0" * 40
+    (repo / "kit-manifest.json").write_text(json.dumps(record), encoding="utf-8")
+    verify = _l5(repo, env)
+    assert verify.returncode == 1 and "is not a record L4 wrote from the kit" in verify.stdout
+
+
+@pytest.mark.parametrize(
+    "args, message",
+    [
+        (["--verify-lite", "--root", "/abs"], "requires --from-kit and --root"),
+        (["--verify-lite", "--from-kit", str(REPO_ROOT), "--root", "rel"], "absolute --root"),
+        (["--verify-lite", "--from-kit", "rel", "--root", "/abs"], "absolute --from-kit"),
+        (["--verify-lite", "--from-kit", str(REPO_ROOT), "--root", "/abs", "--json"], "cannot be combined"),
+        (["--verify-lite", "--from-kit", str(REPO_ROOT), "--root", "/abs", "--branch", "main"], "cannot be combined"),
+    ],
+)
+def test_verify_lite_usage(tmp_path: Path, args: list[str], message: str) -> None:
+    result = _doctor(*args, env=_git_env(tmp_path))
+    assert result.returncode == 2
+    assert message in result.stderr
+
+
+@pytest.mark.parametrize(
+    "phrase",
+    ["verify (L5):", "intact for this adoption — lite install", "as L5 expects", "stop: verify (L5):", "refused:"],
+)
+def test_each_output_adopt_l5_quotes_is_one_the_engine_prints(phrase: str) -> None:
+    assert phrase in _adopt_lite_section()
+    assert phrase in KIT_DOCTOR.read_text(encoding="utf-8")
