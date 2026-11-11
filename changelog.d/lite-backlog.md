@@ -21,7 +21,8 @@ read is a hard stop. So are a `backlog` outside the declared form, a `backlog.pa
 that is not a plain path inside the repository (ASCII letters, digits, `.`, `_`, `/`
 and `-`, relative, with no `.` or `..` component and no leading `-`, not a symbolic
 link, and resolving inside the repository), and one naming the plan or the friction
-log. The working tree's config is the one read.
+log. These backlog stops read the working tree's config; the schema stop, which now
+lists `backlog.path`, reads every copy as before.
 
 `kit_doctor.py` is unchanged: it accepts a lite install with the key and without it.
 
