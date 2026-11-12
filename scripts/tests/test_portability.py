@@ -20302,6 +20302,17 @@ _KIT_GUARD_MESSAGES = frozenset({
 _UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?)")
 
 
+def _kit_bound_lines(block: str) -> list[str]:
+    """A block's lines, with `$KIT` read as `<kit>` in a block that binds
+    `KIT='<kit>'` itself: that expansion carries nothing from an earlier command
+    (adopt.md's lite L3, #1420). Every line is still read for the shared path and
+    for anything else this guard forbids."""
+    lines = block.splitlines()
+    if "KIT='<kit>'" not in lines:
+        return lines
+    return [re.sub(r"\$KIT\b|\$\{KIT\}", "<kit>", line) for line in lines]
+
+
 def _kit_command_spans(doc: str) -> list[str]:
     """Every line of a fence that may hold a command, trailing comment dropped, and
     every inline code span outside fences: the two places a reader takes a command
@@ -20310,7 +20321,7 @@ def _kit_command_spans(doc: str) -> list[str]:
         re.sub(r"\s+#\s.*$", "", line).strip()  # a trailing comment runs nothing
         for label, block in _fences(doc)
         if label not in _NON_SHELL_FENCES and "git clone" not in block
-        for line in block.splitlines()
+        for line in _kit_bound_lines(block)
     ]
     prose = re.sub(r"^[ \t]*```.*?^[ \t]*```", "", doc, flags=re.MULTILINE | re.DOTALL)
     spans = [" ".join(s.split()) for s in re.findall(r"`([^`]+)`", prose)]
@@ -20327,7 +20338,9 @@ def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) ->
     the shared path. A literal path reads whatever tree sits there, and any other
     expansion of an unset KIT is no better: `git -C ""` reads the current repository
     (#576, PR 1340 rounds 1 and 2). The two flags that choose which kit is compared
-    with or recorded take nothing but `"${KIT:?`. Fences labelled as transcripts or
+    with or recorded take nothing but `"${KIT:?` or `<kit>`, the path the kit block
+    printed, written out (#1420). In a block that binds `KIT='<kit>'` itself, its own
+    `$KIT` is that path, and the block's lines are read for everything else. Fences labelled as transcripts or
     data are not read."""
     require_kit_paths(workflow)
     offenders = []
@@ -20335,7 +20348,8 @@ def test_every_kit_path_in_a_workflow_command_goes_through_kit(workflow: str) ->
         if "/tmp/agentic-dev-kit" in span or _UNGUARDED_KIT.search(span):
             offenders.append(span)
         for arg in re.findall(r"--(?:from-kit|manifest)\s+(\S+)", span):
-            if not arg.startswith('"${KIT:?'):
+            # `<kit>`: the path the kit block printed, written out (#1410, #1420).
+            if not arg.startswith('"${KIT:?') and arg not in ("<kit>", "'<kit>'"):
                 offenders.append(span)
         # What a guard tells the reader is part of the guard: under a per-run path
         # "re-run Step 0" made a second clone (PR 1340 rounds 2 and 3).

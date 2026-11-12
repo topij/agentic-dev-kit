@@ -2422,9 +2422,16 @@ def test_repo_only_paths_are_hashed_but_not_offered_to_an_adopter(tmp_path):
     # lite install has them at the skill paths (#1365). `adopt.md`'s lite install
     # copies them from there, so every mention must read from the guarded clone.
     lite_sources = "docs/agentic-dev-kit/lite/adapters/"
+    # Or from `$KIT` inside the block that binds it to the path the kit block
+    # printed (adopt.md's lite L3, #1420).
     for rel, text in adopter_doctrine.items():
         for match in re.finditer(re.escape(lite_sources), text):
-            assert re.search(r"\$\{KIT:\?[^}]*\}/$", text[: match.start()]), (
+            before = text[: match.start()]
+            fence = before[before.rfind("```") :]
+            bound = re.search(r"^KIT='<kit>'$", fence, re.MULTILINE)
+            assert re.search(r"\$\{KIT:\?[^}]*\}/$", before) or (
+                bound and before.endswith('"$KIT/')
+            ), (
                 f"{rel} refers to {lite_sources} outside the guarded kit clone"
             )
     for repo_only_path in repo_only:

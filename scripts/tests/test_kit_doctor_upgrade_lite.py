@@ -388,6 +388,23 @@ def test_u5_stops_when_the_install_is_not_intact_after_u4(
     assert not _has_line(done, "apply (U4):")
 
 
+def test_u5_install_line_is_not_intact_when_only_an_adapter_stops(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """Every lite file intact, yet an adapter stop prints: the install line still
+    reads NOT intact, as `--verify-lite`'s does (adversarial, PR 1423 delta F1)."""
+    repo, env = _install(tmp_path, kit_upstream)
+    assert _apply(kit, repo, env).returncode == 0
+    command = repo / ".claude/commands/review.md"
+    command.parent.mkdir(parents=True, exist_ok=True)
+    command.write_text("Our own review command.\n", encoding="utf-8")
+    done = _pinned(kit, repo, env)
+    assert done.returncode == 1, done.stdout
+    assert "stop: verify (L5): adapter .claude/commands/review.md is adopter-owned" in done.stdout
+    assert "intact for this adoption" not in done.stdout
+    assert _has_line(done, "verify (L5): NOT intact: ")
+
+
 CLAUDE_SKILL = ".claude/skills/review/SKILL.md"
 KEPT_SKILL = ".agents/skills/review/SKILL.md"
 
@@ -405,7 +422,20 @@ def _tamper_declined_on_disk(repo: Path) -> list[str]:
 
 def _tamper_kept_gone(repo: Path) -> list[str]:
     (repo / KEPT_SKILL).unlink()
-    return [f"{KEPT_SKILL} is kept by the record but not on disk"]
+    return [f"{KEPT_SKILL} is kept by the record but not a file on disk"]
+
+
+def _tamper_kept_dir(repo: Path) -> list[str]:
+    # A directory or a dangling link in a kept skill's place is no skill.
+    (repo / KEPT_SKILL).unlink()
+    (repo / KEPT_SKILL).mkdir()
+    return [f"{KEPT_SKILL} is kept by the record but not a file on disk"]
+
+
+def _tamper_kept_dangling(repo: Path) -> list[str]:
+    (repo / KEPT_SKILL).unlink()
+    (repo / KEPT_SKILL).symlink_to(repo / "nowhere.md")
+    return [f"{KEPT_SKILL} is kept by the record but not a file on disk"]
 
 
 def _edit_record(repo: Path, change) -> None:
@@ -440,11 +470,16 @@ def _tamper_registration(repo: Path) -> list[str]:
         (_tamper_skill_removed, {}),
         (_tamper_declined_on_disk, {"without": (CLAUDE_SKILL,)}),
         (_tamper_kept_gone, {"keep": (KEPT_SKILL,)}),
+        (_tamper_kept_dir, {"keep": (KEPT_SKILL,)}),
+        (_tamper_kept_dangling, {"keep": (KEPT_SKILL,)}),
         (_tamper_outside_lite, {}),
         (_tamper_profile, {}),
         (_tamper_registration, {}),
     ],
-    ids=["skill-removed", "declined-on-disk", "kept-gone", "outside-lite", "profile", "registration"],
+    ids=[
+        "skill-removed", "declined-on-disk", "kept-gone", "kept-dir", "kept-dangling",
+        "outside-lite", "profile", "registration",
+    ],
 )
 def test_u5_stops_on_each_way_the_install_is_not_what_l5_expects(
     tmp_path: Path, kit_upstream: dict, kit: Path, tamper, install: dict
@@ -533,7 +568,8 @@ def test_an_adapter_report_that_refuses_is_a_verify_stop(
     record = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
     lines, stops = kit_doctor._lite_verify(repo, kit, config, manifest, record)
     assert stops == ["the adapter report refused: cannot read source interface"], stops
-    assert lines and lines[0].startswith("verify (L5): intact for this adoption — lite install: ")
+    # The refusal is a stop, so the install line says so (adversarial, PR 1423 delta F1).
+    assert lines and lines[0].startswith("verify (L5): NOT intact: ")
 
 
 def test_u5_passes_a_skill_the_operator_left_absent(

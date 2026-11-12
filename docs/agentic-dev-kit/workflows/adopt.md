@@ -48,7 +48,8 @@ the clone once the adoption has landed.
 
 Everything below copies **from** that checkout **into** the current repo (the adopter) —
 **two trees, and from here every write must name which one.** Bind both roots now,
-before the first write, and use them for the rest of the workflow:
+before the first write, and use them for the rest of the workflow. The *Lite profile*
+skips this block: its commands name both paths written out (#1420).
 
 ```bash
 REPO="$(git rev-parse --show-toplevel)"   # the repo being adopted into
@@ -87,7 +88,7 @@ Ask the operator which install profile this repository takes, before Step 1:
   time only. It fits one operator and an agent committing to a branch, or opening a pull
   request that no review loop or CI gate watches, with no tracker integration or
   parallel lanes. Follow *Lite profile* at the end of this workflow instead of Steps
-  1–6; it uses the two blocks above.
+  1–6; it uses the kit block above, not the block that binds `REPO` and `KIT`.
 
 Recommend lite when the repository has no remote CI, tracker integration or parallel
 lanes for the kit to drive; taking changes through pull requests alone does not rule it
@@ -639,10 +640,20 @@ adoption as review-ready.
 A lite install (#1320) writes only these into the repository: the three lite workflow
 docs, their six adapters, a short `config/dev-model.yaml`, the plan and friction docs
 when the repository has none, a section in `AGENTS.md`, and the install baseline
-`kit-manifest.json`. Run Step 0's two blocks first; every write below goes through
-`$REPO` and every read of the kit through the guarded `$KIT`.
+`kit-manifest.json`.
+
+**No step here carries a shell variable to a later one.** An agent harness often
+starts a fresh shell for every command (#1410, #1420). Every command below names its
+inputs as absolute paths you write out: `<kit>`, the kit clone, and `<root>`, the top
+of the checkout the install is committed in. L1 writes them down; copy them from there,
+inside the single quotes each command keeps around them, so a path with a blank stays
+one word.
 
 ### L1 — Inspect (read-only)
+
+First run Step 0's **kit block**, from the checkout the install is committed in. Write
+down the path its `KIT=<path> at <sha>` line prints: that is `<kit>`. Write down what
+`git rev-parse --show-toplevel` prints in that checkout: that is `<root>`. Then:
 
 - **A plan already kept?** A `docs/plan.md`, a roadmap, or a plan file another tool
   maintains. If so, `paths.handoff` points at it and the lite `wrap-up` edits it in its
@@ -721,11 +732,18 @@ command. A skill directory that holds anything, such as a helper file whose
 binding L2 marked **replace**, move its extra items to the homes L2 named, then ask
 the operator to remove the whole binding (the command file, or the skill directory
 with everything in it) and to say when it is done. Remove nothing of the repository's
-yourself. L6 stages a tracked binding's removal with the install. Then run the block:
+yourself. L6 stages a tracked binding's removal with the install. Then run the block,
+with `<root>` and `<kit>` on its first two lines replaced by the paths L1 wrote down:
 
 ```bash
-REPO="${REPO:?REPO is not set — run Step 0}"
+REPO='<root>'
+KIT='<kit>'
+case "$REPO$KIT" in *'<'*) echo "replace <root> and <kit> with the paths L1 wrote down" >&2; exit 1;; esac
 while [ "$REPO" != / ] && [ "${REPO%/}" != "$REPO" ]; do REPO="${REPO%/}"; done
+top="$(git -C "$REPO" rev-parse --show-toplevel 2>/dev/null)" && [ "$top" = "$(cd "$REPO" && pwd -P)" ] ||
+  { echo "$REPO is not the top of a checkout: use the root L1 wrote down" >&2; exit 1; }
+[ -f "$KIT/scripts/kit_doctor.py" ] && [ -d "$KIT/docs/agentic-dev-kit/lite/adapters" ] ||
+  { echo "$KIT is not the kit clone: use the path L1 wrote down" >&2; exit 1; }
 under_link() {
   d=$(dirname "$1")
   while [ "$d" != "$REPO" ] && [ "$d" != / ] && [ "$d" != . ]; do
@@ -739,7 +757,7 @@ for doc in lite-session-start lite-wrap-up lite-review; do
   if [ -e "$dst" ] || [ -L "$dst" ]; then echo "kept: $dst"; continue; fi
   if under_link "$dst"; then echo "skipped, a directory on its path is a symlink: $dst"; continue; fi
   mkdir -p "$REPO/docs/agentic-dev-kit/lite"
-  cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/$doc.md" "$dst"
+  cp "$KIT/docs/agentic-dev-kit/lite/$doc.md" "$dst"
 done
 for slug in session-start wrap-up review; do
   for pair in "claude:.claude/skills" "codex:.agents/skills"; do
@@ -752,7 +770,7 @@ for slug in session-start wrap-up review; do
     skill="$REPO/$dir/$slug"
     if [ -e "$skill" ] && ! { [ -d "$skill" ] && [ "$(ls -A "$skill" 2>&1; echo x)" = x ]; }; then echo "kept: $skill"; continue; fi
     mkdir -p "$skill"
-    cp "${KIT:?KIT is not set — re-run the kit block in Step 0}/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
+    cp "$KIT/docs/agentic-dev-kit/lite/adapters/$runtime/$slug/SKILL.md" "$dst"
   done
 done
 ```
@@ -760,7 +778,7 @@ done
 A `kept:` or `collision:` line for a binding L2 marked **replace** means some of it is
 still there: ask the operator to remove the rest, then run the block again. Resolve a
 target the block skipped for a symlinked directory with the operator. Then write
-`$REPO/config/dev-model.yaml` if it is absent. One that exists is kept: change a key in
+`<root>/config/dev-model.yaml` if it is absent. One that exists is kept: change a key in
 it only with the operator, never by writing the file again, which would drop a key
 such as `review.safety_critical_paths`.
 `kit.version` is `kit_version` in the kit clone's `kit-manifest.json`; leave out each
@@ -786,8 +804,8 @@ backlog:
 
 Create the plan and inbox only where L2 said **create**: a `# Plan` heading over an
 empty `## Workstreams` section, and a `# Friction log` heading. Add this section to
-`$REPO/AGENTS.md` unless it already has the section's heading, creating the file if it
-is missing, and create `$REPO/CLAUDE.md` as
+`<root>/AGENTS.md` unless it already has the section's heading, creating the file if it
+is missing, and create `<root>/CLAUDE.md` as
 the single line `@AGENTS.md` when it is missing. When `CLAUDE.md` exists and does not
 import `AGENTS.md`, ask the operator where the section goes instead.
 
@@ -812,14 +830,14 @@ When L1 found repository sources, list them after that section's bullets, under 
 ### L4 — Record the install baseline
 
 ```bash
-uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "${REPO:?REPO is not set — run Step 0}"
+uv run '<kit>/scripts/kit_doctor.py' --record-install --from-kit '<kit>' --root '<root>'
 ```
 
 Add `--keep <skill path>` to it for each skill L2 kept, such as `--keep
 .claude/skills/review/SKILL.md`. A kept skill that is not the kit's copy is recorded as
 the repository's own, named in a note, and read `declined` by L5; one that is the kit's
 copy is recorded as installed. `--keep` exits 2 for a path that is not one of the six
-lite skills or is not there. It writes `$REPO/kit-manifest.json` with `"profile":
+lite skills or is not there. It writes `<root>/kit-manifest.json` with `"profile":
 "lite"`. Exit 1 names a lite doc or skill that does not match the kit clone's copy and
 was not named with `--keep`: one the repository already had, or one edited since L3.
 Settle each with the operator, then re-run: a skill by naming it with `--keep` or by
@@ -829,27 +847,29 @@ skills alone. Re-running alone does not settle one: it stays exit 1 until then.
 ### L5 — Verify
 
 ```bash
-uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --root "${REPO:?REPO is not set — run Step 0}" --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json"
-uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}/scripts/kit_doctor.py" --adapter-report --adapter-source "${KIT:?KIT is not set — re-run the kit block in Step 0}" --root "$REPO"
+uv run '<kit>/scripts/kit_doctor.py' --verify-lite --from-kit '<kit>' --root '<root>'
 ```
 
-The first must exit 0 and print `· profile: lite` and `intact for this adoption — lite
-install`, with `nothing declined` unless L2 kept a skill or a command. Each file it
-reads `declined` must be a skill L2 kept, or the Claude skill L3 skipped for a
-`.claude/commands/<slug>.md` L2 kept; any other is a lite doc or skill that is missing,
-so take the kit's copy and re-run L4. Every full-profile file is counted `outside the
-lite profile`, and the engines, hook and registrations read `not installed (lite)`. The
-second lists each lite binding `kit-current`, or `adopter-owned` where L2 kept the
-repository's own, and every full-only binding `outside-profile`. A `profile-mismatch`
-row is a full binding where the lite one belongs: take the kit's lite copy.
+It writes nothing. It needs L4's record for this kit's commit, which supplies the
+profile and the kept skills, and refuses with a `refused:` line without one: run L4.
+That check catches a skipped L4; each file is judged against the kit's manifest and
+the disk, not against the record's hashes. It runs the main report
+against the kit's manifest and the adapter report from the kit, and judges them. Each
+lite doc and skill must be the kit's copy, a skill L4 kept with `--keep`, or the
+Claude skill L3 skipped for a `.claude/commands/<slug>.md` L2 kept; every lite binding
+must be the kit's render or one of those kept ones. It must exit 0 and print two
+`verify (L5):` lines: the install, `intact for this adoption — lite install`, and the
+bindings, `as L5 expects`. Anything else is a `stop: verify (L5):` line naming the
+file and exit 1. Settle each with the operator: take the kit's copy of a missing or
+edited file, or keep a skill as the repository's own, then re-run L4 and L5.
 
 ### L6 — Commit and hand off
 
 Stage every path L3 and L4 wrote by name, and each binding the operator removed for a
-**replace**: `git -C "$REPO" add -- <binding>` stages a tracked one's removal, and
+**replace**: `git -C '<root>' add -- <binding>` stages a tracked one's removal, and
 refuses with `did not match any files` for one Git never tracked, which leaves nothing
 to stage. Commit on the branch L2 named, or open a pull request if the repository takes
-changes that way. Delete `$KIT` once the commit has
+changes that way. Delete the kit clone at `<kit>` once the commit has
 landed. Report what was installed, kept and pointed at, and leave `session-start` as the
 next step. A later move to the full profile is this workflow run again with **Full**;
 its path from lite is not written yet (#1320).
