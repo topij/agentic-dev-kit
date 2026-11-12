@@ -339,8 +339,10 @@ for the lite config readers, are on #1368. The parser-based guard on lite docs' 
 
 **Status:** a whole-kit assessment at `fd12e961` on 2026-11-12 ranks what needs work and proposes an ordered
 plan. No step of it has started, and no ticket was filed for it. Its security finding S2, a lane writing the
-review receipt its own merge is judged by, was read from the code and not run.
+review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
+D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now and has no other record: no lane is
+issued with `--merge-class self` until the probe of S2 has run (D2).
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: the operator answers the plan's decisions D1 to D6 and chooses among the steps it names first: the
-backlog pass (step 1), the live probe of S2 (step 2a) and the single merge predicate (step 3a).
+▶ Next: the plan's step 1 (the LOW intake rule, then the backlog pass), the live probe of S2 (step 2a), then
+the single merge predicate (step 3a).

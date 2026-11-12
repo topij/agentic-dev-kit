@@ -62,6 +62,7 @@ all of them. Readings of the forge are not tied to a commit; the repository head
 | M7 | `config/dev-model.yaml`: 638 comment-only lines, 192 other non-blank lines. | `awk '/^[[:space:]]*#/{c++;next} /^[[:space:]]*$/{next} {k++} END{print c,k}' config/dev-model.yaml` |
 | M8 | `saved_plans/` holds 1196 tracked files, 42M on disk. | `git ls-files saved_plans \| wc -l`; `git ls-files -z saved_plans \| xargs -0 du -ch \| tail -1` |
 | M9 | `scripts/tests/test_portability.py` is 22556 lines. Its helper `_assert_triage_semantics` spans lines 5170 to 14751. `scripts/tests/test_pr_watch.py` contains 350 `monkeypatch.setattr` calls. `scripts/pr_watch.py` is 7392 lines and `scripts/kit_doctor.py` 6252. | `wc -l`; Python `ast` over the file's top-level functions; `grep -c 'monkeypatch.setattr'` |
+| M10 | `make test` at `435133e0`, in `.claude/worktrees/kit-assessment` on macOS, printed `6851 passed, 5 skipped in 1728.00s (0:28:47)` and exited 0. | `make test` |
 
 ## What is strong
 
@@ -236,8 +237,8 @@ check is a boundary against them. The one mechanism that is: give lanes and lens
 their own, weaker forge credential. With a separate identity, "a lane does not merge",
 "a lane does not record its own review" and "a lens publishes nothing" become things
 the forge enforces by author, and S1's blast radius shrinks to what that credential can
-do. That is an operator decision (D1 below), because it needs a second account or an
-app installation.
+do. It needs a second account or an app installation, so it was the operator's to
+decide, and D1 below records the decision to do it.
 
 ## DRY
 
@@ -355,7 +356,8 @@ documentation, the real-state guard, parsed-YAML checks of CI triggers.
 - **Timing and process tests run serially with no per-test timeout.** Wall-clock
   assertions sit in `test_lane_launcher.py:1217`, `test_reconcile_sessions.py:1009` and
   `test_review_eval.py:262`. The `toolkit` job has no `timeout-minutes`. #644 and #1344
-  are flakes of this kind. M5 shows the price: a run is 11 to 16 minutes.
+  are flakes of this kind. M5 and M10 show the price: a CI run is 11 to 16 minutes and
+  a local run on the operator's machine is 29 minutes.
 - **Executed documentation stops at lite.** `session-cleanup.md`'s shell blocks are
   referenced by no test file (#374 and #586 are the general tickets).
 
@@ -414,7 +416,7 @@ file completely before the first action (`pr-watch.md:17-20`,
    `saved_plans/` and `docs/kit-*`, and an `adopt.md` and `upgrade.md` that take a ref
    and verify it. This also gives the changelog fragments something to compile into.
 4. **`kit_doctor.py --upgrade` for the full profile.** The states already exist and
-   `--upgrade-lite` shows the plan, apply and verify shape.
+   `--upgrade-lite` shows the plan, apply and verify shape. D4 defers it.
 5. **One merge predicate, importable.** C1. The triage, lane and reconcile paths then
    cannot disagree.
 6. **Usage on the record before tuning review.** #1174. Review proportionality, the
@@ -433,62 +435,100 @@ Each step is one pull request unless it says otherwise. Tags are `[size · revie
 the step changes a file in `review.safety_critical_paths` and owes the two-lens review.
 No ticket is filed by this document; filing is the operator's go-ahead.
 
-### Step 0. Decisions only the operator can make
+### Step 0. The operator's decisions
 
-These gate the steps that follow. Each has a recommendation.
+These gate the steps that follow. The operator made them on 2026-11-12, in the session
+that wrote this document, taking the recommendation given for each. D4 is the
+operator's own answer.
 
-- **D1. A separate forge identity for lanes and lenses?** Recommended: yes. Without it,
+- **D1. A separate forge identity for lanes and lenses: yes, lanes first.** A second
+  account with a fine-grained token scoped to this repository, for contents and pull
+  requests and nothing else. `launch_lane.py` passes that token to the child in place
+  of the operator's, and a ruleset on `main` leaves merging to the operator's account.
+  Lenses follow with a read-only token. Not yet probed: how the ruleset and a
+  fine-grained token behave together. That probe is part of step 2c. Until 2c ships,
   steps 2a and 2b raise the bar and stop short of a boundary.
-- **D2. Keep lane self-merge enabled while the receipt is self-reported?** Recommended:
-  hold `self`-class lanes for the operator until step 2a's probe has run.
-- **D3. A backlog intake rule.** Recommended: a LOW review finding with no recurrence
-  is recorded in the pull request's disposition and nowhere else; it becomes a ticket
-  on its second occurrence. This is Principle 2's asymmetry applied to review residue.
-- **D4. Is the full profile meant for repositories other than the author's?** If no,
-  step 6b is not worth its cost and the README should say that full is the author's
-  profile. If yes, 6b moves up.
-- **D5. A release unit.** Recommended: annotated tags on `main`, cut when a changelog
-  fragment marked breaking or changed lands.
-- **D6. May the Markdown scanners depend on `markdown-it-py`?** Recommended: no for
-  engines, which stay stdlib-only; one shared stdlib fence scanner instead.
+- **D2. Hold `self`-class lane merges until step 2a's probe has run: yes.** In force
+  from 2026-11-12. It needs no code: `dev_session.sh new` issues a lane as `operator`
+  unless `--merge-class self` is passed, so the hold is not passing it. If the probe
+  shows a lane cannot produce a receipt the merge wrapper accepts, the hold lifts.
+  Otherwise it stays until step 2a ships.
+- **D3. A LOW review finding is not ticketed until it recurs: yes, as a trial.** It is
+  recorded in the pull request's typed disposition and nowhere else, and becomes a
+  ticket on its second occurrence. `post-merge-systemize` already reads typed
+  disposition lines from merged pull requests, so the recurrence has a reader. A LOW on
+  a safety-critical path is still repaired in its pull request or ticketed. This
+  reverses the ticket half of *LOW findings: delta review or ticket* in
+  `fallback-review-panel.md`, so it is a change to that shared document in its own pull
+  request (step 1a). The trial runs for a month from the day that merges and is judged
+  against the monthly inflow in M3.
+- **D4. Whether the full profile is meant for repositories other than the author's:
+  undecided, and the option is kept.** So the plan neither builds for it nor forecloses
+  it. The full-profile upgrade engine is deferred (step 6c). The steps both answers need
+  go ahead: pinned installs (2d), the lite-first README and export (6a), and the
+  adoption fixtures that keep the full install path tested. The lite-to-full move (6b)
+  comes before the upgrade engine, because it is what lets a lite adopter grow into
+  full. Revisit when a repository outside the author's asks for full, or when the next
+  full upgrade of `in-parallel-oy/cs-toolkit` or `topij/OpenKitchen` reports new defects
+  in the hand-run path.
+- **D5. Annotated, calendar-named tags on `main` as the release unit: yes.** Cut one
+  when an adopter upgrade is about to run and whenever a changelog fragment marked
+  breaking lands. The tag message lists the fragments since the previous tag.
+  Calendar names and not semantic versions: the tag message says which fragments a
+  tag holds, and a calendar name orders tags without a ruling on what counts as major.
+  `adopt.md` and `upgrade.md` take a ref, so pinning a bare commit keeps working.
+- **D6. One shared stdlib fence scanner for the engines: yes.** Engines stay
+  stdlib-only: they run as a bare `python3` from hooks and scheduled jobs, and the
+  README says the runtime engines do not require PyYAML. `markdown-it-py` stays in
+  `check_record_prose.py`, which is review-time tooling run through `uv`.
 
-### Step 1. Make the backlog choosable `[M · tracker only · cloud]`
+### Step 1. Make the backlog choosable
 
-One pass over the open issues, on the operator's approval of the rule and of each
-batch, in the manner of the 2026-10 pass:
+- **1a. The intake rule** `[S · standard · cloud]`. Write D3 into *LOW findings: delta
+  review or ticket* in `fallback-review-panel.md`, with the date the trial ends and
+  the safety-critical carve-out. **Done when** the document sends a first-occurrence
+  LOW to the disposition alone, and the handoff carries the date to judge the trial.
+- **1b. The pass** `[M · tracker only · cloud]`. One pass over the open issues, on the
+  operator's approval of each batch, in the manner of the 2026-10 pass:
 
-- retire entries the tree has overtaken, after checking each against the tree; #36 is
-  the first to check;
-- fold overlapping reports into one after reading their bodies: #1398 with #1145, and
-  #467 and #677 with #1082;
-- apply D3 to open LOW-residue tickets with no recorded recurrence;
-- give each survivor a priority label and a known execution environment (M3 counts the
-  ones labelled `execution:unknown`);
-- group survivors under the steps of this plan where they belong.
+  - retire entries the tree has overtaken, after checking each against the tree; #36
+    is the first to check;
+  - fold overlapping reports into one after reading their bodies: #1398 with #1145,
+    and #467 and #677 with #1082;
+  - apply D3 to open LOW-residue tickets with no recorded recurrence;
+  - give each survivor a priority label and a known execution environment (M3 counts
+    the ones labelled `execution:unknown`);
+  - group survivors under the steps of this plan where they belong.
 
-**Done when** `gh issue list --state open` returns no issue without a priority label,
-and each step below names its tickets.
+  **Done when** `gh issue list --state open` returns no issue without a priority
+  label, and each step below names its tickets.
 
 ### Step 2. Provenance on the unattended path
 
 - **2a. Probe, then bind the receipt** `[M · safety-critical · local]`. First run S2
   live in a throwaway lane against a throwaway pull request and record the result. If
   it holds: `dev_session.sh merge` takes review evidence only from a place the lane's
-  grants do not reach. With D1 that is a disposition comment authored by the cockpit
-  identity. Without D1 it is the cockpit's own state root, and `record_review` refuses
-  under a lane descriptor. **Done when** the same probe is refused at the new sha and
-  still succeeds at the sha before it.
+  grants do not reach. Once 2c has given lanes their own identity (D1), that is a
+  disposition comment authored by the operator's identity. Until then it is the
+  cockpit's own state root, and `record_review` refuses under a lane descriptor.
+  **Done when** the same probe is refused at the new sha and still succeeds at the sha
+  before it. D2's hold lifts then.
 - **2b. Author trust for text handed to an agent** `[M · safety-critical · cloud]`.
   `launch_lane.py --ticket` refuses an issue whose author is not the repository owner,
   a member or a collaborator, or that was edited after a time the operator passes at
   launch. `pr_watch.py --json` marks each comment with its author's association, and
   `pr-watch.md` says to act on trusted tiers and report the rest. Covers S1's inlet
   and S3.
-- **2c. Narrow the lane's environment and grants** `[S · safety-critical · local]`.
-  Pass the child an allowlist of environment variables instead of removing three
-  families. Put a lane-side gate in front of `git push` and the `gh` grants, as #615
-  proposes, and extend it to S6's argument classes.
-- **2d. Pin what adopters install** `[S · standard · cloud]`. After D5: `adopt.md` and
+- **2c. A lane identity, a narrower environment and narrower grants** `[M ·
+  safety-critical · local]`. Per D1: probe a second account's fine-grained token
+  against a ruleset on `main`, then have `launch_lane.py` hand the child that token
+  from a configured environment variable. Pass the child an allowlist of environment
+  variables instead of removing named ones. Put a lane-side gate in front of
+  `git push` and the `gh` grants, as #615 proposes, and extend it to S6's argument
+  classes. Owes a changelog fragment for the new config key. **Done when** a lane
+  launched with the shipped profile cannot merge its own pull request and its child's
+  environment does not carry the operator's token.
+- **2d. Pin what adopters install** `[S · standard · cloud]`. Per D5: `adopt.md` and
   `upgrade.md` take a ref, clone that ref, and print it before the first copy. Covers
   S5.
 - **2e. CI hygiene** `[S · safety-critical · cloud]`. Pin the remaining actions to
@@ -512,7 +552,10 @@ and each step below names its tickets.
 - **3d. One runner for `git` and `gh`, one process-group stop** `[M · mixed · local]`.
   A shared module with a timeout, error translation and one `GIT_*` policy, adopted an
   engine at a time. `launch_lane.py`'s group stop becomes the shared one.
-- **3e. One fence scanner** `[S · standard · cloud]`. After D6. Covers C6.
+- **3e. One fence scanner** `[S · standard · cloud]`. Per D6: one stdlib scanner under
+  `scripts/lib/`, used by `archive_plan_sessions.py`, `review_eval.py`,
+  `lib/systemize/normalize.py`, `lib/triage/inbox.py` and `lib/triage/model.py`. Covers
+  C6.
 
 ### Step 4. CI and tests the same shape as the operator's machine
 
@@ -547,15 +590,17 @@ and each step below names its tickets.
 
 ### Step 6. Distribution
 
-- **6a. Lite first, and an export** `[M · standard · cloud]`. After D5: the README's
-  first screen states the two profiles and who each is for. A release export leaves out
+- **6a. Lite first, tags and an export** `[M · standard · cloud]`. Per D5 and D4: the
+  first calendar tag; a README whose first screen states the two profiles, who each is
+  for and what full costs to keep current; a release export that leaves out
   `saved_plans/` and `docs/kit-*`. The `cp -r` route is replaced or gains its cleanup
   step.
-- **6b. `kit_doctor.py --upgrade` for the full profile** `[L · standard · local]`.
-  After D4. Generalise the lite planner; move config migration out of interactive
-  `init.sh` into a stdlib module `init.sh` calls.
-- **6c. The lite-to-full move.** Already the Lite install profile workstream's open
-  item; listed so the order is visible.
+- **6b. The lite-to-full move.** Already the Lite install profile workstream's open
+  item. D4 puts it ahead of 6c, because it keeps full reachable for a lite adopter.
+- **6c. `kit_doctor.py --upgrade` for the full profile** `[L · standard · local]`.
+  Deferred under D4 until one of its two revisit conditions holds. When it is built:
+  generalise the lite planner, and move config migration out of interactive `init.sh`
+  into a stdlib module `init.sh` calls.
 
 ### Step 7. Split the large engines `[L · safety-critical · local]`
 
@@ -563,6 +608,8 @@ Last, and only after 3a, 3b and 4b. By then the first two `pr_watch.py` seams ar
 and the tests' patching can be moved to the new modules a seam at a time.
 
 ### The first three
+
+D2's hold on `self`-class lane merges is already in force and needs no step.
 
 If only three things happen next: **step 1**, because every later choice is easier
 against a backlog with priorities; **step 2a's probe**, because it is small and says
@@ -588,6 +635,8 @@ merge path, and lets 2a's change to review evidence land in one place.
 ## What this assessment did not establish
 
 - Whether S2 holds when run. It was read, not run.
+- How a fine-grained token on a second account and a ruleset on `main` behave together
+  (D1).
 - The token cost of a review round, a lane or a session start.
 - Whether an adopter other than the author can complete a full install unaided; no
   such attempt is on record.
