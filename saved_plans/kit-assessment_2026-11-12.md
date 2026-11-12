@@ -454,12 +454,17 @@ operator's own answer.
 
   **This hold is prose.** It binds a session that reads this document or the handoff
   entry that carries it, and nothing else. `parallel.md`'s *Per-lane merge class* table
-  still classes mechanical and standard lanes as self-merge for autonomous batches.
+  still classes mechanical and standard lanes as self-merge for autonomous batches,
+  and it is one of the documents that tell a cockpit to run the wrapper for a `self`
+  lane; `grep -rln "dev_session.sh merge" --include='*.md' .` lists them.
   `dev_session.sh new` still accepts `--merge-class self` (`dev_session.sh:257-258`).
   `dev_session.sh merge` gates on the session's stored class (`dev_session.sh:1033-1035`),
-  so a `self` session already on disk stays mergeable; `dev_session.sh list` in the
-  primary checkout on 2026-11-12 printed `(no active sessions)`. This pull request
-  changes no engine and no workflow, so the mechanism is step 2a.
+  so a `self` session already on disk stays mergeable. On 2026-11-12, with the primary
+  checkout at `fd12e961`, no `merge_class` file existed under the default sessions
+  directory beside it (`ls <sessions-dir>/*/merge_class` matched nothing).
+  `dev_session.sh list` is not that check: it shows only a session that still has its
+  worktree. This pull request changes no engine and no workflow, so the mechanism is
+  step 2a.
 
   **What the operator reads is the pull request, not the merge-ready line.**
   `reconcile_sessions.sh` reports an operator-class lane as held and merge-ready from
@@ -537,8 +542,9 @@ operator's own answer.
   - tries, from inside the lane's grants, each route to the receipt: the granted
     `pr_watch.py --record-review`, and a direct write of the state file under the
     lane's state root;
-  - reads what the merge wrapper reads, `pr_watch.py <PR> --json --no-persist` under
-    the lane's state root, and records `review_evidence` and `mergeable`;
+  - reads the report the merge wrapper reads at the sha under test, and records its
+    `review_evidence` and `mergeable` (at `fd12e961` that report is
+    `pr_watch.py <PR> --json --no-persist` under the lane's state root);
   - runs the control: the same read after the cockpit records a receipt;
   - does not run `dev_session.sh merge`, so it needs no `self` lane and merges
     nothing.
