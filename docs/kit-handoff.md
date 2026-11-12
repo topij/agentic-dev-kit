@@ -334,3 +334,13 @@ the full profile's kit block. #1399 gave lite an optional story backlog, `backlo
 the operator chose over tNote for phase 5 on 2026-11-09. The lite-to-full move is not written. #1381's review rounds
 showed that a prose list of config stops does not converge; the findings left open, and a proposed shared validator
 for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
+
+### Whole-kit plan
+
+**Status:** a whole-kit assessment at `fd12e961` on 2026-11-12 ranks what needs work and proposes an ordered
+plan. No step of it has started, and no ticket was filed for it. Its security finding S2, a lane writing the
+review receipt its own merge is judged by, was read from the code and not run.
+**Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
+
+▶ Next: the operator answers the plan's decisions D1 to D6 and chooses among the steps it names first: the
+backlog pass (step 1), the live probe of S2 (step 2a) and the single merge predicate (step 3a).
