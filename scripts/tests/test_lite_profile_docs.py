@@ -1221,6 +1221,24 @@ def test_adopt_lite_copy_block_refuses_a_kit_path_that_is_not_the_kit(tmp_path: 
 
 
 @pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
+@pytest.mark.parametrize("only", ["scripts/kit_doctor.py", "docs/agentic-dev-kit/lite/adapters"])
+def test_adopt_lite_copy_block_needs_both_halves_of_the_kit_check(tmp_path: Path, shell: str, only: str) -> None:
+    """L3 takes a path as the kit only with the engine AND the lite adapters: each half
+    alone is refused (adversarial, PR 1423 delta F3)."""
+    repo, env = _repo(tmp_path, "adopter")
+    fake = tmp_path / "fake-kit"
+    if only.endswith(".py"):
+        (fake / only).parent.mkdir(parents=True)
+        (fake / only).write_text("", encoding="utf-8")
+    else:
+        (fake / only).mkdir(parents=True)
+    result = _adopt_run(shell, repo, {**env, "REPO": str(repo), "KIT": str(fake)})
+    assert result.returncode == 1
+    assert "is not the kit clone" in result.stderr
+    assert not (repo / "docs").exists()
+
+
+@pytest.mark.parametrize("shell", [s for s in ("sh", "bash") if shutil.which(s)])
 def test_adopt_lite_copy_block_refuses_an_installed_adopter_as_the_kit(tmp_path: Path, shell: str) -> None:
     """An adopter carries `kit-manifest.json` after L4, so that is no sign of the kit
     clone: `<root>` and `<kit>` swapped is refused (adversarial, PR 1423 pass 2 F1)."""

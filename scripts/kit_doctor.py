@@ -4850,7 +4850,7 @@ def _lite_verify(
             continue
         on_disk = (root / f.path).exists() or (root / f.path).is_symlink()
         if f.state == "declined" and f.path in kept:
-            # A regular file: a directory or a dangling link in its place is no skill.
+            # A file, or a link to one: a directory or a dangling link in its place is no skill.
             if not (root / f.path).is_file():
                 stops.append(f"{f.path} is kept by the record but not a file on disk — {settle}")
             continue
@@ -4872,7 +4872,7 @@ def _lite_verify(
         adapters = compare_adapters(kit, root, profile="lite")
     except ValueError as exc:
         stops.append(f"the adapter report refused: {exc}")
-        return lines, stops
+        return _lite_install_line_not_intact(lines), stops
     bad: list[str] = []
     # A kept `.claude/commands/<slug>.md` in place of the lite Claude skill L3
     # skipped for it (#1365): the command and the absent skill both read
@@ -4896,7 +4896,19 @@ def _lite_verify(
         f"verify (L5): adapters {'NOT as L5 expects' if bad else 'as L5 expects'}: {current} kit-current"
         + (f", {owned} adopter-owned and kept" if owned else "")
     )
+    if bad:
+        lines = _lite_install_line_not_intact(lines)
     return lines, stops + bad
+
+
+def _lite_install_line_not_intact(lines: list[str]) -> list[str]:
+    """The install line once any L5 stop prints, the adapters' included: a run that
+    exits 1 never says `intact for this adoption`, for `--verify-lite` and U5 alike."""
+    if lines:
+        lines[0] = lines[0].replace(
+            "verify (L5): intact for this adoption — lite install", "verify (L5): NOT intact", 1
+        )
+    return lines
 
 
 def _lite_bullets(lines: list[str]) -> list[str]:
@@ -5113,11 +5125,10 @@ def verify_lite(root: Path, kit: Path, *, out=None) -> int:
         say(f"refused: {exc}")
         return 1
     stops += verify_stops
-    if stops and lines:
-        # The install line says intact only for a run that exits 0.
-        lines[0] = lines[0].replace(
-            "verify (L5): intact for this adoption — lite install", "verify (L5): NOT intact", 1
-        )
+    if stops:
+        # The install line says intact only for a run that exits 0: a kit.version stop
+        # comes from here, outside `_lite_verify`.
+        lines = _lite_install_line_not_intact(lines)
     for line in lines:
         say(line)
     for stop in stops:

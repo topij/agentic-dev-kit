@@ -26,7 +26,7 @@ What to do: nothing, unless your own notes or scripts for a lite install run L5'
 old commands, or rely on `KIT` and `REPO` carrying from Step 0. Run `--verify-lite`
 with both paths written out instead. A full install is unchanged.
 
-CHANGED (gate semantics): a skill the record keeps must be a regular file on disk. A
-directory or a dangling link in its place is a `stop: verify (L5):` line, from
+CHANGED (gate semantics): a skill the record keeps must be a file on disk, or a link to
+one. A directory or a dangling link in its place is a `stop: verify (L5):` line, from
 `--verify-lite` and from `--upgrade-lite`'s U5 read alike, where only a path with
 nothing at it was one before.
