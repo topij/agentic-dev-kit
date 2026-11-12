@@ -568,7 +568,8 @@ def test_an_adapter_report_that_refuses_is_a_verify_stop(
     record = json.loads((repo / "kit-manifest.json").read_text(encoding="utf-8"))
     lines, stops = kit_doctor._lite_verify(repo, kit, config, manifest, record)
     assert stops == ["the adapter report refused: cannot read source interface"], stops
-    assert lines and lines[0].startswith("verify (L5): intact for this adoption — lite install: ")
+    # The refusal is a stop, so the install line says so (adversarial, PR 1423 delta F1).
+    assert lines and lines[0].startswith("verify (L5): NOT intact: ")
 
 
 def test_u5_passes_a_skill_the_operator_left_absent(
