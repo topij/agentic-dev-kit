@@ -448,16 +448,39 @@ operator's own answer.
   Lenses follow with a read-only token. Not yet probed: how the ruleset and a
   fine-grained token behave together. That probe is part of step 2c. Until 2c ships,
   steps 2a and 2b raise the bar and stop short of a boundary.
-- **D2. Hold `self`-class lane merges until step 2a's probe has run: yes.** In force
-  from 2026-11-12. It needs no code: `dev_session.sh new` issues a lane as `operator`
-  unless `--merge-class self` is passed, so the hold is not passing it. If the probe
-  shows a lane cannot produce a receipt the merge wrapper accepts, the hold lifts.
-  Otherwise it stays until step 2a ships.
+- **D2. Hold `self`-class lane merges: yes.** In force from 2026-11-12: no lane is
+  issued with `--merge-class self`, and no session runs `dev_session.sh merge`, the
+  self-merge wrapper. The operator merges lane pull requests after reading them.
+
+  **This hold is prose.** It binds a session that reads this document or the handoff
+  entry that carries it, and nothing else. `parallel.md`'s *Per-lane merge class* table
+  still classes mechanical and standard lanes as self-merge for autonomous batches.
+  `dev_session.sh new` still accepts `--merge-class self` (`dev_session.sh:257-258`).
+  `dev_session.sh merge` gates on the session's stored class (`dev_session.sh:1033-1035`),
+  so a `self` session already on disk stays mergeable; `dev_session.sh list` in the
+  primary checkout on 2026-11-12 printed `(no active sessions)`. This pull request
+  changes no engine and no workflow, so the mechanism is step 2a.
+
+  **What the operator reads is the pull request, not the merge-ready line.**
+  `reconcile_sessions.sh` reports an operator-class lane as held and merge-ready from
+  a `pr_watch.py` report read under the lane's state root
+  (`reconcile_sessions.sh:495-520`). That line rests on the same receipt as S2 and is
+  not independent evidence.
+
+  **It lifts when step 2a ships.** If 2a's probe finds nothing to repair, it lifts on
+  the operator's decision, recorded with the probe, and only if the probe covered each
+  route a lane has to the receipt (the granted `pr_watch.py --record-review`, and a
+  direct write of the state file under the lane's state root) and included a control
+  in which a receipt the cockpit recorded is accepted. A probe result alone lifts
+  nothing.
 - **D3. A LOW review finding is not ticketed until it recurs: yes, as a trial.** It is
   recorded in the pull request's typed disposition and nowhere else, and becomes a
   ticket on its second occurrence. `post-merge-systemize` already reads typed
-  disposition lines from merged pull requests, so the recurrence has a reader. A LOW on
-  a safety-critical path is still repaired in its pull request or ticketed. This
+  disposition lines from merged pull requests, so the recurrence has a reader when
+  that workflow runs. This document did not establish that anything runs it on a
+  schedule in this repository, and what counts as the same LOW is a judgement its run
+  makes, so step 1a names when it runs during the trial. A LOW on a safety-critical
+  path is still repaired in its pull request or ticketed. This
   reverses the ticket half of *LOW findings: delta review or ticket* in
   `fallback-review-panel.md`, so it is a change to that shared document in its own pull
   request (step 1a). The trial runs for a month from the day that merges and is judged
@@ -485,9 +508,10 @@ operator's own answer.
 ### Step 1. Make the backlog choosable
 
 - **1a. The intake rule** `[S · standard · cloud]`. Write D3 into *LOW findings: delta
-  review or ticket* in `fallback-review-panel.md`, with the date the trial ends and
-  the safety-critical carve-out. **Done when** the document sends a first-occurrence
-  LOW to the disposition alone, and the handoff carries the date to judge the trial.
+  review or ticket* in `fallback-review-panel.md`, with the date the trial ends, the
+  safety-critical carve-out, and when `post-merge-systemize` runs during the trial.
+  **Done when** the document sends a first-occurrence LOW to the disposition alone,
+  and the handoff carries the date to judge the trial.
 - **1b. The pass** `[M · tracker only · cloud]`. One pass over the open issues, on the
   operator's approval of each batch, in the manner of the 2026-10 pass:
 
@@ -506,13 +530,25 @@ operator's own answer.
 ### Step 2. Provenance on the unattended path
 
 - **2a. Probe, then bind the receipt** `[M · safety-critical · local]`. First run S2
-  live in a throwaway lane against a throwaway pull request and record the result. If
-  it holds: `dev_session.sh merge` takes review evidence only from a place the lane's
+  live and record the result. The probe:
+
+  - issues a throwaway lane with the default `operator` class, against a throwaway
+    pull request whose base is a branch made for the probe, never `main`;
+  - tries, from inside the lane's grants, each route to the receipt: the granted
+    `pr_watch.py --record-review`, and a direct write of the state file under the
+    lane's state root;
+  - reads what the merge wrapper reads, `pr_watch.py <PR> --json --no-persist` under
+    the lane's state root, and records `review_evidence` and `mergeable`;
+  - runs the control: the same read after the cockpit records a receipt;
+  - does not run `dev_session.sh merge`, so it needs no `self` lane and merges
+    nothing.
+
+  If S2 holds: `dev_session.sh merge` takes review evidence only from a place the lane's
   grants do not reach. Once 2c has given lanes their own identity (D1), that is a
   disposition comment authored by the operator's identity. Until then it is the
   cockpit's own state root, and `record_review` refuses under a lane descriptor.
   **Done when** the same probe is refused at the new sha and still succeeds at the sha
-  before it. D2's hold lifts then.
+  before it. D2's hold lifts when this ships.
 - **2b. Author trust for text handed to an agent** `[M · safety-critical · cloud]`.
   `launch_lane.py --ticket` refuses an issue whose author is not the repository owner,
   a member or a collaborator, or that was edited after a time the operator passes at
@@ -609,11 +645,12 @@ and the tests' patching can be moved to the new modules a seam at a time.
 
 ### The first three
 
-D2's hold on `self`-class lane merges is already in force and needs no step.
+D2's hold on `self`-class lane merges is already in force. It is prose, and step 2a is
+what replaces it with a mechanism.
 
 If only three things happen next: **step 1**, because every later choice is easier
 against a backlog with priorities; **step 2a's probe**, because it is small and says
-whether lane self-merge is sound today; and **step 3a**, because it is small, on the
+whether S2 holds when run; and **step 3a**, because it is small, on the
 merge path, and lets 2a's change to review evidence land in one place.
 
 ## What I would not do
@@ -640,6 +677,7 @@ merge path, and lets 2a's change to review evidence land in one place.
 - The token cost of a review round, a lane or a session start.
 - Whether an adopter other than the author can complete a full install unaided; no
   such attempt is on record.
+- Whether anything runs `post-merge-systemize` on a schedule in this repository (D3).
 - Whether `test_pre_push_hook.py` catches the three mutations #36 lists.
 - The contents of issue bodies, except #36's opening and #1398's opening.
 - Anything about `in-parallel-oy/cs-toolkit` or the lite repositories beyond what
