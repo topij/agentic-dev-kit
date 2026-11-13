@@ -1024,3 +1024,42 @@ def test_systemize_operator_logins_is_overlayable_and_its_siblings_are_not(tmp_p
     )
     with pytest.raises(ValueError, match="systemize.batch_size — not overlayable"):
         kitconfig.load_config(path)
+
+
+def _git(root, *args):
+    import subprocess
+
+    subprocess.run(
+        ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+        check=True,
+        capture_output=True,
+    )
+
+
+@pytest.mark.parametrize("committed", [True, False], ids=["committed", "staged"])
+def test_an_overlay_git_tracks_is_refused(tmp_path, committed):
+    """An overlay is local to one checkout. Force-added, it would set every
+    overlayable key, `systemize.operator_logins` among them, for every checkout of
+    its branch, through a pull request that never touches the tracked config.
+    Refused whether it is committed or only staged."""
+    root = tmp_path / "repo"
+    (root / "config").mkdir(parents=True)
+    _git(root, "init", "-q")
+    path = root / "config" / "dev-model.yaml"
+    path.write_text("systemize:\n  operator_logins: []\n", encoding="utf-8")
+    (root / ".gitignore").write_text("config/*.local.yaml\n", encoding="utf-8")
+    overlay = root / "config" / "dev-model.local.yaml"
+    overlay.write_text("systemize:\n  operator_logins: [operator]\n", encoding="utf-8")
+    _git(root, "add", ".")
+    _git(root, "commit", "-q", "-m", "init")
+    assert kitconfig.get(kitconfig.load_config(path), "systemize.operator_logins") == ["operator"]
+
+    _git(root, "add", "-f", "config/dev-model.local.yaml")
+    if committed:
+        _git(root, "commit", "-q", "-m", "commit the overlay")
+    with pytest.raises(ValueError, match="overlay is tracked by Git"):
+        kitconfig.load_config(path)
+    assert kitconfig.get(kitconfig.load_config(path, overlay=False), "systemize.operator_logins") == []
+
+    _git(root, "rm", "-q", "--cached", "config/dev-model.local.yaml")
+    assert kitconfig.get(kitconfig.load_config(path), "systemize.operator_logins") == ["operator"]

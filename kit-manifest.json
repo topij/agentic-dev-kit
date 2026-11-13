@@ -383,7 +383,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "79bfb619670d3ece6ac1c496307d7db6e4f35a6aaa74c9a81f9956116057149c"
+      "sha256": "c55fe2d286801034f8409bb815a8d1c131b91e20a5446fb62e34d015cffb4230"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -785,7 +785,7 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "c761f281aec75fd378df207de5d9c1ad0fe43b78a7ce08057b5ccec7ad671d63"
+      "sha256": "0a6acd7c787876b2dcf1a6bc012c7396eac77616e6deee5b419c831b537e0b2f"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",

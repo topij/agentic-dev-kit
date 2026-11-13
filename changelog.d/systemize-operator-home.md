@@ -14,6 +14,16 @@ systemize:
 ```
 
 Leave the tracked value `[]`, because `./init.sh` writes the tracked file and the
-overlay wins over it. A checkout without the overlay, such as a fresh clone or a lane
-worktree, sees only the tracked value. If that is empty and `review.bots` is empty
-too, `post-merge-systemize` refuses there. No other `systemize` key is overlayable.
+overlay wins over it. A checkout without the overlay, such as a fresh clone or a
+worktree made by plain `git worktree add`, sees only the tracked value; a lane that
+`dev_session.sh` creates gets a copy of the primary checkout's overlay. If the value
+a checkout sees is empty and `review.bots` is empty too, `post-merge-systemize`
+refuses there. No other `systemize` key is overlayable.
+
+## A local config overlay that Git tracks is refused
+
+`kitconfig.load_config()` now raises `ValueError` (`local config overlay is tracked by
+Git`) when `config/dev-model.local.yaml` is in Git's index, committed or staged. If you
+committed your overlay, remove it from the index with
+`git rm --cached config/dev-model.local.yaml`, keep `config/*.local.yaml` in
+`.gitignore`, and commit that removal.
