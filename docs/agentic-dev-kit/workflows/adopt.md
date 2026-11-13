@@ -22,13 +22,27 @@ Run this **kit block** from inside the repo being adopted into:
 KIT_HOME="$(git rev-parse --absolute-git-dir)" || exit 1
 KIT="$KIT_HOME/agentic-dev-kit"
 KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
-if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
+KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to install; main, the tip of the kit's main branch, when you name none
+if [ ! -e "$KIT" ]; then
+  git clone --depth 1 "$KIT_URL" "$KIT" &&
+    git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
+    git -C "$KIT" checkout -q --detach FETCH_HEAD ||
+    { echo "could not check out $KIT_REF in $KIT: delete $KIT and re-run this block" >&2; exit 1; }
+fi
 KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
+echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   (ref requested: $KIT_REF)"
 ```
+
+**Name the ref you are installing.** Set `KIT_REF` to a release tag or a full commit sha
+before the block runs (`KIT_REF=<tag-or-sha>`, or edit the default line). Naming none
+installs `main` as it stands when the block runs, which is a different kit next week;
+a tag or sha installs the same kit every time. The block prints the resolved commit on its
+`kit commit:` line before any copy: write that sha in the adoption's pull request, so the
+repository records which kit commit it installed.
 
 The path depends only on this checkout, so the block is safe to re-run from any shell or
 session: it finds the same clone again instead of making another, which matters once
@@ -651,8 +665,10 @@ one word.
 
 ### L1 — Inspect (read-only)
 
-First run Step 0's **kit block**, from the checkout the install is committed in. Write
-down the path its `KIT=<path> at <sha>` line prints: that is `<kit>`. Write down what
+First run Step 0's **kit block**, from the checkout the install is committed in, with
+`KIT_REF` set to the tag or sha you are installing (it installs `main` when you name
+none). Write down the path its `KIT=<path> at <sha>` line prints: that is `<kit>`. Write
+down the sha its `kit commit:` line prints too, for the install's pull request. Write down what
 `git rev-parse --show-toplevel` prints in that checkout: that is `<root>`. Then:
 
 - **A plan already kept?** A `docs/plan.md`, a roadmap, or a plan file another tool

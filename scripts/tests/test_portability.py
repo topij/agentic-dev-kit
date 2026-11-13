@@ -19972,13 +19972,28 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
     stub.write_text(
         '#!/bin/sh\n'
         'if [ "$1" = clone ]; then\n'
+        '  # Fixed dates: every stub clone holds the same commits, so a sha taken from one is\n'
+        '  # valid in the next, as one kit is for every adopter.\n'
+        '  export GIT_AUTHOR_DATE="2020-01-01T00:00:00Z" GIT_COMMITTER_DATE="2020-01-01T00:00:00Z"\n'
         '  url=; for last; do url="$prev"; prev="$last"; done\n'
         '  echo "$last" >> "$CLONES"\n'
-        '  "$REAL_GIT" init -q "$last" && "$REAL_GIT" -C "$last" remote add origin "$url" &&\n'
+        '  "$REAL_GIT" init -q -b main "$last" && "$REAL_GIT" -C "$last" remote add origin "$url" &&\n'
         '    echo "{}" > "$last/kit-manifest.json" && "$REAL_GIT" -C "$last" add kit-manifest.json &&\n'
-        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -m kit\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -m kit &&\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t tag -a -m release v1 &&\n'
+        '    echo "{\\"later\\": true}" > "$last/kit-manifest.json" &&\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -a -m later\n'
         '  exit $?\n'
         'fi\n'
+        '# The block pins its ref with `git -C <kit> fetch --depth 1 origin <ref>`: resolve the\n'
+        '# ref in the stub clone (no network), as FETCH_HEAD, and log the ref asked for.\n'
+        'case " $* " in *" fetch --depth 1 origin "*)\n'
+        '  for last; do :; done\n'
+        '  echo "$last" >> "$CLONES.refs"\n'
+        '  sha="$("$REAL_GIT" -C "$2" rev-parse "$last^{commit}")" || exit 1\n'
+        '  printf "%s\\t\\t%s\\n" "$sha" "$last" > "$2/.git/FETCH_HEAD"\n'
+        '  exit 0 ;;\n'
+        'esac\n'
         'case " $* " in *" fetch "*) echo "fetch $*" >> "$CLONES.fetch" ;; esac\n'
         'exec "$REAL_GIT" "$@"\n'
     )
@@ -20044,6 +20059,53 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
     assert Path(kits[0]).is_relative_to(_git_dir(task_a))
     assert Path(kits[2]).is_relative_to(_git_dir(task_b))
     assert _git(task_a, "status", "--porcelain").stdout == ""
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_the_kit_block_checks_out_the_named_ref_and_prints_its_commit(
+    tmp_path: Path, workflow: str, shell: str
+) -> None:
+    """The operator names a tag or sha in `KIT_REF`; the clone is at that commit and
+    the block prints the resolved sha before any copy. With none named it takes
+    `main`, the default the block states."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    assert 'KIT_REF="${KIT_REF:-main}"' in block
+    env, clones = _kit_world(tmp_path)
+    _, task_tag = _repo_with_task(tmp_path, "tag")
+    _, task_default = _repo_with_task(tmp_path, "default")
+    tagged = _run_kit_block(shell, block, dict(env, KIT_REF="v1"), task_tag)
+    assert tagged.returncode == 0, tagged.stderr
+    kit = Path(tagged.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    first = _git(kit, "rev-parse", "v1^{commit}").stdout.strip()
+    head = _git(kit, "rev-parse", "HEAD").stdout.strip()
+    assert head == first != _git(kit, "rev-parse", "main").stdout.strip()
+    assert f"kit commit: {head}   (ref requested: v1)" in tagged.stdout.splitlines()
+    assert _git(kit, "status", "--porcelain").stdout == ""
+    # A bare commit works the same way.
+    by_sha = _run_kit_block(shell, block, dict(env, KIT_REF=first), task_default)
+    assert by_sha.returncode == 0, by_sha.stderr
+    assert f"kit commit: {first}" in by_sha.stdout
+    # No ref named: main, and the line says so.
+    _, task_none =_repo_with_task(tmp_path, "none")
+    none = _run_kit_block(shell, block, env, task_none)
+    assert none.returncode == 0, none.stderr
+    kit_none = Path(none.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    assert f"kit commit: {_git(kit_none, 'rev-parse', 'main').stdout.strip()}   (ref requested: main)" in none.stdout
+    assert Path(str(clones) + ".refs").read_text().splitlines() == ["v1", first, "main"]
+
+
+def test_the_kit_block_stops_on_a_ref_it_cannot_check_out(tmp_path: Path) -> None:
+    workflow = "docs/agentic-dev-kit/workflows/adopt.md"
+    require_kit_paths(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    result = _run_kit_block("sh", _kit_block(workflow), dict(env, KIT_REF="no-such-ref"), task)
+    assert result.returncode != 0
+    assert "could not check out no-such-ref" in result.stderr
 
 
 def _tamper(kit: Path, how: str) -> None:

@@ -104,13 +104,27 @@ KIT_HOME="$(git -C "${REPO:?REPO is not set — re-run the config check}" rev-pa
 KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || { echo "the kit block needs this task's branch checked out in $REPO" >&2; exit 1; }
 KIT="$KIT_HOME/agentic-dev-kit/$KIT_TASK"
 KIT_URL=https://github.com/topij/agentic-dev-kit
-if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
+KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to upgrade to; main, the tip of the kit's main branch, when you name none
+if [ ! -e "$KIT" ]; then
+  git clone --depth 1 "$KIT_URL" "$KIT" &&
+    git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
+    git -C "$KIT" checkout -q --detach FETCH_HEAD ||
+    { echo "could not check out $KIT_REF in $KIT: delete $KIT and re-run this block" >&2; exit 1; }
+fi
 KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
+echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   (ref requested: $KIT_REF)"
 ```
+
+**Name the ref you are upgrading to.** Set `KIT_REF` to a release tag or a full commit sha
+before the block runs (`KIT_REF=<tag-or-sha>`, or edit the default line). Naming none
+upgrades to `main` as it stands when the block runs; a tag or sha upgrades to the same
+kit every time. The block prints the resolved commit on its `kit commit:` line before any
+copy: write that sha in the upgrade's pull request. The lite profile's U2 read needs that
+sha as well when you named a ref (below).
 
 The path depends only on the checkout the block runs in and the branch checked out there,
 which here is the task worktree and its task branch, so the block is safe to re-run from
@@ -1283,6 +1297,12 @@ branch.
 ```bash
 uv run <kit>/scripts/kit_doctor.py --upgrade-lite --root <root> --branch <branch>
 ```
+
+When you named a ref in the kit block, add `--kit-commit <sha>` to this command, with
+the full sha its `kit commit:` line printed. The read refuses a clone whose commit is
+not its origin's HEAD, which a tag or an older sha is not; `--kit-commit` pins the
+clone's own commit instead. With no ref named, the clone is `main`'s tip and the command
+runs as written.
 
 It writes nothing to the repository. To read the changelog it deepens a `--depth 1`
 kit clone, which writes only into the clone's git directory. It exits 1 with a
