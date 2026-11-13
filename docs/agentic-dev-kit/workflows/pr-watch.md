@@ -215,10 +215,13 @@ Repeat until the report says **converged**:
    event was ever delivered: a forge incident can drop it, and then there is no
    run to wait for or to re-run. Do not push a commit to get one, because that
    moves the head and discards a review receipt bound to it. Close and reopen the
-   pull request instead (`gh pr close <PR#>`, then `gh pr reopen <PR#>`): a
+   pull request instead (`gh pr close <PR#>`, then `gh pr reopen <PR#>`, then
+   `gh pr view <PR#> --json state` to confirm it is `OPEN` again): a
    `pull_request` trigger with no `types:` fires on `reopened`, at the same head.
-   Where the workflow declares `workflow_dispatch`,
-   `gh workflow run <workflow> --ref <branch>` asks for the run directly.
+   Where the workflow on the **default branch** declares `workflow_dispatch`,
+   `gh workflow run <workflow> --ref <branch>` asks for the run directly. Both are
+   cockpit steps: a headless lane's profile grants neither command, so a lane
+   reports the missing run in its terminal summary instead.
 
 1. **If a check is `failing`:** investigate (`gh run view <run-id> --log-failed`, or
    `gh pr checks <PR#>`), fix the cause in the code, run your project's local gate

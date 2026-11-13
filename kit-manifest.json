@@ -120,7 +120,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "93b48666b38dd3c178edf1716fd60482b047f627dad3f583a3926635c960e505"
+      "sha256": "e4fd95bcb468544edfb6160c3c71c688eaad0b8e2af78d5052b45f3afd39360b"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -203,7 +203,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "dc7f2e538da7b4f69f61f5e0080f8808dde541698c203407cee602474d625555"
+      "sha256": "c55e0e51975a9e74f38e62507d8735c4f8fd0c352a39712982a99bc6443d04dd"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -769,7 +769,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "a2a78065dcfefe76bb63d4ed097b87f634eb353f0f708a8ce34c2e3fea51e9f7"
+      "sha256": "aa71992b3f27d2079719241c5d285cae31d7d8b953b3fdab69157c636a60675e"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",

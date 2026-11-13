@@ -133,7 +133,7 @@ jobs:
         # whatever was newest when the job ran, so a release of either could
         # turn CI red, or change what the suite checks, with no change to this
         # repo. The versions are the ones `uv run --with pytest --with pyyaml`
-        # resolved locally on 2026-11-13. Bump them deliberately.
+        # resolved locally at 171d9f4 on 2026-11-13. Bump them deliberately.
         run: python -m pip install pytest==9.2.0 pyyaml==6.0.3 uv==0.12.3
       - name: Lint Python (ruff)
         # The kit shipped engines that nothing had ever linted (issue #58). Two

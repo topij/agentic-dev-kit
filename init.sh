@@ -2816,8 +2816,8 @@ add_ignore_line "config/*.local.yaml"
 # ignore file happened to name it, which a second machine, a collaborator or a
 # cloud session does not share. Hygiene rather than policy, because what its
 # absence costs is a leak: one `git add -A` commits a personal allow-list.
-# Seeded whether or not `.claude/` exists yet, since the client writes the file
-# the first time an operator answers "always allow". A repository that already
+# Seeded whether or not the file exists yet, since the client writes it the
+# first time an operator answers "always allow". A repository that already
 # TRACKS the file is unaffected, because git ignores only untracked paths.
 add_ignore_line ".claude/settings.local.json"
 # dev_session.sh copies a repo-root .mcp.json into each lane worktree so lanes

@@ -166,8 +166,9 @@ note saying why — when your repo already carries a rule about that path or alr
 tracks files the entry would ignore
 ([#385](https://github.com/topij/agentic-dev-kit/issues/385)); git ignores only
 untracked paths, so an imposed policy line breaks *new* files silently while the
-tracked ones keep working. `config/*.local.yaml` is hygiene and is always added.
-It adds one more, `.mcp.json`, **only** if that file exists and appears to hold literal
+tracked ones keep working. `config/*.local.yaml` and `.claude/settings.local.json`
+(the Claude Code client's personal permission overlay) are hygiene and are always
+added. It adds one more, `.mcp.json`, **only** if that file exists and appears to hold literal
 credentials rather than `${ENV_VAR}` references; it says so when it does. That check
 matters because `dev_session.sh` copies a repo-root `.mcp.json` into every lane
 worktree, so a lane inherits whatever is in it. **The sniff is narrower than it looks:** its regex is case-sensitive and matches

@@ -2308,7 +2308,9 @@ def test_the_claude_settings_overlay_line_is_seeded_before_the_file_exists(
 ) -> None:
     """The client writes the overlay the first time an operator answers "always
     allow", which is after the install on a fresh adoption. A line seeded only
-    when the file was already there would miss exactly that repository."""
+    when the file was already there would miss exactly that repository. The
+    install itself creates `.claude/` for the lens agent definitions, so this
+    pins only that the FILE need not exist, not the directory."""
     repo = _fixture(tmp_path, config=shipped_config())
     assert not (repo / ".claude").exists()
 
