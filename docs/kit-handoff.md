@@ -65,15 +65,15 @@ ______________________________________________________________________
 added named delta draws; #993 (`2d40c960`) shipped the review round budget.
 #1039 (`fa905cd09c950b96fe926ceb21d69ff7c00dea7c`) shipped #585's record-prose
 preflight and executed-span guidance on 2026-10-10. The P2 regression the operator
-deferred to #1041 shipped in #1044 (`8f41ea42`); #403's precedence question was outside the change.
+deferred to #1041 shipped in #1044 (`8f41ea42`). #403 was retired as delivered in the 2026-11-13 backlog pass.
 #1088 (`2ca8ded9`) exempts pairings moved unchanged, not ones across a heading the
 archive sweep rewrites (friction archive; #1139). #1096 (`8beee9a1`) pins its candidate bound
 with a positional test.
 `pr_watch.py --record-review fallback:delta` refuses a disposition missing a named
 lens's `prose-class:` or `safety-critical:` verdict line (#921, in PR #1248).
 #1167 (`4248942`) refuses a `--last-reviewed` sha outside the branch (#1166).
-**Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585); related #403,
-#666, #305, and the class's documented limits #928, #929, #930 and #931.
+**Owner:** [#585](https://github.com/topij/agentic-dev-kit/issues/585); related #666,
+and the class's documented limits #928, #929, #930 and #931.
 
 ▶ Next: choose the next step with the operator from #585 and the documented limits
 #928, #929, #930 and #931.
@@ -103,9 +103,8 @@ round-3 LOWs are #1259. #1261 (`87a5f18b`) names the differing bound field in an
 unavailable inventory's refusal and adds an approved `reconcile` for a changed device
 number, under the preconditions in `session-cleanup.md`. It deletes nothing. Retained evidence is discarded by default and retires through
 `session_cleanup.py retire-evidence` (#1316; #1256, #1315);
-the cross-inventory shared store and a seal byte budget from those tickets were left out of it as secondary. #1261's review LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
-`~/.codex/worktrees`, are invisible to the report (#1255); retained-evidence policy is
-#1256. `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) shipped #1253's binding of inventories
+the cross-inventory shared store and a seal byte budget from those tickets were left out of it as secondary, and on 2026-11-13 the operator declined both (#1315); #1256 was retired as delivered by #1316. #1261's review LOWs are #1263. Copies outside every managed root, such as Codex lens trees under
+`~/.codex/worktrees`, are invisible to the report (#1255). `state/review-evidence/` retention remains scoped to #861. #1267 (`cfb708db`) shipped #1253's binding of inventories
 and receipts to a boot-stable identity. On 2026-10-28, from the primary checkout and with the operator's approval,
 every device-renumbered inventory in this repository was reconciled. Rounds `01234b40` (inventory `8cf42b14`) and
 `5ced121b` and `e388daaa` (inventory `a5b9c398`) were kept then by `test_panel_prompt.py` fixture leftovers (#1265,
@@ -126,7 +125,6 @@ on 2026-10-31.
 [#861](https://github.com/topij/agentic-dev-kit/issues/861),
 [#895](https://github.com/topij/agentic-dev-kit/issues/895),
 [#1255](https://github.com/topij/agentic-dev-kit/issues/1255),
-[#1256](https://github.com/topij/agentic-dev-kit/issues/1256),
 [#1259](https://github.com/topij/agentic-dev-kit/issues/1259),
 [#1263](https://github.com/topij/agentic-dev-kit/issues/1263),
 [#1279](https://github.com/topij/agentic-dev-kit/issues/1279),
@@ -139,8 +137,8 @@ apply's copy and every item's retirement tombstone. That reservation is partial:
 lists what it leaves out, and #1335 proposes storing `last_result` without the seal copy so that it covers every write
 that grows with the evidence. #1349 added the test of the refusal's count (#1336). Item 2 was #1331's.
 
-▶ Next: decide with the operator whether #1327 is finished, and whether #1256's seal byte budget and #1315's shared
-store are still wanted.
+▶ Next: #1335 — store `last_result` without the seal copy, so the seal's size reservation covers every write that
+grows with the evidence. #1327 was retired as delivered on 2026-11-13.
 
 ### Reviewer profiles
 
@@ -173,10 +171,10 @@ and an engine-owned rollback waits for a recurrence (#892).
 
 ### Handoff workstream naming
 
-**Status:** #1028 (`50145a23`) names workstreams by subject and files a batch per pull request; cs-toolkit's batch-named entries were folded by in-parallel-oy/cs-toolkit#2609. #1030 holds the residual single-workstream wording, the half-pinned clauses, the run-mode carve-out, and a kept entry that cannot be named.
-**Owner:** [#1030](https://github.com/topij/agentic-dev-kit/issues/1030).
+**Status:** #1028 (`50145a23`) names workstreams by subject and files a batch per pull request; cs-toolkit's batch-named entries were folded by in-parallel-oy/cs-toolkit#2609. Its residual LOW findings (the single-workstream wording, the half-pinned clauses, the run-mode carve-out, and a kept entry that cannot be named) are recorded on PR #1028's disposition; #1030 was retired on 2026-11-13 under the record route.
+**Owner:** none open.
 
-▶ Next: #1030 — cover every workstream a session worked on in the "Update only that workstream's entry" bullet, pin the half-pinned clauses, give creating and detecting entries one run-mode carve-out, and define what happens to a kept entry that cannot be named and to references after a rename.
+▶ Next: none until one of those findings recurs; a recurrence is ticketed under the record route.
 
 ### Skills and instruction files
 
@@ -193,11 +191,9 @@ hiding later links (#1075), and #1100 (`5d29a75f`) covers #1069's residual LOWs
 (#1070).
 #1108 (`f066b3ae3d4b902e7c8d30c8ea78eff25d9d7c95`) added the Codex invocation-policy report for #1055.
 #1115 (`738d1b2e`) pins the triage split's section placement and summary citations
-for #1058, which stays open for the operator. #1132
+for #1058, which the 2026-11-13 backlog pass retired as delivered, with #1055. #1132
 (`a5ec9c0f594142559bdb47ece083f6133a5efe6e`) delivered #1098's link-check follow-up.
-**Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`;
-[#1055](https://github.com/topij/agentic-dev-kit/issues/1055),
-[#1058](https://github.com/topij/agentic-dev-kit/issues/1058).
+**Owner:** `saved_plans/skills-and-instructions-assessment_2026-10-11.md`.
 
 ▶ Next: operator selection after #1132; the previous #1098 implementation step shipped.
 
@@ -223,10 +219,9 @@ completed-state retirement.
 ### Shared hook installation
 
 **Status:** #1112 (`aff05641`) stopped `init.sh` run from a linked worktree from writing
-the hooks every checkout shares. #1117 holds its residual LOW findings. #990's items 1
+the hooks every checkout shares. Its residual LOW findings are recorded on PR #1112's disposition; #1117 was retired on 2026-11-13 under the record route. #990's items 1
 (lens definitions rendered for the kit's config) and 3 (migration gaps) are open.
-**Owner:** [#990](https://github.com/topij/agentic-dev-kit/issues/990);
-[#1117](https://github.com/topij/agentic-dev-kit/issues/1117).
+**Owner:** [#990](https://github.com/topij/agentic-dev-kit/issues/990).
 
 ▶ Next: #990 item 1 — render the lens agent definitions from the adopter's config rather than the kit's.
 
@@ -237,12 +232,13 @@ dispositions. #1169 (`e68871b`), #1179 (`a00eeed`) and #1181 (`a72034b`) ship
 `scripts/review_eval.py`, which scores lens and verifier changes against known-bug and
 clean cases. #1183 (`901daad`) declares the optional verifier compute key. The
 comparison runs are recorded on #1156; making the lens panel the primary reviewer
-is #1159. **Owner:** [#1156](https://github.com/topij/agentic-dev-kit/issues/1156),
+is #1159. #1156 was retired as delivered on 2026-11-13; #1435 carries its remainder. **Owner:**
+[#1435](https://github.com/topij/agentic-dev-kit/issues/1435),
 [#1159](https://github.com/topij/agentic-dev-kit/issues/1159). #1191 (`433de2ab`)
 delivered #1182.
 
-▶ Next: #1156 — judge the clean-case findings every verifier confirmed (real defect
-or false alarm) and grow the case set before ranking verifier tiers.
+▶ Next: #1435 — judge the clean-case findings every verifier confirmed (real defect or
+false alarm) and grow the case set before ranking verifier tiers.
 
 ### Parallel lanes
 
@@ -253,8 +249,8 @@ the `LANE-TERMINAL:` line and bounded resume; #1237 (`035c07c8`) prescribed file
 lane messages, granted `git restore` and added `launch_lane.py --ticket`. Operator
 decisions on 2026-10-25 that no single PR holds: a resume continues the bound launch
 with no new descriptor; `parallel.max_resumes` ships as 1; the lane profile grants
-neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. Whether #514, #564, #1011,
-#628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 with the
+neither `gh pr edit` nor `gh pr comment`; `--ticket` stays. The 2026-11-13 backlog pass retired #514
+and #1011 as delivered; whether #564, #628 and #271 are done is the operator's call. Probed at Claude Code 2.1.310 with the
 shipped profile under `dontAsk` (stamped in `parallel-headless.md`), compounds of profile-allowed
 `git` commands ran and a chain with a refused part was denied whole; the runtime's
 read-only class that #628's 2.1.250 denials concern was not re-probed. #1241 took
@@ -265,12 +261,10 @@ and the overlay still refuses `parallel.<runtime>_headless_command` (#629);
 `dev_session.sh <subcommand> --help` is side-effect free, which is only part of #454.
 Proposals not yet taken: a
 documented cloud-session lane route, and standing mandates (#472, which the review
-sequences after a terminal state and a cost record). Still open from #1235: #1173's
-default tier and a tier carried in the descriptor, and #1174's ranking report and
-per-lane budget.
+sequences after a terminal state and a cost record). #1173 was retired as delivered by
+#1235 on 2026-11-13; #1174's ranking report and per-lane budget stay open.
 **Owner:** [#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
 [#1174](https://github.com/topij/agentic-dev-kit/issues/1174),
-[#1173](https://github.com/topij/agentic-dev-kit/issues/1173),
 [#1242](https://github.com/topij/agentic-dev-kit/issues/1242),
 [#1243](https://github.com/topij/agentic-dev-kit/issues/1243),
 [#454](https://github.com/topij/agentic-dev-kit/issues/454),
@@ -303,7 +297,7 @@ these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-too
 contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-parallel-oy/cs-toolkit#3020, merged
 2026-10-30). Its installed `pr_followup_hook.py` matched kit `69f30eb6` byte for byte on 2026-11-03, so it carries
 #1301's no-bot wording.
-**Owner:** #1116, #990, #1011, #1282.
+**Owner:** #1116, #990, #1282.
 
 ▶ Next: cs-toolkit installed kit `d994f8eb` (in-parallel-oy/cs-toolkit#3091, merged 2026-11-07), after `1eddf599`
 (in-parallel-oy/cs-toolkit#3056), which dropped its `test_systemize_config.py` patch. Its next upgrade runs from
@@ -326,7 +320,7 @@ install (topij/home-server#31, first installed at kit `78f10709`); its field rep
 2026-11-10), which found #1410, #1408 and #1409. `--upgrade-lite` then ran live in `brain`, `mcp-voice-notes` and
 `obsidian-vault-mcp`, `d994f8eb` → `e35380d0` (topij/brain#38, topij/mcp-voice-notes#21 and
 topij/obsidian-vault-mcp#34, merged 2026-11-10 and 2026-11-11). Those runs found #1414 to #1419, which
-#1421 (`f053066b`) addressed with #1412's U4/U5 wording item; #1412's other items stay open. The
+#1421 (`f053066b`) addressed with #1412's U4/U5 wording item; #1412's other items are recorded on PR #1411's disposition; #1412 was retired on 2026-11-13 under the record route. The
 same failure #1419 found was in the lite install path, `adopt.md`'s *Lite profile*: #1420 writes its commands with
 `<kit>` and `<root>`, and its L5 is `kit_doctor.py --verify-lite`. #1405 stays open for
 the full profile's kit block. #1399 gave lite an optional story backlog, `backlog.path` (*Backlog* in
@@ -342,8 +336,9 @@ plan. Step 1a writes D3 into `fallback-review-panel.md` (*LOW findings: delta re
 LOW is recorded on its pull request and not ticketed. The trial runs from 2026-11-13 to 2026-12-13 (shift these
 dates if step 1a merges later). Run `post-merge-systemize backfill` and the `recorded` search the panel doc names on
 2026-11-27, 2026-12-11 and 2026-12-13, ticket each LOW recorded on two or more pull requests (operator approval), and
-judge the trial on 2026-12-13, after that day's run, against the plan's M3 inflow. The rule stays until the operator decides. No other step has started, and no ticket was filed for the
-plan's steps. Its security finding S2, a lane writing the
+judge the trial on 2026-12-13, after that day's run, against the plan's M3 inflow. The rule stays until the operator decides. Step 1b, the backlog pass, ran on 2026-11-13 with the operator's
+approval of each batch, and each step of the plan names its tickets. Its done-when, no open issue without a priority label, held on 2026-11-13:
+`gh issue list --state open --limit 1000 --search '-label:P1 -label:P2 -label:P3'` printed none when the pass ended. No later step has started. Its security finding S2, a lane writing the
 review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
 `--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
@@ -352,7 +347,7 @@ documents and engines still describe and accept self-merge, `parallel.md` for on
 operator's decision under the conditions D2 states. A probe result alone lifts nothing.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: the plan's step 1b (the backlog pass, applying D3 to open LOW-residue tickets), the live probe of S2
-(step 2a), then the single merge predicate (step 3a). Time-bound: the D3 trial's systemize runs on 2026-11-27,
+▶ Next: #1296 before 2026-11-27 (`post-merge-systemize` refuses to run in this repository, so the trial's first
+run would fail), then the live probe of S2 (step 2a), then the single merge predicate (step 3a, #1370). Time-bound: the D3 trial's systemize runs on 2026-11-27,
 2026-12-11 and 2026-12-13, and its judgement on 2026-12-13 after the last run (shift these dates if step 1a merges
 later).

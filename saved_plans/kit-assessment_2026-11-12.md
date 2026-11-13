@@ -444,6 +444,8 @@ Each step is one pull request unless it says otherwise. Tags are `[size · revie
 · environment]`, with sizes as `session-start.md` defines them. *Safety-critical* means
 the step changes a file in `review.safety_critical_paths` and owes the two-lens review.
 No ticket is filed by this document; filing is the operator's go-ahead.
+A step's **Tickets:** line, added by step 1b, names the open tickets on that step's
+subject; it does not claim that delivering them completes the step.
 
 ### Step 0. The operator's decisions
 
@@ -534,6 +536,7 @@ operator's own answer.
   safety-critical carve-out, and when `post-merge-systemize` runs during the trial.
   **Done when** the document sends a first-occurrence LOW to the disposition alone,
   and the handoff carries the date to judge the trial.
+  **Tickets:** follow-ups #551, #1296, #1433.
 - **1b. The pass** `[M · tracker only · cloud]`. One pass over the open issues, on the
   operator's approval of each batch, in the manner of the 2026-10 pass:
 
@@ -548,6 +551,8 @@ operator's own answer.
 
   **Done when** `gh issue list --state open` returns no issue without a priority
   label, and each step below names its tickets.
+  **Ran 2026-11-13**, each batch on the operator's approval; the closing comments on the
+  tracker record each outcome.
 
 ### Step 2. Provenance on the unattended path
 
@@ -572,12 +577,14 @@ operator's own answer.
   cockpit's own state root, and `record_review` refuses under a lane descriptor.
   **Done when** the same probe is refused at the new sha and still succeeds at the sha
   before it. D2's hold lifts when this ships.
+  **Tickets:** #490, #1430.
 - **2b. Author trust for text handed to an agent** `[M · safety-critical · cloud]`.
   `launch_lane.py --ticket` refuses an issue whose author is not the repository owner,
   a member or a collaborator, or that was edited after a time the operator passes at
   launch. `pr_watch.py --json` marks each comment with its author's association, and
   `pr-watch.md` says to act on trusted tiers and report the rest. Covers S1's inlet
   and S3.
+  **Tickets:** #267, #539.
 - **2c. A lane identity, isolation from the operator's credentials, a narrower
   environment and narrower grants** `[L · safety-critical · local]`. Per D1: probe a
   second account's fine-grained token against a ruleset on `main`, then have
@@ -591,13 +598,16 @@ operator's own answer.
   **Done when** a lane launched with the shipped profile cannot merge its own pull
   request, its child's environment does not carry the operator's token, and a command
   the lane runs through `make test` cannot obtain the operator's forge credential.
+  **Tickets:** #615, #617, #618, #1025, #1138.
 - **2d. Pin what adopters install** `[S · standard · cloud]`. Per D5: `adopt.md` and
   `upgrade.md` take a ref, clone that ref, and print it before the first copy. Covers
   S5.
+  **Tickets:** none filed.
 - **2e. CI hygiene** `[S · safety-critical · cloud]`. Pin the remaining actions to
   commits, pin `pytest` and `pyyaml`, set `persist-credentials: false` and
   `timeout-minutes` on the `toolkit` job, and add `.claude/settings.local.json` to
   `.gitignore` and to what `init.sh` seeds. Covers S8 and S9.
+  **Tickets:** #345.
 
 ### Step 3. One contract, one plumbing
 
@@ -606,34 +616,42 @@ operator's own answer.
   `triage/model.py` call it. It requires what the strictest copy requires today, and
   #1370's case becomes a named outcome of it. **Done when** a test fails if any of
   those files spells the field checks itself.
+  **Tickets:** #319, #1370, #1371.
 - **3b. `pr_watch.py` resolves state through `state_paths`** `[M · safety-critical ·
   local]`. Removes C2 and gives #1145 a single place to change. Owes a changelog
   fragment if a state path moves.
+  **Tickets:** #1145.
 - **3c. Defaults from one place** `[S · safety-critical · cloud]`. `pr_watch.py`'s
   built-in review defaults are generated from, or pinned by test to, the shipped
   config. Covers C3.
+  **Tickets:** #40.
 - **3d. One runner for `git` and `gh`, one process-group stop** `[M · mixed · local]`.
   A shared module with a timeout, error translation and one `GIT_*` policy, adopted an
   engine at a time. `launch_lane.py`'s group stop becomes the shared one.
+  **Tickets:** #414, #1172, #1219.
 - **3e. One fence scanner** `[S · standard · cloud]`. Per D6: one stdlib scanner under
   `scripts/lib/`, used by `archive_plan_sessions.py`, `review_eval.py`,
   `lib/systemize/normalize.py`, `lib/triage/inbox.py` and `lib/triage/model.py`. Covers
   C6.
+  **Tickets:** #374, #1171.
 
 ### Step 4. CI and tests the same shape as the operator's machine
 
 - **4a. CI runs `make test`, on Linux and macOS** `[S · safety-critical · cloud]`. Fold
   the run without PyYAML into the Makefile so that local and CI are one recipe. Add the
   Python that `uv` selects by default beside 3.12.
+  **Tickets:** #1353.
 - **4b. A hermetic layer in `scripts/tests/conftest.py`** `[M · standard · cloud]`. An
   autouse fixture nulls global and system git configuration, sets a temp `HOME`, and
   puts a `gh` that fails loudly first on `PATH`. Shared `git_repo` and `fake_gh`
   fixtures replace the per-file runners over later pull requests. Covers #97 and #1394.
+  **Tickets:** #97, #543, #788, #1082, #1300, #1394.
 - **4c. Retire the in-test triage model** `[L · standard · cloud]`. Move protocol
   checks onto the real engine's tests. Keep document pins to the two mechanisms that
   already exist: marked-clause equality and whole-file snapshot. Split
   `test_portability.py` by subject as the pieces come out. `mutation-test` is the
   check that nothing stopped being caught.
+  **Tickets:** #791.
 
 ### Step 5. Less text for an agent to load
 
@@ -641,15 +659,19 @@ operator's own answer.
   each workflow to `doc_budgets` at its current length, so that growth trips the wire.
   Then move incident history and editor notes to `-evidence.md` companions, a workflow
   per pull request, starting with `session-start.md`, `adopt.md` and `upgrade.md`.
+  **Tickets:** none filed.
 - **5b. The gather as an engine** `[L · standard · local]`. One command returns the
   briefing's inputs as JSON with an explicit `unavailable` per source and paging done
   inside it. `session-start.md` shrinks to classify, check, render. Covers #1135, #663
   and #313. Lite keeps its prose gather.
+  **Tickets:** #313, #663, #1135.
 - **5c. Lite validation into `kit_doctor.py --verify-lite`** `[M · standard · cloud]`.
   The prose schema in `lite-wrap-up.md` becomes "run the check from the kit clone".
   Covers #1368 and #1427.
+  **Tickets:** #1368, #1427.
 - **5d. Correct the copies that disagree** `[S · standard · cloud]`. The pairs named
   under *Documents* and *Distribution and upgrade*, in one pull request.
+  **Tickets:** #296, #358.
 
 ### Step 6. Distribution
 
@@ -658,17 +680,22 @@ operator's own answer.
   for and what full costs to keep current; a release export that leaves out
   `saved_plans/` and `docs/kit-*`. The `cp -r` route is replaced or gains its cleanup
   step.
+  **Tickets:** #18.
 - **6b. The lite-to-full move.** Already the Lite install profile workstream's open
   item. D4 puts it ahead of 6c, because it keeps full reachable for a lite adopter.
+  **Tickets:** none filed.
 - **6c. `kit_doctor.py --upgrade` for the full profile** `[L · standard · local]`.
   Deferred under D4 until one of its two revisit conditions holds. When it is built:
   generalise the lite planner, and move config migration out of interactive `init.sh`
   into a stdlib module `init.sh` calls.
+  **Tickets:** #534, #1170.
 
 ### Step 7. Split the large engines `[L · safety-critical · local]`
 
 Last, and only after 3a, 3b and 4b. By then the first two `pr_watch.py` seams are out,
 and the tests' patching can be moved to the new modules a seam at a time.
+
+**Tickets:** none filed.
 
 ### The first three
 
