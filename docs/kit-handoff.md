@@ -334,3 +334,18 @@ the full profile's kit block. #1399 gave lite an optional story backlog, `backlo
 the operator chose over tNote for phase 5 on 2026-11-09. The lite-to-full move is not written. #1381's review rounds
 showed that a prose list of config stops does not converge; the findings left open, and a proposed shared validator
 for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
+
+### Whole-kit plan
+
+**Status:** a whole-kit assessment at `fd12e961` on 2026-11-12 ranks what needs work and proposes an ordered
+plan. No step of it has started, and no ticket was filed for it. Its security finding S2, a lane writing the
+review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
+D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
+`--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
+reading them. The hold is prose and binds only a session that reads this entry or the plan: the kit's
+documents and engines still describe and accept self-merge, `parallel.md` for one. It lifts when the plan's step 2a ships, or on the
+operator's decision under the conditions D2 states. A probe result alone lifts nothing.
+**Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
+
+▶ Next: the plan's step 1 (the LOW intake rule, then the backlog pass), the live probe of S2 (step 2a), then
+the single merge predicate (step 3a).
