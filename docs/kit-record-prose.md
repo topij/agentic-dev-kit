@@ -220,7 +220,8 @@ first — and were defeated by shell state, not reasoning (`#399`).
 `fallback-review-panel.md` rule 7 has carried this for review lenses since before
 either occurrence; nothing carried it for workflows. **Both `upgrade.md` and `adopt.md`
 clone the kit to a second tree** in their Step 0, and `adopt.md` Step 1 then sends you
-to read files inside it. Only `upgrade.md` is hardened so far — it binds `$REPO`/`$KIT`
+to read files inside it. `upgrade.md` was hardened first — it binds `$REPO`/`$KIT`
 and anchors its writes — because that is where the occurrence landed and where the
-writes are literal shell. `adopt.md` states its copies mostly in prose, which narrows
-the blast radius without removing it; hardening it is `#399`'s remaining half.
+writes are literal shell. `adopt.md` now binds and guards `$KIT` and `$REPO` in Step 0
+and guards its Step 3 `cd` with `${REPO:?…}`; the 2026-11-13 backlog pass retired `#399`
+as delivered.

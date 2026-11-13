@@ -198,9 +198,9 @@ made it**, so every later relative path resolves in the wrong tree.
 
 The failure looks like the tool or the filesystem misbehaving, not like a wrong
 directory (`#399`). Both `upgrade.md` and `adopt.md` clone the kit to a second tree in
-their Step 0. `upgrade.md` binds `$REPO`/`$KIT` and anchors its writes, and `#480`
-reports that anchoring as fail-open. `adopt.md` states its copies mostly in prose;
-hardening it is `#399`'s remaining half. The occurrences are recorded in
+their Step 0, bind `$REPO`/`$KIT` there, and guard each `cd` with `${VAR:?…}`, so an
+unset root fails loudly instead of leaving the shell where it was (`#480`, `#399`).
+The occurrences are recorded in
 [`docs/kit-record-prose.md`](docs/kit-record-prose.md).
 
 ## Runtime parity
