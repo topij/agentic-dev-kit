@@ -1180,24 +1180,27 @@ Choose and record a disposition on the PR:
   administrative action pending, without restarting review or claiming a ticket was
   filed. A deferred LOW takes this route, not the record route, when:
   - it recurs: a matching ticket is open, or an earlier pull request recorded the
-    same finding. Before recording, search open tickets, and search the forge's
-    pull-request comments for earlier `recorded:` lines naming the same path or
-    concern (on GitHub, `gh api --paginate -X GET search/issues -f per_page=100
-    -f q='repo:<owner>/<repo> is:pr in:comments recorded <path>
-    updated:>=<date>'`, which reaches disposition lines, regression lines and
-    thread replies alike). The `updated:>=<date>` term is required, set to the day
-    the record route came into use: it filters on each pull request's last
-    update, not on its comments' dates, so it keeps out pull requests untouched
-    since then, and a pull request updated later still returns its older
-    comments. Read every page, not the first, since one page holds at most 100
-    hits; and read each hit, since the search ignores punctuation and the date
-    term does not exclude older comments. If the response's `total_count`
-    exceeds 1000, the search's own ceiling, narrow the query further, because
-    pages past that ceiling are not served. **A search that cannot be run or
-    read to completion** (refused, rate-limited, erroring, or still over the
-    ceiling) **sends the finding to this ticket route**; it is not grounds to
-    record. When the search completed and you are unsure whether two findings
-    are the same, record it; the scheduled run below is the second reader;
+    same finding;
+  - **its recurrence check is not complete.** The record route is open only when
+    both recurrence searches completed, and anything short of that, for any
+    reason, takes this ticket route. The two searches are the open tickets, read
+    to the tracker's last page as `session-start`'s tracker read requires, and
+    the forge's pull-request comments for earlier `recorded:` lines naming the
+    same path or concern. On GitHub the second is `gh api --paginate -X GET
+    search/issues -f per_page=100 -f q='repo:<owner>/<repo> is:pr in:comments
+    recorded <path> updated:>=<date>'`, which reaches disposition lines,
+    regression lines and thread replies alike. It is complete only when `gh`
+    exited zero, every page was read, every page reported
+    `incomplete_results: false`, and `total_count` was at most 1000, the
+    search's own ceiling, past which pages are not served (narrow the query
+    until it is). The `updated:>=<date>` term is required, set to the day the
+    record route came into use: it filters on each pull request's last update,
+    not on its comments' dates, so it keeps out pull requests untouched since
+    then, and a pull request updated later still returns its older comments.
+    Read each hit, since the search ignores punctuation and the date term does
+    not exclude older comments. When both searches completed and you are unsure
+    whether two findings are the same, record it; the scheduled run below is
+    the second reader;
   - it is on a pull request `safety-critical-changes.md` governs (computed review
     class `safety-critical`), which repairs or tickets every LOW;
   - its repair was attempted and needs a broader redesign, or its containment is
@@ -1217,8 +1220,9 @@ see a recording made there. Beside its run, the session running it searches the
 window's pull-request comments for `recorded` (the query above, without a path,
 with its `updated:>=` term set to the window's start and every page read),
 drafts a ticket for each LOW finding recorded on two or more pull requests, and files
-it on the operator's approval. If that search cannot be run or read to completion,
-the run reports its recurrence check as not done rather than as finding none. Two limits: a recurrence further apart than
+it on the operator's approval. Unless that search is complete in the sense above, the
+run reports its recurrence check as not done rather than as finding none. Two limits:
+a recurrence further apart than
 `systemize.backfill_days` falls in no single window, and the digest drops the
 lowest-severity pull requests first when it caps at
 `systemize.max_findings_prs_per_run`, so a run whose report lists omitted pull

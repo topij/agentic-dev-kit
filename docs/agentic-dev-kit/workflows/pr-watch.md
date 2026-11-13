@@ -79,7 +79,8 @@ Apply [LOW findings: delta review or ticket](../fallback-review-panel.md#low-fin
 to bot, human and fallback findings alike. Batch contained repairs, verify their
 affected behavior and preserve prior review evidence; otherwise defer the finding. A
 first occurrence is recorded on the pull request only, in its typed disposition or its
-thread reply. A recurring one, one whose recurrence search could not be completed,
+thread reply. A recurring one, one whose recurrence check (open tickets and earlier
+`recorded` lines) did not complete,
 one on a safety-critical pull request, one whose repair
 needs a redesign or whose containment is disputed, and a pre-existing one are ticketed
 and linked. A new LOW finding does not restart full suites, whole-PR panels,
