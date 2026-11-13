@@ -965,7 +965,8 @@ def test_self_merge_refuses_a_pr_whose_computed_review_class_is_not_standard(
             failures.append((label, f"no {missing!r} in {result.stderr!r}"))
         elif operator not in reasons and "it is operator-merge" in result.stderr:
             failures.append((label, result.stderr))
-    assert failures == []
+    # A message rather than a compared list, which pytest truncates.
+    assert not failures, "\n".join(f"{label}: {why}" for label, why in failures)
 
     # The same report classed standard merges, so the refusals above are the
     # class check and not something else in the fixture.
