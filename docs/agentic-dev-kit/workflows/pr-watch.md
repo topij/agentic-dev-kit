@@ -74,11 +74,12 @@ Engine: `<engine-dir>/pr_watch.py` (deterministic — check rollup + comment uni
 issue/review/inline surfaces, noise-filtered, diffed against a per-PR seen-set). You
 drive the loop + apply the judgment.
 
-**LOW/P3 findings take delta review or a ticket, never a full-process restart.**
+**LOW/P3 findings take delta review or a deferral, never a full-process restart.**
 Apply [LOW findings: delta review or ticket](../fallback-review-panel.md#low-findings-delta-review-or-ticket)
 to bot, human and fallback findings alike. Batch contained repairs, verify their
-affected behavior and preserve prior review evidence; otherwise file and link the
-deferred work. A new LOW finding does not restart full suites, whole-PR panels,
+affected behavior and preserve prior review evidence; otherwise defer the finding: a
+first occurrence is recorded in its typed disposition only, and a recurring one, or one
+on a safety-critical pull request, is ticketed and linked. A new LOW finding does not restart full suites, whole-PR panels,
 delivery stages or approval rounds. Required CI, initial review coverage, formal
 change requests and higher-severity blockers remain separate obligations.
 
@@ -568,13 +569,13 @@ Self-pace on a bounded cadence — don't busy-wait:
 
   - each open finding, with the severity and regression label its reviewer gave it,
     and what fixing it would touch;
-  - the LOW findings already routed to tickets, linked;
+  - the LOW findings already deferred: the recorded ones named, the ticketed ones linked;
   - whether the design was re-examined, and what that found: say whether the
     predicate or the ownership of what kept drawing findings was reconsidered, not
     only which cases were added, as the panel doc's *Read repeated findings in one
     place as design feedback* rule asks when one function draws findings round after
     round;
-  - the options: merge with the remaining findings ticketed, authorize a stated
+  - the options: merge with the remaining findings deferred, authorize a stated
     number of further rounds, split the change, or withdraw the repair that grew.
 
   When the head moved without findings, such as a CI fix after the last review, the
@@ -585,14 +586,14 @@ Self-pace on a bounded cadence — don't busy-wait:
   printing the warning through them, because the count does not reset. While
   `review_rounds.spent` is true, each later round's disposition on the PR says again
   whether the design was re-examined. A LOW finding
-  needs no go-ahead to be ticketed; fixing it takes one, as below.
+  needs no go-ahead to be recorded or ticketed; fixing it takes one, as below.
 
   *Round counting*, in `report-fields.md`, says when the count runs under or over
   the fix rounds taken.
 
   Past a spent budget, a LOW fix is a fix round like any other: pushing it, and the
   `fallback:delta` review its head then needs, takes the operator's go-ahead.
-  Without one, the LOW finding takes the ticket.
+  Without one, the LOW finding is deferred by the record or ticket route.
 
   **What the budget does not do.** It moves neither `converged` nor `mergeable`, and it
   waives nothing. A finding above LOW that is still open is not merged past by an agent

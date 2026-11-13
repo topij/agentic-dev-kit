@@ -338,7 +338,11 @@ for the lite config readers, are on #1368. The parser-based guard on lite docs' 
 ### Whole-kit plan
 
 **Status:** a whole-kit assessment at `fd12e961` on 2026-11-12 ranks what needs work and proposes an ordered
-plan. No step of it has started, and no ticket was filed for it. Its security finding S2, a lane writing the
+plan. Step 1a writes D3 into `fallback-review-panel.md` (*LOW findings: delta review or ticket*): a first-occurrence
+LOW is recorded in its disposition and not ticketed, as a trial from 2026-11-13 to 2026-12-13. Run
+`post-merge-systemize backfill` on 2026-11-27 and 2026-12-13, and judge the trial on 2026-12-13 against the plan's
+M3 inflow; the rule stays until the operator decides. No other step has started, and no ticket was filed for the
+plan's steps. Its security finding S2, a lane writing the
 review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
 `--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
@@ -347,5 +351,6 @@ documents and engines still describe and accept self-merge, `parallel.md` for on
 operator's decision under the conditions D2 states. A probe result alone lifts nothing.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: the plan's step 1 (the LOW intake rule, then the backlog pass), the live probe of S2 (step 2a), then
-the single merge predicate (step 3a).
+▶ Next: the plan's step 1b (the backlog pass, applying D3 to open LOW-residue tickets), the live probe of S2
+(step 2a), then the single merge predicate (step 3a). Time-bound: the D3 trial's systemize runs on 2026-11-27 and
+2026-12-13, and its judgement on 2026-12-13.
