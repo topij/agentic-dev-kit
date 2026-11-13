@@ -38,6 +38,10 @@ cp -r /path/to/agentic-dev-kit/. .
 ./init.sh
 ```
 
+Copy from a fresh clone of the kit, not from a working checkout: `cp` also copies
+untracked files, and a `config/dev-model.local.yaml` there would set its operator
+logins in your repository.
+
 > Already adopted the kit in this repo before? Follow the
 > [upgrade workflow](agentic-dev-kit/workflows/upgrade.md). Re-running `./init.sh`
 > updates supported configuration and unclaimed templates, but does not inspect

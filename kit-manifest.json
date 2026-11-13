@@ -785,7 +785,7 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "526db55e7d86881a3723acc8eddef1971e66caed91153a0aafa8d4e44b7b7c96"
+      "sha256": "efa2f4d321a1c7be1d2dd026538c0771f975414cb2f262c8d75c6cfd62d770c2"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",

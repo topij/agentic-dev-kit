@@ -1108,10 +1108,12 @@ def test_the_overlay_check_finds_a_force_added_overlay(tmp_path, monkeypatch, co
     (root / ".gitignore").write_text("config/*.local.yaml\n", encoding="utf-8")
     (root / "config" / "dev-model.yaml").write_text("systemize:\n  operator_logins: []\n", encoding="utf-8")
     (root / "config" / "app.local.yaml").write_text("not: an overlay\n", encoding="utf-8")
-    (root / "config" / name).write_text("systemize:\n  operator_logins: [operator]\n", encoding="utf-8")
     git(root, "add", ".")
     git(root, "add", "-f", "config/app.local.yaml")
     git(root, "commit", "-q", "-m", "init")
+    # Written after the commit, never staged by `git add .`: on a case-sensitive
+    # filesystem the `.gitignore` pattern does not ignore the upper-case name.
+    (root / "config" / name).write_text("systemize:\n  operator_logins: [operator]\n", encoding="utf-8")
     monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
     _assert_no_tracked_overlay(root)
 
