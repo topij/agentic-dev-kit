@@ -20098,6 +20098,35 @@ def test_the_kit_block_checks_out_the_named_ref_and_prints_its_commit(
     assert Path(str(clones) + ".refs").read_text().splitlines() == ["v1", first, "main"]
 
 
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_stops_when_a_clone_it_finds_is_not_at_the_named_ref(
+    tmp_path: Path, workflow: str
+) -> None:
+    """A re-run finds the clone an earlier run made. With a tag or sha named, that
+    clone must be at its commit, or Step 2 would copy, and the record name, a kit the
+    operator did not ask for (PR 1443 review)."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF="v1"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    pinned = _git(kit, "rev-parse", "HEAD").stdout.strip()
+    later = _git(kit, "rev-parse", "main").stdout.strip()
+    assert pinned != later
+    # The same ref, by tag or by sha: found, checked, used.
+    for ref in ("v1", pinned):
+        again = _run_kit_block("sh", block, dict(env, KIT_REF=ref), task)
+        assert again.returncode == 0, again.stderr
+        assert f"kit commit: {pinned}" in again.stdout
+    # A different commit named: the found clone is refused before anything prints it.
+    wrong = _run_kit_block("sh", block, dict(env, KIT_REF=later), task)
+    assert wrong.returncode != 0
+    assert f"is not at {later}" in wrong.stderr
+    assert "kit commit:" not in wrong.stdout
+
+
 def test_the_kit_block_stops_on_a_ref_it_cannot_check_out(tmp_path: Path) -> None:
     workflow = "docs/agentic-dev-kit/workflows/adopt.md"
     require_kit_paths(workflow)

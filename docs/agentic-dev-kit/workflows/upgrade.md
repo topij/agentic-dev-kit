@@ -105,7 +105,9 @@ KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || { echo "the kit block 
 KIT="$KIT_HOME/agentic-dev-kit/$KIT_TASK"
 KIT_URL=https://github.com/topij/agentic-dev-kit
 KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to upgrade to; main, the tip of the kit's main branch, when you name none
+KIT_FOUND=yes
 if [ ! -e "$KIT" ]; then
+  KIT_FOUND=
   git clone --depth 1 "$KIT_URL" "$KIT" &&
     git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
     git -C "$KIT" checkout -q --detach FETCH_HEAD ||
@@ -115,6 +117,12 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
+# A clone this block found rather than made must still be at the ref you named.
+if [ -n "$KIT_FOUND" ] && [ "$KIT_REF" != main ]; then
+  git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
+    [ "$(git -C "$KIT" rev-parse FETCH_HEAD)" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    { echo "$KIT is not at $KIT_REF: delete $KIT and re-run this block" >&2; exit 1; }
+fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   (ref requested: $KIT_REF)"
 ```
@@ -138,7 +146,10 @@ than let Step 4 record it. The check sees only what `git status` reports, so it 
 see ignored files, a pattern added to the clone's `.git/info/exclude` included, entries
 marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone: `status`
 stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any of these
-happened in the clone, delete `$KIT` and re-run the block. It writes into the git
+happened in the clone, delete `$KIT` and re-run the block. When you named a tag or sha
+and the block finds a clone rather than making one, it fetches that ref again and stops
+unless the clone's `HEAD` is the commit it names; with `main` it does not, because `main`
+moves, so read the clone's commit on the line the block prints. It writes into the git
 directory, so a sandbox that allows writes only inside the working tree needs to allow
 this one. No other task's checkout or branch reaches the path, and when the block ran in
 the task worktree, removing that worktree removes the clone with it. A clone made in a

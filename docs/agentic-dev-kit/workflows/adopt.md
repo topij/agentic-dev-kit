@@ -23,7 +23,9 @@ KIT_HOME="$(git rev-parse --absolute-git-dir)" || exit 1
 KIT="$KIT_HOME/agentic-dev-kit"
 KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
 KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to install; main, the tip of the kit's main branch, when you name none
+KIT_FOUND=yes
 if [ ! -e "$KIT" ]; then
+  KIT_FOUND=
   git clone --depth 1 "$KIT_URL" "$KIT" &&
     git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
     git -C "$KIT" checkout -q --detach FETCH_HEAD ||
@@ -33,6 +35,12 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
+# A clone this block found rather than made must still be at the ref you named.
+if [ -n "$KIT_FOUND" ] && [ "$KIT_REF" != main ]; then
+  git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
+    [ "$(git -C "$KIT" rev-parse FETCH_HEAD)" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    { echo "$KIT is not at $KIT_REF: delete $KIT and re-run this block" >&2; exit 1; }
+fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   (ref requested: $KIT_REF)"
 ```
@@ -55,8 +63,10 @@ does not see ignored files, a pattern added to the clone's `.git/info/exclude` i
 entries marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone:
 `status` stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any
 of these happened in the clone, delete `$KIT` and re-run the block. An existing clone is
-from an earlier adoption attempt in this checkout: the line the block prints names its commit, and if that is not the kit you mean
-to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
+from an earlier adoption attempt in this checkout. When you named a tag or sha, the block
+fetches that ref again and stops unless the clone's `HEAD` is the commit it names. With
+`main` it does not, because `main` moves: the line the block prints names the clone's
+commit, and if that is not the kit you mean to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
 sandbox that allows writes only inside the working tree needs to allow this one. Delete
 the clone once the adoption has landed.
 
