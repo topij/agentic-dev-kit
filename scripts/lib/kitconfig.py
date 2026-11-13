@@ -371,7 +371,29 @@ def _deep_merge(
 #:
 #: ``state.test_guard_exclude`` names directories in THIS checkout's ``state/``;
 #: its one reader is ``<engine-dir>/conftest.py``, which loads with the overlay.
-OVERLAYABLE_PREFIXES = ("notify.user_key", "state.test_guard_exclude")
+#:
+#: ``systemize.operator_logins`` is an identity: the forge logins whose review
+#: findings ``post-merge-systemize`` trusts (#1296). It is read by
+#: ``systemize/config.py``'s ``load_settings``, which loads with the overlay, and by
+#: ``post-merge-systemize.md``, which reads the merged view. ``init.sh`` writes the
+#: tracked value and never reads it back for a decision. The trust argument: the
+#: overlay is a file local to one checkout, so whoever can write it can already
+#: edit the tracked config there, and it grants nothing that person lacks. That
+#: holds only while the overlay is untracked: one committed with ``git add -f``
+#: would reach every checkout of its branch through a pull request that does not
+#: change ``config/dev-model.yaml``. ``test_no_local_config_overlay_is_tracked``
+#: in ``test_kitconfig.py`` fails the suite, and so CI, on such a pull request; the
+#: loader itself runs no Git command. What the key adds is that the kit
+#: repository can name its own operator without the shipped template, which every
+#: adopter copies, trusting that foreign identity. A checkout without the file
+#: reads the tracked value only: a fresh clone, or a worktree made by plain
+#: ``git worktree add``. ``dev_session.sh`` copies the primary checkout's overlay
+#: into a lane it creates when the lane's base ref ignores the file.
+OVERLAYABLE_PREFIXES = (
+    "notify.user_key",
+    "state.test_guard_exclude",
+    "systemize.operator_logins",
+)
 
 
 def _overlay_paths(node: Any, where: str = "") -> list[str]:

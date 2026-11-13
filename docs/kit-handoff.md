@@ -347,7 +347,9 @@ documents and engines still describe and accept self-merge, `parallel.md` for on
 operator's decision under the conditions D2 states. A probe result alone lifts nothing.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: #1296 before 2026-11-27 (`post-merge-systemize` refuses to run in this repository, so the trial's first
-run would fail), then the live probe of S2 (step 2a), then the single merge predicate (step 3a, #1370). Time-bound: the D3 trial's systemize runs on 2026-11-27,
+▶ Next: once PR #1436 merges and before 2026-11-27, add `operator_logins: [topij]` under `systemize:` (the
+operator's choice of 2026-11-13) to the primary checkout's untracked `config/dev-model.local.yaml`, keeping any keys it
+already holds, and run the trial from that checkout; the tracked value stays `[]`.
+Without it the trial's first run refuses for want of a trusted review source. Then the live probe of S2 (step 2a), then the single merge predicate (step 3a, #1370). Time-bound: the D3 trial's systemize runs on 2026-11-27,
 2026-12-11 and 2026-12-13, and its judgement on 2026-12-13 after the last run (shift these dates if step 1a merges
 later).

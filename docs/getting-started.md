@@ -38,6 +38,10 @@ cp -r /path/to/agentic-dev-kit/. .
 ./init.sh
 ```
 
+Copy from a fresh clone of the kit, not from a working checkout: `cp` also copies
+untracked files, and a `config/dev-model.local.yaml` there would set its operator
+logins in your repository.
+
 > Already adopted the kit in this repo before? Follow the
 > [upgrade workflow](agentic-dev-kit/workflows/upgrade.md). Re-running `./init.sh`
 > updates supported configuration and unclaimed templates, but does not inspect
@@ -102,8 +106,8 @@ notify:
   user_key: "U0XXXXXXXXX"
 ```
 
-It and `state.test_guard_exclude` are the only keys you may set there; anything else
-is an error naming what it refused. `./init.sh` writes the *tracked* file, so a locally-set key keeps winning
+It, `state.test_guard_exclude` and `systemize.operator_logins` are the only keys you
+may set there; anything else is an error naming what it refused. `./init.sh` writes the *tracked* file, so a locally-set key keeps winning
 after a re-run — leave the tracked value blank rather than duplicating it.
 
 ## 2 · Your first briefing — `session-start`
