@@ -144,9 +144,13 @@ comparison. [Board columns and refresh options](agentic-dev-kit/workflows/parall
 
 ### 5 · Reconcile the batch before writing the handoff
 
-Pass the scopes you actually launched to `scripts/reconcile_sessions.sh`.
-It checks Git and the forge, then reports one row per branch. Keep the list you
-launched, because discovery can miss a lane whose worktree has been removed.
+Keep the actual branches and base you launched. A bare scope passed to
+`scripts/reconcile_sessions.sh` expands to the configured `<prefix>/<scope>`.
+For a custom prefix or branch, pass the full branch name if it contains a slash.
+For a slash-free name, use an exact `--match` while its local or remote branch
+exists, then check that the output includes it. If that ref has gone, inspect the
+PR by its head branch before accounting for the lane. Reconcile each base
+separately with `--base` when it differs from the configured protected branch.
 
 | Row | What the cockpit does |
 | --- | --- |

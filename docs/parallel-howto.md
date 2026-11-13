@@ -194,15 +194,19 @@ directory. When a ready PR exists, poll it there.
 scripts/dev_session.sh pr-watch cli-help --json
 ```
 
-Read and address the reported findings before using `--mark-seen`. This
+Push any repairs and post replies before using `--mark-seen`. This
 acknowledges findings from the last persisting poll. If you ran an independent
 review, use the PR-watch workflow's receipt command for that review class. Pass
 the reviewed head and the actual findings through the scope wrapper. Then re-poll.
 [Review loop](agentic-dev-kit/workflows/pr-watch.md#loop)
 
-**Reconcile the batch.** Pass every launched scope or full branch name before
-writing the joint handoff. For the unattended example, include `docs-index`
-if you launched it too.
+**Reconcile the batch.** Use a bare scope for a branch under the configured prefix.
+Pass a custom branch by its full name if it contains a slash. For a slash-free
+branch named `guide-update`, use `--match 'guide-update'` and check that its
+row appears. This form matches existing local and remote refs. If both have
+gone, read the PR by its head branch to account for the lane. Use `--base` for a
+different target branch and reconcile each base separately. For the unattended
+example, include `docs-index` if you launched it too.
 
 ```bash
 scripts/reconcile_sessions.sh cli-help

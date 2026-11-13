@@ -76,8 +76,9 @@ Follow this top to bottom, per ticket.
 1. Poll the exact PR and read failing checks, new findings and any read gaps.
    A lane's cockpit uses `dev_session.sh pr-watch <scope>` so the poll and receipt
    use that lane's state. Serialize operations on that state file.
-2. Fix or answer each finding, then acknowledge the handled round with
-   `--mark-seen`. After a repair push, poll the new head. Pending checks and
+2. Push repairs and post replies to findings you dispute. Once each finding
+   from the last poll has been handled on the PR, acknowledge that round with
+   `--mark-seen` and poll the current head again. Pending checks and
    unsettled rollups need another poll on the workflow's documented cadence.
 3. At convergence, follow `review_owed` and inspect `review_evidence` for the
    reported head. Run any fallback review required by `review_class`. Record
