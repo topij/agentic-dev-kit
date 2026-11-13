@@ -1186,12 +1186,18 @@ Choose and record a disposition on the PR:
     -f q='repo:<owner>/<repo> is:pr in:comments recorded <path>
     updated:>=<date>'`, which reaches disposition lines, regression lines and
     thread replies alike). The `updated:>=<date>` term is required, set to the day
-    the record route came into use, because `recorded` alone matches comments
-    written before it; read every page, not the first, since one page holds at
-    most 100 hits; and read each hit, since the search ignores punctuation. If
-    the response's `total_count` exceeds 1000, the search's own ceiling, narrow
-    the query further, because pages past that ceiling are not served. When unsure whether two findings are the same,
-    record it; the scheduled run below is the second reader;
+    the record route came into use: it filters on each pull request's last
+    update, not on its comments' dates, so it keeps out pull requests untouched
+    since then, and a pull request updated later still returns its older
+    comments. Read every page, not the first, since one page holds at most 100
+    hits; and read each hit, since the search ignores punctuation and the date
+    term does not exclude older comments. If the response's `total_count`
+    exceeds 1000, the search's own ceiling, narrow the query further, because
+    pages past that ceiling are not served. **A search that cannot be run or
+    read to completion** (refused, rate-limited, erroring, or still over the
+    ceiling) **sends the finding to this ticket route**; it is not grounds to
+    record. When the search completed and you are unsure whether two findings
+    are the same, record it; the scheduled run below is the second reader;
   - it is on a pull request `safety-critical-changes.md` governs (computed review
     class `safety-critical`), which repairs or tickets every LOW;
   - its repair was attempted and needs a broader redesign, or its containment is
@@ -1211,7 +1217,8 @@ see a recording made there. Beside its run, the session running it searches the
 window's pull-request comments for `recorded` (the query above, without a path,
 with its `updated:>=` term set to the window's start and every page read),
 drafts a ticket for each LOW finding recorded on two or more pull requests, and files
-it on the operator's approval. Two limits: a recurrence further apart than
+it on the operator's approval. If that search cannot be run or read to completion,
+the run reports its recurrence check as not done rather than as finding none. Two limits: a recurrence further apart than
 `systemize.backfill_days` falls in no single window, and the digest drops the
 lowest-severity pull requests first when it caps at
 `systemize.max_findings_prs_per_run`, so a run whose report lists omitted pull

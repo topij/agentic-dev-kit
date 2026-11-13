@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "a0ef52dfc620ed86906b4192118b134c0c2f3e0ac77499ef6995cf62e59613c2"
+      "sha256": "e8b3b2a08477ed5f6e6aa4490067cd46655118c45393b4888a4113e0f94b56bb"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md": {
       "role": "lite",
@@ -120,7 +120,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "761cf633e408dfeb99574f8bf238e3e677804a5d77462a55760b8386e7631533"
+      "sha256": "f9fec4e8cc820dc2e2e59196056fe324f78d215fee4d4b70704cfdd1ca710412"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
