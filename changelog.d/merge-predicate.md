@@ -13,8 +13,10 @@ which is everything any one of them required before. A report is merge-ready onl
 `mergeable`, `converged` and `done` are each `true`, `merge_blockers` and
 `truncated_reads` are each an empty list, and `review_evidence.valid` is `true`, for the
 exact pull request and head the caller holds. `pr_watch.py` writes all of these, so a
-report from the current engine reads as before, with one exception: a `mergeable` report
-that lists a truncated read is now refused by `dev_session.sh merge` and is not `held`.
+report from the current engine reads as before. A `mergeable` report that lists a
+truncated read is now refused by `dev_session.sh merge` and is not `held`; the current
+engine never emits one (only the REST backend records truncated reads, and a REST report
+is never `mergeable`), so this changes only a stubbed or hand-built report.
 
 - `dev_session.sh merge` newly requires `converged`, `done`, the empty `merge_blockers`
   and `truncated_reads`, and valid `review_evidence`. If you stub the report in a test,

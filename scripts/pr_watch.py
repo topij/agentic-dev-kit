@@ -1173,15 +1173,15 @@ _truncation_warned: set[str] = set()
 # The JSON alone was not enough, and saying it was is a mistake this engine has
 # now made twice. `summarize_review_bots.signal` is the precedent worth copying —
 # but the reason it works is that `render` BRANCHES on it and
-# `workflows/pr-watch.md` documents it. A field with neither is read by nobody:
-# `dev_session.sh merge` extracts only `mergeable`/`pr`/`base`/`head`.
+# `workflows/pr-watch.md` documents it. A field with neither is read by nobody.
 #
 # It gates nothing in this engine on purpose (REST cannot authorize a merge, and
 # blocking `converged` would wedge the watch loop). Session-start reads a
-# non-empty one as review findings unavailable. Triage's
-# `terminal_pr_watch_receipt` also requires it empty, but no REST report reaches
-# that check: triage runs `--assert-ready` first, which refuses on REST, and a
-# REST report is never mergeable. Here the render line is the whole
+# non-empty one as review findings unavailable. `lib/merge_predicate.py`, which
+# `dev_session.sh merge`, the reconciler's `held` check and triage's
+# `terminal_pr_watch_receipt` all read the report through, requires it empty,
+# but no REST report reaches those checks as merge-ready: a REST report is never
+# mergeable, and triage runs `--assert-ready` first, which refuses on REST. Here the render line is the whole
 # mechanism: REST list endpoints return oldest-first, which means the ceiling
 # drops the NEWEST comments — where fresh findings live — and a read short of a
 # count may have dropped any of them, so an agent reading "converged" needs to
@@ -1247,8 +1247,9 @@ def _warn_read_incomplete(url: str, reason: str) -> None:
 
     Recorded in ``_truncated_reads`` beside the ceiling case, because the report
     a reader acts on is the same: the list is a prefix, not the whole. This engine
-    gates nothing on it; session-start reads a non-empty list as review findings
-    unavailable, so a false positive (a comment deleted between the PR read and
+    gates nothing on it; `lib/merge_predicate.py` requires it empty (see
+    ``_truncated_reads``), and session-start reads a non-empty list as review
+    findings unavailable, so a false positive (a comment deleted between the PR read and
     the list read) costs that one poll's findings until a later poll reads clean.
     #94's
     re-audit at `e37b7bd` found every count GitHub sends discarded, so a short

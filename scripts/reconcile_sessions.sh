@@ -16,15 +16,15 @@
 # merged, held, parked; `open` is the one that says reconciliation is not
 # finished, which is why it, alone, keeps the batch un-closeable:
 #   • merged  — a merged PR exists for the branch              → counts toward M
-#   • held    — an OPERATOR-class lane whose open PR is        → counts toward H
-#               merge-ready: green, review-clean, and carrying
-#               an independent-review receipt bound to the
-#               current head. The lane is finished; only the
-#               operator's merge decision is missing, so the
-#               batch itself can no longer advance it. A
-#               SELF-class lane in that condition is held too
-#               when its PR is not classed standard, because
-#               `dev_session.sh merge` refuses that PR.
+#   • held    — a lane whose open PR is merge-ready (green,  → counts toward H
+#               review-clean, and carrying an independent-
+#               review receipt bound to the current head) and
+#               that only the operator can merge: an OPERATOR-
+#               class lane, or a SELF-class lane whose PR is
+#               not classed standard, because `dev_session.sh
+#               merge` refuses that PR. The lane is finished;
+#               only the operator's merge decision is missing,
+#               so the batch itself can no longer advance it.
 #   • open    — a PR is still open with work left on it        → batch not closeable
 #   • parked  — no merged PR; sub-reason surfaced so a dead    → counts toward K
 #               lane can never hide behind the aggregate:
@@ -495,7 +495,9 @@ _resolve_repo_nwo() {
 #    their predicates from forge rollups. `--no-persist` keeps this probe
 #    from acknowledging anything: in serialized use, reconciliation preserves a lane's
 #    seen-set, pending acknowledgements, and review receipt. Serialize operations
-#    on the same per-PR state file. The one thing it
+#    on the same per-PR state file. A self-class lane polls and persists to this
+#    same file while it works, so reconcile a batch once its lanes have stopped:
+#    nothing here detects a live lane or locks the file. The one thing it
 #    may record on gh is the settle baseline — when the probe observed this head's
 #    rollup at its current size — which is a timing fact, computed exactly as
 #    the lane's own poll would, and cannot open the gate before the grace

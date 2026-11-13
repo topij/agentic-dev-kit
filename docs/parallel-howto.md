@@ -239,8 +239,10 @@ shipped:
 scripts/reconcile_sessions.sh <scope-1> <scope-2> …   # merged / held / parked / open
 ```
 
-`held` is an operator-class lane whose PR is already merge-ready (green, review-clean,
-receipt bound to head): the batch cannot advance it, only your merge decision can.
+`held` is a lane whose PR is already merge-ready (green, review-clean, receipt bound
+to head) and that only you can merge: an operator-class lane, or a self-class lane whose
+PR is not classed standard, which `dev_session.sh merge` refuses. The batch cannot
+advance it; only your merge decision can.
 
 Three of those four are terminal — `merged`, `held`, `parked`. `open` is not: it says
 reconciliation is unfinished, and it alone keeps the batch un-closeable. Exit codes

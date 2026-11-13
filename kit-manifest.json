@@ -112,7 +112,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "d28624dfd8ac4e5f740f6ebcbc5326a729637e8f968700d255d1cf9297ad5b1b"
+      "sha256": "a08e0bee2d50bdefadba49fc78e2d5c57aa8f4db0818d3cdf389fb5fc55d25a3"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -127,7 +127,7 @@
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "83b35371c2edd4bbe398f6f26fe6033452e2a3142b09b05dc765aad1b82f7362"
+      "sha256": "e24cc6385ac9313bbf3606496c55d1da0a6b1450006fa41a3c264b28371d5e9c"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -676,11 +676,11 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "ccd1523815ed6aad5b55476917dafa5156c030a70c505431d72a222eb090d56c"
+      "sha256": "2efcd87603bc171831f23372dad638564834fed67e9794a4470444588c75a892"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "ba3d594dd5a54b69f0cc5b35ce46fcb8b48c19bc771ef7ee80cce3cd6b88225b"
+      "sha256": "1888c9881c7be475d6df519c1dd7161106d31ee1e0bf3929686d7f65db510fe6"
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
@@ -824,7 +824,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "6034a497b09da6f1f52933b9b7ca7a39dc3b8eeba7b93da888db790ed3eba4de"
+      "sha256": "b6373da06a0e3ca8b6348b657b8f01709041c5f69e904c54b09f7a9b6d041bbe"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -832,7 +832,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "27b64aea505c0915124b191fc3bbf6c583674b600a2baf95f59f453e8c4b980c"
+      "sha256": "2452c07ebed2ab4f7bc9d09486547860bfe85b9bde4d5ba6c2f8a0a575f161cf"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

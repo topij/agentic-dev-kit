@@ -5059,8 +5059,9 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
 
     Unit tests on `decide_mergeable` are insufficient by that rule: the thing
     that actually authorizes a merge is `dev_session.sh merge`, which shells out
-    to `pr_watch.py --json` and tests the parsed value with an IDENTITY check
-    (`d.get("mergeable") is True`). A truthy non-bool would fail that check
+    to `pr_watch.py --json` and hands the report to `lib/merge_predicate.py
+    merge`, which tests the parsed value with an IDENTITY check
+    (`report.get("mergeable") is True`). A truthy non-bool would fail that check
     closed but confusingly, and nothing at the Python level would notice —
     `decide_mergeable`'s own docstring names this hazard.
 
@@ -5089,8 +5090,9 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
     # reason, in the one test file adopters actually install, and in the file
     # `#40` certifies as portable. Measured on cs-toolkit, whose
     # `scripts/dev_session.sh` is its own 53KB file from 2026-06-22, predating
-    # the kit; both it and the kit's hold exactly one matching block, so even
-    # the `len(blocks) == 1` guard below could not tell them apart (`#537`).
+    # the kit; both it and the kit's held exactly one matching block, so even
+    # the `len(blocks) == 1` guard this test then had could not tell them apart
+    # (`#537`).
     #
     # Since the gate's reads moved out of the wrapper, the file read here is
     # `lib/merge_predicate.py`, which the wrapper runs as this same command and

@@ -1244,9 +1244,8 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
     """
     wrapper = (ENGINE_DIR / "dev_session.sh").read_text(encoding="utf-8")
     blocks = re.findall(r"python3 -c '\n(import json, sys\n.*?)'", wrapper, re.S)
-    # Selected by CONTENT, not position — the rule `test_pr_watch.py`'s
-    # merge-gate test states: indexing would silently re-point this test the day
-    # a block is added above this one. `headRepositoryOwner` appears only as code.
+    # Selected by CONTENT, not position: indexing would silently re-point this
+    # test the day a block is added above this one. `headRepositoryOwner` appears only as code.
     meta = [block for block in blocks if "headRepositoryOwner" in block]
     assert len(meta) == 1, f"expected one lane-PR extraction, found {len(meta)}"
 
