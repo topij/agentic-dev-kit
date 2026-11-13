@@ -1037,7 +1037,7 @@ never by number.**
 before the route that carries it out (`#613`):
 
 - `accept`: the finding holds. The disposition then names the route: the fix commit, the
-  delta pass, or the ticket for a LOW or pre-existing finding.
+  delta pass, the record or ticket for a LOW, or the ticket for a pre-existing finding.
 - `dispute-evidence: <citation or executed probe>`: the finding does not hold, and here
   is a `path:line`, a commit, or a command with its output that shows it. A verifier's
   `refuted` evidence counts once the author has reproduced it.
@@ -1161,18 +1161,78 @@ Choose and record a disposition on the PR:
   Record what actually ran as `fallback:delta`, with `--compose-parent`,
   `--head` and a `--disposition` carrying each lens's verdict lines, preserving
   the standing full-review evidence and its limitations.
+- **Record.** The default deferral for a LOW finding's first occurrence. The PR
+  carries the whole record and nothing is filed in the tracker. For a fallback-panel
+  finding that is its typed disposition line, whose route says `recorded` and gives
+  the finding's location and what fixing it would take, for example
+  `correctness F3 LOW: accept — recorded: <path>:<line>, <what a fix would change>`.
+  For a bot or human review thread it is the reply on that thread, opening with
+  `recorded:` and giving the same two things. A record disposition makes no
+  candidate commit and needs no re-review. It acknowledges an unresolved LOW
+  finding, not a fix.
 - **Ticket.** Defer the finding in the configured tracker, with its location,
   reviewer severity, regression classification and acceptance criteria; link the
   ticket and explain the deferral on the PR. Reuse an existing matching ticket
-  rather than duplicating it. A ticket disposition makes no candidate commit and
-  needs no re-review. It acknowledges an unresolved LOW finding, not a fix.
-  Use only authorized tracker access; if writing is unavailable or unauthorized,
-  retain the exact ticket draft and report that administrative action pending,
-  without restarting review or claiming a ticket was filed.
+  rather than duplicating it, and add this occurrence to it. A ticket disposition
+  makes no candidate commit and needs no re-review. It acknowledges an unresolved
+  LOW finding, not a fix. Use only authorized tracker access; if writing is
+  unavailable or unauthorized, retain the exact ticket draft and report that
+  administrative action pending, without restarting review or claiming a ticket was
+  filed. A deferred LOW takes this route, not the record route, when:
+  - it recurs: a matching ticket is open, or an earlier pull request recorded the
+    same finding;
+  - **its recurrence check is not complete.** The record route is open only when
+    both recurrence searches completed, and anything short of that, for any
+    reason, takes this ticket route. The two searches are the open tickets, read
+    to the tracker's last page as `session-start`'s tracker read requires, and
+    the forge's pull-request comments for earlier `recorded:` lines naming the
+    same path or concern. On GitHub the second is `gh api --paginate -X GET
+    search/issues -f per_page=100 -f q='repo:<owner>/<repo> is:pr in:comments
+    recorded <path> updated:>=<date>'`, which reaches disposition lines,
+    regression lines and thread replies alike. It is complete only when `gh`
+    exited zero, every page was read, every page reported
+    `incomplete_results: false`, and `total_count` was at most 1000, the
+    search's own ceiling, past which pages are not served (narrow the query
+    until it is). The `updated:>=<date>` term is required, set to the day the
+    record route came into use: it filters on each pull request's last update,
+    not on its comments' dates, so it keeps out pull requests untouched since
+    then, and a pull request updated later still returns its older comments.
+    Read each hit, since the search ignores punctuation and the date term does
+    not exclude older comments. When both searches completed and you are unsure
+    whether two findings are the same, record it; the scheduled run below is
+    the second reader;
+  - it is on a pull request `safety-critical-changes.md` governs (computed review
+    class `safety-critical`), which repairs or tickets every LOW;
+  - its repair was attempted and needs a broader redesign, or its containment is
+    disputed (below);
+  - its reviewer classed it pre-existing, which takes the ticket route at any
+    severity under *Pre-existing findings*.
+
+  Nothing in the engine reads a route: like the pre-existing label, the choice of
+  `recorded` is the author's claim on the pull request. *A reviewer checks* that no
+  `recorded` line sits on a safety-critical pull request and that each one names a
+  location.
+
+**Recurrences across pull requests are found by `post-merge-systemize`.** Run
+`post-merge-systemize backfill` at least every two weeks while the record route is
+in use. That workflow treats a thread reply as context, not a finding, so it does not
+see a recording made there. Beside its run, the session running it searches the
+window's pull-request comments for `recorded` (the query above, without a path,
+with its `updated:>=` term set to the window's start and every page read),
+drafts a ticket for each LOW finding recorded on two or more pull requests, and files
+it on the operator's approval. Unless that search is complete in the sense above, the
+run reports its recurrence check as not done rather than as finding none. Two limits:
+a recurrence further apart than
+`systemize.backfill_days` falls in no single window, and the digest drops the
+lowest-severity pull requests first when it caps at
+`systemize.max_findings_prs_per_run`, so a run whose report lists omitted pull
+requests says that their recorded findings were not clustered. The record route
+began as a one-month trial in the kit's own repository (the plan's decision D3),
+whose living handoff schedules the trial's runs and its judgement.
 
 Check for a valid full-review parent before committing a LOW-only repair. If no
-composable parent exists, choose the ticket route; do not rerun a completed review
-just to manufacture a parent. This rule does not waive an initial review that
+composable parent exists, defer the finding by the record or ticket route; do not
+rerun a completed review just to manufacture a parent. This rule does not waive an initial review that
 never happened or invent a receipt for an incomplete or wrong-revision review.
 A pending ticket write does not by itself dispose of a finding for merge.
 
@@ -1184,7 +1244,7 @@ to hunt unrelated defects across the whole PR. Do not claim behavior is record
 prose to qualify. Preserve the normal independent safety-critical boundary check
 and post each lens's verdict before recording the composed receipt.
 
-A new LOW finding from that delta takes the same delta-or-ticket route. If the
+A new LOW finding from that delta takes the same LOW rule. If the
 repair would require a broader redesign, or containment is disputed without a
 severity escalation, ticket it rather than expanding or restarting the LOW round.
 If the disputed repair is already committed, withdraw that repair and delta-review
