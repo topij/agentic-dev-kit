@@ -960,7 +960,7 @@ owner = row.get("headRepositoryOwner") or {}
 if isinstance(owner, dict):
     owner = owner.get("login") or owner.get("name") or ""
 def f(v):
-    # Same scrub, same reason as the merge gate further down this file. These
+    # The same scrub lib/merge_predicate.py applies to what it prints. These
     # extracted fields are tab-joined and the shell splits them, so a control
     # character in an EARLIER field shifts every later one -- and the checks
     # that follow (base, branch, head-repo owner, fork status, and head) are what
@@ -1029,7 +1029,7 @@ cmd_merge() {
 
     local merge_class="operator" branch="" base="$DEFAULT_BASE"
     local resolved repo_nwo pr listed_head
-    local report mergeable validated_pr validated_base validated_head review_class review_why
+    local report gate_rc gate_line gate_verdict gate_detail
     [[ -s "$session_dir/merge_class" ]] && merge_class="$(cat "$session_dir/merge_class")"
     [[ "$merge_class" == "self" ]] \
         || _die "lane '$scope' is operator-merge (or missing metadata); autonomous merge refused"
@@ -1047,102 +1047,56 @@ cmd_merge() {
     report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" DEVKIT_ROOT="$REPO_ROOT" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist)" \
         || _die "pr-watch failed for PR #$pr"
-    # Gate on `mergeable`: converged AND no deterministic merge blocker AND
-    # independent-review evidence bound to this head — either a recorded receipt
-    # or a configured bot's own review of it (#350). Which route answered sits in
-    # `review_evidence.route`; this gate reads neither, by the same rule that
-    # keeps it reading `mergeable` rather than re-deriving it.
-    # The report's `done` is an unchanged
-    # alias of `mergeable`, and every pre-split pr_watch emitted `done` with this
-    # same merge-authorization meaning — so either key is safe against a kit
-    # version skew, and `mergeable` additionally fails CLOSED when absent. Read
-    # `mergeable` because it is the precise name and is not the one retained for
-    # backward compatibility. The key that must NEVER gate a merge is `converged` —
-    # the watch-loop predicate ("anything left to fix?"), which is deliberately
-    # true on a green, comment-clean PR carrying no receipt.
-    # Read the flag pr_watch computes — never re-derive it here, or this gate
-    # becomes a second copy of the contract that can drift from the engine's.
-    IFS=$'\t' read -r mergeable validated_pr validated_base validated_head review_class review_why <<< "$(printf '%s' "$report" | python3 -c '
-import json, sys
-d = json.load(sys.stdin)
-def f(v):
-    # Load-bearing for AUTHORIZATION, not cosmetics. These fields are emitted
-    # tab-separated and the shell splits on tabs, so a tab inside `pr` shifts
-    # every later field: `base` is then read out of `pr` and matches the recorded
-    # value while the real base goes unexamined. Measured without this: a report
-    # with base "WRONG" and an empty head was AUTHORIZED.
-    # A control character becomes a SPACE rather than being DELETED. Deleting it
-    # would fuse a hostile value into a legitimate-looking one -- a base of
-    # "tr<TAB>unk" would scrub to "trunk" and match the recorded base. A space
-    # cannot appear in a git ref, so every comparison below fails CLOSED instead.
-    # Only the report side is scrubbed, so in principle a recorded base holding a
-    # SPACE could collide with a reported one holding a tab. Unreachable: that
-    # value must be a real git ref twice over (cmd_new fetches it, and the PR
-    # baseRefName must equal it), and git ref names admit neither.
-    # Unreachable through gh today, exactly as the sibling scrub in
-    # _resolve_lane_pr says of itself -- these three fields are a PR number, a
-    # ref name and a commit sha, none of which admit a control character. So
-    # this is defence in depth on an AUTHORIZATION path (#537), not a live
-    # bypass. Said at BOTH sites deliberately: one candid copy beside one silent
-    # copy of the same fix reads as the silent one knowing something.
-    # NB: no apostrophes in this block -- it lives inside python3 -c SINGLE
-    # quotes, so one would terminate the string and break the extraction.
-    return "".join(" " if ch < "\x20" or ch == "\x7f" else ch for ch in str(v))
-# The review class is read as one exact token, so only a report that says
-# standard, with nothing unclassified, can pass. A missing or non-dict field
-# (an older pr_watch), an unclassified change, or any other class reads as not
-# standard and refuses: this check only tightens (#1357). A standard class that
-# also lists matched paths or a config change is inconsistent, so it reads as
-# not standard too rather than trusting the class string alone. The reason is
-# last so the shell read hands it whatever remains of the line; it is scrubbed
-# like the rest and only ever printed, never compared.
-rc = d.get("review_class")
-matched = []
-if isinstance(rc, dict):
-    raw = rc.get("matched_paths")
-    matched = [str(m) for m in (raw if isinstance(raw, list) else [raw] if raw else [])]
-    if rc.get("changes_config") is True:
-        matched.append("the config that declares review.safety_critical_paths")
-if not isinstance(rc, dict):
-    review_class, why = "missing", "the report has no review_class"
-elif rc.get("unclassified") is not None:
-    review_class, why = "unclassified", str(rc.get("unclassified"))
-elif rc.get("class") == "standard" and not matched:
-    review_class, why = "standard", ""
-else:
-    review_class = "not-standard"
-    why = "class " + str(rc.get("class")) + ("; matched: " + ", ".join(matched) if matched else "")
-print("\t".join(("true" if d.get("mergeable") is True else "false", f(d.get("pr") or ""), f(d.get("base") or ""), f(d.get("head") or ""), review_class, f(why))))
-')"
-    [[ "$mergeable" == "true" ]] \
-        || _die "PR #$pr is not green, review-clean, and merge-ready; run pr-watch to convergence first"
-    [[ "$validated_pr" == "$pr" ]] \
-        || _die "pr-watch validated PR #$validated_pr, not resolved PR #$pr"
-    [[ "$validated_base" == "$base" ]] \
-        || _die "validated PR #$pr targets '$validated_base', not recorded base '$base'"
-    [[ -n "$validated_head" ]] || _die "pr-watch returned no validated head for PR #$pr"
-    [[ "$validated_head" == "$listed_head" ]] \
-        || _die "PR #$pr head changed during validation; retry against the current head"
+    # The gate is `merge_gate` in lib/merge_predicate.py: the report must be
+    # merge-ready for exactly this PR, base and head, and classed standard. This
+    # wrapper compares nothing in the report itself, so the reconciler's `held`
+    # check and triage's receipt check, which call the same module, cannot drift
+    # from it. What merge-ready requires, and why the verdict flags are read
+    # rather than re-derived, is documented there.
     # The lane's merge class was decided at plan time from the planned footprint;
     # the PR's diff can grow past it. pr_watch computes `review_class` from the
     # actual diff, so a PR that now touches review.safety_critical_paths (or the
     # config that declares them) is operator-merge whatever the lane recorded
     # (safety-critical-changes.md, *Merge class*; #1357).
+    # The module prints `<verdict><TAB><detail>` and exits 0 only for `ready`.
+    # Both are required, and the `case` below refuses every verdict it does not
+    # name, so a module that is missing, fails or prints nothing refuses the
+    # merge. The detail is report text the module has scrubbed of control
+    # characters; it is only ever printed here, never compared.
+    gate_rc=0
+    gate_line="$(printf '%s' "$report" | python3 "$SCRIPT_DIR/lib/merge_predicate.py" merge \
+        --pr "$pr" --base "$base" --head "$listed_head")" || gate_rc=$?
+    IFS=$'\t' read -r gate_verdict gate_detail <<< "$gate_line" || true
     # Each refusal names its own remedy: an older pr_watch is version skew, and an
     # unclassified PR is most often a base or head commit this clone has not
     # fetched (pr_review_class reads both from local git), not an operator-merge.
-    case "$review_class" in
-        standard) ;;
-        missing)
-            _die "PR #$pr is not classed standard: the pr-watch report has no review_class; upgrade pr_watch.py together with dev_session.sh, then retry" ;;
-        unclassified)
-            _die "PR #$pr is not classed standard: it could not be classed (${review_why}); fetch the PR's base and head (git fetch origin '$base'), then retry, and if it still cannot be classed the operator lands it directly" ;;
+    case "$gate_verdict" in
+        ready)
+            [[ "$gate_rc" -eq 0 ]] \
+                || _die "could not evaluate the pr-watch report for PR #$pr (lib/merge_predicate.py exited $gate_rc); merge refused" ;;
+        malformed|not-mergeable)
+            _die "PR #$pr is not green, review-clean, and merge-ready; run pr-watch to convergence first" ;;
+        wrong-pr)
+            _die "pr-watch validated PR #$gate_detail, not resolved PR #$pr" ;;
+        wrong-base)
+            _die "validated PR #$pr targets '$gate_detail', not recorded base '$base'" ;;
+        no-head)
+            _die "pr-watch returned no validated head for PR #$pr" ;;
+        head-changed)
+            _die "PR #$pr head changed during validation; retry against the current head" ;;
+        class-missing)
+            _die "PR #$pr is not classed standard: ${gate_detail}; upgrade pr_watch.py together with dev_session.sh, then retry" ;;
+        class-unclassified)
+            _die "PR #$pr is not classed standard: it could not be classed (${gate_detail}); fetch the PR's base and head (git fetch origin '$base'), then retry, and if it still cannot be classed the operator lands it directly" ;;
+        class-not-standard)
+            _die "PR #$pr is not classed standard (${gate_detail}); it is operator-merge, so the operator lands it directly" ;;
         *)
-            _die "PR #$pr is not classed standard (${review_why:-$review_class}); it is operator-merge, so the operator lands it directly" ;;
+            _die "could not evaluate the pr-watch report for PR #$pr (lib/merge_predicate.py is missing or failed; refresh it together with dev_session.sh); merge refused" ;;
     esac
 
+    # `$listed_head` is the head the gate just matched against the report's.
     (cd "$REPO_ROOT" && GH_REPO="$repo_nwo" gh pr merge --repo "$repo_nwo" "$pr" --squash --delete-branch \
-        --match-head-commit "$validated_head") \
+        --match-head-commit "$listed_head") \
         || _die "GitHub merge failed for PR #$pr"
 }
 

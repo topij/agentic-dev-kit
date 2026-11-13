@@ -153,6 +153,8 @@ class Harness:
             ENGINE_DIR / "reconcile_sessions.sh", self.engine_dir / "reconcile_sessions.sh"
         )
         shutil.copy2(ENGINE_DIR / "lib" / "repo_root.sh", self.engine_dir / "lib" / "repo_root.sh")
+        self.predicate = self.engine_dir / "lib" / "merge_predicate.py"
+        shutil.copy2(ENGINE_DIR / "lib" / "merge_predicate.py", self.predicate)
         shutil.copy2(ENGINE_DIR / "pr_watch.py", self.engine_dir / "pr_watch.py")
         (self.repo / "config").mkdir()
         (self.repo / "config" / "dev-model.yaml").write_text(_CONFIG, encoding="utf-8")
@@ -259,7 +261,12 @@ class Harness:
             **fields,
         }
         if fields.get("mergeable") is True:
+            # Everything else `lib/merge_predicate.py` requires of a merge-ready
+            # report, so a case that changes one field is refused for that field.
             report.setdefault("converged", True)
+            report.setdefault("done", True)
+            report.setdefault("truncated_reads", [])
+            report.setdefault("review_evidence", {"valid": True})
         (self.uv_reports / f"{number}.json").write_text(json.dumps(report), encoding="utf-8")
 
     # ------------------------------------------------------------------ runner
@@ -347,20 +354,199 @@ def test_operator_lane_with_a_mergeable_open_pr_is_held_not_open(harness: Harnes
     assert result.returncode == 4
 
 
+STANDARD_CLASS = {
+    "class": "standard",
+    "matched_paths": [],
+    "changes_config": False,
+    "unclassified": None,
+}
+SAFETY_CRITICAL_CLASS = {
+    **STANDARD_CLASS,
+    "class": "safety-critical",
+    "matched_paths": ["scripts/pr_watch.py"],
+}
+
+
 def test_self_merge_lane_with_the_same_mergeable_pr_stays_open(harness: Harness) -> None:
-    """A `self` lane in this exact condition is not held — it is supposed to
-    merge itself. Only the PERSISTED class distinguishes the two, so this is the
-    case that dies if `_held_check` stops reading `merge_class`."""
+    """A `self` lane whose merge-ready PR is classed standard is not held — it
+    is supposed to merge itself. Only the PERSISTED class distinguishes it from
+    the operator lane above, so this is the case that dies if the verdict stops
+    reading `merge_class`. It is probed since #1370, because its review class is
+    in the report, and the ordinary "not held" answer stays silent."""
     harness.branch("lane/beta")
     harness.pr("lane/beta", 502, "OPEN")
     harness.session("beta", "lane/beta", "self")
-    harness.watch_report(502, mergeable=True, converged=True)
+    harness.watch_report(502, mergeable=True, converged=True, review_class=STANDARD_CLASS)
 
     result = harness.run("beta")
 
     assert _status_of(result.stdout, "beta") == "open"
     assert result.returncode == 3
-    assert harness.uv_calls() == [], "a self-class lane must not even be probed"
+    assert len(harness.uv_calls()) == 1
+    assert "could not evaluate" not in result.stderr
+
+
+def test_self_lane_the_merge_wrapper_refuses_for_its_class_is_held(harness: Harness) -> None:
+    """#1370. `dev_session.sh merge` refuses a `self` lane whose PR is not
+    classed standard, and the operator lands it. Reported `open`, that lane kept
+    the batch from ever reaching exit 4. The report here is merge-ready, so only
+    the class separates it from the lane in the test above."""
+    harness.branch("lane/grown")
+    harness.pr("lane/grown", 550, "OPEN")
+    harness.session("grown", "lane/grown", "self")
+    harness.watch_report(550, mergeable=True, review_class=SAFETY_CRITICAL_CLASS)
+
+    result = harness.run("grown")
+
+    assert _status_of(result.stdout, "grown") == "held"
+    assert "awaiting operator merge" in result.stdout
+    assert _tally(result.stdout) == "launched 1, merged 0, parked 0, held 1"
+    assert result.returncode == 4
+
+
+def test_self_lane_classed_safety_critical_but_not_merge_ready_stays_open(
+    harness: Harness,
+) -> None:
+    """The class alone holds nothing: the lane still has work on it."""
+    harness.branch("lane/growing")
+    harness.pr("lane/growing", 551, "OPEN")
+    harness.session("growing", "lane/growing", "self")
+    harness.watch_report(551, mergeable=False, review_class=SAFETY_CRITICAL_CLASS)
+
+    result = harness.run("growing")
+
+    assert _status_of(result.stdout, "growing") == "open"
+    assert result.returncode == 3
+    assert "could not evaluate" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "review_class",
+    [
+        None,
+        {"class": "safety-critical"},
+        {**SAFETY_CRITICAL_CLASS, "unclassified": "the PR's base or head commit is unknown"},
+    ],
+)
+def test_self_lane_whose_class_cannot_be_read_is_open_and_says_so(
+    harness: Harness, review_class: dict | None
+) -> None:
+    """A missing, partial or unclassified review class does not widen `held`:
+    the merge wrapper's remedy for these is an upgrade or a fetch, not an
+    operator merge. The lane is `open`, with the could-not-evaluate note."""
+    harness.branch("lane/unread")
+    harness.pr("lane/unread", 552, "OPEN")
+    harness.session("unread", "lane/unread", "self")
+    fields: dict[str, object] = {"mergeable": True}
+    if review_class is not None:
+        fields["review_class"] = review_class
+    harness.watch_report(552, **fields)
+
+    result = harness.run("unread")
+
+    assert _status_of(result.stdout, "unread") == "open"
+    assert result.returncode == 3
+    assert "could not evaluate for 'held'" in result.stderr
+    assert "PR #552" in result.stderr
+
+
+def test_a_lane_of_any_other_merge_class_is_not_held_and_not_probed(harness: Harness) -> None:
+    """Lane metadata that is not exactly `operator` or `self` claims nothing,
+    and costs no forge poll."""
+    harness.branch("lane/odd")
+    harness.pr("lane/odd", 553, "OPEN")
+    harness.session("odd", "lane/odd", "Operator")
+    harness.watch_report(553, mergeable=True, review_class=SAFETY_CRITICAL_CLASS)
+
+    result = harness.run("odd")
+
+    assert _status_of(result.stdout, "odd") == "open"
+    assert result.returncode == 3
+    assert harness.uv_calls() == []
+
+
+# --------------------------------------------------------------------------- #
+# the verdict is the shared module's, not this script's
+# --------------------------------------------------------------------------- #
+
+
+def _stub_predicate(harness: Harness, body: str) -> None:
+    harness.predicate.write_text(body, encoding="utf-8")
+
+
+def test_the_reconciler_spells_no_field_check_of_its_own(harness: Harness) -> None:
+    """The structural check for `reconcile_sessions.sh`, by substitution rather
+    than by searching its text for field names.
+
+    `lib/merge_predicate.py` is swapped for a stub in the copied tree and the
+    real script is run. With a stub that says "held" to everything, a lane whose
+    report is an EMPTY object must be `held`: any report field the script still
+    compared itself would keep it `open`. With a stub that says "not held", a
+    lane whose report is complete must be `open`: a script that had kept its own
+    predicate and ignored the module would hold it. The stub also records its
+    argv, which pins that the script hands over the lane's merge class and the
+    PR, base and head it resolved."""
+    argv_log = harness.tmp / "predicate-argv.log"
+    harness.branch("lane/stubbed")
+    harness.pr("lane/stubbed", 560, "OPEN")
+    harness.session("stubbed", "lane/stubbed", "self")
+    head = harness.pr_heads[560]
+
+    (harness.uv_reports / "560.json").write_text("{}", encoding="utf-8")
+    _stub_predicate(
+        harness,
+        "import sys\n"
+        f"open({str(argv_log)!r}, 'a').write('\\t'.join(sys.argv[1:]) + '\\n')\n"
+        "print('held')\n",
+    )
+    accepted = harness.run("stubbed")
+    assert _status_of(accepted.stdout, "stubbed") == "held"
+    assert accepted.returncode == 4
+    assert argv_log.read_text(encoding="utf-8").splitlines() == [
+        f"held\t--merge-class\tself\t--pr\t560\t--base\ttrunk\t--head\t{head}"
+    ]
+
+    harness.watch_report(560, mergeable=True, review_class=SAFETY_CRITICAL_CLASS)
+    _stub_predicate(harness, "import sys\nprint('not-held')\nsys.exit(1)\n")
+    refused = harness.run("stubbed")
+    assert _status_of(refused.stdout, "stubbed") == "open"
+    assert refused.returncode == 3
+    assert "could not evaluate" not in refused.stderr
+
+
+@pytest.mark.parametrize(
+    "stub",
+    [
+        None,  # the module is absent
+        "raise RuntimeError('boom')\n",  # a bare traceback exits 1
+        "import sys\nsys.exit(1)\n",  # exit 1 with no answer printed
+        "import sys\nsys.exit(0)\n",  # exit 0 with no answer printed
+        "import sys\nprint('held')\nsys.exit(1)\n",  # the answer and the status disagree
+        "print('Held')\n",
+        "print('held for the operator')\n",
+        "print('unknown')\n",
+    ],
+)
+def test_a_predicate_that_did_not_answer_is_open_and_says_so(
+    harness: Harness, stub: str | None
+) -> None:
+    """A missing or failing module must never read as `held`, and must not read
+    as a clean "not held" either. The second and third cases are why the script
+    reads the printed token: their exit status alone is the "not held" one."""
+    harness.branch("lane/broken")
+    harness.pr("lane/broken", 561, "OPEN")
+    harness.session("broken", "lane/broken", "operator")
+    harness.watch_report(561, mergeable=True)
+    if stub is None:
+        harness.predicate.unlink()
+    else:
+        _stub_predicate(harness, stub)
+
+    result = harness.run("broken")
+
+    assert _status_of(result.stdout, "broken") == "open"
+    assert result.returncode == 3
+    assert "could not evaluate for 'held'" in result.stderr
 
 
 def test_absent_merge_class_metadata_is_not_held(harness: Harness) -> None:
@@ -760,6 +946,10 @@ def test_newer_wrong_base_reuse_cannot_expose_an_older_matching_merge(
         {"head": "f" * 40},
         {"converged": False},
         {"merge_blockers": ["pending review"]},
+        # Required by triage's copy alone before the three shared one predicate.
+        {"done": False},
+        {"truncated_reads": ["comments"]},
+        {"review_evidence": {"valid": False}},
     ],
 )
 def test_held_requires_the_exact_pr_base_head_and_clean_report(
@@ -1353,20 +1543,25 @@ def test_the_index_matches_on_branch_identity_not_on_position(harness: Harness) 
 
     harness.branch("lane/zzz")
     harness.pr("lane/zzz", 531, "OPEN")
-    harness.session("zzz", "lane/zzz", "self")
-    harness.watch_report(531, mergeable=True)
+    zzz = harness.session("zzz", "lane/zzz", "self")
+    harness.watch_report(531, mergeable=True, review_class=STANDARD_CLASS)
 
-    # The self-class lane must NOT borrow the operator class of the first entry.
+    # The self-class lane must NOT borrow the operator class of the first entry:
+    # its merge-ready, standard PR is `open`, where an operator lane's is `held`.
+    # It is probed since #1370, and against ITS OWN sandbox.
     only_zzz = harness.run("zzz")
     assert _status_of(only_zzz.stdout, "zzz") == "open"
-    assert harness.uv_calls() == []
+    assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
+        os.path.realpath(zzz / "state")
+    ]
 
     # And the operator lane must be probed against ITS OWN sandbox, which is what
     # dies if resolution ever answers with a different session's directory.
     only_aaa = harness.run("aaa")
     assert _status_of(only_aaa.stdout, "aaa") == "held"
     assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
-        os.path.realpath(aaa / "state")
+        os.path.realpath(zzz / "state"),
+        os.path.realpath(aaa / "state"),
     ]
 
 
@@ -1383,8 +1578,8 @@ def test_the_index_matches_on_branch_identity_in_the_other_direction(
     invocation and the opposite class arrangement, not a mutant of its own."""
     harness.branch("lane/aaa")
     harness.pr("lane/aaa", 532, "OPEN")
-    harness.session("aaa", "lane/aaa", "self")
-    harness.watch_report(532, mergeable=True)
+    aaa = harness.session("aaa", "lane/aaa", "self")
+    harness.watch_report(532, mergeable=True, review_class=STANDARD_CLASS)
 
     harness.branch("lane/zzz")
     harness.pr("lane/zzz", 533, "OPEN")
@@ -1395,8 +1590,10 @@ def test_the_index_matches_on_branch_identity_in_the_other_direction(
 
     assert _status_of(result.stdout, "aaa") == "open"
     assert _status_of(result.stdout, "zzz") == "held"
+    # Each lane is probed once, against its own sandbox (a self lane since #1370).
     assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
-        os.path.realpath(zzz / "state")
+        os.path.realpath(aaa / "state"),
+        os.path.realpath(zzz / "state"),
     ]
     assert result.returncode == 3
 

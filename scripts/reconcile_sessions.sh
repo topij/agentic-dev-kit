@@ -21,7 +21,10 @@
 #               an independent-review receipt bound to the
 #               current head. The lane is finished; only the
 #               operator's merge decision is missing, so the
-#               batch itself can no longer advance it.
+#               batch itself can no longer advance it. A
+#               SELF-class lane in that condition is held too
+#               when its PR is not classed standard, because
+#               `dev_session.sh merge` refuses that PR.
 #   • open    — a PR is still open with work left on it        → batch not closeable
 #   • parked  — no merged PR; sub-reason surfaced so a dead    → counts toward K
 #               lane can never hide behind the aggregate:
@@ -464,7 +467,9 @@ _resolve_repo_nwo() {
 # _held_check <session-dir> <branch> <pr> <base> <head> — is this open PR's
 # lane HELD for the operator?
 #
-#   0 — held: operator-class lane, and the PR is merge-ready
+#   0 — held: the PR is merge-ready, and either the lane is operator-class or
+#       it is self-class and the PR is not classed standard, so
+#       `dev_session.sh merge` refuses it and the operator lands it (#1370)
 #   1 — not held (lane is genuinely still open)
 #   2 — could not be determined; caller reports `open` and says why
 #
@@ -482,8 +487,11 @@ _resolve_repo_nwo() {
 #    incomplete session identity and therefore cannot widen the lane to held.
 #
 # 3. A non-persisting pr_watch poll against the lane's own state sandbox must
-#    report `mergeable` and `converged` for this exact PR, base, and head, with
-#    an explicit empty blocker list. Read the engine verdicts; do not rebuild
+#    be merge-ready for this exact PR, base, and head, as lib/merge_predicate.py
+#    defines it. For a self-class lane the same report must also class the PR
+#    as not standard; one whose class is missing or could not be computed is
+#    rc 2, because the remedy there is an upgrade or a fetch and not an
+#    operator merge. Read the engine verdicts; do not rebuild
 #    their predicates from forge rollups. `--no-persist` keeps this probe
 #    from acknowledging anything: in serialized use, reconciliation preserves a lane's
 #    seen-set, pending acknowledgements, and review receipt. Serialize operations
@@ -494,19 +502,21 @@ _resolve_repo_nwo() {
 #    window has run from the first observation.
 _held_check() {
     local session_dir="$1" branch="$2" pr="$3" base="$4" head_oid="$5"
-    local merge_class recorded_base report
+    local merge_class recorded_base report answer answer_rc
 
     [[ -n "$session_dir" ]] || return 1
     [[ -d "$session_dir/state" && -s "$session_dir/base" && -s "$session_dir/merge_class" ]] || return 1
     recorded_base="$(cat "$session_dir/base")"
     [[ "$recorded_base" == "$base" ]] || return 1
     merge_class="$(cat "$session_dir/merge_class")"
-    [[ "$merge_class" == "operator" ]] || return 1
+    # Only these two classes can be held, so no other lane is probed at all. The
+    # decision itself, this test included, is `held` in lib/merge_predicate.py.
+    [[ "$merge_class" == "operator" || "$merge_class" == "self" ]] || return 1
 
     # No `command -v uv` / `-f pr_watch.py` pre-check, and no empty-`$report`
     # check either: all three would be equivalent mutants. An absent `uv`, an
     # absent engine, a timeout, a transport failure and an empty reply all end at
-    # the same place — a non-zero invocation, or a parse below that raises — and
+    # the same place — a non-zero invocation, or a reply the module below cannot read — and
     # all of them mean the one thing: the probe did not run, so rc 2 and the
     # caller's stderr note. Repository identity was resolved before row output;
     # this check only preserves the helper's fail-closed contract.
@@ -518,33 +528,20 @@ _held_check() {
         "GH_REPO=$REPO_NWO" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
 
-    # `mergeable` is the merge-authorization verdict; `converged` confirms that
-    # the observed forge state is internally settled. Both fail closed when
-    # absent, and exact identity plus an explicit blocker list prevent a valid
-    # report for another head from terminalizing this lane.
-    printf '%s' "$report" | python3 -c '
-import json, sys
-expected_pr, expected_base, expected_head = sys.argv[1:4]
-try:
-    d = json.load(sys.stdin)
-except Exception:
-    sys.exit(2)
-if not isinstance(d, dict):
-    sys.exit(2)
-blockers = d.get("merge_blockers")
-if not isinstance(blockers, list):
-    sys.exit(2)
-ready = (
-    d.get("mergeable") is True
-    and d.get("converged") is True
-    and str(d.get("pr")) == expected_pr
-    and d.get("base") == expected_base
-    and d.get("head") == expected_head
-    and not blockers
-)
-sys.exit(0 if ready else 1)
-' "$pr" "$base" "$head_oid" || return $?
-    return 0
+    # The verdict is `held` in lib/merge_predicate.py, the module the merge
+    # wrapper and triage read the same report through. It prints one exact
+    # token. The token is what is read, because a Python that fails before it
+    # can answer exits 1, which as a status alone would be a clean "not held".
+    # `held` also needs exit 0, and anything that is neither token is rc 2, so
+    # a module that is missing, fails or prints nothing is "could not tell".
+    answer_rc=0
+    answer="$(printf '%s' "$report" | python3 "$SCRIPT_DIR/lib/merge_predicate.py" held \
+        --merge-class "$merge_class" --pr "$pr" --base "$base" --head "$head_oid")" || answer_rc=$?
+    case "$answer" in
+        held) [[ "$answer_rc" -eq 0 ]] || return 2; return 0 ;;
+        not-held) return 1 ;;
+        *) return 2 ;;
+    esac
 }
 
 # Lane set, deduped by resolved branch (a branch can surface from more than one
@@ -784,7 +781,8 @@ cmd_reconcile() {
             # grow with them — a cause missing from it reads to the operator as
             # "not my case".
             echo "⚠ could not evaluate for 'held' (no uv / no pr_watch.py /"
-            echo "  probe failed or returned malformed state) —"
+            echo "  no lib/merge_predicate.py / probe failed or returned malformed"
+            echo "  state / a self lane's review class is missing or unclassified) —"
             echo "  reported OPEN, which may understate them:"
             printf '%s' "$unknown_notes"
         } >&2

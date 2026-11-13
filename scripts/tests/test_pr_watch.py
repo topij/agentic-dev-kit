@@ -5065,9 +5065,9 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
     `decide_mergeable`'s own docstring names this hazard.
 
     So this exercises the real path: the report is serialized exactly as
-    `--json` emits it, and the extraction is READ OUT OF `dev_session.sh` rather
-    than restated here, so a change to the wrapper's parsing cannot drift away
-    from this test silently.
+    `--json` emits it and handed to the command the wrapper runs,
+    `lib/merge_predicate.py merge`, rather than to a restatement of its checks,
+    so a change to the gate's reads cannot drift away from this test silently.
     """
     pr_watch = _load_pr_watch()
     view = _green_view(
@@ -5091,76 +5091,63 @@ def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
     # `scripts/dev_session.sh` is its own 53KB file from 2026-06-22, predating
     # the kit; both it and the kit's hold exactly one matching block, so even
     # the `len(blocks) == 1` guard below could not tell them apart (`#537`).
-    wrapper_path = ENGINE_DIR / "dev_session.sh"
+    #
+    # Since the gate's reads moved out of the wrapper, the file read here is
+    # `lib/merge_predicate.py`, which the wrapper runs as this same command and
+    # whose verdict line is all it acts on. The fork hazard above is why it is
+    # still resolved from ENGINE_DIR.
+    predicate_path = ENGINE_DIR / "lib" / "merge_predicate.py"
     # A SKIP rather than a FileNotFoundError, because absence here is a
-    # legitimate adopter choice and not a fault. `dev_session.sh` is separately
-    # declinable, and this is the only test in this file that reads a *different*
-    # engine than the one under test — a cross-engine dependency nothing else
-    # declares (`#534` cause 2, same shape one file over). Erroring would make
-    # this file's installability depend on an engine the adopter never took.
-    if not wrapper_path.exists():
+    # legitimate adopter choice and not a fault. `dev_session.sh` and the module
+    # it runs are separately declinable, and this is the only test in this file
+    # that reads a *different* engine than the one under test — a cross-engine
+    # dependency nothing else declares (`#534` cause 2, same shape one file
+    # over). Erroring would make this file's installability depend on an engine
+    # the adopter never took.
+    if not predicate_path.exists():
         pytest.skip(
-            f"{wrapper_path.name} is not installed at {wrapper_path.parent} — "
-            "this test pins that wrapper's merge-gate extraction, and there is "
+            f"{predicate_path.name} is not installed at {predicate_path.parent} — "
+            "this test pins the merge gate's read of a real report, and there is "
             "nothing to pin where it was declined"
         )
-    wrapper = wrapper_path.read_text()
-    # Selected by CONTENT, not position: `dev_session.sh` embeds several
-    # `python3 -c` blocks and the merge gate's is not the first. Indexing them
-    # would silently re-point this test at another block the day one is added
-    # above it — which is how a gate test starts asserting about `nameWithOwner`.
-    blocks = [
-        block
-        for block in re.findall(r"python3 -c '\n(import json, sys\n.*?)'", wrapper, re.S)
-        if "mergeable" in block
-    ]
-    assert len(blocks) == 1, (
-        "expected exactly one merge-gate extraction in dev_session.sh, "
-        f"found {len(blocks)} — re-point this test"
-    )
 
-    proc = subprocess.run(
-        [sys.executable, "-c", blocks[0]],
-        input=json.dumps(report),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    (
-        mergeable,
-        validated_pr,
-        validated_base,
-        validated_head,
-        review_class,
-        _review_why,
-    ) = proc.stdout.rstrip("\n").split("\t")
+    def gate(*identity: str) -> tuple[int, str]:
+        proc = subprocess.run(
+            [sys.executable, str(predicate_path), "merge", *identity],
+            input=json.dumps(report),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return proc.returncode, proc.stdout
 
-    # The literal the wrapper compares against, and the identity check behind it.
-    assert mergeable == "true"
-    assert validated_pr == "7"
-    assert validated_base == "trunk"
-    assert validated_head == "abc123"
-    # The wrapper also reads the report's `review_class` by that key (#1357).
-    # This fixture's shas are not real commits, so the engine cannot class it
-    # and the wrapper must read that as unclassified, which refuses the merge.
+    this_pr = ("--pr", "7", "--base", "trunk", "--head", "abc123")
+    # The gate also reads the report's `review_class` (#1357). This fixture's
+    # shas are not real commits, so the engine cannot class it and the gate must
+    # read that as unclassified, which refuses the merge. Reaching that verdict
+    # is also the evidence that everything before it passed: the module checks
+    # the verdict flags and the identity first, so a real coverage-route report
+    # is merge-ready for this PR, base and head.
     assert report["review_class"]["unclassified"]
-    assert review_class == "unclassified"
+    code, line = gate(*this_pr)
+    assert code == 1
+    assert line.startswith("class-unclassified\t")
 
     # The same report with its class set by hand to the shape the engine emits
-    # for a standard PR (this fixture cannot produce one) reads standard.
+    # for a standard PR (this fixture cannot produce one) is ready.
     report["review_class"] = {
         **report["review_class"],
         "class": pr_watch.REVIEW_CLASS_STANDARD,
         "unclassified": None,
     }
-    proc = subprocess.run(
-        [sys.executable, "-c", blocks[0]],
-        input=json.dumps(report),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert proc.stdout.rstrip("\n").split("\t")[4] == "standard"
+    assert gate(*this_pr) == (0, "ready\t\n")
+    # And only for this identity.
+    assert gate("--pr", "8", "--base", "trunk", "--head", "abc123") == (1, "wrong-pr\t7\n")
+    assert gate("--pr", "7", "--base", "main", "--head", "abc123") == (1, "wrong-base\ttrunk\n")
+    assert gate("--pr", "7", "--base", "trunk", "--head", "abc124")[1].startswith("head-changed\t")
+    # A truthy non-bool is not `True`: the hazard `decide_mergeable` names.
+    report["mergeable"] = 1
+    assert gate(*this_pr) == (1, "not-mergeable\t\n")
 
 
 def test_coverage_tolerates_a_missing_or_malformed_commit_field() -> None:

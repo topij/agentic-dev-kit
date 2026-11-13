@@ -373,6 +373,10 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/lib/adapter_templates/codex/lite-review.md", "template"),
     ("scripts/lib/atomic_write.py", "engine"),
     ("scripts/lib/devmodel_config.py", "engine"),
+    # Run as a command by `dev_session.sh` and `reconcile_sessions.sh`, which is
+    # an edge `derive_dependencies` cannot see (it does not scan shell), and
+    # imported by `lib/triage/model.py`, which it can.
+    ("scripts/lib/merge_predicate.py", "engine"),
     ("scripts/lib/repo_root.sh", "engine"),
     ("scripts/lib/state_paths/__init__.py", "engine"),
     ("scripts/lib/state_paths/resolver.py", "engine"),
@@ -410,6 +414,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_kit_doctor.py", "test"),
     ("scripts/tests/test_kit_repo_only.py", "test"),
     ("scripts/tests/test_kitconfig.py", "test"),
+    ("scripts/tests/test_merge_predicate.py", "test"),
     ("scripts/tests/test_mutation_gate.py", "test"),
     ("scripts/tests/test_panel_prompt.py", "test"),
     ("scripts/tests/test_record_prose.py", "test"),
