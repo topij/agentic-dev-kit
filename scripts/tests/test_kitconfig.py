@@ -1026,40 +1026,80 @@ def test_systemize_operator_logins_is_overlayable_and_its_siblings_are_not(tmp_p
         kitconfig.load_config(path)
 
 
-def _git(root, *args):
+
+def _tracked_overlays(root: Path) -> list[str]:
+    """The local config overlays Git's index holds under ``root``, committed or staged.
+
+    Every inherited ``GIT_*`` variable is dropped, so neither an exported ``GIT_DIR``
+    nor ``GIT_INDEX_FILE`` points the read at another repository or index. A failed
+    read raises rather than returning nothing, because an empty answer is the pass.
+    """
     import subprocess
 
-    subprocess.run(
-        ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", *args],
-        check=True,
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z", "--", "config/*.local.yaml"],
         capture_output=True,
+        env=env,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        f"git ls-files failed in {root} (exit {result.returncode}): "
+        f"{result.stderr.decode(errors='replace').strip()}"
+    )
+    return [name for name in result.stdout.decode().split("\0") if name]
+
+
+def test_no_local_config_overlay_is_tracked():
+    """#1296: the overlay can name whose review findings `post-merge-systemize`
+    trusts (`systemize.operator_logins`), and that is safe only because the file is
+    local to one checkout. One committed with `git add -f` would set it for every
+    checkout of its branch, through a pull request that never touches
+    `config/dev-model.yaml`. This fails the suite, and so CI, on that pull request.
+    `kitconfig.load_config` runs no Git command, so this test is the guard."""
+    if not (REPO_ROOT / ".git").exists():
+        pytest.skip(f"{REPO_ROOT} is not a Git checkout, so nothing in it is tracked")
+    tracked = _tracked_overlays(REPO_ROOT)
+    assert not tracked, (
+        f"Git tracks a local config overlay: {tracked}. Remove it from the index with "
+        f"'git rm --cached <path>' and keep 'config/*.local.yaml' in .gitignore."
     )
 
 
 @pytest.mark.parametrize("committed", [True, False], ids=["committed", "staged"])
-def test_an_overlay_git_tracks_is_refused(tmp_path, committed):
-    """An overlay is local to one checkout. Force-added, it would set every
-    overlayable key, `systemize.operator_logins` among them, for every checkout of
-    its branch, through a pull request that never touches the tracked config.
-    Refused whether it is committed or only staged."""
+def test_tracked_overlays_finds_a_force_added_overlay(tmp_path, monkeypatch, committed):
+    """The check above reports an overlay whether it is committed or only staged,
+    and an inherited GIT_DIR naming another repository neither hides it nor
+    receives this test's writes."""
+    import subprocess
+
+    decoy = tmp_path / "decoy"
+    decoy.mkdir()
+    clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+
+    def git(root, *args):
+        subprocess.run(
+            ["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@t", *args],
+            check=True, capture_output=True, env=clean,
+        )
+
+    git(decoy, "init", "-q")
     root = tmp_path / "repo"
     (root / "config").mkdir(parents=True)
-    _git(root, "init", "-q")
-    path = root / "config" / "dev-model.yaml"
-    path.write_text("systemize:\n  operator_logins: []\n", encoding="utf-8")
+    git(root, "init", "-q")
     (root / ".gitignore").write_text("config/*.local.yaml\n", encoding="utf-8")
-    overlay = root / "config" / "dev-model.local.yaml"
-    overlay.write_text("systemize:\n  operator_logins: [operator]\n", encoding="utf-8")
-    _git(root, "add", ".")
-    _git(root, "commit", "-q", "-m", "init")
-    assert kitconfig.get(kitconfig.load_config(path), "systemize.operator_logins") == ["operator"]
+    (root / "config" / "dev-model.yaml").write_text("systemize:\n  operator_logins: []\n", encoding="utf-8")
+    (root / "config" / "dev-model.local.yaml").write_text(
+        "systemize:\n  operator_logins: [operator]\n", encoding="utf-8"
+    )
+    git(root, "add", ".")
+    git(root, "commit", "-q", "-m", "init")
+    monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
+    assert _tracked_overlays(root) == []
 
-    _git(root, "add", "-f", "config/dev-model.local.yaml")
+    git(root, "add", "-f", "config/dev-model.local.yaml")
     if committed:
-        _git(root, "commit", "-q", "-m", "commit the overlay")
-    with pytest.raises(ValueError, match="overlay is tracked by Git"):
-        kitconfig.load_config(path)
-    assert kitconfig.get(kitconfig.load_config(path, overlay=False), "systemize.operator_logins") == []
-
-    _git(root, "rm", "-q", "--cached", "config/dev-model.local.yaml")
-    assert kitconfig.get(kitconfig.load_config(path), "systemize.operator_logins") == ["operator"]
+        git(root, "commit", "-q", "-m", "commit the overlay")
+    assert _tracked_overlays(root) == ["config/dev-model.local.yaml"]
+    assert not list((decoy / ".git").glob("index"))

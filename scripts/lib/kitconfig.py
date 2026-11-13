@@ -35,7 +35,6 @@ Usage:
 from __future__ import annotations
 
 import re
-import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -382,13 +381,14 @@ def _deep_merge(
 #: edit the tracked config there, and it grants nothing that person lacks. That
 #: holds only while the overlay is untracked: one committed with ``git add -f``
 #: would reach every checkout of its branch through a pull request that does not
-#: change ``config/dev-model.yaml``. ``load_config`` therefore refuses an overlay
-#: Git tracks (``_overlay_is_tracked``). What the key adds is that the kit
+#: change ``config/dev-model.yaml``. ``test_no_local_config_overlay_is_tracked``
+#: in ``test_kitconfig.py`` fails the suite, and so CI, on such a pull request; the
+#: loader itself runs no Git command. What the key adds is that the kit
 #: repository can name its own operator without the shipped template, which every
 #: adopter copies, trusting that foreign identity. A checkout without the file
 #: reads the tracked value only: a fresh clone, or a worktree made by plain
-#: ``git worktree add``. A lane ``dev_session.sh`` creates gets a copy of the
-#: primary checkout's overlay.
+#: ``git worktree add``. ``dev_session.sh`` copies the primary checkout's overlay
+#: into a lane it creates when the lane's base ref ignores the file.
 OVERLAYABLE_PREFIXES = (
     "notify.user_key",
     "state.test_guard_exclude",
@@ -404,27 +404,6 @@ def _overlay_paths(node: Any, where: str = "") -> list[str]:
     for key, value in node.items():
         out.extend(_overlay_paths(value, f"{where}.{key}" if where else key))
     return out
-
-
-def _overlay_is_tracked(overlay_path: Path) -> bool:
-    """Whether Git's index holds the overlay, committed or only staged.
-
-    ``git ls-files --error-unmatch`` exits 0 only when the path is in the index; an
-    untracked path exits 1 and a directory outside any repository exits 128, and
-    neither of those can have been committed from here. If ``git`` itself cannot
-    run, the answer is "not tracked": that is the one way this check fails open,
-    and it needs a checkout whose ``git`` is missing or hangs.
-    """
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(overlay_path.parent), "ls-files", "--error-unmatch", "--", overlay_path.name],
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return result.returncode == 0
 
 
 def load_config(path: str | Path = DEFAULT_CONFIG_PATH, *, overlay: bool = True) -> dict[str, Any]:
@@ -452,15 +431,6 @@ def load_config(path: str | Path = DEFAULT_CONFIG_PATH, *, overlay: bool = True)
 
     overlay_path = target.with_suffix(f".local{target.suffix}")
     if overlay and overlay_path.is_file():
-        if _overlay_is_tracked(overlay_path):
-            raise ValueError(
-                f"local config overlay is tracked by Git: {overlay_path}\n"
-                f"The overlay is local to one checkout and must never be committed: a "
-                f"tracked overlay would set {', '.join(OVERLAYABLE_PREFIXES)} for every "
-                f"checkout of its branch. Remove it from the index with "
-                f"'git rm --cached {overlay_path.name}' (run in {overlay_path.parent}) "
-                f"and keep 'config/*.local.yaml' in .gitignore."
-            )
         raw = overlay_path.read_text(encoding="utf-8")
         overlay_data = loads(raw)
         # `loads()` yields {} for anything it cannot read as a mapping. Content
