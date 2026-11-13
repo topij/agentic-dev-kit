@@ -7,6 +7,10 @@ finding, says `recorded:` with the location and what a fix would change, and not
 is filed in the tracker. A LOW is still ticketed when it recurs, when it is on a
 safety-critical pull request, when its repair needs a redesign or its containment is
 disputed, or when it is pre-existing. If you want every LOW ticketed as before, keep
-your local copy of that section. If you take the record route, run
-`post-merge-systemize backfill` at least every two weeks and ticket the recurring
-clusters of recorded findings it reports.
+your local copy of that section. If you take the record route, search your
+pull-request comments for earlier `recorded` lines before recording a LOW, and run
+`post-merge-systemize backfill` at least every two weeks. Beside each run, the
+session searches the window's pull-request comments for `recorded` itself, because
+systemize does not read a recording made in a thread reply, and tickets each LOW
+recorded on two or more pull requests, as well as the recurring clusters systemize
+reports.
