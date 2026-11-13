@@ -828,7 +828,7 @@ def test_git_timeout_is_per_item_and_retryable(session, monkeypatch, phase):
     assert "timed out" in result["paths"][0]["reason"]
     assert task.is_dir()
     assert not Path(receipt["path"]).exists()
-    assert registry.load(record["id"])["last_result"] == result
+    assert registry.load(record["id"])["last_result"] == {k: v for k, v in result.items() if k != "evidence"}
     registry.verify_evidence(record)
     monkeypatch.setattr(cleanup, "git", original)
     assert registry.apply(registry.load(record["id"]), token, True)["complete"]
@@ -2778,15 +2778,12 @@ def test_reconcile_refuses_a_malformed_seal_and_writes_nothing(device_session, m
     assert stored(registry, record) == before
 
 
-def reserved_size(path, scope):
+def reserved_size(path):
     """session.json's size as a seal must reserve it, encoded as publish does.
 
-    The just-sealed record, plus the copy of the newest seal an apply stores in
-    `last_result`, plus a retirement tombstone on every retained item.
+    The just-sealed record plus a retirement tombstone on every retained item.
     """
     record = json.loads(path.read_text())
-    holder = record if scope == "inventory" else record["rounds"][-1]
-    holder["last_result"] = {"evidence": json.loads(json.dumps(holder["seal"]))}
     seals = [record["seal"], *(r.get("seal") for r in record["rounds"])]
     for item in (i for s in seals if s for i in s["retained"]):
         item.setdefault("retired", {"approval": "f" * 64})
@@ -2795,12 +2792,12 @@ def reserved_size(path, scope):
 
 @pytest.mark.parametrize("earlier", [False, True], ids=["first-seal", "after-a-sealed-round"])
 @pytest.mark.parametrize("scope", ["round", "inventory"])
-def test_a_seal_reserves_its_applied_copy_and_every_tombstone(session, monkeypatch, scope, earlier):
-    # #1327: the reservation arithmetic. A seal that fits session.json's limit
-    # but leaves no room for the seal copy an apply stores and the tombstones
-    # retire_evidence writes would strand evidence. This checks the projected
-    # size at its boundary; it does not run apply or retire-evidence, whose
-    # path bookkeeping the projection does not reserve.
+def test_a_seal_reserves_every_tombstone(session, monkeypatch, scope, earlier):
+    # #1327, #1335: the reservation arithmetic. A seal that fits session.json's
+    # limit but leaves no room for the tombstones retire_evidence writes would
+    # strand evidence. This checks the projected size at its boundary; it does
+    # not run apply or retire-evidence, whose path bookkeeping the projection
+    # does not reserve.
     registry, record, _ = session
     if earlier:
         first = allocate(registry, record)
@@ -2815,7 +2812,7 @@ def test_a_seal_reserves_its_applied_copy_and_every_tombstone(session, monkeypat
                     receipt, scope=receipt["id"] if scope == "round" else None)
 
     sealing()  # measure the sealed record, then put the inventory back
-    sealed, reserved = len(path.read_bytes()), reserved_size(path, scope)
+    sealed, reserved = len(path.read_bytes()), reserved_size(path)
     assert sealed < reserved
     path.write_bytes(before)
     for name in set(os.listdir(evidence)) - held:
@@ -2863,15 +2860,16 @@ def deep_session(request, tmp_path, monkeypatch):
     yield from make_session(base, monkeypatch)
 
 
-def test_a_discard_only_seal_is_not_refused_for_earlier_seals_budget(deep_session, monkeypatch):
-    # #1327: a seal that retains nothing strands nothing, so the budget earlier
-    # seals used does not refuse it; one that retains an item names their share.
-    # #1345: LIMIT is the measured size of the record the discard-only seal
+def test_a_discard_only_seal_is_checked_against_the_tombstone_budget(deep_session, monkeypatch):
+    # #1335: a seal that retains nothing still stores its discard list, so it is
+    # checked like any other: it may not use the room earlier seals reserved for
+    # their tombstones. The refusal comes before anything is written or removed.
+    # #1345: both limits are measured from the record the discard-only seal
     # writes, not a fixed headroom, since what a seal adds grows with the
-    # absolute paths under the basetemp. The retained seal's projection adds the
-    # apply copy and three tombstones on top of a larger seal, so it exceeds
-    # that size at any path length; the discard-only seal, if it were checked,
-    # would project its apply copy and two tombstones over it too.
+    # absolute paths under the basetemp. At the limit one byte under the
+    # projection the sealed record itself still fits (two tombstones are more
+    # than one byte), so only the check can refuse it; one that retains an item
+    # is over that limit too, and names the earlier seals' share.
     registry, record, _ = deep_session
     first = allocate(registry, record)
     seal(registry, record, first, scope=first["id"])
@@ -2887,18 +2885,88 @@ def test_a_discard_only_seal_is_not_refused_for_earlier_seals_budget(deep_sessio
                             "discard": [{"source": str(report), "reason": "recorded on PR #123"}]})
 
     discarding()  # measure the record a discard-only seal writes, then put it back
-    discarded = len(path.read_bytes())
+    discarded, projected = len(path.read_bytes()), reserved_size(path)
     path.write_bytes(before)
     assert set(os.listdir(evidence)) == held
-    monkeypatch.setattr(cleanup, "LIMIT", discarded)
+    assert discarded < projected
+    monkeypatch.setattr(cleanup, "LIMIT", projected - 1)
+    with pytest.raises(cleanup.sweep.ConfigError,
+                       match=r"each of its 0 retained items and the 2 unretired items earlier seals hold"):
+        discarding()
     with pytest.raises(cleanup.sweep.ConfigError,
                        match=r"each of its 1 retained items and the 2 unretired items earlier seals hold"):
         registry.seal_round(registry.load(record["id"]), second["id"], {"evidence_complete": True, "retain": [
             {"source": str(report), "kind": "report", "requires": [], "exception": EXCEPTION}]})
     assert path.read_bytes() == before
+    assert set(os.listdir(evidence)) == held
+    assert report.read_text() == "x" * 4096 and Path(first["path"]).is_dir()
+    monkeypatch.setattr(cleanup, "LIMIT", projected)
     discarding()
     assert len(path.read_bytes()) == discarded
     assert registry.load(record["id"])["rounds"][1]["seal"]["retained"] == []
+
+
+def test_two_sealed_rounds_apply_and_retire_inside_the_projection(session, monkeypatch):
+    # #1335 (#1334 adversarial review, round 2 finding 1): with two rounds
+    # sealed and neither applied, each apply stored a full copy of its seal in
+    # `last_result`, which no seal's check had reserved. Each seal here is
+    # larger than the whole allowance above the projection, so one stored seal
+    # copy would cross the limit. The allowance covers what the projection does
+    # not reserve: the applies' path outcomes, summaries, approvals and statuses.
+    registry, record, _ = session
+    first = allocate(registry, record)
+    second = allocate(registry, registry.load(record["id"]), keep_previous="probe")
+    allowance = 8192
+    for receipt in (first, second):
+        report = Path(receipt["path"]) / "report.md"
+        report.write_text(f"report of {receipt['id']}\n")
+        sealed = registry.seal_round(registry.load(record["id"]), receipt["id"], {
+            "evidence_complete": True, "retain": [{"source": str(report), "kind": "report", "requires": [],
+                                                  "exception": {**EXCEPTION, "task": "t" * 20000}}]})
+        assert len(json.dumps(sealed)) > allowance
+    path = registry.location(record["id"]) / "session.json"
+    monkeypatch.setattr(cleanup, "LIMIT", reserved_size(path) + allowance)
+    for receipt in (first, second):
+        assert apply_round(registry, registry.load(record["id"]), receipt)["complete"]
+    applied = registry.load(record["id"])
+    assert applied["complete"] and all("evidence" not in r["last_result"] for r in applied["rounds"])
+    shas = sorted({item["sha256"] for _, item in registry.evidence_items(applied)})
+    assert len(shas) == 2
+    _, plan = registry.retirement_plan(record["id"], shas)
+    registry.retire_evidence(record["id"], plan["approval_token"], shas)
+    retired = registry.load(record["id"])
+    assert all(item["retired"] and not os.path.lexists(item["retained"])
+               for _, item in registry.evidence_items(retired))
+
+
+@pytest.mark.parametrize("scope", ["round", "inventory"])
+def test_last_result_is_stored_without_the_seal_copy(session, scope):
+    # #1335 (#1334 correctness review, round 2 finding 1): apply returns the
+    # full result, `evidence` included, and stores it without `evidence`. So an
+    # apply run again after retire-evidence copies no tombstone into the record.
+    registry, record, _ = session
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt, scope=receipt["id"] if scope == "round" else None)
+
+    def run():
+        current = registry.load(record["id"])
+        return apply_round(registry, current, receipt) if scope == "round" else apply(registry, current)
+
+    def holder():
+        loaded = registry.load(record["id"])
+        return loaded["rounds"][0] if scope == "round" else loaded
+
+    result = run()
+    assert result["complete"] and result["evidence"] == holder()["seal"]
+    assert holder()["last_result"] == {k: v for k, v in result.items() if k != "evidence"}
+    shas = sorted({item["sha256"] for item in holder()["seal"]["retained"]})
+    _, plan = registry.retirement_plan(record["id"], shas)
+    registry.retire_evidence(record["id"], plan["approval_token"], shas)
+    again = run()
+    assert again["complete"]
+    assert [item["retired"] for item in again["evidence"]["retained"]] == [{"approval": plan["approval_token"]}] * 2
+    kept = holder()["last_result"]
+    assert "evidence" not in kept and plan["approval_token"] not in json.dumps(kept)
 
 
 def test_the_seal_size_refusal_counts_only_unretired_earlier_items(session, monkeypatch):

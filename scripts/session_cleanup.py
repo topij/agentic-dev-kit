@@ -724,28 +724,18 @@ class Registry:
         # Bytes the copy below will write, counted as copy_evidence counts them:
         # once per content not already stored.
         unique = dict(hashes)
-        # Only a seal that retains something is checked. Inputs that share that
-        # skip's shape (an empty `retain`) and each one's result:
-        # - a discard-only round seal, the normal completion path: skipped. It adds
-        #   no retained item, so it strands nothing, even when earlier seals have
-        #   already used the budget, and refusing it would leave its round with no
-        #   way to retire.
-        # - a discard-only inventory seal: skipped, for the same reason.
-        # - a manifest with neither retain nor discard: refused above.
-        # - a manifest with `retire` diagnostics: needs retained replacements, so
-        #   its `retain` is not empty and it is checked.
-        # The bytes a skipped seal adds (its discards, bounded only by the 1 MiB
-        # manifest read limit, and its copy in an apply's `last_result`) are not
-        # reserved, and they use the headroom earlier seals' checks counted on;
-        # publish refuses a save over LIMIT.
-        if planned:
-            self.check_seal_size(record, owner, {
-                "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
-                             for item, (sha, size) in zip(planned, hashes, strict=True)],
-                "retired": retired, "discarded": discards, "evidence_complete": True,
-                "bytes": {"retained": sum(size for _, size in hashes),
-                          "copied": sum(size for sha, size in unique.items()
-                                        if not os.path.lexists(target / sha))}})
+        # Every seal is checked, with no skip (#1335). A seal with an empty
+        # `retain` (a discard-only round or inventory seal, the normal completion
+        # path) adds no retained item, but its discard list is stored in the
+        # record, and unchecked it could use the room earlier seals' checks
+        # reserved for their tombstones. A refusal here copies and writes nothing.
+        self.check_seal_size(record, owner, {
+            "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
+                         for item, (sha, size) in zip(planned, hashes, strict=True)],
+            "retired": retired, "discarded": discards, "evidence_complete": True,
+            "bytes": {"retained": sum(size for _, size in hashes),
+                      "copied": sum(size for sha, size in unique.items()
+                                    if not os.path.lexists(target / sha))}})
         retained, copied = [], 0
         if planned:
             target.mkdir(mode=0o700, exist_ok=True)
@@ -765,34 +755,35 @@ class Registry:
                 "bytes": {"retained": sum(r["size"] for r in retained), "copied": copied}}
 
     def check_seal_size(self, record: dict, owner: dict | None, seal: dict) -> None:
-        """Refuse a seal that leaves session.json no room for its own later writes (#1327).
+        """Refuse a seal that leaves session.json no room for the retirement tombstones (#1327, #1335).
 
         session.json is read back under LIMIT, and publish refuses to write a
-        record over it. Two later writes grow with the evidence a seal retains:
-        an apply (inventory or `--round`) stores its preview, which embeds a full
-        copy of the seal, as `last_result`; and retire_evidence writes a
-        `retired` tombstone into every item it deletes, before deleting anything.
-        If either write refuses, some or all of the evidence cannot be retired.
-        So the record is projected with this seal in place, the copy this seal's
-        own first apply stores, and a tombstone on every retained item (those
-        earlier seals hold included), and refused here, before any byte is copied.
+        record over it. Two writes grow with the evidence: the seal itself (its
+        retained items, `retire` diagnostics and discard list), and the `retired`
+        tombstone retire_evidence writes into every item it deletes, before
+        deleting anything. An apply stores its result as `last_result` without
+        the preview's `evidence` (see stored_result), so it copies neither a seal
+        nor its tombstones. If a tombstone write refuses, some or all of the
+        evidence cannot be retired. So the record is projected with this seal in
+        place and a tombstone on every retained item (those earlier seals hold
+        included), and refused here, before any byte is copied. Every seal is
+        checked, one with an empty `retain` included: its discard list uses the
+        same budget.
 
-        This is a partial reservation, not a guarantee that the evidence can be
-        retired. Not reserved, each using the same budget:
-        - the apply copy of every other seal not yet applied (another round's,
-          or the inventory seal's), each a full copy of that seal;
-        - a discard-only seal, which is not checked, and its discard list, bounded
-          per seal only by the 1 MiB manifest read limit and not budgeted;
-        - the tombstones a re-apply after retire_evidence copies into its
-          `last_result`;
-        - the rest of what an apply records (path outcomes, the evidence summary,
-          approvals and statuses) and anything recorded later, such as another
-          round's receipt.
+        The projection is exact for the seals and their tombstones. It is not a
+        guarantee that the evidence can be retired, because it does not reserve
+        what else is recorded later: what an apply records (path outcomes, the
+        evidence summary, approvals and statuses), another round's receipt, a
+        reconcile's history. A `last_result` written before #1335 still holds
+        its seal copy until the next apply of that round or inventory replaces
+        it, and is projected as stored.
         publish still refuses a save over LIMIT, so a seal that passes here can
         meet that refusal later. Retained evidence survives it: retire_evidence
         saves its tombstones before deleting anything. An apply does not: it
         removes its rounds' and worktrees' paths before its final save, so that
         save can refuse after the removal and leave the inventory incomplete.
+        A round whose seal is refused here cannot be retired with `--round`
+        until a seal fits; the refusal deletes nothing.
 
         The projection uses the hashes and sizes read just before the copy. A
         source rewritten between that read and the copy is stored as copied, so
@@ -801,14 +792,8 @@ class Registry:
         projected = json.loads(json.dumps(record))
         holder = projected if owner is None else projected["rounds"][
             next(i for i, entry in enumerate(record["rounds"]) if entry is owner)]
-        # Copies, so the projection never writes into the caller's seal. The
-        # reserved apply copy is the first apply's, taken before any retirement,
-        # so it carries no tombstones, and evidence_items below does not reach
-        # it. A re-apply after retire_evidence copies tombstones into its
-        # `last_result`; those are not reserved (see above).
+        # A copy, so the projection never writes into the caller's seal.
         holder["seal"] = json.loads(json.dumps(seal))
-        holder["last_result"] = {**holder.get("last_result", {}),
-                                 "evidence": json.loads(json.dumps(seal))}
         # The approval a tombstone carries is a digest: 64 hexadecimal characters.
         tombstone = {"approval": "0" * 64}
         unretired = 0
@@ -820,10 +805,21 @@ class Registry:
         if size > LIMIT:
             raise sweep.ConfigError(
                 f"sealing this would leave no room to retire its evidence: session.json with this "
-                f"seal, the copy of it an apply records, and a retirement tombstone on each of its "
+                f"seal and a retirement tombstone on each of its "
                 f"{len(seal['retained'])} retained items and the {earlier} unretired items earlier "
                 f"seals hold would be {size} bytes, over its {LIMIT}-byte limit; retain fewer "
-                f"items, or seal them in a new inventory")
+                f"items or shorten the discard list, or seal them in a new inventory")
+
+    @staticmethod
+    def stored_result(result: dict) -> dict:
+        """An apply's result as `last_result` stores it: without `evidence` (#1335).
+
+        `evidence` is the seal, which the record already holds beside the result
+        (the inventory's `seal`, or the round's). Storing it again made every
+        apply an evidence-sized write that the seal's size check could not
+        bound. The caller still returns the full result.
+        """
+        return {key: value for key, value in result.items() if key != "evidence"}
 
     def verify_evidence(self, record: dict) -> None:
         self.verify_seal(record, record["seal"])
@@ -1094,11 +1090,13 @@ class Registry:
         preview["processes_finished_attestation"] = True
         result = preview["paths"][0]
         if preview["active_users"]:
-            entry["last_result"] = {**preview, "complete": False}
+            outcome = {**preview, "complete": False}
+            entry["last_result"] = self.stored_result(outcome)
             self.save(record)
-            return entry["last_result"]
+            return outcome
         self.retire_round(record, entry, result, lambda: self.verify_seal(record, entry["seal"]), approval)
-        entry["last_result"] = {**preview, "complete": result["action"] in {"removed", "absent"}}
+        outcome = {**preview, "complete": result["action"] in {"removed", "absent"}}
+        entry["last_result"] = self.stored_result(outcome)
         # A reconciled round whose path reappeared stays "removed" but is not
         # gone, matching apply's path-based verdict for the same state.
         record["complete"] = (not record["worktrees"]
@@ -1106,7 +1104,7 @@ class Registry:
                               and not any(r.get("reconciled") and os.path.lexists(r["receipt"]["path"])
                                           for r in record["rounds"]))
         self.save(record)
-        return entry["last_result"]
+        return outcome
 
     def retire_round(self, record: dict, entry: dict, result: dict, verify, approval: str | None = None) -> None:
         if result["action"] in {"eligible", "kept"} and not entry.get("reconciled"):
@@ -1163,9 +1161,10 @@ class Registry:
         preview["processes_finished_attestation"] = True
         if preview["active_users"]:
             record["complete"] = False
-            record["last_result"] = {**preview, "complete": False}
+            outcome = {**preview, "complete": False}
+            record["last_result"] = self.stored_result(outcome)
             self.save(record)
-            return record["last_result"]
+            return outcome
         for worktree, result in zip(record["worktrees"], preview["paths"], strict=False):
             if result["action"] == "remove-worktree":
                 # Git's refusal is supplementary: it can discard ignored object
@@ -1191,9 +1190,10 @@ class Registry:
             if result["action"] in {"removed", "absent"} and os.path.lexists(result["path"]):
                 result.update(action="kept", reason="path exists after retirement; inspect before retrying")
         record["complete"] = all(p["action"] in {"removed", "absent"} for p in preview["paths"])
-        record["last_result"] = {**preview, "complete": record["complete"]}
+        outcome = {**preview, "complete": record["complete"]}
+        record["last_result"] = self.stored_result(outcome)
         self.save(record)
-        return record["last_result"]
+        return outcome
 
 
 def _absent(path: str) -> bool:
