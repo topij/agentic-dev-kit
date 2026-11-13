@@ -1183,8 +1183,10 @@ Choose and record a disposition on the PR:
     same finding. Before recording, search open tickets, and search the forge's
     pull-request comments for earlier `recorded:` lines naming the same path or
     concern (on GitHub, `gh api -X GET search/issues -f q='repo:<owner>/<repo>
-    is:pr in:comments "LOW: accept — recorded" <path>'`; the search ignores
-    punctuation, so read each hit). When unsure whether two findings are the same,
+    is:pr in:comments recorded <path>'`, which reaches disposition lines, regression
+    lines and thread replies alike; the search ignores punctuation, so read each
+    hit, and narrow it with `updated:>=<date>` to the time the record route has
+    been in use). When unsure whether two findings are the same,
     record it; the scheduled run below is the second reader;
   - it is on a pull request `safety-critical-changes.md` governs (computed review
     class `safety-critical`), which repairs or tickets every LOW;
@@ -1200,16 +1202,17 @@ Choose and record a disposition on the PR:
 
 **Recurrences across pull requests are found by `post-merge-systemize`.** Run
 `post-merge-systemize backfill` at least every two weeks while the record route is
-in use. Beside the route that workflow's routing table gives a cluster, the session
-running it drafts a ticket for each cluster of recorded LOW findings spanning two or
-more pull requests and files it on the operator's approval, as the tracker route
-there requires. Two limits: a recurrence further apart than
+in use. That workflow treats a thread reply as context, not a finding, so it does not
+see a recording made there. Beside its run, the session running it searches the
+window's pull-request comments for `recorded` (the query above, without a path),
+drafts a ticket for each LOW finding recorded on two or more pull requests, and files
+it on the operator's approval. Two limits: a recurrence further apart than
 `systemize.backfill_days` falls in no single window, and the digest drops the
 lowest-severity pull requests first when it caps at
 `systemize.max_findings_prs_per_run`, so a run whose report lists omitted pull
 requests says that their recorded findings were not clustered. The record route
-began as a one-month trial in the kit's own repository (the plan's decision D3);
-that repository's living handoff holds the trial's dates and its judgement.
+began as a one-month trial in the kit's own repository (the plan's decision D3),
+whose living handoff schedules the trial's runs and its judgement.
 
 Check for a valid full-review parent before committing a LOW-only repair. If no
 composable parent exists, defer the finding by the record or ticket route; do not

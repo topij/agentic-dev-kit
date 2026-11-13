@@ -339,10 +339,10 @@ for the lite config readers, are on #1368. The parser-based guard on lite docs' 
 
 **Status:** a whole-kit assessment at `fd12e961` on 2026-11-12 ranks what needs work and proposes an ordered
 plan. Step 1a writes D3 into `fallback-review-panel.md` (*LOW findings: delta review or ticket*): a first-occurrence
-LOW is recorded on its pull request and not ticketed. The trial runs a month from the day that pull request merges;
-run `post-merge-systemize backfill` two weeks after the merge and on the trial's last day, file a ticket for each
-cluster of recorded LOWs it finds (operator approval), and judge the trial on its last day against the plan's M3
-inflow. The rule stays until the operator decides. Write the dates here when it merges. No other step has started, and no ticket was filed for the
+LOW is recorded on its pull request and not ticketed. The trial runs from 2026-11-13 to 2026-12-13 (shift these
+dates if step 1a merges later). Run `post-merge-systemize backfill` and the `recorded` search the panel doc names on
+2026-11-27 and 2026-12-11, ticket each LOW recorded on two or more pull requests (operator approval), and judge the
+trial on 2026-12-13 against the plan's M3 inflow. The rule stays until the operator decides. No other step has started, and no ticket was filed for the
 plan's steps. Its security finding S2, a lane writing the
 review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
@@ -353,5 +353,5 @@ operator's decision under the conditions D2 states. A probe result alone lifts n
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
 ▶ Next: the plan's step 1b (the backlog pass, applying D3 to open LOW-residue tickets), the live probe of S2
-(step 2a), then the single merge predicate (step 3a). Time-bound: the D3 trial's two systemize runs and its judgement,
-dated from step 1a's merge.
+(step 2a), then the single merge predicate (step 3a). Time-bound: the D3 trial's systemize runs on 2026-11-27 and
+2026-12-11, and its judgement on 2026-12-13.
