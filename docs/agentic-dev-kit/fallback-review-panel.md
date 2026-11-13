@@ -1183,7 +1183,8 @@ Choose and record a disposition on the PR:
     same finding. Before recording, search open tickets, and search the forge's
     pull-request comments for earlier `recorded:` lines naming the same path or
     concern (on GitHub, `gh api -X GET search/issues -f q='repo:<owner>/<repo>
-    is:pr "recorded:" <path>'`). When unsure whether two findings are the same,
+    is:pr in:comments "LOW: accept — recorded" <path>'`; the search ignores
+    punctuation, so read each hit). When unsure whether two findings are the same,
     record it; the scheduled run below is the second reader;
   - it is on a pull request `safety-critical-changes.md` governs (computed review
     class `safety-critical`), which repairs or tickets every LOW;

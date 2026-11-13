@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "6cebc3a989fcf1e8df5fb8d46f444d53396fc398ef41ace6a50f993bca946cf6"
+      "sha256": "0d8736491867f97daa911e23bfee60656ffc54181277dbddf00482daaf1b85f8"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md": {
       "role": "lite",
