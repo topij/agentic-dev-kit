@@ -1,36 +1,34 @@
 # Parallel dev sessions
 
-Running several AI-agent sessions at once is the fastest way to burn a day of work —
-or to corrupt three branches and dilute every review. This kit's answer is
-**cockpit + isolated lanes** (Principle #3): one coordinating session owns the shared
-narrative and the merges, while each unit of parallel work runs in its own isolated
-**lane**. This page explains what a lane is, when parallelism is safe, and the
-end-to-end workflow.
+Use parallel lanes in a full installation when independent tasks can change
+different files. The **cockpit** is the session that plans the batch, watches its
+pull requests and keeps the shared handoff. Each **lane** gets a source checkout
+and a separate directory for workflow state. For an ordinary change by a single
+session, a dedicated task worktree is sufficient. [Development session](developer-guide.md#run-a-development-session)
 
-Engine: [`scripts/dev_session.sh`](../scripts/dev_session.sh) (launch/list/remove
-lanes) and [`scripts/reconcile_sessions.sh`](../scripts/reconcile_sessions.sh)
-(drive every lane to a terminal state). The in-session front-end is the
+[`dev_session.sh`](../scripts/dev_session.sh) prepares lanes, displays their
+state and removes finished worktrees. [`reconcile_sessions.sh`](../scripts/reconcile_sessions.sh)
+looks up the result for each launched branch. The in-session front-end is the
 shared [`parallel`](agentic-dev-kit/workflows/parallel.md) workflow. These links use
 the template default `paths.engines: scripts`; a namespaced adopter substitutes its
 configured directory, such as `scripts/devkit`.
 
 ## What a lane is
 
-A **lane** is one unit of parallel work, fully isolated:
+A lane has a source checkout and a state directory:
 
 - **its own git worktree** on a **fresh branch** off `origin/<base>` — so two lanes
   never share a working tree or step on each other's checkout;
-- **its own state sandbox** — a `DEVKIT_STATE_ROOT` pointed at a per-lane directory
-  (with a `.devkit_state_root` marker file for tool calls that don't inherit the
-  shell), so concurrent writes to `state/cache/` and other scratch state can't clobber
-  each other. See [`scripts/lib/state_paths/`](../scripts/lib/state_paths/).
+- **its own state sandbox** — `DEVKIT_STATE_ROOT` directs state writes into the
+  lane's directory. Interactive activation exports it. A headless launch also
+  writes a worktree marker for tool calls that start in a fresh shell. [State resolver](../scripts/lib/state_paths/)
 
-The **cockpit** is your main session. It owns the two narrative files (`paths.handoff`
-and `paths.friction_log` in `config/dev-model.yaml` — `docs/handoff.md` and
-`docs/friction-log.md` by default), the review pass, and the terminal merge decision.
-Lanes never touch the narrative files — they carry their handoff in their
-**pull request description**, the one channel that's reviewed and visible across every
-lane.
+The cockpit edits the files configured by `paths.handoff` and
+`paths.friction_log` and coordinates review. Each lane puts its handoff in its
+**pull request description** so the cockpit can collect it during reconciliation.
+For work in the kit repository itself, consult the **Whole-kit plan** in the living
+handoff before issuing a lane. Its D2 decision requires `--merge-class operator`
+and leaves lane merges to the operator while the hold applies. [Kit handoff](kit-handoff.md#whole-kit-plan)
 
 ## When parallelism is safe — disjoint file footprints
 
@@ -51,18 +49,17 @@ shared module, schema, or config in the same lane and run it sequentially.
 
 ```mermaid
 flowchart TD
-    CP["cockpit<br/>owns handoff · friction-log · merges"] --> Plan["parallel plan<br/>cluster candidates by file footprint<br/>· at most one per disjoint cluster"]
-    Plan --> L1["lane A<br/>worktree + branch + sandbox"]
-    Plan --> L2["lane B<br/>worktree + branch + sandbox"]
-    Plan --> L3["lane C<br/>worktree + branch + sandbox"]
-    L1 --> D1["terminal: pr-ready<br/>green · marked ready"]
-    L2 --> D2["terminal: no-pr<br/>or blocked<br/>with reason"]
-    L3 --> D3["no terminal line<br/>Claude resumes;<br/>otherwise stalled"]
-    D1 --> B["cockpit board<br/>list --watch: RUN · OVERLAP"]
-    D2 --> B
-    D3 --> B
-    B --> R["cockpit reconciles<br/>reconcile_sessions.sh"]
-    R --> M["cockpit merges<br/>via dev_session.sh merge (self class)<br/>or operator sign-off (operator class)"]
+    accTitle: Following a batch of parallel lanes
+    accDescr: The cockpit selects work with disjoint files, watches each lane's progress, reviews open pull requests in their lane state and reconciles the branches. Open work returns to review. Held pull requests go to the operator. Merged and parked work are accounted for in the handoff.
+    Plan["Cockpit selects tasks with disjoint files"] --> A["Lane A<br/>branch, worktree, state"]
+    Plan --> B["Lane B<br/>branch, worktree, state"]
+    A --> Board["Cockpit watches RUN and OVERLAP"]
+    B --> Board
+    Board --> Review["Review each open PR in its lane's state"]
+    Review --> Reconcile["Reconcile each launched branch"]
+    Reconcile -->|open| Review
+    Reconcile -->|held| Held["Await operator merge decision"]
+    Reconcile -->|merged or parked| Handoff["Record any remaining work"]
 ```
 
 ### 1 · Plan the batch — `parallel plan`
@@ -80,11 +77,10 @@ Don't spin up lanes ticket-by-ticket. Compose the batch deliberately:
 4. **Scope outward-safe** — a lane that would push to an external system or send a
    notification is scoped to its *in-repo half*; the outward step stays an operator
    action after merge.
-5. **Suggest an effort tier and assign a merge class per lane** — decide *up front*
-   what compute to request (`cheap`, `default`, or `expensive`) and whether it may
-   **self-merge** once green or must **hand back for operator sign-off**. Deciding
-   the merge boundary at plan time stops a batch stalling on ad-hoc "can I merge
-   this?" calls.
+5. **Choose a tier and merge class.** Select the compute to request (`cheap`,
+   `default` or `expensive`) and who can land each PR. Use `operator` for
+   interactive lanes. For unattended work, check both the project's policy and
+   the operator's request before proposing a class.
 
 The exact per-step commands, plus the effort-tier and merge-class tables, are in
 [`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#planning-a-batch--parallel-plan-focus)
@@ -109,16 +105,15 @@ The exact command, every flag, and the headless JSON descriptor are in
 
 ### 3 · Each lane works to a green, ready-for-review PR
 
-A lane's job ends at **green-and-ready**, not at merge — bound by the same **lane
-contract** every launch mechanism injects verbatim into the lane's prompt. Completed work
+A lane that delivers a change hands the cockpit a ready PR. Completed work
 opens ready by default, and the lane immediately runs `--assert-ready` before review
 polling. Draft is reserved for material unfinished work that must already exist remotely
 because required forge-hosted validation cannot run before the PR exists; that lane owns
 the draft assertion, completion, ready transition, and ready assertion. Active CI
 polling, narrative ownership, branch hygiene, and the no-merge boundary remain in the
-same contract. **Marking ready is the lane's; landing it is the cockpit's.**
+same contract. The cockpit coordinates the remaining review and merge decision.
 
-The contract also asks the lane to end its final text with one terminal line:
+The headless contract also asks the lane to end its final text with one terminal line:
 `LANE-TERMINAL: pr-ready #<n>`, `LANE-TERMINAL: no-pr <reason>` or
 `LANE-TERMINAL: blocked <reason>`. The headless launcher counts a lane as `completed`
 only with that line. A Claude lane whose runtime exits successfully without it is
@@ -140,36 +135,29 @@ contract yourself with `dev_session.sh print-contract`, or read it in
 scripts/dev_session.sh list --watch        # re-render every 30s
 ```
 
-The live board marks every row that changed since the last frame with a leading `*` —
-a CI flip, a new commit, the DIRTY count moving, a RUN or OVERLAP change, a PR-state
-change — and surfaces a
-silently-dead lane that stops moving. `RUN` says whether a headless lane is starting or
-running, shows its terminal receipt's status (such as `completed` or `stalled`), or
-may mark it `lost` when the wrapper died (a recycled process id can hide that); `OVERLAP` names other lanes changing the same files, the
-footprint check made visible after launch. By default lane sessions live beside the
-primary checkout (`DEVKIT_SESSIONS_DIR` overrides it), so the board reads the same from any of its worktrees. Use it as the cockpit's ambient board while a
-batch runs; full behavior (piped output, `--max-iters`, per-call timeouts) is in
-[`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#live-board--parallel-list---watch-interval).
+A leading `*` marks a row whose observed state changed since the last frame.
+Read `RUN` for the headless wrapper's process or receipt status. `completed` can
+mean the lane reported a ready PR, no PR or a blocker. Read `terminal.lane_state`
+in its receipt to see which. `OVERLAP` names lanes changing the same file. A
+`?` there means a footprint could not be read, so other rows also lack a complete
+comparison. [Board columns and refresh options](agentic-dev-kit/workflows/parallel.md#live-board--parallel-list---watch-interval)
 
-### 5 · Reconcile, then merge — `reconcile_sessions.sh`
+### 5 · Reconcile the batch before writing the handoff
 
-Before the cockpit writes anything to the shared handoff, drive **every** launched lane
-to a terminal state — **merged**, **held**, or **parked-with-reason** — with
-`scripts/reconcile_sessions.sh`. (**still-open** is the fourth result and the one that
-is *not* terminal: it means reconciliation is unfinished, and it alone keeps the batch
-un-closeable.) An aggregate "everything's done" is *not* evidence a
-specific lane actually shipped; reconcile per lane. Then review and merge each per its
-pre-assigned merge class: a self-merge lane goes through the deterministic wrapper
-(re-polls CI/review/merge readiness at act time and refuses missing or operator
-metadata, and a PR whose `review_class` is not `standard`); an operator lane is merged only after explicit cockpit sign-off. **held** is
-that second kind, seen from the reconciler: an operator lane whose PR is already
-merge-ready, so the batch has nothing left to do and the sign-off is the only thing
-outstanding. Exit **4** is reached only when no lane is open or parked and at least one
-is held; an all-merged batch still exits **0**, because a held lane has not shipped. The exact
-`pr-watch` / `merge` / `rm` command sequence lives in
-[`workflows/parallel.md`](agentic-dev-kit/workflows/parallel.md#finishing-a-session)
-and [`parallel-howto.md`](parallel-howto.md#use-case-5--wind-a-session-down) — this doc
-keeps only the reconcile-before-merge reasoning.
+Pass the scopes you actually launched to `scripts/reconcile_sessions.sh`.
+It checks Git and the forge, then reports one row per branch. Keep the list you
+launched, because discovery can miss a lane whose worktree has been removed.
+
+| Row | What the cockpit does |
+| --- | --- |
+| `open` | Read the detail, follow the scoped review or finish the outstanding work, then reconcile again. |
+| `held` | Tell the operator which PR is ready for their merge decision. The PR remains open. |
+| `parked` | Inspect the reason and preserve any recoverable work. Name the parked item in its workstream when closing the batch. |
+| `merged` | Read the PR's handoff and remove the lane once its state is no longer needed. |
+
+On a repository or forge read error the reconciler can refuse the report entirely.
+The [wind-down recipe](parallel-howto.md#use-case-5--wind-a-session-down)
+shows the commands and exit codes.
 
 ## Model / effort tiering per lane
 
@@ -180,9 +168,11 @@ operator applies a model or effort control if the runtime exposes one. For a
 headless lane, pass the tier to the wrapper: `launch_lane.py --tier <tier>` reads
 `models.runtime_mappings.<runtime>.<tier>` and puts that runtime's model and effort
 controls on the lane's argv, and refuses before launch when the tier is not mapped.
-Without `--tier` the wrapper applies no tier. The receipt records the compute it
-applied, and a Claude lane's terminal receipt adds its token, cost and turn usage
-(a Codex lane records none). Read the
+Without `--tier` the wrapper inherits the client's compute. The receipt's
+`request.compute` records the model and effort requested on the command line.
+The client may fall back to its default if it does not recognize an effort value.
+Claude reports usage for the initial launch and each resume separately. Codex's
+final-text transport supplies no usage figures. Read the
 [shared tier route](agentic-dev-kit/workflows/parallel.md#per-lane-effort-tier-risk--reasoning-effort--model)
 before claiming that a lane ran at a particular model or effort.
 
@@ -209,11 +199,9 @@ scripts/dev_session.sh new cli-help-typo --merge-class operator --runtime codex
 These commands prepare isolation, runtime guidance, and merge class; they do not
 start an agent or set a model tier. Use each printed launch or activation command
 in another terminal, then apply the suggested tier through the runtime when that
-control is available. Each lane works to a green, ready-for-review PR while you
-watch `list --watch` from the cockpit — each flipping its own PR ready as it
-finishes, so the review bots pick them up at different times. Interactive lanes
-hand their PRs back for an operator merge decision; `dev_session.sh merge` is for
-autonomous self-class lanes with project and current-request authority.
+control is available. As each lane finishes, it opens a ready PR and asserts
+readiness. Follow each from the cockpit using its own scope. The operator
+decides whether to merge each reviewed PR.
 Reconcile the lanes from the cockpit, then run the joint wrap-up: the merged PRs
 record what shipped, so the handoff (`paths.handoff`) only gains what remains held or
 parked, in the entry of each workstream it belongs to.

@@ -27,12 +27,9 @@ Follow this top to bottom, per ticket.
 
 ### Branch hygiene
 
-- Branch from fresh `<config vcs.protected_branch>` (typically `main`):
-  `git checkout <protected_branch> && git pull --ff-only`, then
-  `git checkout -b <user>/<ticket>-<slug>` (or `chore/<slug>`). **NEVER commit directly to
-  the protected branch.**
-- **ALWAYS check `git branch --show-current` before any commit.** A stray edit made on the
-  protected branch carries onto the next branch via `checkout -b` — verify every time.
+- Fetch the protected branch and reuse the task's assigned linked worktree, or
+  create one from the fetched base. Keep edits, verification and commits in that
+  worktree. Use `git branch --show-current` before committing to confirm the task branch.
 
 ### Sequencing — coupled vs independent
 
@@ -76,42 +73,37 @@ Follow this top to bottom, per ticket.
 
 ### Watch-and-fix loop (do NOT yield until green + clean)
 
-- Seed the seen-set for whatever review-tracking tool your kit provides (e.g. the
-  `/pr-watch` skill's `--mark-seen` flag), so you only react to *new* signal on later polls.
-- Poll in a **background** loop and wait on task notifications so the turn stays alive
-  instead of blocking on a foreground sleep. Break on: done (checks green + `merge_state`
-  clean + no unresolved findings) | any check failing | (nothing pending and a new comment
-  landed); poll on a bounded cadence (tens of seconds, not minutes).
-- Your configured review bots (`review.bots` in `config/dev-model.yaml`) may not reliably
-  re-review every incremental push — after fixing, confirm your fix-commit lands after the
-  bot's last review rather than waiting indefinitely for a re-review that may not come.
-  Fix real findings (commit + push → re-watch); reply-with-reason to nitpicks you keep. If
-  no bot is configured (`review.bots: []`, the shipped default), or every configured bot
-  is unavailable (rate-limited, no credits, skipped the PR), run
-  the `review.fallback_panel` pass — one isolated fresh-context reviewer per lens, per
-  `docs/agentic-dev-kit/fallback-review-panel.md`. Handle its findings, then bind that
-  evidence to the current head with `uv run <engine-dir>/pr_watch.py <PR#>
-  --record-review "<review.fallback_panel.receipt_source>" --lenses <names> --head
-  <polled-sha>` (use the `head`
-  from the exact reviewed poll; a lane uses the scope-aware `dev_session.sh pr-watch`
-  wrapper). Unattended, this matters more than it does interactively: there is no
-  operator reading the findings, so a one-lens pass in your own context is the author
-  approving their own diff. A blocked bot is not a waiver on review.
+1. Poll the exact PR and read failing checks, new findings and any read gaps.
+   A lane's cockpit uses `dev_session.sh pr-watch <scope>` so the poll and receipt
+   use that lane's state. Serialize operations on that state file.
+2. Fix or answer each finding, then acknowledge the handled round with
+   `--mark-seen`. After a repair push, poll the new head. Pending checks and
+   unsettled rollups need another poll on the workflow's documented cadence.
+3. At convergence, follow `review_owed` and inspect `review_evidence` for the
+   reported head. Run any fallback review required by `review_class`. Record
+   what actually ran, its head and the typed dispositions. If a disposition
+   promises a repair, use the workflow's pending-repair receipt before pushing it.
+4. Read `merge_blockers` and `mergeable`. If the review budget is spent with
+   findings still to act on, deliver the decision packet and hold the head for
+   the operator. The [PR-watch workflow](agentic-dev-kit/workflows/pr-watch.md)
+   owns polling, review requests, receipts and stop conditions.
 
 ### Merge + close out
 
 - Merge only once checks are green, the PR is mergeable, and every finding has been fixed
   or explicitly addressed. A lane created by `dev_session.sh` must honor its persisted
-  merge class at act time: `self` lanes merge through
+  merge class at act time. Where project and request authority permit self-merge,
+  the cockpit merges a `self` lane through
   `<engine-dir>/dev_session.sh merge <scope>` (which re-polls `pr-watch`); missing,
   unknown, or `operator` metadata refuses autonomous merge and requires operator
   sign-off, and so does a `self` lane whose PR `pr_watch` does not class `standard`. A non-lane PR with no project merge policy defaults to the operator
   route and needs authorization for the exact PR; an autonomous-session request
-  alone does not grant that merge. Only after the applicable authority is established,
-  a non-lane/operator merge uses:
+  alone does not grant that merge. Consult the project's configured handoff for
+  any operator hold on lane merges. When authorized,
+  merge the authorized head and confirm the result on the forge. For an
+  authorized non-lane PR, pin the observed head in the GitHub merge command:
   ```sh
-  gh pr merge <PR#> --squash --delete-branch
-  git checkout <protected_branch> && git pull --ff-only origin <protected_branch>
+  gh pr merge <PR#> --squash --match-head-commit <reviewed-sha>
   ```
 - **Tracker auto-linking:** if your tracker backend (`tracker.backend` in
   `config/dev-model.yaml`) auto-links or auto-completes issues by branch name or commit

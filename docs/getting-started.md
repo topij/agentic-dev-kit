@@ -1,335 +1,194 @@
 # Getting started
 
-A worked example of one full session with the kit — from adoption through your
-first `wrap-up` — so you can see the basic flow end to end. It assumes you drive
-an AI coding agent that can run repository skills and shell
-commands, on a repo that uses branches + pull requests with review before merge.
+Suppose your project exports reports as CSV. A report with no rows downloads as
+an empty file. You want it to include the column headers so a spreadsheet can open
+it like any other report. This walkthrough follows that change from the first
+briefing to a reviewed pull request. It assumes the full profile. If you use lite,
+follow the shorter session below.
 
-Workflow names are runtime-neutral below. Invoke them as `/name` in Claude Code or
-`$name` in Codex.
+## Choose the installation route
 
-The loop you're setting up:
+| Your starting point | What to do |
+| --- | --- |
+| New project using the full kit | Choose **Use this template** on GitHub and clone the **new repository**. Set the paths and run the installer as described below. |
+| Existing project adopting the kit | Start an agent in the target repository and give it the [adoption workflow](agentic-dev-kit/workflows/adopt.md). It inspects your existing files, asks which profile you want, and proposes what to reuse or install. Review that plan before it changes the project. |
+| Project already using the kit | Follow the [upgrade workflow](agentic-dev-kit/workflows/upgrade.md). It identifies the installed profile and inspects the files before refreshing them. For a lite install, use its [lite upgrade instructions](agentic-dev-kit/workflows/upgrade.md#lite-profile). |
 
-> **`session-start` → work → `wrap-up` → `pr-watch`**, with the **friction
-> flywheel** (`triage-friction-log`, `post-merge-systemize`) turning underneath.
+**Choose full** when the kit should watch CI and PR review, work with a tracker,
+or coordinate isolated agent lanes. **Choose lite** when you want a living plan,
+a friction inbox and a review before committing. Lite can open pull requests on
+projects with a configured protected branch. Its workflows run in your agent
+without installing engines or Git hooks in the project. [Profile selection](agentic-dev-kit/workflows/adopt.md#choose-the-profile)
 
-See the [README diagram](../README.md#how-it-fits-together) for the whole picture.
+### Prepare a full installation
 
-**Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
-shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chmod`, `touch`,
-`basename`, `dirname`, `date` and `git` — all standard on macOS
-and Linux. `panel_prompt.py` and `check_record_prose.py` call `git --no-lazy-fetch`, which needs Git
-2.44 or later. The engines additionally need
-[`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file scripts) and, for
-`pr-watch` / `parallel`, the GitHub CLI `gh`, authenticated (`gh auth status`).
-Runtime engines use the stdlib-only `kitconfig.py` reader; this repository's
-test command supplies PyYAML separately.
-
-If a step stops, use [Troubleshooting](troubleshooting.md) to identify the owning
-command, evidence to keep and the next authorized action.
-
-## 1 · Adopt the kit
-
-Click **Use this template** on GitHub and clone the result, or copy the kit's
-contents into an existing repo's root:
+The installer runs in POSIX `sh` with Git and standard macOS or Linux shell tools.
+Install `uv` for the Python engines. The review tools use `git --no-lazy-fetch`,
+which requires Git 2.44 or later. For this walkthrough, authenticate the GitHub CLI
+in the environment that will watch the PR. [Developer guide](developer-guide.md)
 
 ```sh
-cp -r /path/to/agentic-dev-kit/. .
-./init.sh
+git --version
+uv --version
+gh auth status
 ```
 
-Copy from a fresh clone of the kit, not from a working checkout: `cp` also copies
-untracked files, and a `config/dev-model.local.yaml` there would set its operator
-logins in your repository.
+In a repository created from the template, open `config/dev-model.yaml` **before
+running `./init.sh`**. Its tracked `paths` block points to this kit’s maintenance
+records. Edit the following entries in the existing block to use the shipped
+skeletons, or substitute your project’s own record paths. Preserve the other keys.
 
-> Already adopted the kit in this repo before? Follow the
-> [upgrade workflow](agentic-dev-kit/workflows/upgrade.md). Re-running `./init.sh`
-> updates supported configuration and unclaimed templates, but does not inspect
-> or refresh installed engines. The README's
-> [upgrade section](../README.md#upgrading-an-already-adopted-repo) explains the route.
-
-`init.sh` prompts you for project name, agent runtime, operator logins, tracker board,
-the protected branch, your notification user key and any third-party review bot
-(optional: answer `none` and the kit's review panel reviews every PR), and stamps them
-into `config/dev-model.yaml`.
-That file arrives with `review.safety_critical_paths` listing only the kit's own gate
-files, CI workflows, hook scripts and runtime hook registrations. Add your own send,
-destructive and kill/recovery paths to it, or delete the key:
-absent, every pull request keeps the two-lens fallback review, while a list that misses a
-gate file sends that file to one lens (#930).
-It renders the narrative docs and root entry points — `AGENTS.md`, which holds
-the contract, and `CLAUDE.md`, which imports it with `@AGENTS.md` because once a `CLAUDE.md`
-exists Claude Code reads it instead of `AGENTS.md` — from `docs/templates/`, installs the pre-push hook, and
-adds the state sandbox to `.gitignore`.
-
-It renders a target when it is **missing, or its first line opens an HTML comment
-carrying a kit marker** — so a handoff you are actually using is left
-byte-identical. This makes re-running it safe for configuration and template
-rendering; use `upgrade` to refresh installed kit files.
-
-- `devkit-template: unrendered` marks a **shipped skeleton** — the narrative docs.
-- `devkit-source: kit-own` marks the **kit's own** root `AGENTS.md` and `CLAUDE.md`. The
-  kit ships those files because a session working in the kit needs a contract too, and the
-  `cp -r` quickstart therefore lands them in your root. This marker is what lets `init.sh`
-  render yours over them instead of mistaking them for files you are already using.
-
-A marker counts only in one exact position — line 1 must **open an HTML comment whose
-first words are the marker**:
-
-```markdown
-<!-- devkit-source: kit-own — anything may follow -->
+```yaml
+  handoff: docs/handoff.md
+  handoff_history: docs/handoff-history.md
+  friction_log: docs/friction-log.md
+  friction_log_archive: docs/friction-log-archive.md
 ```
 
-A comment that merely *talks about* a marker does not qualify, wherever it sits:
-`<!-- see the kit's devkit-source: kit-own convention -->` on line 1 is in use, and seeding
-leaves it alone. So is any mention below line 1. Your rendered `AGENTS.md` and `CLAUDE.md`
-carry no marker at all, so once yours exist they are never re-rendered.
+Update the matching `path` and `archive` entries under `doc_budgets` to name the
+same files. In `tracker`, set `backend`, `project_name` and `url` for this
+project. For a project without a tracker, set `backend: none`, `project_name: ""`
+and `url: ""` **before running the installer**. Pressing Enter at a prompt accepts
+the displayed value. An upstream tracker URL left there gets written into the
+project’s friction inbox and root agent guide.
 
-If you *do* want a marked file re-rendered — or want to keep one forever — line 1 is the
-whole control: delete it to claim the file, restore it to hand the file back.
+From the new repository root, run `./init.sh` and answer the prompts. It renders
+the root agent guides and unclaimed narrative files at the selected paths. Open
+the generated `AGENTS.md` and replace the verification-command placeholder with
+your project’s command. Check `vcs.protected_branch` and inspect `git diff`
+before committing. In an existing repository, follow the installer handoff in
+the adoption workflow.
 
-(The older "only if it doesn't already exist" rule couldn't work: the kit *ships* those
-files, so a copy-in always landed them first and the seed step never fired.)
+The template's `review.safety_critical_paths`
+identifies the kit's own files. Include the project's gate, destructive and
+recovery paths in that list, or omit the key to apply the stronger review to
+every change. Set `review.bots` to `[]` if you want the kit's review panel to
+handle independent review. [Safety doctrine](agentic-dev-kit/safety-critical-changes.md) · [Review panel](agentic-dev-kit/fallback-review-panel.md)
 
-Then open `config/dev-model.yaml` and fill in anything you skipped — especially
-the `tracker` and `models` blocks. That one file is where every skill and script
-reads its project-specific values, so there's nothing to hardcode elsewhere.
+Read the installer's message about the pre-push hook. For example, `deferred`
+means a linked checkout shares the hook directory. Follow the installation
+instructions it prints. The rendered root guides and living records belong
+to your project. [Ownership](ownership.md) · [Troubleshooting](troubleshooting.md)
 
 ### Values you don't want in git
 
-`notify.user_key` is an identity — the operator id an approval DM targets — so it
-goes in `config/dev-model.local.yaml`, gitignored and merged over the tracked file:
+If approvals use direct messages, keep the operator's notification identity in
+`config/dev-model.local.yaml` and leave the tracked `notify.user_key` blank.
+The full profile reads supported local values over the tracked configuration.
+The reader defines which keys the local file may contain. [Config reader](../scripts/lib/kitconfig.py)
 
 ```yaml
-# config/dev-model.local.yaml
 notify:
   user_key: "U0XXXXXXXXX"
 ```
 
-It, `state.test_guard_exclude` and `systemize.operator_logins` are the only keys you
-may set there; anything else is an error naming what it refused. `./init.sh` writes the *tracked* file, so a locally-set key keeps winning
-after a re-run — leave the tracked value blank rather than duplicating it.
+## Start a lite session
 
-## 2 · Your first briefing — `session-start`
+Invoke `session-start`. It reads the configured plan and inbox, the working tree,
+recent commits and the story backlog when configured. Pick a task, make the
+change, and verify it with the project's command. Invoke `wrap-up` to stage the
+intended paths and run the lite `review` on the staged change. In Claude Code,
+invoke skills as `/session-start` or `/wrap-up`. In Codex, use `$session-start`
+or `$wrap-up`. [Lite briefing](agentic-dev-kit/lite/lite-session-start.md) · [Lite wrap-up](agentic-dev-kit/lite/lite-wrap-up.md)
 
-Start your agent and run `session-start`. It reads your handoff, the friction
-log, your tracker, open PRs, and CI, then proposes what to do next — grouped by
-urgency, each candidate tagged `[size · model · mode]`, ending with one pick:
+Ordinary lite review uses the author's session to read the diff. If the change
+triggers the configured risk tier, a reviewer in a fresh context also reads it
+and the operator gives the go-ahead before commit. With `vcs.protected_branch`
+configured, wrap-up commits on a session branch and opens a PR. Otherwise it
+commits on the checked-out branch. [Lite review](agentic-dev-kit/lite/lite-review.md) · [Lite wrap-up](agentic-dev-kit/lite/lite-wrap-up.md)
 
-```text
-🧭 Session Start — Mon 2026-01-05
+## Brief the full session
 
-Where things stand
-  • main (clean) · 0 open PRs · CI green
-  • Recently merged: #3 scaffold the auth module
+Open your agent in the project. Invoke `$session-start` in Codex or `/session-start`
+in Claude Code. Enter these invocations in the agent session. Run shell commands in the terminal.
 
-What to do next
-🟡 Soon
-  • Wire the password-reset endpoint    [M · default · inline]   handoff
-🟢 Whenever
-  • Backfill tests for the token store  [S · cheap · delegate]   friction-log
-
-👉 My pick: wire the password-reset endpoint — it's the active sprint's next step.
-```
-
-The tags are the plan: **size** (S/M/L), which **model tier** the step warrants
-(`cheap` / `default` / `expensive` — match the tier to the difficulty, not the session), and
-**mode** — `inline` (work it here) or `delegate` (hand a self-contained task to a
-cheaper agent and review the result).
-
-For a shorter task index, use the [Developer guide](developer-guide.md). For the
-component relationships behind this loop, use [Architecture](architecture.md).
-
-## 3 · Do the work
-
-Two modes, by the shape of the task:
-
-- **Inline (cockpit)** — anything needing judgment or back-and-forth. You and the
-  agent work in the main session.
-- **Isolated lanes** (`parallel`) — self-contained, *disjoint* tasks run
-  concurrently, each in its own git worktree with a sandboxed `state/` directory,
-  so parallel agents can't clobber each other's scratch state or the shared plan.
-  Map each lane's file footprint first — the sandbox prevents *state* collisions,
-  not *source* merge conflicts.
-
-Before editing, reuse the task's assigned linked worktree or create one with a task
-branch. Inline work still belongs in that checkout; it does not mean editing the
-primary checkout. The [developer guide](developer-guide.md#run-a-development-session)
-shows the worktree setup. Keep edits, verification and commits together there.
-
-Reserve the top model tier for the one decision that's expensive to get wrong;
-let a cheaper tier do the mechanical building.
-
-## 4 · Open a PR and watch it — `pr-watch`
-
-Every change goes through a branch and a PR — and opening the PR is *not* the end
-of the task. Run `wrap-up`'s handoff test (section 5) before you request its opening
-review, preferably before opening it, so any handoff edit rides this PR and is
-reviewed with it. Open completed work ready for review. Then:
+For the CSV change, a **briefing excerpt** might read like this:
 
 ```text
-/pr-watch 42          # Claude; `$pr-watch 42` in Codex
+Soon
+  • Write column headers for an empty CSV report    [S · default · inline · local]   handoff / Reports
+
+My pick: take the empty-report case. The CSV fixtures and the project test command are available here.
 ```
 
-(That's a skill invocation in your agent session, not a shell command — the engine
-underneath is `uv run scripts/pr_watch.py 42`.) It polls CI and review comments and
-doesn't stop until the PR is **green and clean**:
-every check passing, and every review finding either fixed or replied-to with a
-reason. Without a review bot, the independent review is run by the agent at the
-converged head with fresh-context review lenses: one for an ordinary change, two
-for a safety-critical one, then an optional verifier that checks their findings and
-a receipt bound to the PR head ([fallback review contract](agentic-dev-kit/fallback-review-panel.md)).
-A configured bot being down isn't a waiver either; the same pass runs instead.
+The tags identify size, model tier, execution mode and environment. The source
+pointer lets you read why this is next. If a case needs a fixture the session
+cannot access, the briefing keeps it visible and names what would unblock it.
+If the tracker read fails, the briefing reports the gap. An unreadable handoff
+or friction inbox stops the briefing until you restore it or correct its path.
+[Session-start contract](agentic-dev-kit/workflows/session-start.md)
 
-For a **risky** change — a send-gate, a destructive migration, a recovery/kill
-path — the shared safety doctrine (`docs/agentic-dev-kit/safety-critical-changes.md`)
-raises the bar: prefer a deterministic gate over a fuzzy matcher, use more than
-one review lens, and require an operator sign-off before merge. Those never
-self-merge.
+## Make the change
 
-## 5 · Hand off — `wrap-up`
+Reuse the assigned linked worktree and task branch, or create them before editing.
+For the CSV example, use one worktree for the export writer and its tests.
+Exercise both an empty report and a report with rows. The first should now contain
+the header line. The second should keep its original columns, order and data.
+Run the project's verification command in that same checkout. If you are changing
+the kit itself, that command is `make test`. [Worktree setup](developer-guide.md#run-a-development-session)
 
-Before each PR goes to review, preferably before opening it, `wrap-up`'s handoff
-test asks whether the work left anything its pull request, commits and tracker
-issues do not already record. When the answer is no, which is the usual result, it
-commits nothing. When there is something — a decision, an
-abandoned approach, a next step with no ticket — it updates the entry of the
-workstream the work belongs to in `docs/handoff.md`, on that pull request before
-its review. Other workstreams' next steps stay as they were:
+## Decide what the next session needs
 
-```markdown
-## Workstreams
+Before you request the opening review, run `wrap-up`'s handoff test. In this
+example the diff and tests explain the header change. If the PR, commits and
+tracker also hold the next step, leave the living plan alone. Suppose instead the
+operator decides during the conversation to compare the export against a partner's
+sample before changing the delimiter, and no issue records that. Update **Reports**
+in the configured handoff on the same PR. A next step someone can act on would be
+“Obtain the partner's sample from the operator and compare its delimiter with the
+export fixture.” [Wrap-up contract](agentic-dev-kit/workflows/wrap-up.md)
 
-### Password reset
+Route friction when you encounter it. Suppose the fixture passes from the project
+root but the test runner in your editor cannot find it. Record what reproduces
+the failure and the next diagnostic in the friction inbox while the cause is still
+unknown. If you already know the reproduction, mechanism and fix, search the
+tracker for a duplicate and present the proposed ticket for approval. Park the
+finding in the inbox when that filing route is unavailable. [Friction routing](developer-guide.md#route-friction-and-recurring-findings)
 
-**Status:** endpoint live; email and rate limit outstanding. **Owner:** #40.
-
-▶ Next: add the reset-email template and the rate-limit guard.
+```mermaid
+flowchart TB
+    accTitle: Where an observation belongs
+    accDescr: A new project decision belongs in the handoff when no PR, commit or tracker issue records it. Session friction goes to the inbox while unexplained, or through duplicate search and approval when ready to file.
+    Decision["Decision from the conversation"] --> Known{"Already in the PR,<br/>commits or tracker?"}
+    Known -->|Yes| Done["Keep the existing record"]
+    Known -->|No| Plan["Update the workstream<br/>on this PR"]
+    Friction["Problem encountered during work"] --> Cause{"Reproduction, cause<br/>and fix known?"}
+    Cause -->|No| Inbox["Park in the friction inbox"]
+    Cause -->|Yes| Search["Search tracker and present<br/>the filing decision"]
 ```
 
-Friction is routed when you hit it, not saved for the end. Anything you can
-already explain — a reproduction, a named mechanism, *and* a fix — the agent offers
-to file straight to your tracker, because a triage pass could add nothing to it. It files on your go-ahead, and
-parks the finding instead whenever that route is unavailable — you decline, there is no
-tracker configured, the create fails, or nobody is there to ask because the session is
-unattended. What you *can't* yet explain goes to
-`docs/friction-log.md` while it's fresh:
+## Open the PR and follow review
 
-```markdown
-## 2026-01-05 — inbox
+Verify any handoff edit with the rest of the change. Open the completed PR ready
+for review. In that task checkout, resolve the PR for the branch you just pushed
+and run the ready assertion immediately. The template uses `scripts`. Substitute
+your configured `paths.engines` in a vendored install. [PR-watch contract](agentic-dev-kit/workflows/pr-watch.md)
 
-- **`init.sh` skipped an existing tracker config (severity: L).** Second time this
-  week; it wrote a fresh `tracker.linear.project_id` over the one already there. No
-  idea what it keys on — a clean re-run didn't reproduce it. Next step: capture the
-  detection branch it takes when it does.
+```sh
+pr_number=$(gh pr view --json number --jq '.number') &&
+  uv run scripts/pr_watch.py "$pr_number" --assert-ready
 ```
 
-That one parks because it has no mechanism and no fix yet — only a next diagnostic
-step — not because it is minor. Any one missing part is enough to park it. Because the
-next `session-start` reads both the handoff and the inbox, neither thread is lost.
+Invoke `$pr-watch <PR-number>` in Codex or `/pr-watch <PR-number>` in Claude
+Code. The workflow monitors checks, reads findings, and asks for or performs the
+configured independent review of the current head. For example, if review finds
+the empty-report path skipped the writer's normal column ordering, repair it in
+the task worktree, run verification, push and watch the new head. If the only
+blocker is a check rollup that has not settled, poll again. When the report says
+`mergeable`, use the project's merge policy to identify who may merge. Hand the
+operator the PR and reviewed head when that decision belongs to them.
+[Reading the watch report](agentic-dev-kit/workflows/pr-watch/report-fields.md)
 
-When the session ends, ask for the full `wrap-up`. The agent offers it in one line
-when there is a reason: half-finished state such as an unpushed branch or a review
-round on disk, a decision that lives only in the conversation, or friction not yet
-routed. With none of those, the closing run would have nothing to record, so a
-session whose PRs passed the handoff test does not need one; clean up what the
-session created as you go either way.
+## Finish the session
 
-For disposable review rounds and task checkouts, follow the
-[evidence and cleanup guide](developer-guide.md#discard-evidence-and-finish-session-cleanup).
-A session deletes the paths it created and recorded once nothing needs them, and
-the full `wrap-up` reports what it removed and what it kept. Completed evidence is discarded by default, so
-retiring scratch needs no copy of it. Obtain authorization for the concrete deletion scope: either
-the operator's approval, or a standing grant you copy into `AGENTS.md` from the
-*Session cleanup* section of [`AGENTS-sections.md`](AGENTS-sections.md). A wrap-up
-invocation alone does not provide it.
+Request the full `wrap-up` if the session ends with an unfinished task, an
+unrecorded decision or friction still to route. When there is nothing else to
+record, a session whose PRs passed the handoff test does not need one. You should
+clean up what the session created as you go either way. Preview the exact
+paths the session recorded, apply under the project's cleanup grant or operator
+approval, and report what the guards kept. [Cleanup lifecycle](agentic-dev-kit/session-cleanup.md)
 
-## 6 · Turn the flywheel
-
-On a cadence (weekly works well):
-
-- **`triage-friction-log`** reads the new inbox entries and routes each one: a
-  single incident becomes a tracker ticket, then the entry is swept to the archive.
-- **`post-merge-systemize`** scans recently merged PRs for a pattern that reaches
-  `systemize.pattern_threshold` — and only *then* proposes a fix. It tries a
-  structural change first, then a check that fails on the past mistake, and writes a
-  prose rule only for a judgement call no check can make. The optional
-  `systemize.enforcement_table` records what enforces each rule; a pattern that
-  repeats a rule marked `judgement, unenforced` there is a cue to add a check.
-
-Single incidents route **down** (to the tracker); repeated patterns route **up**
-(to a check or a rule). That asymmetry is deliberate — it's what keeps your rule set small
-and your friction log honest instead of ratcheting every week.
-
-The **down**-route runs on two clocks, not one. `wrap-up`'s friction-routing step
-takes it as soon as a finding is found, for anything already issue-shaped; `/triage-friction-log` takes it for everything else
-that proves to be a single incident — explicable by now or not. Neither is the
-**up**-route: that is `post-merge-systemize`'s, over a different corpus entirely
-(merged-PR review comments, not inbox entries), which is why a pattern has to show up
-across PRs before it earns a rule. So an inbox that stays small is the system working,
-and one that fills with things you could have filed when you found them means `wrap-up`'s
-friction-routing step is being skipped — not that triage is overdue.
-
-> **Note:** these workflows share their doctrine across Claude and Codex. External
-> tracker and notification clients remain runtime-native. The optional deterministic
-> engines ship with the kit beneath `paths.engines`; both recurring workflows have
-> explicit LLM-only paths when their configured engine sets are wholly absent, and a
-> partial set fails closed. `triage-friction-log` reads its additive `triage` block
-> from merged `config/dev-model.yaml`; rerunning refreshed `./init.sh --no-clobber`
-> installs missing keys without replacing adopter values. Configure exact trusted forge identities in
-> `systemize.operator_logins`; other human reviewers are excluded, while bot sources
-> come only from `review.bots` and its explicit aliases. The installer refuses YAML
-> key forms its shell migrator cannot own before writing: keep top-level keys unique
-> and bare, write a bare `systemize:` section line, and use bare keys at the shipped
-> two-space indentation within it. Keep operator-login items as simple plain login
-> tokens or simple quoted strings; YAML tags, anchors, aliases, typed scalars, escapes,
-> and ambiguous flow syntax are refused before migration writes.
-> `session-start`, `wrap-up`,
-> `parallel`, and `pr-watch`
-> run out of the box — with an exception worth knowing before you rely on it:
-> `wrap-up`'s **direct filing** route
-> reaches your tracker through whatever client your backend gives you, and ships as
-> doctrine rather than as a wired engine. Its consent gate and duplicate check are
-> prose the agent executes, not checks that fail. The systemize workflow likewise
-> labels agent-executed classification honestly and never treats tracker availability
-> as authorization.
->
-> The shared session-start and wrap-up workflows declare the preflight boundary that
-> applies in Claude and Codex. Missing required repository/config or record capabilities
-> stop before a false briefing or commit. Optional session-start sources render as
-> unavailable rather than empty and cannot be silently skipped. PR readiness includes
-> unfiltered review evidence rather than locally acknowledged comments alone, and
-> detached HEAD is explicit rather than a blank branch; wrap-up presents an
-> interactive issue-shaped finding
-> for an exact-payload tracker decision before parking, while unavailable, declined,
-> ambiguous, incomplete, or accumulating routes go to the friction log. Non-interactive
-> runs never wait for approval, and merge authority that is absent or insufficient holds
-> the exact mergeable head for the operator. A non-lane PR with no project policy
-> defaults to operator authorization, never autonomous merge. An unavailable forge or
-> unsettled review path preserves exact resume evidence and reports incomplete.
-> Any existing project-status artifact changed by wrap-up takes that same commit/PR path;
-> a status-only edit is not a successful no-op.
-> Overall outcome precedence makes a later repository or merge failure incomplete even
-> when an earlier optional integration degraded.
-> Their thin adapters select runtime-native mechanisms but cannot change those outcomes.
-> No new config key or installer step is needed for the bookend contract. Triage adds
-> the `triage` config block and the same shared outcome discipline: frozen state and
-> gate-digest-addressed recovery evidence are
-> required, scheduled approval requires notification send/thread read, interactive
-> approval may fall back to the current session, tracker writes require exact-payload
-> approval plus read-back, and only accounted byte-identical blocks may be swept. Test
-> mode cannot edit the source documents or create tracker/forge state.
-
-## That's the loop
-
-```text
-session-start → work (inline or parallel) → wrap-up → pr-watch
-                                                               │
-                        friction-log ──weekly──► triage + systemize
-                                                               │
-                              tickets + checks + rules ──► next session-start
-```
-
-Each session leaves the repo more legible than it found it: the handoff carries
-the thread forward, the flywheel turns rough edges into tickets and repeated pain
-into rules, and the next briefing starts from all of it.
+The next briefing reads the workstream and the inbox. `triage-friction-log`
+revisits parked inbox entries for filing, archiving or continued investigation.
+`post-merge-systemize` reads a different source, the review findings on merged
+PRs, and looks for recurring causes that warrant a shared change. [Triage](agentic-dev-kit/workflows/triage-friction-log.md) · [Post-merge systemize](agentic-dev-kit/workflows/post-merge-systemize.md)
