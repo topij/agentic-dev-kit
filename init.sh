@@ -41,8 +41,9 @@ Bootstraps the agentic-dev-kit in the current repo:
      OPENS AN HTML COMMENT beginning with the unrendered marker or the kit-own
      marker. A file that merely mentions a marker is in use and is left
      byte-identical.
-  5. Appends the kit's state-sandbox paths to .gitignore if they're
-     missing (never duplicates a line on re-run).
+  5. Appends the kit's state-sandbox paths and its two local-overlay paths
+     (config/*.local.yaml, .claude/settings.local.json) to .gitignore if
+     they're missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath), and
      reports — never writes — the PR follow-through hook's registration for
      each runtime that is missing it. From a linked worktree, a hooks
@@ -2649,7 +2650,9 @@ add_ignore_line() {
 # be imposed (#385).
 #
 #   add_ignore_line        — HYGIENE. Its absence leaks something: an operator id
-#                            in config/*.local.yaml, a literal token in .mcp.json.
+#                            in config/*.local.yaml, a personal allow-list in
+#                            .claude/settings.local.json, a literal token in
+#                            .mcp.json.
 #                            Append-only and always-wins is the RIGHT shape there:
 #                            a later rule beating an adopter's earlier one is the
 #                            point, because no adopter benefits from a leak.
@@ -2807,6 +2810,16 @@ add_policy_ignore_line "/reports/" "the kit's derived pipeline reports"
 # adopter following docs/getting-started.md would write an identity into a tracked
 # path while every doc told them it was ignored (panel, adversarial lens).
 add_ignore_line "config/*.local.yaml"
+# Claude Code's per-checkout settings overlay: one operator's own permission
+# grants and, where they set any, environment values. Nothing in the repository
+# kept it out of git: it stayed untracked only where the operator's GLOBAL
+# ignore file happened to name it, which a second machine, a collaborator or a
+# cloud session does not share. Hygiene rather than policy, because what its
+# absence costs is a leak: one `git add -A` commits a personal allow-list.
+# Seeded whether or not `.claude/` exists yet, since the client writes the file
+# the first time an operator answers "always allow". A repository that already
+# TRACKS the file is unaffected, because git ignores only untracked paths.
+add_ignore_line ".claude/settings.local.json"
 # dev_session.sh copies a repo-root .mcp.json into each lane worktree so lanes
 # inherit MCP access. If yours holds literal credentials rather than ${ENV}
 # references, that copy must never be committable from a lane.

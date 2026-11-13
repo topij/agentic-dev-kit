@@ -2239,8 +2239,95 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
         # to write an identity into a tracked path while asserting it is ignored
         # (panel, adversarial lens — a HIGH on the change that added the overlay).
         "config/*.local.yaml",
+        # Claude Code's per-checkout settings overlay. Before this was seeded it
+        # stayed out of git only through an operator's global ignore file.
+        ".claude/settings.local.json",
     ):
         assert lines.count(entry) == 1, f"{entry!r} appears {lines.count(entry)} times"
+
+
+def test_the_claude_settings_overlay_is_ignored_by_the_repo_not_by_the_operator(
+    tmp_path: Path,
+) -> None:
+    """`.claude/settings.local.json` holds one operator's own permission grants.
+    It used to stay untracked only where that operator's GLOBAL ignore file
+    named it, so a checkout on another machine had nothing keeping `git add -A`
+    from committing it.
+
+    Asked of git rather than of the `.gitignore` text, with the global and
+    system config nulled by `_env`: the claim is that the repository's own rules
+    ignore the path, and `check-ignore -v` names the file the matching rule came
+    from. Before the install the same question answers "not ignored", which is
+    what shows the fixture has no other rule doing the work."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    overlay = ".claude/settings.local.json"
+    _write(repo, overlay, '{"permissions": {"allow": ["Bash(make release)"]}}\n')
+
+    def check_ignore() -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "check-ignore", "-v", "--", overlay],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=False,
+            env=_env(tmp_path),
+        )
+
+    before = check_ignore()
+    assert before.returncode == 1, f"already ignored before the install: {before.stdout}"
+
+    _run_init(repo)
+
+    after = check_ignore()
+    assert after.returncode == 0, f"not ignored after the install: {after.stderr}"
+    assert after.stdout.startswith(".gitignore:"), after.stdout
+    status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+        env=_env(tmp_path),
+    ).stdout
+    assert overlay not in status, status
+
+
+def test_the_claude_settings_overlay_line_is_seeded_before_the_file_exists(
+    tmp_path: Path,
+) -> None:
+    """The client writes the overlay the first time an operator answers "always
+    allow", which is after the install on a fresh adoption. A line seeded only
+    when the file was already there would miss exactly that repository."""
+    repo = _fixture(tmp_path, config=shipped_config())
+    assert not (repo / ".claude").exists()
+
+    _run_init(repo)
+
+    lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".claude/settings.local.json" in lines
+
+
+def test_the_claude_settings_overlay_line_leaves_a_tracked_overlay_tracked(
+    tmp_path: Path,
+) -> None:
+    """Hygiene lines are always added, so the line lands in a repository that
+    commits its overlay on purpose. Git ignores only untracked paths, so that
+    file stays tracked and an edit to it still shows as a change."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    overlay = ".claude/settings.local.json"
+    _write(repo, overlay, "{}\n")
+    _commit(repo, overlay)
+
+    _run_init(repo)
+
+    lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert overlay in lines
+    run = lambda *argv: subprocess.run(  # noqa: E731 - local to this test
+        argv, cwd=repo, check=True, capture_output=True, text=True, env=_env(tmp_path)
+    )
+    assert run("git", "ls-files", "--", overlay).stdout.strip() == overlay
+    _write(repo, overlay, '{"permissions": {}}\n')
+    assert overlay in run("git", "status", "--porcelain", "--", overlay).stdout
 
 
 def test_gitignore_gains_mcp_json_only_for_literal_credentials(tmp_path: Path) -> None:
