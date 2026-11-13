@@ -769,7 +769,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "51f336e514de4afaa0875ffeed56eae5c1343a3d93a30bf73ef7c1f16619a126"
+      "sha256": "a2a78065dcfefe76bb63d4ed097b87f634eb353f0f708a8ce34c2e3fea51e9f7"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",

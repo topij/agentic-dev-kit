@@ -2246,6 +2246,31 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
         assert lines.count(entry) == 1, f"{entry!r} appears {lines.count(entry)} times"
 
 
+def _git_without_operator_ignores(
+    repo: Path, *argv: str
+) -> subprocess.CompletedProcess[str]:
+    """Run git in `repo` with the operator's own ignore file out of reach.
+
+    `_env` nulls the global CONFIG, and that is not enough for a question about
+    ignore rules: with `core.excludesFile` unset git still reads
+    `$XDG_CONFIG_HOME/git/ignore`, falling back to `~/.config/git/ignore`. On a
+    machine whose file names `.claude/settings.local.json`, the first version of
+    the tests below failed for that reason: the path was ignored before the
+    install ran, and `git add` refused it. Pointing `XDG_CONFIG_HOME` at a
+    directory that holds nothing leaves the repository's own rules as the only
+    ones."""
+    empty = repo.parent / "no-operator-git-config"
+    empty.mkdir(exist_ok=True)
+    return subprocess.run(
+        ["git", *argv],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**_env(repo.parent), "XDG_CONFIG_HOME": str(empty)},
+    )
+
+
 def test_the_claude_settings_overlay_is_ignored_by_the_repo_not_by_the_operator(
     tmp_path: Path,
 ) -> None:
@@ -2254,42 +2279,28 @@ def test_the_claude_settings_overlay_is_ignored_by_the_repo_not_by_the_operator(
     named it, so a checkout on another machine had nothing keeping `git add -A`
     from committing it.
 
-    Asked of git rather than of the `.gitignore` text, with the global and
-    system config nulled by `_env`: the claim is that the repository's own rules
-    ignore the path, and `check-ignore -v` names the file the matching rule came
-    from. Before the install the same question answers "not ignored", which is
-    what shows the fixture has no other rule doing the work."""
+    Asked of git rather than of the `.gitignore` text, without the operator's
+    own ignore file: the claim is that the repository's rules ignore the path,
+    and `check-ignore -v` names the file the matching rule came from. Before the
+    install the same question answers "not ignored", which is what shows the
+    fixture has no other rule doing the work."""
     repo = _fixture(tmp_path, config=shipped_config(), git=True)
     overlay = ".claude/settings.local.json"
     _write(repo, overlay, '{"permissions": {"allow": ["Bash(make release)"]}}\n')
 
-    def check_ignore() -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
-            ["git", "check-ignore", "-v", "--", overlay],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            check=False,
-            env=_env(tmp_path),
-        )
-
-    before = check_ignore()
+    before = _git_without_operator_ignores(repo, "check-ignore", "-v", "--", overlay)
     assert before.returncode == 1, f"already ignored before the install: {before.stdout}"
 
     _run_init(repo)
 
-    after = check_ignore()
+    after = _git_without_operator_ignores(repo, "check-ignore", "-v", "--", overlay)
     assert after.returncode == 0, f"not ignored after the install: {after.stderr}"
     assert after.stdout.startswith(".gitignore:"), after.stdout
-    status = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all"],
-        cwd=repo,
-        capture_output=True,
-        text=True,
-        check=True,
-        env=_env(tmp_path),
-    ).stdout
-    assert overlay not in status, status
+    status = _git_without_operator_ignores(
+        repo, "status", "--porcelain", "--untracked-files=all"
+    )
+    assert status.returncode == 0, status.stderr
+    assert overlay not in status.stdout, status.stdout
 
 
 def test_the_claude_settings_overlay_line_is_seeded_before_the_file_exists(
@@ -2316,18 +2327,24 @@ def test_the_claude_settings_overlay_line_leaves_a_tracked_overlay_tracked(
     repo = _fixture(tmp_path, config=shipped_config(), git=True)
     overlay = ".claude/settings.local.json"
     _write(repo, overlay, "{}\n")
-    _commit(repo, overlay)
+
+    def git(*argv: str) -> str:
+        done = _git_without_operator_ignores(repo, *argv)
+        assert done.returncode == 0, f"git {argv}: {done.stderr}"
+        return done.stdout
+
+    # Not `_commit`: its `git add` runs under `_env`, which leaves the
+    # operator's ignore file in force, and that file may name this very path.
+    git("add", "--", overlay)
+    git("-c", "user.email=t@example.invalid", "-c", "user.name=fixture", "commit", "-qm", "fixture")
 
     _run_init(repo)
 
     lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert overlay in lines
-    run = lambda *argv: subprocess.run(  # noqa: E731 - local to this test
-        argv, cwd=repo, check=True, capture_output=True, text=True, env=_env(tmp_path)
-    )
-    assert run("git", "ls-files", "--", overlay).stdout.strip() == overlay
+    assert git("ls-files", "--", overlay).strip() == overlay
     _write(repo, overlay, '{"permissions": {}}\n')
-    assert overlay in run("git", "status", "--porcelain", "--", overlay).stdout
+    assert overlay in git("status", "--porcelain", "--", overlay)
 
 
 def test_gitignore_gains_mcp_json_only_for_literal_credentials(tmp_path: Path) -> None:
