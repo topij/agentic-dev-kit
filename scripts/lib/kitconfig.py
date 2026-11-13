@@ -371,7 +371,22 @@ def _deep_merge(
 #:
 #: ``state.test_guard_exclude`` names directories in THIS checkout's ``state/``;
 #: its one reader is ``<engine-dir>/conftest.py``, which loads with the overlay.
-OVERLAYABLE_PREFIXES = ("notify.user_key", "state.test_guard_exclude")
+#:
+#: ``systemize.operator_logins`` is an identity: the forge logins whose review
+#: findings ``post-merge-systemize`` trusts (#1296). It is read by
+#: ``systemize/config.py``'s ``load_settings``, which loads with the overlay, and by
+#: ``post-merge-systemize.md``, which reads the merged view. ``init.sh`` writes the
+#: tracked value and never reads it back for a decision. The trust argument: the
+#: overlay is a gitignored file in one checkout, so whoever can write it can already
+#: edit the tracked config there, and it grants nothing that person lacks. What it
+#: adds is that the kit repository can name its own operator without the shipped
+#: template, which every adopter copies, trusting that foreign identity. A checkout
+#: without the file (a fresh clone, a lane worktree) reads the tracked value only.
+OVERLAYABLE_PREFIXES = (
+    "notify.user_key",
+    "state.test_guard_exclude",
+    "systemize.operator_logins",
+)
 
 
 def _overlay_paths(node: Any, where: str = "") -> list[str]:

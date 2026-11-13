@@ -465,6 +465,8 @@ trusted; configured bot identities come from `review.bots` and explicit aliases 
 The installer prompts for the operator list and never infers it from the repository
 owner or current authentication. Keep this prompted value as a one-line YAML flow
 sequence; `./init.sh` stops with a conversion example when it finds block style.
+The list may instead be set in the gitignored `config/dev-model.local.yaml`, which is
+how this repository names its own operator while the shipped template keeps it empty.
 Because the installer migrates YAML with shell text tools, its preflight also requires
 unique bare top-level keys, a bare `systemize:` section line, and bare keys inside that
 section at the shipped two-space indentation. Rewrite tagged, quoted, anchored,

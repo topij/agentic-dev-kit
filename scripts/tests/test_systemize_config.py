@@ -67,6 +67,23 @@ def test_shipped_config_loads_engine_backed_once_an_operator_is_named(tmp_path: 
     assert settings.operator_logins and not settings.reviewer_logins
 
 
+def test_shipped_config_loads_engine_backed_with_the_operator_in_the_local_overlay(tmp_path: Path) -> None:
+    """#1296: the kit repository keeps the shipped `operator_logins: []` and names
+    its own operator in `config/dev-model.local.yaml`, so `post-merge-systemize`
+    runs here without the template trusting that login in an adopter. Kit source
+    only, for the reason the test above gives."""
+    require_kit_source()
+    text = (REPO_ROOT / "config/dev-model.yaml").read_text(encoding="utf-8")
+    root = make_repo(tmp_path, config_edit=lambda _: text)
+    (root / "config/dev-model.local.yaml").write_text(
+        "systemize:\n  operator_logins: [operator]\n", encoding="utf-8"
+    )
+    settings = load_settings(root)
+    assert settings.engine_mode == "engine-backed"
+    assert settings.operator_logins == ("operator",)
+    assert not settings.reviewer_logins
+
+
 @pytest.mark.parametrize("key", REQUIRED_KEYS)
 def test_a_missing_required_key_is_named(tmp_path: Path, key: str) -> None:
     with pytest.raises(SystemizeError, match=rf"missing config key systemize\.{key}: rerun ./init.sh"):

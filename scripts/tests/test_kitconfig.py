@@ -1005,3 +1005,22 @@ def test_tracker_is_not_overlayable(tmp_path):
     )
     with pytest.raises(ValueError, match="not overlayable"):
         kitconfig.load_config(path)
+
+
+def test_systemize_operator_logins_is_overlayable_and_its_siblings_are_not(tmp_path):
+    """#1296: the kit repository names its own operator in the overlay, so the
+    shipped template keeps `operator_logins: []` and never trusts that login in an
+    adopter. Only the identity is overlayable; a sibling setting stays refused, so
+    the overlay cannot change what a run does, only whose findings it reads."""
+    tracked = "systemize:\n  operator_logins: []\n  batch_size: 5\n"
+    path = _config_tree(tmp_path, tracked, "systemize:\n  operator_logins: [operator]\n")
+    config = kitconfig.load_config(path)
+    assert kitconfig.get(config, "systemize.operator_logins") == ["operator"]
+    assert kitconfig.get(config, "systemize.batch_size") == 5
+    assert kitconfig.get(kitconfig.load_config(path, overlay=False), "systemize.operator_logins") == []
+
+    (path.parent / "dev-model.local.yaml").write_text(
+        "systemize:\n  batch_size: 9\n", encoding="utf-8"
+    )
+    with pytest.raises(ValueError, match="systemize.batch_size — not overlayable"):
+        kitconfig.load_config(path)
