@@ -444,6 +444,8 @@ Each step is one pull request unless it says otherwise. Tags are `[size · revie
 · environment]`, with sizes as `session-start.md` defines them. *Safety-critical* means
 the step changes a file in `review.safety_critical_paths` and owes the two-lens review.
 No ticket is filed by this document; filing is the operator's go-ahead.
+A step's **Tickets:** line, added by step 1b, names the open tickets on that step's
+subject; it does not claim that delivering them completes the step.
 
 ### Step 0. The operator's decisions
 

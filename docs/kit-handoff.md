@@ -337,8 +337,8 @@ LOW is recorded on its pull request and not ticketed. The trial runs from 2026-1
 dates if step 1a merges later). Run `post-merge-systemize backfill` and the `recorded` search the panel doc names on
 2026-11-27, 2026-12-11 and 2026-12-13, ticket each LOW recorded on two or more pull requests (operator approval), and
 judge the trial on 2026-12-13, after that day's run, against the plan's M3 inflow. The rule stays until the operator decides. Step 1b, the backlog pass, ran on 2026-11-13 with the operator's
-approval of each batch, and each step of the plan names its tickets. Its done-when, `gh issue list --state open`
-returning no issue without a priority label, held when the pass ended on 2026-11-13. No later step has started. Its security finding S2, a lane writing the
+approval of each batch, and each step of the plan names its tickets. Its done-when, no open issue without a priority label, held on 2026-11-13:
+`gh issue list --state open --limit 1000 --search '-label:P1 -label:P2 -label:P3'` printed none when the pass ended. No later step has started. Its security finding S2, a lane writing the
 review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
 `--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
