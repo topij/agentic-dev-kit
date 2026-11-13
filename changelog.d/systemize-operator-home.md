@@ -24,8 +24,9 @@ No other `systemize` key is overlayable.
 ## A tracked local config overlay fails the test suite
 
 `test_kitconfig.py::test_no_local_config_overlay_is_tracked` fails when Git's index
-holds any `config/*.local.yaml`, committed or staged, so a CI that runs the kit's tests
-fails on a pull request that force-adds one. `load_config` itself still reads an
+holds `config/dev-model.local.yaml` in any letter case, committed or staged, so a CI
+that runs the kit's tests fails on a pull request that force-adds it. Other tracked
+`config/*.local.yaml` files are not checked. `load_config` itself still reads an
 overlay whether or not Git tracks it. If you committed your overlay, run
 `git rm --cached config/dev-model.local.yaml`, keep `config/*.local.yaml` in
 `.gitignore`, and commit that removal.

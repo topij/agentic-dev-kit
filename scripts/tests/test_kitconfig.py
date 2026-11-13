@@ -1026,19 +1026,29 @@ def test_systemize_operator_logins_is_overlayable_and_its_siblings_are_not(tmp_p
         kitconfig.load_config(path)
 
 
+#: The overlay ``load_config`` reads beside the default config, derived from
+#: ``kitconfig.DEFAULT_CONFIG_PATH`` so a rename moves the check with it. Only this
+#: one file: another tracked ``config/*.local.yaml`` is no overlay and is not refused.
+_DEFAULT_CONFIG = Path(kitconfig.DEFAULT_CONFIG_PATH)
+_OVERLAY = _DEFAULT_CONFIG.with_suffix(f".local{_DEFAULT_CONFIG.suffix}").as_posix()
+
 
 def _tracked_overlays(root: Path) -> list[str]:
-    """The local config overlays Git's index holds under ``root``, committed or staged.
+    """The paths Git's index holds under ``root`` that name the local config
+    overlay in any letter case, committed or staged.
 
-    Every inherited ``GIT_*`` variable is dropped, so neither an exported ``GIT_DIR``
-    nor ``GIT_INDEX_FILE`` points the read at another repository or index. A failed
-    read raises rather than returning nothing, because an empty answer is the pass.
+    ``:(icase)`` because a case-insensitive filesystem (macOS APFS) serves
+    ``config/Dev-Model.Local.yaml`` to the loader's lower-case path, while Git and
+    a Linux CI see a different name. Every inherited ``GIT_*`` variable is
+    dropped, so neither an exported ``GIT_DIR`` nor ``GIT_INDEX_FILE`` points the
+    read at another repository or index. A failed read raises rather than
+    returning nothing, because an empty answer is the pass.
     """
     import subprocess
 
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     result = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "-z", "--", "config/*.local.yaml"],
+        ["git", "-C", str(root), "ls-files", "-z", "--", f":(icase){_OVERLAY}"],
         capture_output=True,
         env=env,
         timeout=60,
@@ -1051,26 +1061,33 @@ def _tracked_overlays(root: Path) -> list[str]:
     return [name for name in result.stdout.decode().split("\0") if name]
 
 
-def test_no_local_config_overlay_is_tracked():
-    """#1296: the overlay can name whose review findings `post-merge-systemize`
-    trusts (`systemize.operator_logins`), and that is safe only because the file is
-    local to one checkout. One committed with `git add -f` would set it for every
-    checkout of its branch, through a pull request that never touches
-    `config/dev-model.yaml`. This fails the suite, and so CI, on that pull request.
-    `kitconfig.load_config` runs no Git command, so this test is the guard."""
-    if not (REPO_ROOT / ".git").exists():
-        pytest.skip(f"{REPO_ROOT} is not a Git checkout, so nothing in it is tracked")
-    tracked = _tracked_overlays(REPO_ROOT)
+def _assert_no_tracked_overlay(root: Path) -> None:
+    tracked = _tracked_overlays(root)
     assert not tracked, (
         f"Git tracks a local config overlay: {tracked}. Remove it from the index with "
         f"'git rm --cached <path>' and keep 'config/*.local.yaml' in .gitignore."
     )
 
 
+def test_no_local_config_overlay_is_tracked():
+    """#1296: the overlay can name whose review findings `post-merge-systemize`
+    trusts (`systemize.operator_logins`), and that is safe only because the file is
+    local to one checkout. One committed with `git add -f` would set it for every
+    checkout of its branch, through a pull request that never touches
+    `config/dev-model.yaml`. This fails the suite, and so CI, on that pull request.
+    `kitconfig.load_config` runs no Git command, so this test is the guard; the
+    check itself is `_assert_no_tracked_overlay`, which the tests below exercise."""
+    if not (REPO_ROOT / ".git").exists():
+        pytest.skip(f"{REPO_ROOT} is not a Git checkout, so nothing in it is tracked")
+    _assert_no_tracked_overlay(REPO_ROOT)
+
+
 @pytest.mark.parametrize("committed", [True, False], ids=["committed", "staged"])
-def test_tracked_overlays_finds_a_force_added_overlay(tmp_path, monkeypatch, committed):
-    """The check above reports an overlay whether it is committed or only staged,
-    and an inherited GIT_DIR naming another repository neither hides it nor
+@pytest.mark.parametrize("name", ["dev-model.local.yaml", "Dev-Model.Local.yaml"])
+def test_the_overlay_check_finds_a_force_added_overlay(tmp_path, monkeypatch, committed, name):
+    """The check reports the overlay committed or only staged, under any letter
+    case, and passes a tracked `config/*.local.yaml` that is not the overlay. An
+    inherited GIT_DIR naming another repository neither hides the overlay nor
     receives this test's writes."""
     import subprocess
 
@@ -1090,16 +1107,24 @@ def test_tracked_overlays_finds_a_force_added_overlay(tmp_path, monkeypatch, com
     git(root, "init", "-q")
     (root / ".gitignore").write_text("config/*.local.yaml\n", encoding="utf-8")
     (root / "config" / "dev-model.yaml").write_text("systemize:\n  operator_logins: []\n", encoding="utf-8")
-    (root / "config" / "dev-model.local.yaml").write_text(
-        "systemize:\n  operator_logins: [operator]\n", encoding="utf-8"
-    )
+    (root / "config" / "app.local.yaml").write_text("not: an overlay\n", encoding="utf-8")
+    (root / "config" / name).write_text("systemize:\n  operator_logins: [operator]\n", encoding="utf-8")
     git(root, "add", ".")
+    git(root, "add", "-f", "config/app.local.yaml")
     git(root, "commit", "-q", "-m", "init")
     monkeypatch.setenv("GIT_DIR", str(decoy / ".git"))
-    assert _tracked_overlays(root) == []
+    _assert_no_tracked_overlay(root)
 
-    git(root, "add", "-f", "config/dev-model.local.yaml")
+    git(root, "add", "-f", f"config/{name}")
     if committed:
         git(root, "commit", "-q", "-m", "commit the overlay")
-    assert _tracked_overlays(root) == ["config/dev-model.local.yaml"]
+    assert _tracked_overlays(root) == [f"config/{name}"]
+    with pytest.raises(AssertionError, match="Git tracks a local config overlay"):
+        _assert_no_tracked_overlay(root)
     assert not list((decoy / ".git").glob("index"))
+
+
+def test_the_overlay_check_fails_when_git_cannot_read(tmp_path):
+    """An empty answer is the pass, so a read that fails must not return one."""
+    with pytest.raises(AssertionError, match="git ls-files failed"):
+        _assert_no_tracked_overlay(tmp_path / "absent")
