@@ -342,8 +342,8 @@ plan. No step of it has started, and no ticket was filed for it. Its security fi
 review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
 `--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
-reading them. The hold is prose and binds only a session that reads this entry or the plan: `parallel.md`,
-among other documents, still classes mechanical and standard lanes as self-merge. It lifts when the plan's step 2a ships, or on the
+reading them. The hold is prose and binds only a session that reads this entry or the plan: the kit's
+documents and engines still describe and accept self-merge, `parallel.md` for one. It lifts when the plan's step 2a ships, or on the
 operator's decision under the conditions D2 states. A probe result alone lifts nothing.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 

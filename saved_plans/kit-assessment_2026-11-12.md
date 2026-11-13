@@ -211,7 +211,7 @@ Findings are described by class. None of them is a step-by-step route.
 
 | # | Finding | Evidence | Read or run | Tracked |
 |---|---|---|---|---|
-| S1 | **An unattended lane holds the operator's whole forge credential, and untrusted text reaches it.** `--ticket` appends the live issue body with no check of who wrote or last edited it. The child inherits every environment variable except those starting `DEVKIT_` or `GIT_` and the keys `GH_REPO`, `PWD` and `OLDPWD`. The profile grants `Edit(**)` together with `make test`, which runs repository code. | `launch_lane.py:66-72`, `285-305`, `390-391`, `1480-1489`; `config/claude-lane-settings.json` | read | #615 and #617 cover parts; ticket-author trust and a process boundary are untracked |
+| S1 | **An unattended lane holds the operator's whole forge credential, and untrusted text reaches it.** `--ticket` appends the live issue body with no check of who wrote or last edited it. The child inherits every environment variable except those starting `DEVKIT_` or `GIT_` and the keys `GH_REPO`, `PWD` and `OLDPWD`. The profile grants `Edit(**)` together with `make test`, which runs repository code as the operator's OS user, so credentials stored for that user are within its reach whatever the environment holds (not probed here). | `launch_lane.py:66-72`, `285-305`, `390-391`, `1480-1489`; `config/claude-lane-settings.json` | read | #615 and #617 cover parts; ticket-author trust and a process boundary are untracked |
 | S2 | **A lane can write the review receipt its own merge is judged by.** The lane's state root is `<session>/state`, the same root `dev_session.sh merge` passes to `pr_watch.py`. The profile grants `uv run scripts/pr_watch.py:*`, and `record_review` checks the head, not the caller. With `review.bots: []`, that receipt is the whole of the independent-review evidence. | `dev_session.sh:281`, `461`, `1047`; `pr_watch.py:4875-4909`; `config/dev-model.yaml:312` | read; **probe before filing** | untracked; #815 is the nearest |
 | S3 | **`pr_watch.py --json` gives the agent every comment body with no author tier.** The follow-up hook tells the agent to poll `--json` and not to yield until findings are fixed or answered. A comment from any account styled as a finding is input to that loop. | `pr_watch.py:6135-6148`; `grep -c 'author_association\|authorAssociation' scripts/pr_watch.py` prints 0 at `fd12e961`; `pr_followup_hook.py:422-426` | read | #267 covers sanitising; author trust is untracked |
 | S4 | **Review lenses are isolated by instruction and attestation.** The lens definitions carry no tool restriction, and a lens runs with the operator's credentials. | `.claude/agents/adversarial.md:1-6`, whose front matter has `name`, `description`, `model` and `effort` and no tool list | read | #1025, #712, #1138, #1078, #270 |
@@ -232,13 +232,21 @@ lane contract, the lens rules, a self-reported receipt. The documents say this
 candidly. The gap is that the merge gate then treats the prose-backed claims as
 evidence, and the least-trusted actor writes its own.
 
-**What would change the picture.** A lane and a lens run as the operator, so no local
-check is a boundary against them. The one mechanism that is: give lanes and lenses
-their own, weaker forge credential. With a separate identity, "a lane does not merge",
-"a lane does not record its own review" and "a lens publishes nothing" become things
-the forge enforces by author, and S1's blast radius shrinks to what that credential can
-do. It needs a second account or an app installation, so it was the operator's to
-decide, and D1 below records the decision to do it.
+**What would change the picture.** A lane and a lens run as the operator's OS user, so
+no local check is a boundary against them. Two things together make one: their own,
+weaker forge credential, and isolation from the credentials stored for the operator.
+
+The identity alone is not enough. A lane can edit files and run `make test`, so it
+runs code as the operator's OS user, and whatever the `gh` CLI or a Git credential
+helper has stored for that user stays readable whatever the child's environment
+holds. That was not probed here; it follows from where those tools keep credentials.
+
+With both, "a lane does not merge", "a lane does not record its own review" and "a
+lens publishes nothing" become things the forge enforces by author, and S1's blast
+radius shrinks to what the lane's credential can do. The identity needs a second
+account or an app installation, and D1 below records the operator's decision to have
+one. The isolation needs a separate OS user, a container or the runtime's own
+sandbox. Which of those is not decided; step 2c probes them.
 
 ## DRY
 
@@ -403,8 +411,10 @@ file completely before the first action (`pr-watch.md:17-20`,
 
 ## Missed opportunities
 
-1. **A separate, weaker credential for lanes and lenses.** Described under *Security*.
-   It converts three prose rules into forge-enforced ones.
+1. **A separate, weaker credential for lanes and lenses, with isolation from the
+   operator's stored credentials.** Described under *Security*. Together they turn
+   "a lane does not merge", "a lane does not record its own review" and "a lens
+   publishes nothing" into rules the forge enforces.
 2. **An engine for the session-start gather.** `session-start.md` has the agent run the
    pull request list, a per-request `pr_watch.py` poll, the tracker read with its paging
    rules, the disk report and the cleanup list by hand, and carries the lore for each.
@@ -448,15 +458,22 @@ operator's own answer.
   Lenses follow with a read-only token. Not yet probed: how the ruleset and a
   fine-grained token behave together. That probe is part of step 2c. Until 2c ships,
   steps 2a and 2b raise the bar and stop short of a boundary.
+
+  **The identity alone is not a boundary.** It becomes one only together with
+  isolation from the credentials stored for the operator, as *Security* says. The
+  recommendation the operator took on 2026-11-12 left that out. Review of this document
+  raised it, the pull request's decision packet records it, and the operator authorized
+  writing it in on 2026-11-13. Which form the isolation takes is not decided; it is
+  part of step 2c.
 - **D2. Hold `self`-class lane merges: yes.** In force from 2026-11-12: no lane is
   issued with `--merge-class self`, and no session runs `dev_session.sh merge`, the
   self-merge wrapper. The operator merges lane pull requests after reading them.
 
   **This hold is prose.** It binds a session that reads this document or the handoff
-  entry that carries it, and nothing else. `parallel.md`'s *Per-lane merge class* table
-  still classes mechanical and standard lanes as self-merge for autonomous batches,
-  and it is one of the documents that tell a cockpit to run the wrapper for a `self`
-  lane; `grep -rln "dev_session.sh merge" --include='*.md' .` lists them.
+  entry that carries it, and nothing else. The kit's documents and engines still
+  describe and accept self-merge. `parallel.md`'s *Per-lane merge class* table, which
+  classes mechanical and standard lanes as self-merge for autonomous batches, is one
+  example, and this document does not list the others.
   `dev_session.sh new` still accepts `--merge-class self` (`dev_session.sh:257-258`).
   `dev_session.sh merge` gates on the session's stored class (`dev_session.sh:1033-1035`),
   so a `self` session already on disk stays mergeable. On 2026-11-12, with the primary
@@ -561,15 +578,19 @@ operator's own answer.
   launch. `pr_watch.py --json` marks each comment with its author's association, and
   `pr-watch.md` says to act on trusted tiers and report the rest. Covers S1's inlet
   and S3.
-- **2c. A lane identity, a narrower environment and narrower grants** `[M ·
-  safety-critical · local]`. Per D1: probe a second account's fine-grained token
-  against a ruleset on `main`, then have `launch_lane.py` hand the child that token
-  from a configured environment variable. Pass the child an allowlist of environment
-  variables instead of removing named ones. Put a lane-side gate in front of
-  `git push` and the `gh` grants, as #615 proposes, and extend it to S6's argument
-  classes. Owes a changelog fragment for the new config key. **Done when** a lane
-  launched with the shipped profile cannot merge its own pull request and its child's
-  environment does not carry the operator's token.
+- **2c. A lane identity, isolation from the operator's credentials, a narrower
+  environment and narrower grants** `[L · safety-critical · local]`. Per D1: probe a
+  second account's fine-grained token against a ruleset on `main`, then have
+  `launch_lane.py` hand the child that token from a configured environment variable.
+  Pass the child an allowlist of environment variables instead of removing named ones.
+  Isolate the child from the credentials stored for the operator: probe a separate OS
+  user, a container and the runtime's own sandbox, and take the lightest under which
+  code the lane runs cannot read them. Put
+  a lane-side gate in front of `git push` and the `gh` grants, as #615 proposes, and
+  extend it to S6's argument classes. Owes a changelog fragment for the new config key.
+  **Done when** a lane launched with the shipped profile cannot merge its own pull
+  request, its child's environment does not carry the operator's token, and a command
+  the lane runs through `make test` cannot obtain the operator's forge credential.
 - **2d. Pin what adopters install** `[S · standard · cloud]`. Per D5: `adopt.md` and
   `upgrade.md` take a ref, clone that ref, and print it before the first copy. Covers
   S5.
@@ -680,6 +701,8 @@ merge path, and lets 2a's change to review evidence land in one place.
 - Whether S2 holds when run. It was read, not run.
 - How a fine-grained token on a second account and a ruleset on `main` behave together
   (D1).
+- Whether a lane can read the credentials stored for the operator on this machine, and
+  which isolation stops it (D1, step 2c).
 - The token cost of a review round, a lane or a session start.
 - Whether an adopter other than the author can complete a full install unaided; no
   such attempt is on record.
