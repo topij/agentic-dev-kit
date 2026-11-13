@@ -2940,7 +2940,7 @@ def test_two_sealed_rounds_apply_and_retire_inside_the_projection(session, monke
 
 
 @pytest.mark.parametrize("scope", ["round", "inventory"])
-def test_last_result_is_stored_without_the_seal_copy(session, scope):
+def test_last_result_is_stored_without_the_seal_copy(session, scope, monkeypatch):
     # #1335 (#1334 correctness review, round 2 finding 1): apply returns the
     # full result, `evidence` included, and stores it without `evidence`. So an
     # apply run again after retire-evidence copies no tombstone into the record.
@@ -2955,6 +2955,15 @@ def test_last_result_is_stored_without_the_seal_copy(session, scope):
     def holder():
         loaded = registry.load(record["id"])
         return loaded["rounds"][0] if scope == "round" else loaded
+
+    # An apply blocked by a live writer stores its result too, on its own
+    # branch: it must leave the seal copy out the same way.
+    monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: ["writer"])
+    blocked = run()
+    assert not blocked["complete"] and "evidence" in blocked
+    assert holder()["last_result"]["active_users"] == ["writer"]
+    assert "evidence" not in holder()["last_result"]
+    monkeypatch.setattr(cleanup, "active_users", lambda paths, pids: [])
 
     result = run()
     assert result["complete"] and result["evidence"] == holder()["seal"]

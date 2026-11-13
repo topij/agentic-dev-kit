@@ -14,7 +14,7 @@ CHANGED (gate semantics): `seal` and `seal --round` now check every seal against
 `session.json` bound, one with an empty `retain` included. The projection is the
 record with the new seal in place and a `retired` tombstone on every retained item
 (those earlier seals hold included); it no longer adds a copy of the seal. So a seal
-that retains items fits in less room than before, and a discard-only seal that would
+that retains items now needs less room than before, and a discard-only seal that would
 use the room earlier seals reserved for their tombstones now refuses, before anything
 is written, with `sealing this would leave no room to retire its evidence`. If you
 hit it, shorten the discard list or retain fewer items, or seal them in a new

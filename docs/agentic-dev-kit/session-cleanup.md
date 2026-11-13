@@ -287,7 +287,8 @@ statuses), another round's receipt, a reconcile's history. A `last_result` that 
 earlier version of the engine stored still holds its seal copy until the next apply
 of that round or inventory replaces it.
 
-Those use the same budget, and a write that would cross the limit still refuses.
+Those later writes use the same budget, and one that would cross the limit still
+refuses.
 Retained evidence survives that refusal, because `retire-evidence` saves its
 tombstones before it deletes anything. An `apply` does not stop before deleting: it
 removes its rounds' and worktrees' paths before its final save, so that save can
