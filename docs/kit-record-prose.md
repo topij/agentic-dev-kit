@@ -222,6 +222,6 @@ either occurrence; nothing carried it for workflows. **Both `upgrade.md` and `ad
 clone the kit to a second tree** in their Step 0, and `adopt.md` Step 1 then sends you
 to read files inside it. `upgrade.md` was hardened first — it binds `$REPO`/`$KIT`
 and anchors its writes — because that is where the occurrence landed and where the
-writes are literal shell. `adopt.md` now binds and guards `$KIT` and `$REPO` in Step 0
+writes are literal shell. `adopt.md` now binds `$REPO` and guards `$KIT` in Step 0,
 and guards its Step 3 `cd` with `${REPO:?…}`; the 2026-11-13 backlog pass retired `#399`
 as delivered.

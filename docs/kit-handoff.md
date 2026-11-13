@@ -232,12 +232,13 @@ dispositions. #1169 (`e68871b`), #1179 (`a00eeed`) and #1181 (`a72034b`) ship
 `scripts/review_eval.py`, which scores lens and verifier changes against known-bug and
 clean cases. #1183 (`901daad`) declares the optional verifier compute key. The
 comparison runs are recorded on #1156; making the lens panel the primary reviewer
-is #1159. #1156 was retired as delivered on 2026-11-13. **Owner:**
+is #1159. #1156 was retired as delivered on 2026-11-13; #1435 carries its remainder. **Owner:**
+[#1435](https://github.com/topij/agentic-dev-kit/issues/1435),
 [#1159](https://github.com/topij/agentic-dev-kit/issues/1159). #1191 (`433de2ab`)
 delivered #1182.
 
-▶ Next: judge the clean-case findings every verifier confirmed (real defect or false
-alarm) and grow the case set before ranking verifier tiers. No open ticket carries this.
+▶ Next: #1435 — judge the clean-case findings every verifier confirmed (real defect or
+false alarm) and grow the case set before ranking verifier tiers.
 
 ### Parallel lanes
 
@@ -336,8 +337,8 @@ LOW is recorded on its pull request and not ticketed. The trial runs from 2026-1
 dates if step 1a merges later). Run `post-merge-systemize backfill` and the `recorded` search the panel doc names on
 2026-11-27, 2026-12-11 and 2026-12-13, ticket each LOW recorded on two or more pull requests (operator approval), and
 judge the trial on 2026-12-13, after that day's run, against the plan's M3 inflow. The rule stays until the operator decides. Step 1b, the backlog pass, ran on 2026-11-13 with the operator's
-approval of each batch: every open issue now carries a priority and a known execution label, and each step of the
-plan names its tickets. No later step has started. Its security finding S2, a lane writing the
+approval of each batch, and each step of the plan names its tickets. Its done-when, `gh issue list --state open`
+returning no issue without a priority label, held when the pass ended on 2026-11-13. No later step has started. Its security finding S2, a lane writing the
 review receipt its own merge is judged by, was read from the code and not run. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
 `--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
