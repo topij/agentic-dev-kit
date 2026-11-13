@@ -1161,12 +1161,15 @@ Choose and record a disposition on the PR:
   Record what actually ran as `fallback:delta`, with `--compose-parent`,
   `--head` and a `--disposition` carrying each lens's verdict lines, preserving
   the standing full-review evidence and its limitations.
-- **Record.** The default deferral for a LOW finding's first occurrence. The typed
-  disposition line on the PR is the whole record: its route says `recorded` and gives
+- **Record.** The default deferral for a LOW finding's first occurrence. The PR
+  carries the whole record and nothing is filed in the tracker. For a fallback-panel
+  finding that is its typed disposition line, whose route says `recorded` and gives
   the finding's location and what fixing it would take, for example
   `correctness F3 LOW: accept — recorded: <path>:<line>, <what a fix would change>`.
-  Nothing is filed in the tracker. A record disposition makes no candidate commit and
-  needs no re-review. It acknowledges an unresolved LOW finding, not a fix.
+  For a bot or human review thread it is the reply on that thread, opening with
+  `recorded:` and giving the same two things. A record disposition makes no
+  candidate commit and needs no re-review. It acknowledges an unresolved LOW
+  finding, not a fix.
 - **Ticket.** Defer the finding in the configured tracker, with its location,
   reviewer severity, regression classification and acceptance criteria; link the
   ticket and explain the deferral on the PR. Reuse an existing matching ticket
@@ -1175,23 +1178,37 @@ Choose and record a disposition on the PR:
   LOW finding, not a fix. Use only authorized tracker access; if writing is
   unavailable or unauthorized, retain the exact ticket draft and report that
   administrative action pending, without restarting review or claiming a ticket was
-  filed. Ticket a deferred LOW, rather than record it, only when:
-  - it recurs: a matching ticket is open, or an earlier pull request's disposition
-    recorded the same finding. Search open tickets and the dispositions you know of
-    before choosing; when unsure whether two findings are the same, record it;
+  filed. A deferred LOW takes this route, not the record route, when:
+  - it recurs: a matching ticket is open, or an earlier pull request recorded the
+    same finding. Before recording, search open tickets, and search the forge's
+    pull-request comments for earlier `recorded:` lines naming the same path or
+    concern (on GitHub, `gh api -X GET search/issues -f q='repo:<owner>/<repo>
+    is:pr "recorded:" <path>'`). When unsure whether two findings are the same,
+    record it; the scheduled run below is the second reader;
   - it is on a pull request `safety-critical-changes.md` governs (computed review
     class `safety-critical`), which repairs or tickets every LOW;
   - its repair was attempted and needs a broader redesign, or its containment is
-    disputed (below).
+    disputed (below);
+  - its reviewer classed it pre-existing, which takes the ticket route at any
+    severity under *Pre-existing findings*.
 
-**A first-occurrence LOW is recorded, not ticketed, as a trial.** This repository
-runs the record route from 2026-11-13 to 2026-12-13, a month from the day it merged.
-The trial is judged on 2026-12-13 against the tracker's monthly inflow, and the rule
-stays in force until the operator decides to keep, change or revert it. During the
-trial, run `post-merge-systemize backfill` every two weeks and on the last day, so
-that recorded LOWs from different weeks fall in one window and a recurrence across
-pull requests is clustered. That run routes a recurring cluster by its own routing
-table. The living handoff carries these dates.
+  Nothing in the engine reads a route: like the pre-existing label, the choice of
+  `recorded` is the author's claim on the pull request. *A reviewer checks* that no
+  `recorded` line sits on a safety-critical pull request and that each one names a
+  location.
+
+**Recurrences across pull requests are found by `post-merge-systemize`.** Run
+`post-merge-systemize backfill` at least every two weeks while the record route is
+in use. Beside the route that workflow's routing table gives a cluster, the session
+running it drafts a ticket for each cluster of recorded LOW findings spanning two or
+more pull requests and files it on the operator's approval, as the tracker route
+there requires. Two limits: a recurrence further apart than
+`systemize.backfill_days` falls in no single window, and the digest drops the
+lowest-severity pull requests first when it caps at
+`systemize.max_findings_prs_per_run`, so a run whose report lists omitted pull
+requests says that their recorded findings were not clustered. The record route
+began as a one-month trial in the kit's own repository (the plan's decision D3);
+that repository's living handoff holds the trial's dates and its judgement.
 
 Check for a valid full-review parent before committing a LOW-only repair. If no
 composable parent exists, defer the finding by the record or ticket route; do not

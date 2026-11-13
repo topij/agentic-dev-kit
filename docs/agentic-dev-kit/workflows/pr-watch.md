@@ -77,9 +77,11 @@ drive the loop + apply the judgment.
 **LOW/P3 findings take delta review or a deferral, never a full-process restart.**
 Apply [LOW findings: delta review or ticket](../fallback-review-panel.md#low-findings-delta-review-or-ticket)
 to bot, human and fallback findings alike. Batch contained repairs, verify their
-affected behavior and preserve prior review evidence; otherwise defer the finding: a
-first occurrence is recorded in its typed disposition only, and a recurring one, or one
-on a safety-critical pull request, is ticketed and linked. A new LOW finding does not restart full suites, whole-PR panels,
+affected behavior and preserve prior review evidence; otherwise defer the finding. A
+first occurrence is recorded on the pull request only, in its typed disposition or its
+thread reply. A recurring one, one on a safety-critical pull request, one whose repair
+needs a redesign or whose containment is disputed, and a pre-existing one are ticketed
+and linked. A new LOW finding does not restart full suites, whole-PR panels,
 delivery stages or approval rounds. Required CI, initial review coverage, formal
 change requests and higher-severity blockers remain separate obligations.
 
