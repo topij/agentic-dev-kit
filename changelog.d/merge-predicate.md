@@ -25,6 +25,11 @@ is never `mergeable`), so this changes only a stubbed or hand-built report.
   `review_evidence` before it reports a lane `held`.
 - `terminal_pr_watch_receipt` newly requires `head` and `url` to be non-empty strings.
 
+A `pr_watch.py` from before 2026-07-27 (no `truncated_reads`; `converged` and
+`review_evidence` are older still) fails every one of these checks, and
+`dev_session.sh merge` refuses with `run pr-watch to convergence first`, which in that
+case means: upgrade `pr_watch.py` together with the other four files.
+
 CHANGED (gate semantics): `dev_session.sh merge` reads `review_class` more strictly
 (#1371). A `review_class` lacking any of `class`, `matched_paths`, `changes_config` or
 `unclassified` is refused as having no review class; `{"class": "standard"}` alone used

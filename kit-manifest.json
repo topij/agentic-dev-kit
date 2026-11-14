@@ -390,7 +390,7 @@
         "scripts/lib/triage/model.py"
       ],
       "role": "engine",
-      "sha256": "6467c09f3099c96543fbf167eb80cb75cb4693d0198e681a13022297b7d8690c"
+      "sha256": "360713ae727c3ea3bb9a5787018951a96b9950fba8271725a2216917bbae1e1c"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -676,11 +676,11 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "2efcd87603bc171831f23372dad638564834fed67e9794a4470444588c75a892"
+      "sha256": "a77e64289f843e65f3196ac196c08c5edac722cd1cad4cf5b436b18d3d8e94ae"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "1888c9881c7be475d6df519c1dd7161106d31ee1e0bf3929686d7f65db510fe6"
+      "sha256": "dc5ec7f541e450e7390907435786cbb3ba126eeede0148b0ec742ef540eddbb4"
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
@@ -824,7 +824,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "b6373da06a0e3ca8b6348b657b8f01709041c5f69e904c54b09f7a9b6d041bbe"
+      "sha256": "81ee60af55cfe5593679a187eee45209b40dd7acc9a414dc88a2b910ea8dede9"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

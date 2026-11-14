@@ -1213,7 +1213,9 @@ def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
 
 
 def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
-    """Both scrubs claim a character CLASS; the two tests above pin one member.
+    """The lane-PR extraction's scrub claims a character CLASS; the tests above
+    pin one member. (The merge gate's scrub moved to lib/merge_predicate.py and
+    is pinned by test_merge_predicate.py; the history below covers both.)
 
     Round 1 of the fallback review panel narrowed each scrub in an isolated
     clone and watched the whole suite stay green — twice, in two different
@@ -16553,6 +16555,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         configured_profile_path,
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
+        "scripts/lib/merge_predicate.py",
+        "scripts/devkit/lib/merge_predicate.py",
         ".github/workflows/*",
         "scripts/hooks/*",
         "scripts/devkit/hooks/*",

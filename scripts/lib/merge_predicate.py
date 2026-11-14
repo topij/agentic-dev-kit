@@ -8,8 +8,8 @@ waiting for the operator, from the same report:
 - ``lib/triage/model.py``'s ``terminal_pr_watch_receipt``.
 
 Each used to spell the field reads itself, and each had a check the others
-lacked. This module holds the reads once. It requires everything the strictest
-of the three required, so no caller got looser by moving here.
+lacked. This module holds the reads once. It requires everything any one of the
+three required, so no caller got looser by moving here.
 
 Stdlib only: the shell engines run this file with a bare ``python3`` from hooks
 and scheduled jobs, where nothing else is installed.

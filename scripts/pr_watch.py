@@ -3960,8 +3960,9 @@ def decide_mergeable(
 
     The result is coerced to ``bool`` deliberately: a bare ``and`` chain returns
     its last operand, so a truthy non-bool ``review_evidence`` would propagate
-    into the report — and ``dev_session.sh merge`` tests the JSON value with an
-    identity check (``is True``), which such a value fails *closed* but
+    into the report — and ``lib/merge_predicate.py``, which ``dev_session.sh
+    merge`` authorizes on, tests the JSON value with an identity check
+    (``is True``), which such a value fails *closed* but
     confusingly. A safety gate should not depend on every caller passing a real
     bool.
     """

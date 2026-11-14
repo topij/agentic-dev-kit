@@ -495,9 +495,11 @@ _resolve_repo_nwo() {
 #    their predicates from forge rollups. `--no-persist` keeps this probe
 #    from acknowledging anything: in serialized use, reconciliation preserves a lane's
 #    seen-set, pending acknowledgements, and review receipt. Serialize operations
-#    on the same per-PR state file. A self-class lane polls and persists to this
-#    same file while it works, so reconcile a batch once its lanes have stopped:
-#    nothing here detects a live lane or locks the file. The one thing it
+#    on the same per-PR state file. A lane's own polls and the cockpit's polls,
+#    acknowledgements and receipts all persist to this same file, whatever the
+#    lane's class, so reconcile a batch once its lanes have stopped and the
+#    cockpit is not polling them: nothing here detects a live writer or locks
+#    the file. The one thing it
 #    may record on gh is the settle baseline — when the probe observed this head's
 #    rollup at its current size — which is a timing fact, computed exactly as
 #    the lane's own poll would, and cannot open the gate before the grace
@@ -730,10 +732,12 @@ cmd_reconcile() {
                 elif [[ "$tip_differs" -eq 0 ]]; then
                     open=$((open + 1)); status="open"; detail="in flight — $title"
                     # rc 1 is the ordinary "not held" answer and must stay silent.
-                    # Anything else means the probe could not run (no uv, no
-                    # pr_watch.py, timeout, transport failure) — the lane is
-                    # reported `open` either way, but a probe that never ran must
-                    # not be indistinguishable from one that ran and said no.
+                    # Anything else means no answer could be given: the probe
+                    # could not run (no uv, no pr_watch.py, timeout, transport
+                    # failure), lib/merge_predicate.py did not answer, or a self
+                    # lane's review class is missing or unclassified. The lane is
+                    # reported `open` either way, but a lane nothing could judge
+                    # must not be indistinguishable from one judged not held.
                     [[ "$held_rc" -eq 1 ]] || unknown_notes="${unknown_notes}  • ${disp}: PR #${num}"$'\n'
                 fi ;;
             CLOSED)
