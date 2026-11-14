@@ -123,7 +123,9 @@ Repeat until the report says **converged**:
      settling. This is what ends *this* loop.
    - **`mergeable`** — "is this authorized to merge?" `converged` **plus** no
      `merge_blockers[]` **plus** independent-review evidence bound to the current
-     head. This is what `dev_session.sh merge` re-checks.
+     head. `dev_session.sh merge` requires it, with the other fields its gate
+     reads: `readiness` and `review_class` in `<engine-dir>/lib/merge_predicate.py`
+     list them.
 
    **Independent-review evidence has two routes, and `review_evidence.route` says
    which one answered** (`#350`): `receipt`, a `--record-review` receipt bound to

@@ -17,6 +17,8 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+import merge_predicate  # noqa: E402
+from triage import model as triage_model  # noqa: E402
 from triage.approval import ApprovalContext  # noqa: E402
 from triage.canonical import (  # noqa: E402
     decode_bytes,
@@ -134,6 +136,59 @@ def native_watch_receipt(url: str, head: str) -> dict:
         "merge_blockers": [], "head": head, "url": url,
         "truncated_reads": [], "review_evidence": {"valid": True},
     }
+
+
+def test_terminal_receipt_is_read_through_the_shared_merge_predicate() -> None:
+    """`terminal_pr_watch_receipt` is `merge_predicate.readiness` for a head and
+    a URL. Each field its own earlier copy required still refuses."""
+    url, head = "https://example.test/acme/widgets/pull/8", "a" * 40
+    terminal = triage_model.terminal_pr_watch_receipt
+    receipt = native_watch_receipt(url, head)
+    assert terminal(receipt, head=head, url=url) is True
+    for change in (
+        {"converged": False},
+        {"mergeable": False},
+        {"done": False},
+        {"merge_blockers": ["pending review"]},
+        {"truncated_reads": ["comments"]},
+        {"review_evidence": {"valid": False}},
+        {"review_evidence": None},
+        {"head": "b" * 40},
+        {"url": "https://example.test/acme/widgets/pull/9"},
+    ):
+        assert terminal({**receipt, **change}, head=head, url=url) is False, change
+    assert terminal(None, head=head, url=url) is False
+    # A receipt and an intent that both lack a head used to compare equal.
+    headless = {key: value for key, value in receipt.items() if key != "head"}
+    assert terminal(headless, head=None, url=url) is False  # type: ignore[arg-type]
+
+
+def test_terminal_receipt_spells_no_field_check_of_its_own(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The structural check for `triage/model.py`, by substitution rather than
+    by searching its text for field names.
+
+    With `readiness` replaced by one that accepts everything, an EMPTY receipt
+    must be terminal: any report field the function still read for itself would
+    refuse it. With one that refuses everything, a complete receipt must not be
+    terminal: a function that had kept its own checks and ignored the module
+    would accept it. The identity it was handed is also checked, so a call that
+    dropped `head` or `url` fails here."""
+    url, head = "https://example.test/acme/widgets/pull/8", "a" * 40
+    seen: list[dict] = []
+
+    def accept(report: object, **identity: object) -> tuple[str, str]:
+        seen.append(identity)
+        return merge_predicate.READY, ""
+
+    monkeypatch.setattr(merge_predicate, "readiness", accept)
+    assert triage_model.terminal_pr_watch_receipt({}, head=head, url=url) is True
+    assert seen == [{"head": head, "url": url}]
+
+    monkeypatch.setattr(
+        merge_predicate, "readiness", lambda report, **identity: ("not-mergeable", "")
+    )
+    receipt = native_watch_receipt(url, head)
+    assert triage_model.terminal_pr_watch_receipt(receipt, head=head, url=url) is False
 
 
 def test_sweep_set_is_union_of_verified_filed_and_explicit_archive_decisions() -> None:

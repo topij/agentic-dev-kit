@@ -265,31 +265,34 @@ complete evidence closure; the engine cannot infer it from arbitrary prose. Miss
 unreadable, aliased or non-regular evidence blocks sealing.
 
 The inventory's `session.json` is bounded at 1 MiB (`LIMIT` in the engine): a write
-over it refuses, and so does a read. Two later writes grow with the evidence a seal
-retains. An `apply` (inventory or `--round`) stores its preview, which carries a full
-copy of the seal, as `last_result`. `retire-evidence` writes a `retired` tombstone into
-every item it deletes, before deleting anything. If either write refuses, some or all
-of the evidence cannot be retired. So, also before copying, a seal that retains at
-least one item projects `session.json` with the seal in place, the copy this seal's
-own first apply stores, and a tombstone on every retained item (those earlier seals
-hold included), and refuses if that exceeds the limit. The refusal says how many of
-the items are unretired items that earlier seals hold. Retain fewer items, or seal
-them in a new inventory. A seal with an empty `retain` is not checked: it adds no
-evidence to strand.
+over it refuses, and so does a read. Two writes grow with the evidence: the seal
+itself (its retained items, `retire` diagnostics and discard list), and the `retired`
+tombstone that `retire-evidence` writes into every item it deletes, before deleting
+anything. An `apply` (inventory or `--round`) returns its result with the seal as
+`evidence`, and stores that result as `last_result` without `evidence`: the seal is
+already in the record, as the inventory's `seal` or the round's. If a tombstone write
+refuses, some or all of the evidence cannot be retired. So, also before copying, a
+seal that retains at least one item projects `session.json` with the seal in place
+and a tombstone on every retained item (those earlier seals hold included), and
+refuses if that exceeds the limit. The refusal says how many of the items are
+unretired items that earlier seals hold. Retain fewer items, or seal them in a new
+inventory. A seal with an empty `retain` is not checked: it adds no evidence to
+strand, and it is the smallest seal a round can take, so refusing it would leave the
+round no way to retire. The 1 MiB bound itself still applies to it: in a record
+already that near the limit, even a discard-only seal's save refuses, and the round
+stays unsealed until room is made.
 
-This is a partial reservation, not a guarantee that the evidence can be retired. It
-does not reserve:
+The projection counts the seals and their tombstones, up to the size digits of a
+source rewritten between the hash read and the copy. It is not a guarantee that the
+evidence can be retired, because it does not reserve what else is recorded: a
+discard-only seal's discard list (bounded per seal only by the 1 MiB manifest read
+limit), what an apply records (path outcomes, the evidence summary, approvals and
+statuses), another round's receipt, a reconcile's history. A `last_result` that an
+earlier version of the engine stored still holds its seal copy until the next apply
+of that round or inventory replaces it, and is projected as stored.
 
-- the apply copy of every other seal not yet applied (another round's, or the
-  inventory seal's), each a full copy of that seal;
-- a discard-only seal's discard list, bounded per seal only by the 1 MiB manifest
-  read limit and not budgeted;
-- the tombstones that an apply run again after `retire-evidence` copies into its
-  `last_result`;
-- the rest of what an apply records (path outcomes, the evidence summary, approvals
-  and statuses) and anything recorded later, such as another round's receipt.
-
-Those use the same budget, and a write that would cross the limit still refuses.
+Those later writes use the same budget, and one that would cross the limit still
+refuses.
 Retained evidence survives that refusal, because `retire-evidence` saves its
 tombstones before it deletes anything. An `apply` does not stop before deleting: it
 removes its rounds' and worktrees' paths before its final save, so that save can

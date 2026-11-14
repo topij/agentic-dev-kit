@@ -11,13 +11,18 @@ paths:
   # different path, replace this entry with the configured path: rule frontmatter
   # cannot resolve values from config/dev-model.yaml.
   - "config/claude-lane-settings.json"
-  # pr_watch.py COMPUTES the merge gate (`mergeable` / the legacy `done` alias)
-  # that dev_session.sh merely re-checks. It was left out while `done` looked
-  # like a watch-loop verdict — but a change here can authorize a merge on an
+  # pr_watch.py COMPUTES the verdicts (`mergeable` / the legacy `done` alias,
+  # `review_class`) that dev_session.sh merge authorizes on through
+  # lib/merge_predicate.py, which reads them and derives none. It was left
+  # out while `done` looked like a watch-loop verdict — but a change here can authorize a merge on an
   # unreviewed PR just as directly, and the rule has to match the file where the
   # decision is made, not only the one that acts on it.
   - "scripts/pr_watch.py"
   - "scripts/devkit/pr_watch.py"
+  # The merge gate itself: `dev_session.sh merge` authorizes on its verdict, so a
+  # change here weakens every self-merge as directly as one to the wrapper.
+  - "scripts/lib/merge_predicate.py"
+  - "scripts/devkit/lib/merge_predicate.py"
   - "scripts/sweep_scratch.py"
   - "scripts/devkit/sweep_scratch.py"
   - "scripts/session_cleanup.py"

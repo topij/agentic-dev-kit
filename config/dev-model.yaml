@@ -384,6 +384,9 @@ review:
     - "config/claude-lane-settings.json"
     - "scripts/pr_watch.py"
     - "scripts/devkit/pr_watch.py"
+    # The merge gate itself: `dev_session.sh merge` authorizes on its verdict.
+    - "scripts/lib/merge_predicate.py"
+    - "scripts/devkit/lib/merge_predicate.py"
     - "scripts/sweep_scratch.py"
     - "scripts/devkit/sweep_scratch.py"
     - "scripts/session_cleanup.py"

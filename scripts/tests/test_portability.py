@@ -688,12 +688,15 @@ def test_self_merge_refuses_a_cross_repository_pr_before_review(tmp_path: Path) 
 
 
 @pytest.mark.evidence
-def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
+def test_self_merge_refuses_a_report_missing_any_merge_ready_field(
     tmp_path: Path,
 ) -> None:
-    """The gate reads `mergeable`, and fails CLOSED when it is false or absent.
+    """The wrapper refuses a report that fails any field the shared predicate
+    requires: `mergeable`, `converged`, `done`, an empty `merge_blockers` and
+    `truncated_reads`, and valid `review_evidence`. It fails CLOSED when any
+    of them is false or absent.
 
-    Two cases, deliberately pinned together:
+    The first two cases are about `mergeable`, deliberately pinned together:
 
     - **`mergeable: false` alongside `done: true`.** These are equal in any report
       the engine actually produces, so this input is intentionally inconsistent:
@@ -703,7 +706,8 @@ def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
       the field emits only ``done``. The gate must read that as "not authorized"
       rather than merging on an assumption about the missing key.
 
-    A gate that failed open in either case would merge unreviewed work.
+    A gate that failed open in either case would merge unreviewed work. The
+    cases after them are the other fields the shared predicate requires.
     """
     _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     _prepare_self_merge_session(sessions)
@@ -720,11 +724,31 @@ def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
             }
         ]
     )
-    base_report = {"pr": 8, "base": "trunk", "head": "reviewed-head", "done": True}
+    ready = _ready_merge_report()
+    base_report = {key: value for key, value in ready.items() if key != "mergeable"}
 
+    # The rest are what the reconciler's and triage's copies of this predicate
+    # required and the wrapper's did not, before all three shared
+    # `lib/merge_predicate.py`. Each report is merge-ready but for the one field;
+    # the next test ends by merging the unchanged report.
     for label, report in (
         ("explicitly not mergeable", {**base_report, "mergeable": False}),
         ("pre-split engine, key absent", base_report),
+        ("not converged", {**ready, "converged": False}),
+        ("done is false", {**ready, "done": False}),
+        ("done is absent", {key: value for key, value in ready.items() if key != "done"}),
+        ("a merge blocker", {**ready, "merge_blockers": ["pending review"]}),
+        (
+            "no blocker list",
+            {key: value for key, value in ready.items() if key != "merge_blockers"},
+        ),
+        ("a truncated read", {**ready, "truncated_reads": ["comments"]}),
+        ("invalid review evidence", {**ready, "review_evidence": {"valid": False}}),
+        (
+            "no review evidence",
+            {key: value for key, value in ready.items() if key != "review_evidence"},
+        ),
+        ("not an object", [ready]),
     ):
         result = subprocess.run(
             ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
@@ -755,6 +779,26 @@ STANDARD_CLASS = {
     "changes_config": False,
     "unclassified": None,
 }
+
+
+def _ready_merge_report(**changes: object) -> dict:
+    """A report `dev_session.sh merge` accepts for PR 8 on `trunk` at
+    `reviewed-head`: every field `lib/merge_predicate.py` requires, classed
+    standard. A case changes the one field it is about."""
+    report: dict = {
+        "pr": 8,
+        "base": "trunk",
+        "head": "reviewed-head",
+        "mergeable": True,
+        "converged": True,
+        "done": True,
+        "merge_blockers": [],
+        "truncated_reads": [],
+        "review_evidence": {"valid": True},
+        "review_class": dict(STANDARD_CLASS),
+    }
+    report.update(changes)
+    return report
 
 
 @pytest.mark.evidence
@@ -800,13 +844,8 @@ def test_self_merge_refuses_a_pr_whose_computed_review_class_is_not_standard(
             }
         ]
     )
-    base_report = {
-        "pr": 8,
-        "base": "trunk",
-        "head": "reviewed-head",
-        "done": True,
-        "mergeable": True,
-    }
+    base_report = _ready_merge_report()
+    del base_report["review_class"]
     operator = "operator lands it directly"
     upgrade = "upgrade pr_watch.py together with dev_session.sh"
     fetch = "fetch the PR's base and head (git fetch origin 'trunk')"
@@ -852,12 +891,56 @@ def test_self_merge_refuses_a_pr_whose_computed_review_class_is_not_standard(
             {**STANDARD_CLASS, "changes_config": True},
             ["the config that declares review.safety_critical_paths", operator],
         ),
+        # #1371, gate reads. Each of the next four merged before the reads moved
+        # to `lib/merge_predicate.py`.
+        (
+            "partial: a class with no unclassified key",
+            {"class": "standard"},
+            ["has no review_class that names", "unclassified", upgrade],
+        ),
+        (
+            "a config change that is truthy but not True",
+            {**STANDARD_CLASS, "changes_config": 1},
+            ["the config that declares review.safety_critical_paths", operator],
+        ),
+        (
+            "a config change spelt as a string",
+            {**STANDARD_CLASS, "changes_config": "true"},
+            ["the config that declares review.safety_critical_paths", operator],
+        ),
+        (
+            "matched paths that are not a list, and falsy",
+            {**STANDARD_CLASS, "matched_paths": ""},
+            ["class standard; matched:", operator],
+        ),
+        # #1371, untested guard: a truthy non-list was already refused, by a
+        # branch no case reached.
+        (
+            "matched paths that are a string",
+            {**STANDARD_CLASS, "matched_paths": "scripts/pr_watch.py"},
+            ["class standard; matched: scripts/pr_watch.py", operator],
+        ),
+        # #1371, untested guard: the control-character scrub on the printed
+        # reason, through the real wrapper. A raw tab would also cut the reason
+        # short at the shell's tab-splitting `read`, and bash drops a NUL.
+        (
+            "an unclassified reason carrying a tab, a NUL and a newline",
+            {**STANDARD_CLASS, "unclassified": "base\tor\x00head\nunknown"},
+            ["could not be classed (base or head unknown)", fetch],
+        ),
     )
 
+    def merges() -> int:
+        return call_log.read_text(encoding="utf-8").count("|pr merge ") if call_log.exists() else 0
+
+    # Every case runs and the failures are reported together, so one run names
+    # each shape that is let through rather than only the first.
+    failures: list[tuple[str, str]] = []
     for label, review_class, reasons in cases:
         report = dict(base_report)
         if review_class is not None:
             report["review_class"] = review_class
+        merged_before = merges()
         result = subprocess.run(
             ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
             cwd=tmp_path,
@@ -875,13 +958,18 @@ def test_self_merge_refuses_a_pr_whose_computed_review_class_is_not_standard(
             text=True,
         )
 
-        assert result.returncode != 0, label
-        assert "is not classed standard" in result.stderr, (label, result.stderr)
-        for reason in reasons:
-            assert reason in result.stderr, (label, reason, result.stderr)
-        if operator not in reasons:
-            assert "it is operator-merge" not in result.stderr, (label, result.stderr)
-        assert "pr merge" not in call_log.read_text(encoding="utf-8"), label
+        if merges() != merged_before:
+            failures.append((label, "the wrapper merged it"))
+        elif result.returncode == 0:
+            failures.append((label, "exited 0"))
+        elif "is not classed standard" not in result.stderr:
+            failures.append((label, result.stderr))
+        elif missing := [reason for reason in reasons if reason not in result.stderr]:
+            failures.append((label, f"no {missing!r} in {result.stderr!r}"))
+        elif operator not in reasons and "it is operator-merge" in result.stderr:
+            failures.append((label, result.stderr))
+    # A message rather than a compared list, which pytest truncates.
+    assert not failures, "\n".join(f"{label}: {why}" for label, why in failures)
 
     # The same report classed standard merges, so the refusals above are the
     # class check and not something else in the fixture.
@@ -906,24 +994,122 @@ def test_self_merge_refuses_a_pr_whose_computed_review_class_is_not_standard(
 
 
 @pytest.mark.evidence
+def test_the_merge_wrapper_spells_no_field_check_of_its_own(tmp_path: Path) -> None:
+    """The structural check for `dev_session.sh merge`, by substitution rather
+    than by searching the script for field names.
+
+    A search over the script's text would have to tell a field read from a
+    comment, a message or a heredoc, which is the tokenizer problem
+    `test_kit_doctor.py` records a shell scanner being withdrawn over. Instead
+    `lib/merge_predicate.py` is swapped for a stub in the copied tree and the
+    real wrapper is run:
+
+    - a stub that answers `ready` to everything, with a report that is an EMPTY
+      object. The merge must run: any report field the wrapper still compared
+      itself (`mergeable`, `pr`, `base`, `head`, `review_class`) would refuse
+      an empty report;
+    - a stub that answers `not-mergeable`, with a report that is complete. The
+      merge must not run: a wrapper that had kept its own predicate and ignored
+      the module would merge it.
+
+    The stub records its argv, which pins that the wrapper hands the module the
+    PR, base and head it resolved, and the merge is bound to that same head.
+
+    The remaining stubs are a module that did not answer. Each must refuse: the
+    wrapper needs the exact `ready` token AND exit 0, so no failure of the
+    module is a yes.
+    """
+    _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
+    _prepare_self_merge_session(sessions)
+    fake_bin, call_log, uv_log = _install_fake_merge_tools(tmp_path)
+    predicate = engine_dir / "lib" / "merge_predicate.py"
+    argv_log = tmp_path / "predicate-argv.log"
+    pr_json = json.dumps(
+        [
+            {
+                "number": 8,
+                "baseRefName": "trunk",
+                "headRefName": "lane/probe",
+                "headRefOid": "reviewed-head",
+                "headRepositoryOwner": {"login": "owner"},
+                "isCrossRepository": False,
+            }
+        ]
+    )
+
+    def merge(report: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["bash", str(engine_dir / "dev_session.sh"), "merge", "probe"],
+            cwd=tmp_path,
+            env={
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "DEVKIT_SESSIONS_DIR": str(sessions),
+                "CALL_LOG": str(call_log),
+                "UV_LOG": str(uv_log),
+                "PR_JSON": pr_json,
+                "REPORT_JSON": json.dumps(report),
+            },
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    def merges() -> list[str]:
+        return [line for line in call_log.read_text().splitlines() if "|pr merge " in line]
+
+    refusing = (
+        ("answers not-mergeable", "import sys\nprint('not-mergeable\\t')\nsys.exit(1)\n"),
+        ("says ready but exits 1", "import sys\nprint('ready\\t')\nsys.exit(1)\n"),
+        ("exits 0 and prints nothing", "import sys\nsys.exit(0)\n"),
+        ("raises", "raise RuntimeError('boom')\n"),
+        ("prints a longer word", "print('ready-ish\\t')\n"),
+        ("prints the word capitalised", "print('Ready\\t')\n"),
+        ("prints ready on the second line", "print('\\nready\\t')\n"),
+        ("is absent", None),
+    )
+    for label, body in refusing:
+        if body is None:
+            predicate.unlink()
+        else:
+            predicate.write_text(body, encoding="utf-8")
+        refused = merge(_ready_merge_report())
+        assert refused.returncode != 0, label
+        assert merges() == [], label
+    assert "lib/merge_predicate.py is missing or failed" in refused.stderr
+
+    predicate.write_text(
+        "import sys\n"
+        f"open({str(argv_log)!r}, 'a').write('\\t'.join(sys.argv[1:]) + '\\n')\n"
+        "print('ready\\t')\n",
+        encoding="utf-8",
+    )
+    accepted = merge({})
+    assert accepted.returncode == 0, accepted.stderr
+    assert argv_log.read_text(encoding="utf-8").splitlines() == [
+        "merge\t--pr\t8\t--base\ttrunk\t--head\treviewed-head"
+    ]
+    assert len(merges()) == 1
+    assert merges()[0].endswith("--match-head-commit reviewed-head")
+
+
+@pytest.mark.evidence
 def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> None:
-    """The gate extraction is tab-joined and the shell splits it on tabs, so an
-    unscrubbed field SHIFTS every field after it (`#537`).
+    """A report whose `pr` carries tabs must not shift into a matching identity
+    (`#537`).
 
-    End-to-end rather than an assertion on the extraction's stdout, by
-    `safety-critical-changes.md` rule 4: the bypass is a collaboration between
-    the python emitter and bash `read`, and only the wrapper exercises both.
-    `read` with four names hands the last one the remainder of the line, and tab
-    is IFS whitespace so the emptied tail collapses away — which is how the
-    shifted fields come back looking exactly like a legitimate report.
+    The gate once emitted its fields tab-joined for the shell to split and
+    compare, so an unscrubbed field SHIFTED every field after it. Measured
+    against that unscrubbed extraction, this exact report was AUTHORIZED: `pr`
+    carries `8<TAB>trunk<TAB>reviewed-head`, so the PR read `8`, the base read
+    `trunk` and matched the recorded base, and the head read
+    `reviewed-head<TAB>WRONG`, which is non-empty and so passed its only check.
+    The report's real base (`WRONG`) and real head (empty) were never examined.
 
-    Measured against the unscrubbed extraction, this exact report was
-    AUTHORIZED. `pr` carries `8<TAB>trunk<TAB>reviewed-head`, so `validated_pr`
-    read `8`, `validated_base` read `trunk` and matched the recorded base, and
-    `validated_head` read `reviewed-head<TAB>WRONG` — the last name absorbing
-    the remainder — which is non-empty and so passed its only check. The
-    report's real base (`WRONG`) and real head (empty) were never examined at
-    all, and the merge ran with `--match-head-commit reviewed-head<TAB>WRONG`.
+    End-to-end rather than an assertion on the module's output, by
+    `safety-critical-changes.md` rule 4: the shell still splits the verdict line
+    on a tab, and only the wrapper exercises both halves. Every other field of
+    this report is merge-ready, so the identity check is what refuses it.
     """
     _, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
     _prepare_self_merge_session(sessions)
@@ -951,13 +1137,7 @@ def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> 
                 ]
             ),
             "REPORT_JSON": json.dumps(
-                {
-                    "pr": "8\ttrunk\treviewed-head",
-                    "base": "WRONG",
-                    "head": "",
-                    "done": True,
-                    "mergeable": True,
-                }
+                _ready_merge_report(pr="8\ttrunk\treviewed-head", base="WRONG", head="")
             ),
         },
         check=False,
@@ -966,9 +1146,10 @@ def test_self_merge_refuses_a_report_whose_fields_carry_tabs(tmp_path: Path) -> 
     )
 
     assert result.returncode != 0
-    # The scrub turns the tabs into spaces, which no git ref and no PR number
-    # can contain — so the identity check fails CLOSED instead of shifting.
-    assert "not resolved PR #8" in result.stderr
+    # Identity is now compared inside `lib/merge_predicate.py`, on the raw
+    # values, so nothing is split before it is compared. The reported PR is
+    # printed with its tabs scrubbed to spaces, whole, in the refusal.
+    assert "pr-watch validated PR #8 trunk reviewed-head, not resolved PR #8" in result.stderr
     assert "pr merge" not in call_log.read_text(encoding="utf-8")
 
 
@@ -1035,7 +1216,9 @@ def test_lane_pr_resolution_refuses_metadata_whose_fields_carry_tabs(
 
 
 def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
-    """Both scrubs claim a character CLASS; the two tests above pin one member.
+    """The lane-PR extraction's scrub claims a character CLASS; the tests above
+    pin one member. (The merge gate's scrub moved to lib/merge_predicate.py and
+    is pinned by test_merge_predicate.py; the history below covers both.)
 
     Round 1 of the fallback review panel narrowed each scrub in an isolated
     clone and watched the whole suite stay green — twice, in two different
@@ -1057,26 +1240,19 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
     *pinned* narrowly, which is how the class this change closes gets reopened
     by a later simplification with CI green.
 
-    So the contract is pinned here directly, and over BOTH blocks rather than
-    one — the scrub body is duplicated at the two call sites and nothing else
-    forces them to be edited in lockstep. Read out of `dev_session.sh` so the
-    copies cannot drift away from this test or from each other.
+    So the contract is pinned here directly. Two sites carried the scrub when
+    this was written. The merge gate's moved to `lib/merge_predicate.py`, which
+    compares identity on the raw values and scrubs only what it prints;
+    `test_merge_predicate.py` pins that over the same character class. What is
+    left in `dev_session.sh` is the lane-PR extraction, read out of the file so
+    it cannot drift away from this test.
     """
     wrapper = (ENGINE_DIR / "dev_session.sh").read_text(encoding="utf-8")
     blocks = re.findall(r"python3 -c '\n(import json, sys\n.*?)'", wrapper, re.S)
-    # Selected by CONTENT, not position — the rule `test_pr_watch.py`'s
-    # merge-gate test states: indexing would silently re-point this test the day
-    # a block is added above one of these. The selector has to be a token that
-    # cannot appear in the OTHER block's prose, which `baseRefName` is not: the
-    # gate's comment names it, so selecting on it matched both blocks and this
-    # assertion caught it. `headRepositoryOwner` appears only as code.
-    gate = [block for block in blocks if "mergeable" in block]
+    # Selected by CONTENT, not position: indexing would silently re-point this
+    # test the day a block is added above this one. `headRepositoryOwner` appears only as code.
     meta = [block for block in blocks if "headRepositoryOwner" in block]
-    assert len(gate) == 1, f"expected one merge-gate extraction, found {len(gate)}"
     assert len(meta) == 1, f"expected one lane-PR extraction, found {len(meta)}"
-
-    def gate_payload(value: str) -> str:
-        return json.dumps({"mergeable": True, "pr": 8, "base": value, "head": "h"})
 
     def meta_payload(value: str) -> str:
         return json.dumps(
@@ -1102,12 +1278,8 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
         )
         return proc.stdout.rstrip("\n").split("\t")[field]
 
-    # `base` sits at index 2 of the gate extraction, `baseRefName` at index 1 of
-    # the lane-PR extraction.
-    sites = (
-        ("merge gate", gate[0], gate_payload, 2),
-        ("lane PR metadata", meta[0], meta_payload, 1),
-    )
+    # `baseRefName` sits at index 1 of the lane-PR extraction.
+    sites = (("lane PR metadata", meta[0], meta_payload, 1),)
     for label, block, payload, field in sites:
         for code in [*range(0x20), 0x7F]:
             got = emitted(block, payload(f"tr{chr(code)}unk"), field)
@@ -1119,26 +1291,6 @@ def test_the_extractions_scrub_every_control_character_to_a_space() -> None:
         # The class stops there: a printable character is left alone, so a scrub
         # that flattened everything would not pass here either.
         assert emitted(block, payload("tr-unk"), field) == "tr-unk", label
-
-    # The review-class reason (#1357) is the last field, so it absorbs the rest
-    # of the line and is only printed. It still carries report text, so it gets
-    # the same scrub: a raw tab or NUL there would reach the refusal message.
-    def reason_payload(value: str) -> str:
-        return json.dumps(
-            {
-                "mergeable": True,
-                "pr": 8,
-                "base": "b",
-                "head": "h",
-                "review_class": {"class": value, "unclassified": None},
-            }
-        )
-
-    for code in [*range(0x20), 0x7F]:
-        got = emitted(gate[0], reason_payload(f"tr{chr(code)}unk"), 5)
-        assert got == "class tr unk", f"review reason: chr({code}) emitted as {got!r}"
-    assert emitted(gate[0], reason_payload("standard"), 4) == "standard"
-    assert emitted(gate[0], reason_payload("tr-unk"), 4) == "not-standard"
 
 
 @pytest.mark.evidence
@@ -1166,15 +1318,7 @@ def test_self_merge_refuses_when_identity_read_and_review_poll_disagree_on_head(
                 }
             ]
         ),
-        "REPORT_JSON": json.dumps(
-            {
-                "pr": 8,
-                "base": "trunk",
-                "head": "reviewed-head",
-                "done": True,
-                "mergeable": True,
-            }
-        ),
+        "REPORT_JSON": json.dumps(_ready_merge_report()),
         "GH_REPO": "attacker/other",
     }
 
@@ -1221,16 +1365,7 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
                 }
             ]
         ),
-        "REPORT_JSON": json.dumps(
-            {
-                "pr": 8,
-                "base": "trunk",
-                "head": "reviewed-head",
-                "done": True,
-                "mergeable": True,
-                "review_class": STANDARD_CLASS,
-            }
-        ),
+        "REPORT_JSON": json.dumps(_ready_merge_report()),
         "GH_REPO": "attacker/other",
     }
 
@@ -1307,15 +1442,7 @@ def test_scope_wrappers_canonicalize_a_relative_session_state_root(tmp_path: Pat
                 }
             ]
         ),
-        "REPORT_JSON": json.dumps(
-            {
-                "pr": 8,
-                "base": "trunk",
-                "head": "reviewed-head",
-                "mergeable": True,
-                "review_class": STANDARD_CLASS,
-            }
-        ),
+        "REPORT_JSON": json.dumps(_ready_merge_report()),
     }
 
     watch = subprocess.run(
@@ -16431,6 +16558,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         configured_profile_path,
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
+        "scripts/lib/merge_predicate.py",
+        "scripts/devkit/lib/merge_predicate.py",
         ".github/workflows/*",
         "scripts/hooks/*",
         "scripts/devkit/hooks/*",
