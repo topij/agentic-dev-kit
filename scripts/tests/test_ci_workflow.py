@@ -1,4 +1,5 @@
-"""What pins `.github/workflows/test.yml`'s TRIGGERS against the config (#329).
+"""What pins `.github/workflows/test.yml`'s TRIGGERS against the config (#329), and,
+at the end, the #345 hardening (pins, token, timeouts, the dispatch trigger).
 
 Narrow on purpose. This does not police the workflow's steps — `test_mutation_gate.py`
 explains at length why grepping a workflow's text is a guarantee that a reviewer
@@ -352,3 +353,69 @@ def test_norm_is_idempotent(value: str) -> None:
     A property rather than a case, and cheap: a normaliser that is not idempotent
     is one whose output depends on how many times it ran."""
     assert _norm(_norm(value)) == _norm(value), f"not a fixed point: {value!r}"
+
+
+# The #345 hardening, read from the parsed workflow (structured values, as above,
+# not a text grep). Each of these properties is what the workflow's own comments
+# say it holds; without a test a later edit could drop one and stay green (PR 1441,
+# panel round 2).
+
+
+def _jobs() -> dict:
+    doc = yaml.safe_load((REPO_ROOT / WORKFLOW).read_text(encoding="utf-8"))
+    jobs = doc.get("jobs")
+    assert isinstance(jobs, dict) and jobs, f"{WORKFLOW} has no parseable `jobs:` block"
+    return jobs
+
+
+def _steps() -> list[tuple[str, dict]]:
+    return [
+        (name, step)
+        for name, job in _jobs().items()
+        for step in (job.get("steps") or [])
+        if isinstance(step, dict)
+    ]
+
+
+def test_workflow_dispatch_remains_a_trigger() -> None:
+    """pr-watch.md's recovery for a head whose event was never delivered asks for a
+    run with `gh workflow run`, which needs this trigger on the default branch."""
+    assert "workflow_dispatch" in _workflow()
+
+
+def test_every_action_is_pinned_to_a_full_commit_sha() -> None:
+    uses = [(job, step["uses"]) for job, step in _steps() if "uses" in step]
+    assert uses, "no `uses:` step found; the parse is wrong, not the workflow"
+    unpinned = [
+        (job, ref) for job, ref in uses if not re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", str(ref))
+    ]
+    assert not unpinned, f"`uses:` not pinned to a 40-hex commit sha: {unpinned}"
+
+
+def test_every_checkout_drops_the_token() -> None:
+    checkouts = [
+        (job, step) for job, step in _steps() if str(step.get("uses", "")).startswith("actions/checkout@")
+    ]
+    assert checkouts
+    kept = [job for job, step in checkouts if (step.get("with") or {}).get("persist-credentials") is not False]
+    assert not kept, f"checkout without `persist-credentials: false` in job(s): {kept}"
+
+
+def test_every_job_has_a_timeout() -> None:
+    missing = [
+        name for name, job in _jobs().items()
+        if not (isinstance(job.get("timeout-minutes"), int) and job["timeout-minutes"] > 0)
+    ]
+    assert not missing, f"job(s) with no positive integer `timeout-minutes`: {missing}"
+
+
+def test_every_pip_install_pins_its_packages() -> None:
+    installs = [
+        line.split("pip install", 1)[1].split()
+        for _, step in _steps()
+        for line in str(step.get("run", "")).splitlines()
+        if "pip install" in line
+    ]
+    assert installs, "no `pip install` line found; the parse is wrong, not the workflow"
+    loose = [pkg for args in installs for pkg in args if not pkg.startswith("-") and "==" not in pkg]
+    assert not loose, f"`pip install` package(s) without an exact `==` pin: {loose}"

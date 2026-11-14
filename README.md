@@ -1,557 +1,237 @@
 # agentic-dev-kit
 
-A portable development model for codebases built with the help of AI coding
-agents — interactive and unattended alike. It packages ten doctrine principles
-(see [`PRINCIPLES.md`](PRINCIPLES.md)) into the small set of files that actually
-make them stick: narrative documents, workflow skills, engine scripts, a state
-sandbox, and one safety-critical rule.
-
-**Copy-in, repo-owned.** You copy this template into your repo and run
-`./init.sh` once. From then on the kit is yours — no external package, no
-upstream dependency at runtime. Edit the config, rename things, delete a skill
-you don't need. A future packaged version (a plugin plus an installable engine)
-waits until the template has proven itself across a few real projects.
-
-**Find your route:** [Developer guide](docs/developer-guide.md) has practical
-commands and recovery pointers; [Architecture](docs/architecture.md) shows the
-components, ownership boundaries, and workflow flows. The
-[worked first session](docs/getting-started.md) and
-[parallel task recipes](docs/parallel-howto.md) go deeper. The
-[shared workflows](docs/agentic-dev-kit/workflows/) remain the behavioral
-contract.
+Give a fresh coding-agent session enough context to pick up where you left off,
+review its change, and hand the next decision back to you. The kit keeps that
+context in your Git repository. Claude Code and Codex enter the same workflow
+through their own skills. You own the installed files and choose when to upgrade.
 
 > **A personal note.** I built this for my own development work with AI coding agents.
 > The principles and choices here reflect my own preferences and workflows — not a
 > universal best practice. Take what's useful, change what isn't, and shape it to fit
 > how you like to work.
 
-## Why this exists
+## Quickstart
 
-When you build software with AI coding agents — especially several at once, some
-running unattended, with a single human operator who isn't watching every step —
-the hard part stops being *generating* code. It becomes keeping the work
-**coherent**. The recurring failure modes:
+| Where are you starting? | First action |
+| --- | --- |
+| A new project that wants the full kit | Use **Use this template** on GitHub, clone **your new repository**, then follow [Initialize a new project](#initialize-a-new-project). |
+| A project with its own Git history, files or agent instructions | Start the [selective adoption workflow](docs/agentic-dev-kit/workflows/adopt.md) in that project. Choose Lite or Full and review its proposed file changes. |
+| A project with an installed kit | Follow [Upgrading an already-adopted repo](#upgrading-an-already-adopted-repo). The installed profile determines the upgrade procedure. |
+| A project already set up for work | Start a session in your client. The [first-session walkthrough](docs/getting-started.md) follows a change through review and handoff. |
 
-- **Context evaporates between sessions.** A fresh session (yours or an agent's)
-  reconstructs "where were we?" from memory or scrollback, and silently redoes or
-  regresses the last one's work.
-- **Parallel agents step on each other** — two lanes writing the same scratch
-  state or the same plan file corrupt each other's output or collide at merge.
-- **Rough edges get forgotten** — the annoyance you hit an hour ago is gone by the
-  next session, so nobody fixes it. Or the opposite: every one-off incident gets
-  promoted into a standing rule until the rules are noise nobody reads.
-- **Risky changes get rubber-stamped** — a send-gate or a destructive operation
-  slips through bundled with cosmetic diffs, or a PR is opened and abandoned
-  mid-CI with no one watching it to green.
-- **The wrong effort goes to the wrong step** — top-tier reasoning burned on a
-  mechanical rename, or a cheap pass on the one decision that was expensive to get
-  wrong.
-- **Rules a fresh agent "should have known" don't bind it** — because they live in
-  a doc nobody re-reads instead of in the launch prompt, a hook, or a CI check.
+### Choose an install profile
 
-`agentic-dev-kit` is a small, opinionated answer to those failure modes: ten
-doctrine principles plus the minimum set of files — narrative docs, skills, hooks,
-scripts — that make each one *stick* rather than stay a good intention. It assumes
-a single operator, agents working on branches behind pull requests, and review
-before merge. Adopt the pieces incrementally; each stands on its own.
+Choose the profile by **where you want review to happen** and which systems the
+agent needs to read. Both profiles support a project that uses pull requests.
+
+| | Lite | Full |
+| --- | --- | --- |
+| Starting a session | Read the plan, friction inbox, Git state and optional local story backlog. | Bring the plan and inbox together with PR reviews, CI and the configured tracker. |
+| Reviewing the change | Review the staged diff before commit. When the configured risk tier applies, get a fresh-context review and operator approval. | Verify the branch and watch the PR. Independent review covers its current head, with an isolated lens or panel by default and an optional external review bot. |
+| Delivering it | Commit locally. With a protected branch configured, open a PR for the operator to merge. | Open completed work ready for review. Use the PR's checks, review evidence and project merge policy to decide who can merge. |
+| Installed in your project | Workflow Markdown and skill bindings, project configuration, the plan and the inbox. Install and upgrade checks use the doctor in the *kit clone*. | Selected workflow docs, bindings, engines and hooks. Full also supports parallel lanes and recurring triage. |
+
+See the procedures for [choosing a profile](docs/agentic-dev-kit/workflows/adopt.md#choose-the-profile), [Lite review](docs/agentic-dev-kit/lite/lite-review.md) and [Full PR review](docs/agentic-dev-kit/workflows/pr-watch.md).
+
+### Initialize a new project
+
+In the **new full-template checkout**, open `config/dev-model.yaml` before running
+the installer. The template is also the kit's development repository. In `paths`,
+point `handoff`, `handoff_history`, `friction_log` and `friction_log_archive` at
+your project's records. To use the shipped skeletons, choose `docs/handoff.md`,
+`docs/handoff-history.md`, `docs/friction-log.md` and `docs/friction-log-archive.md`.
+Use the same file and archive names in the matching `doc_budgets` entries.
+Set `tracker.project_name` and `tracker.url` to your project, or clear both
+and select the `none` backend if you have no tracker. The installer uses existing
+values as prompt defaults. These settings determine which work and issue board
+the first briefing sees.
+
+From the root of that checkout, run:
+
+```sh
+./init.sh
+```
+
+The installer uses POSIX `sh`, Git and standard shell utilities. It prompts for
+project and integration settings, renders the entry points and unclaimed records,
+and reports hook installation. Check its output for skipped files and deferred
+shared hooks. For the Full engines, install `uv` to run scripts with their declared
+dependencies. Use Git 2.44 or later for the review helpers and authenticate `gh`
+for the GitHub PR and lane commands. The Lite workflows need Git and your agent.
+Lite installation and upgrades also use `uv` on the machine running the doctor.
+
+Check the protected branch, tracker, reviewer settings and `review.safety_critical_paths`
+against your project. The shipped path list describes this kit. Add your own
+release, send, destructive-operation and recovery gates so they receive the
+appropriate review. In the rendered `AGENTS.md`, fill in the project's verification
+command. The installer prints the session-start invocation for your runtime.
+
+### Agent runtime adapters
+
+| In your agent session | Claude Code | Codex |
+| --- | --- | --- |
+| Ask for the next task | `/session-start` | `$session-start` |
+| Review work before a Lite commit | `/review` | `$review` |
+| Watch a PR on Full (example PR 42) | `/pr-watch 42` | `$pr-watch 42` |
+| Hand over work | `/wrap-up` | `$wrap-up` |
+
+Type these workflow names in the agent. For staged Lite review, invoke `wrap-up`; it calls `review` on the index. A standalone `review` reads the working change. Run commands such as `git status` and
+`uv run scripts/kit_doctor.py` in a shell. Full shell examples use this kit's
+`scripts` directory. In an adopted repo, read its location from `paths.engines`.
+The [runtime parity inventory](docs/agentic-dev-kit/runtime-parity.md) lists the bindings and their capabilities.
 
 ## How it fits together
-
-Follow the task you are doing; the [architecture page](docs/architecture.md)
-keeps the detailed component and authority flows.
 
 ### Deliver a change
 
 ```mermaid
-flowchart LR
-    Start["Brief and choose work"] --> Work["Edit in task worktree"]
-    Work --> Record["Wrap up and verify"]
-    Record --> Review["Open ready PR and watch"]
-    Review --> Independent["Independent review<br/>lens panel, or an<br/>opted-in bot"]
-    Independent --> Decision{"Gates satisfied and<br/>actor authorized?"}
-    Decision -->|yes| Merge["Merge and read back"]
-    Decision -->|no| Hold["Resolve blocker or hold"]
+flowchart TD
+    accTitle: Where Lite and Full review a change
+    accDescr: Lite reviews staged work before committing. Full verifies a task branch and reviews the pull request head.
+    classDef lite fill:#e1f3ef,stroke:#287865,color:#163d36
+    classDef full fill:#e7effb,stroke:#3c6396,color:#173456
+    Work["Choose a task and edit"] -->|Lite| Stage["Stage the intended files"]
+    Stage --> Review["Review the staged diff"]
+    Review --> Commit["Commit after applicable sign-off"]
+    Commit -->|Protected branch configured| LitePR["Open PR for operator merge"]
+    Work -->|Full| Task["Verify in the task worktree"]
+    Task --> Handoff["Check for unrecorded handoff"]
+    Handoff --> Ready["Open ready PR and assert ready"]
+    Ready --> Watch["Watch CI and review this head"]
+    Watch --> Policy["Check merge gates and authority"]
+    class Stage,Review,Commit,LitePR lite
+    class Task,Handoff,Ready,Watch,Policy full
 ```
 
-[`session-start`](docs/agentic-dev-kit/workflows/session-start.md) supplies the
-briefing. [`wrap-up`](docs/agentic-dev-kit/workflows/wrap-up.md) records only what
-the PR, commits and tracker do not already hold, before each PR's review; when nothing
-is left it commits nothing. [`pr-watch`](docs/agentic-dev-kit/workflows/pr-watch.md)
-owns the review loop. By default, independent review is a completed pass of the kit's
-own [isolated lens panel](docs/agentic-dev-kit/fallback-review-panel.md) at the
-converged head: fresh-context
-reviewers chosen by the change's review class, an optional verifier that checks their
-findings, and a head-bound receipt with typed dispositions. A third-party review bot
-is opt-in through `review.bots`; once named, its review of the current head also
-counts, and the same pass runs when it is down. Merge authority remains a
-separate project decision. Use the
-[session recipe](docs/developer-guide.md#run-a-development-session) to start.
+On Lite, `wrap-up` includes record edits in the staged review. A direct-commit
+project can finish at the commit. On Full, run the handoff test *before* the
+opening review. If a decision belongs in the handoff, include it on the branch
+and verify the final change. The reviewer and CI then see the same revision.
+An isolated lane reports its handoff to the coordinating session. The
+[worked example](docs/getting-started.md) and [architecture diagrams](docs/architecture.md) follow these paths in detail.
 
 ### Turn experience into improvements
 
 ```mermaid
-flowchart LR
-    Friction["Session friction"] --> Triage["Triage frozen inbox"]
-    Triage --> Decision["Exact operator decision"]
-    Decision --> Outcome["File, archive or park"]
-    Reviews["Merged PR reviews"] --> Patterns["Systemize recurring causes"]
-    Patterns --> Proposal["Shared rule proposal<br/>or routed finding"]
+flowchart TD
+    accTitle: How Full routes session friction and review findings
+    accDescr: Session friction goes to an approved tracker write or the inbox. A separate workflow reads merged pull request reviews for recurring causes.
+    classDef source fill:#e7effb,stroke:#3c6396,color:#173456
+    classDef outcome fill:#e1f3ef,stroke:#287865,color:#163d36
+    Friction["Friction during work"] -->|Explained and approved| Ticket["File in tracker"]
+    Friction -->|Needs diagnosis or filing unavailable| Inbox["Record in friction inbox"]
+    Inbox --> Triage["Triage frozen entries"]
+    Triage --> Decision["Operator decides what to file, archive or keep"]
+    Reviews["Reviews on merged PRs"] --> Systemize["Look for a recurring cause"]
+    Systemize -->|Qualifying pattern| Proposal["Propose a project change"]
+    class Friction,Reviews source
+    class Ticket,Decision,Proposal outcome
 ```
 
-The [triage contract](docs/agentic-dev-kit/workflows/triage-friction-log.md) owns
-inbox decisions. The [systemize contract](docs/agentic-dev-kit/workflows/post-merge-systemize.md)
-owns recurring-pattern proposals. Tracker writes require approval of their payload;
-the [detailed flywheel](docs/architecture.md#friction-flywheel) shows the routes.
-
-### Record results, then clean up
-
-```mermaid
-flowchart LR
-    Record["Record each path<br/>this session creates"] --> Done["Its result is read<br/>and recorded on the PR"]
-    Done --> Preview["Preview exact paths"]
-    Preview --> Decision{"Standing grant or<br/>operator approval<br/>covers these paths?"}
-    Decision -->|yes| Apply["Apply with fresh guards"]
-    Decision -->|no| Keep["Keep and report"]
-    Apply --> Report["Full wrap-up lists<br/>removed and kept paths"]
-    Keep --> Report
-```
-
-The [cleanup lifecycle](docs/agentic-dev-kit/session-cleanup.md) owns retention,
-consent and kept-path recovery. A session deletes what it created once nothing
-needs it, while it works (with a cleanup registry, each review round retires before
-the next is allocated, unless kept with `--keep-previous "<reason>"`) and again in the full `wrap-up` that closes a session. Ending a session does not authorize deletion, but a standing
-grant in `AGENTS.md` can cover the session's own recorded paths; copy the *Session
-cleanup* section of [`docs/AGENTS-sections.md`](docs/AGENTS-sections.md) to opt in.
-The grant replaces asking, not the engine's previews and guards, and an age sweep
-still needs the operator. [The detailed flow](docs/architecture.md#evidence-retention-and-cleanup)
-includes native archive, reboot reconciliation and completion checks.
-
-For a blocked task, use the [symptom-to-recovery table](docs/troubleshooting.md).
-Before editing or replacing a file, check the [ownership reference](docs/ownership.md).
-
-## Quickstart
-
-**Prerequisites.** `init.sh` needs POSIX `sh` plus the usual coreutils/text tools it
-shells out to — `awk`, `grep`, `sed`, `mv`, `rm`, `cat`, `head`, `mkdir`, `chmod`, `touch`,
-`basename`, `dirname`, `date` and `git` — all standard on macOS
-and Linux, none of them a runtime you have to install. The engines need [`uv`](https://docs.astral.sh/uv/) (they're PEP-723 single-file
-scripts), `git` 2.44 or later (for `git --no-lazy-fetch`), and — for `pr-watch` /
-`parallel` — the GitHub CLI `gh`,
-authenticated. **Runtime engines do not require PyYAML:**
-`scripts/lib/kitconfig.py`, the config reader they use, is stdlib-only.
-`scripts/lib/devmodel_config.py` is PyYAML-backed but is not an engine dependency;
-this repository's test command supplies PyYAML for its parity tests.
-
-```sh
-# Click "Use this template" on GitHub and clone the result — or, into an
-# existing repo, copy the kit's contents in from the root:
-cp -r /path/to/agentic-dev-kit/. .
-./init.sh
-# Answer the prompts (or accept the shown defaults), then:
-#   -> open config/dev-model.yaml and fill in anything you skipped
-#   -> start your agent session and invoke session-start
-```
-
-Copy from a fresh clone of the kit, not from a working checkout: `cp` also copies
-untracked files, and a `config/dev-model.local.yaml` there would set its operator
-logins in your repository.
-
-`init.sh` stamps your answers into `config/dev-model.yaml`, renders the narrative
-docs and both root entry points — `AGENTS.md` and the `CLAUDE.md` that imports
-it — from `docs/templates/`, installs the
-pre-push hook, and offers five entries to `.gitignore` — `/state/`, `.devkit_state_root`,
-`.claude/worktrees/` (isolated review lenses), `*.devkit-tmp` and `/reports/` (derived
-pipeline output). Those five are *policy*, not hygiene, so each is skipped — with a
-note saying why — when your repo already carries a rule about that path or already
-tracks files the entry would ignore
-([#385](https://github.com/topij/agentic-dev-kit/issues/385)); git ignores only
-untracked paths, so an imposed policy line breaks *new* files silently while the
-tracked ones keep working. `config/*.local.yaml` is hygiene and is always added.
-It adds one more, `.mcp.json`, **only** if that file exists and appears to hold literal
-credentials rather than `${ENV_VAR}` references; it says so when it does. That check
-matters because `dev_session.sh` copies a repo-root `.mcp.json` into every lane
-worktree, so a lane inherits whatever is in it. **The sniff is narrower than it looks:** its regex is case-sensitive and matches
-only `_`-separated names, so the hyphenated mixed-case shape the kit's own docs use
-(`"CF-Access-Client-Secret"`) is **not** detected and `.mcp.json` stays tracked
-([#86](https://github.com/topij/agentic-dev-kit/issues/86), open). Do not rely on it —
-prefer `${ENV_VAR}` references so there is no literal to leak. It never overwrites a
-rendered doc that is already in use — only one that is missing entirely, or whose
-**first line opens an HTML comment beginning with** one of two markers: the shipped
-`devkit-template: unrendered` on a narrative skeleton, or `devkit-source: kit-own` on
-the kit's own root `AGENTS.md` / `CLAUDE.md`. A doc that merely *mentions* a marker —
-below line 1, or inside a line-1 comment that says anything else first — is in use, and
-is left alone.
-
-For a full worked example of a first session — from
-adoption through `wrap-up` — see **[`docs/getting-started.md`](docs/getting-started.md)**.
-
-## Upgrading an already-adopted repo
-
-**Use the [`upgrade` workflow](docs/agentic-dev-kit/workflows/upgrade.md)** for an
-already-adopted repository. It inspects the installation, handles config migration,
-and refreshes kit-owned files according to their recorded state. Re-running
-`./init.sh` handles the config and unclaimed templates; by itself it does not
-inspect or replace installed engines. The workflow accounts for these surfaces:
-
-- **Config** — `init.sh` migrates an older schema forward *in place*, only ever
-  adding missing keys. Your existing values are never guessed over. `kit.version`
-  records which generation you're on.
-- **`paths.engines`** — probed from where your engines actually are, so a repo that
-  vendored them under `scripts/devkit/` is migrated to that path rather than a
-  wrong default.
-- **Narrative docs** — a handoff or friction log you're actually using is left
-  byte-identical; only an unrendered skeleton is (re-)rendered.
-- **Hooks** — reinstalled as a shim that execs the engine, so a hook stays current
-  with the engine rather than going stale as a copy.
-- **Engines** — replace the files. Engines are **kit-owned**: everything
-  project-specific (review-bot markers, informational checks, CI policy, paths)
-  lives in `config/dev-model.yaml`, so you should never need to edit an engine to
-  adopt it. If you have, that's a bug — please report it.
-
-### Which files actually drifted — `kit_doctor`
-
-Re-running `init.sh` handles the config. For the **engines**, the problem is that a
-copy-in has no version marker and no record of whether it was edited, so nothing can
-tell an older engine from a locally-patched one:
-
-```sh
-uv run scripts/kit_doctor.py
-python scripts/kit_doctor.py  # bare-Python fallback; inline TOML may require uv
-```
-
-Per kit-owned file it reports `unchanged` (safe to replace outright), `differs` (diff
-before replacing), `missing`, or `unknown-version`. `differs` deliberately does **not**
-claim a cause — a hash mismatch can't distinguish "older version" from "hand-edited", so
-it narrows by schema version and leaves the call to you. Adopter-owned paths (your
-config, your narrative docs) are never compared; they're *supposed* to differ.
-
-It also checks installation properties the file hashes cannot establish:
-
-- your config's schema generation vs. the kit's
-- that **`paths.engines` points at a directory that actually holds engines** — a `✗` here
-  is the silent breakage where every workflow's `<engine-dir>/…` reference resolves to
-  nothing
-- that the pre-push hook is installed, not merely shipped
-- that runtime hook registrations resolve; Codex lifecycle semantics apply only to
-  exact repository-owned command strings, structural drift within those identified
-  objects fails explicitly, and altered strings retain generic path diagnostics
-- that the narrative docs were rendered, not left as unrendered templates
-
-`kit-manifest.json` is the hash set it compares against, regenerated at release
-(`--generate-manifest`) and gated in CI so it can't go stale.
-
-**[`upgrade`](docs/agentic-dev-kit/workflows/upgrade.md)** drives the whole sequence — shape detection,
-config migration, then per-file refresh keyed on those states — non-destructively, on a
-branch. It's the counterpart to [`/adopt`](docs/agentic-dev-kit/workflows/adopt.md) (first install). A
-repo with no `config/dev-model.yaml` at all predates the config surface and routes to
-`/adopt` instead.
-
-### Agent runtime adapters
-
-The workflow definitions under `docs/agentic-dev-kit/workflows/` are shared. The
-runtime adapters are intentionally thin:
-
-| Runtime | Repository adapter | Invocation |
-|---|---|---|
-| Claude Code | `.claude/skills/<name>/SKILL.md` | `/session-start`, `/wrap-up`, `/pr-watch`, `/parallel`, `/adopt`, `/upgrade`, `/triage-friction-log`, `/post-merge-systemize` |
-| Codex | `.agents/skills/<name>/SKILL.md` | `$session-start`, `$wrap-up`, `$pr-watch`, `$parallel`, `$adopt`, `$upgrade`, `$triage-friction-log`, `$post-merge-systemize` |
-
-[`docs/agentic-dev-kit/runtime-parity.md`](docs/agentic-dev-kit/runtime-parity.md)
-is the authoritative adapter inventory and records deliberate exceptions and open
-capability gaps. A fresh install from the template delivers both runtimes' adapters
-whichever one you run; the other runtime's adapters stay inert, already in place if
-you add that runtime later.
-
-Set `runtime.default` in `config/dev-model.yaml`. The lane launcher reads its command
-from `runtime.launchers`; shared workflows use the runtime-neutral
-`cheap`/`default`/`expensive` tiers and translate them through
-`models.runtime_mappings` only when the runtime exposes that control.
-Unattended Codex and Claude lanes additionally use the config-owned
-`parallel.<runtime>_headless_command`, declared transports, and declared
-`parallel.<runtime>_approval_policy` through `scripts/launch_lane.py`; the wrapper
-applies the one-shot descriptor's worktree/environment, passes the bounded policy as
-argv (for Claude with the cockpit-owned `config/claude-lane-settings.json` profile as
-the lane's only settings source), records child-observed identity before starting the
-runtime's stable non-interactive client (`codex exec` or `claude -p`), and reads the
-runtime's own denial record back before reporting success.
+For example, a setup command that fails on a fresh checkout belongs in the inbox
+while the cause is unknown. Once you have a reproduction, a mechanism and a
+proposed fix, the workflow can present the ticket for approval. Separately, if
+reviews on different merged PRs repeatedly catch the same mistake, the project
+can change how the operation works or add a check that catches it. The
+[triage](docs/agentic-dev-kit/workflows/triage-friction-log.md) and
+[post-merge systemize](docs/agentic-dev-kit/workflows/post-merge-systemize.md) workflows define the decisions and evidence for each route.
 
 ## Adopting into an existing repo
 
-The quickstart above assumes a fresh or near-empty repo. Dropping the kit into a
-**mature** project — one that already has agent configuration, its own `config/`, a
-plan doc, and CI — needs a lighter touch: a blind `cp -r` would clobber files. Adopt
-selectively instead.
+From the target repository, ask your agent to follow the kit's
+[adopt workflow](docs/agentic-dev-kit/workflows/adopt.md). If the adoption skill
+is already available, invoke `/adopt` in Claude Code or `$adopt` in Codex.
+Otherwise give the agent the workflow document from the kit and identify the
+target checkout. The workflow fetches its source separately, inspects the target,
+and asks which files to install, keep or point at before changing project files.
 
-**The [`/adopt`](docs/agentic-dev-kit/workflows/adopt.md) workflow automates this.** Copy
-`docs/agentic-dev-kit/workflows/adopt.md` and your runtime's adapter for it into your repo, run `/adopt`, and it inspects the repo,
-proposes a selective plan (what to install vs. skip vs. point the config at), and
-executes it non-destructively on a branch — then seeds the friction log with whatever
-the adoption surfaced. The principles it applies:
+Bring an existing plan and agent instructions into that decision. For example,
+`paths.handoff` can point at a project's existing roadmap, and `paths.engines` on
+Full can point at `scripts/devkit`. The Full procedure gives the operator the
+interactive installer step with `--no-clobber`; Lite records and checks its
+selected bindings from the kit clone. The [ownership guide](docs/ownership.md)
+explains how these choices affect the next upgrade.
 
-- **Install only what you lack.** If the repo already practices a piece — a living
-  plan, its own wrap-up skill — keep its version and skip the kit's. Each principle
-  stands alone.
-- **Point the config at what's already there.** Already have a `ROADMAP.md` or similar
-  plan? Set `paths.handoff` to it in `config/dev-model.yaml` rather than adding a
-  second plan file — or rename it to `handoff.md` if you prefer the kit's name.
-- **Don't overwrite existing skills.** Check `.claude/skills/<skill>/SKILL.md`,
-  `.claude/commands/<skill>.md` and `.agents/skills/<skill>/SKILL.md`. A Claude skill
-  shadows a same-named command, so an existing command counts as an existing workflow. Keep an adopter's existing workflow and install
-  only the missing adapters.
-- **Namespace the scripts if `scripts/` is organized.** If the repo keeps `scripts/`
-  in subdirs, vendor the kit under `scripts/devkit/` (or similar) and set
-  `paths.engines` accordingly. Every engine discovers the repo root by walking up for
-  `.git`, so it works at any depth without prompt rewrites. One documented limitation:
-  with **no** `.git` anywhere above it, `kitconfig` falls back to depth arithmetic
-  calibrated for `scripts/lib/`, which is wrong in a vendored layout —
-  [issue #60](https://github.com/topij/agentic-dev-kit/issues/60) stays open on it. Any
-  real checkout has a `.git`, so this bites test harnesses and tarball copies, not
-  adopters.
-- **Check your CI/lint scope.** The `state_paths` tests use bare `assert` (they're
-  pytest tests) — make sure a repo-wide lint scopes away from the kit's dir or ignores
-  `S101` there.
+## Upgrading an already-adopted repo
 
-> This path was walked for real: a pilot into a live, mature repo, whose adoption
-> friction became several of the fixes in this version.
+Start with the [upgrade workflow](docs/agentic-dev-kit/workflows/upgrade.md).
+With no `config/dev-model.yaml`, it routes to adoption. With `profile: lite`, it
+uses the fetched kit's doctor to preview the upgrade, settle locally edited or
+kept files, and verify the approved result. A Full upgrade inspects the installed
+files before refreshing the installer or replacing any engine.
 
-**A lite profile for repos that want only the session discipline.** `/adopt` asks which
-profile to install. Lite adds the living plan, the friction inbox and lite
-`session-start`, `wrap-up` and `review` workflows, with a fresh-context review for paths
-you declare safety-critical. It adds no engines, hooks or Python files: `/adopt` runs
-the kit's `kit_doctor.py` from its clone of the kit to record and check the install. It
-fits one operator and an agent committing to a branch or opening pull requests, with no
-CI or parallel lanes.
+### Which files actually drifted — `kit_doctor`
+
+For a Full installation using the default engine path, run this from its root:
+
+```sh
+uv run scripts/kit_doctor.py
+```
+
+The doctor compares the installed bytes, the comparison manifest and the
+installation baseline when available. Read the result before choosing a replacement.
+
+| Report | What it tells you |
+| --- | --- |
+| `unchanged` / `stale` | The file matches the comparison manifest, or still matches the recorded install while the kit has changed. |
+| `locally-edited` / `stale-and-edited` | Local bytes changed after installation. In the latter case the kit changed too. Inspect the differences before taking a new copy. |
+| `differs` | The bytes differ and the available baseline cannot establish why. |
+| `declined` / `new-upstream` / `outside-profile` | Check what was deliberately omitted, what the baseline never mentioned, and what belongs to a different profile. |
+| `removed` / `missing-required` | A recorded file disappeared, or an installed component needs a missing file. Inspect the named path and dependency. |
+
+Use the [upgrade inspection](docs/agentic-dev-kit/workflows/upgrade.md#step-1--diff-the-installation-read-only)
+for the full report and [Lite upgrade](docs/agentic-dev-kit/workflows/upgrade.md#lite-profile)
+for the checkout, baseline and branch arguments that path requires. Read
+[changelog fragments](changelog.d/) alongside the frozen [changelog](CHANGELOG.md)
+to see which behavior and configuration changes affect your installation.
 
 ## What's inside
 
-Each piece maps to one or more of the ten principles in
-[`PRINCIPLES.md`](PRINCIPLES.md).
-
-| Piece | Principle(s) | Purpose |
-|---|---|---|
-| `docs/handoff.md` + `docs/handoff-history.md` | #1 Living-plan handoff | The one canonical plan: one entry per open workstream, read at session start and updated by wrap-up's handoff test before each PR's review, only for what no PR, commit or tracker issue records. Dated session entries from the earlier layout sweep to the history file once it crosses a line budget. |
-| `docs/friction-log.md` + `docs/friction-log-archive.md` | #2 Friction flywheel | Append-only inbox for bugs and rough edges, triaged on a cadence: single incidents route down to your tracker, real patterns graduate up into a rule. |
-| `docs/templates/` | #1, #2 | The `.tmpl` sources `init.sh` renders into the four narrative docs above, plus both root entry points — `AGENTS.md` (the contract every runtime reads) and `CLAUDE.md` (which imports it, since Claude Code reads a `CLAUDE.md` instead of `AGENTS.md` once one exists) — on adopt or upgrade. Never overwrites one already in use. |
-| `scripts/lib/state_paths/` | #3 Cockpit + isolated lanes | The sandboxed state-path resolver so parallel agent lanes never clobber each other's scratch state. |
-| `docs/agentic-dev-kit/workflows/` | #1, #2, #3, #5 | Runtime-neutral definitions for `session-start`, `wrap-up`, `parallel`, `pr-watch`, `triage-friction-log`, `post-merge-systemize`, `adopt`, and `upgrade`. |
-| `docs/agentic-dev-kit/lite/` | #1, #2 | The lite profile: `session-start`, `wrap-up` and `review` without engines, and their Claude and Codex adapters as `/adopt`'s *Lite profile* copies them. |
-| `docs/agentic-dev-kit/workflows/parallel-headless.md` | #3 Cockpit + isolated lanes | Unattended/headless lane launch mechanics split out of `parallel.md` — the one-shot descriptor, lane-contract preamble, supported Codex wrapper, and observed/terminal receipt. |
-| `.claude/skills/` + `.agents/skills/` | #1, #2, #3, #5 | Thin Claude and Codex adapters over the shared workflows, rendered by `scripts/lib/runtime_adapters.py` from their text in `scripts/lib/adapter_templates/<runtime>/<name>.md`. The authoritative inventory and explicit exceptions live in `docs/agentic-dev-kit/runtime-parity.md`. |
-| `scripts/check_memory_budget.py` | #1, #8 Mechanism over memory | A `SessionStart` hook (wired in `.claude/settings.json`) that warns when an agent-memory file outgrows its budget — the memory-side counterpart to `check_doc_budget.py`. |
-| `scripts/sweep_scratch.py` | #8 Mechanism over memory, #10 No hardcoding | Reports size, age and owner under configured `scratch.roots`; `--disk` includes available space. `--apply --older-than <age>` removes stale entries only. `--create-review-round <root> --head <sha>` allocates private review scratch and prints an allocation receipt to retain outside it. `--finish-review-round <receipt>` previews retirement; `--apply --reviewers-finished` removes that allocation after the caller finishes processes and records the round's findings, retaining worktree, Git-dependency and filesystem protections. Add a root only if every child is disposable. |
-| `scripts/hooks/pr_followup_hook.py` | #5 PR follow-through | A `PostToolUse` hook that treats shell and response matches only as lifecycle candidates, never as proof or mutation authority. A literal `gh pr ready` token plus GitHub CLI's ready/draft acknowledgement selects the stronger candidate heading; creation URLs, existing-PR diagnostics, missing or transformed output, indirect actions, read-only lookalikes, lifecycle tokens in quoted/search text, and response-only ready/draft acknowledgements or PR URLs take the unresolved heading. The routes are non-authoritative and carry the same conditional lifecycle: establish that the operation was lifecycle-changing, resolve the exact pull request, require its repository and host to match the current checkout, read live draft state, assert the matching ready or bounded-draft route, and complete the watch policy. Constructed executables and argv are not reconstructed from shell text. This deliberately accepts harmless false-positive guidance for read-only URL output instead of embedding a shell parser or leaving alias/API creation silent. Registered for Claude in `.claude/settings.json` and Codex in `.codex/hooks.json`, each passing `--runtime`; `init.sh` prints the registrations and writes neither, having no way to tell a real registration from a mention of one. Codex command definitions must be reviewed through `/hooks`; `kit_doctor` assigns lifecycle semantics only to exact repository-owned command strings across the additive project `hooks.json` and inline `config.toml` sources. Altered strings retain generic path diagnostics, and repository checks cannot assert that the client trusted or loaded them. The engine reads `review.bots`, `review.fallback_commands.<runtime>`, `paths.engines`, `review.fallback_panel.lenses`, `review.fallback_panel.receipt_source` and `review.fallback_panel.lens_compute.<runtime>`. |
-| `docs/AGENTS-sections.md` | #4, #5, #6 | Ready-to-merge persistent instructions for Codex adopters. |
-| `docs/CLAUDE-sections.md` | #4 Merge classes, #5 PR follow-through | Ready-to-paste CLAUDE.md sections: risk-based PR splitting, the mandatory watch-to-green loop, execution rules, the rules-layout convention. |
-| `docs/autonomous-session-playbook.md` | #4, #5, #7 | The full operating contract for operator-requested autonomous sessions — branch hygiene, sequencing, local gate, ready-by-default PRs with a bounded material unfinished-work draft exception, watch-and-fix to merge, self-merge policy. |
-| `docs/agentic-dev-kit/writing-for-agents.md` | #8 Mechanism over memory | How to write a workflow, skill, rule or `AGENTS.md` edit an agent will read: pointers and descriptions that decide what gets read, a finish line for every step, and one home for each rule. `post-merge-systemize` and `triage-friction-log` draft their proposals by it. |
-| `docs/agentic-dev-kit/safety-critical-changes.md` | #6 Safety-critical doctrine | Shared doctrine for send-gates, destructive operations, kill/recovery paths, and the CI, hook and hook-registration files that guard a merge; bound through the Claude rule and precise root `AGENTS.md` routing without a runtime-specific copy. |
-| `docs/agentic-dev-kit/runtime-parity.md` | Runtime parity | Machine-readable workflow inventory, adoption footprint and capability matrix for Claude Code and Codex; structural adapter tests and the fresh-install fixtures derive their expected set from this contract. |
-| `config/dev-model.yaml` | #10 No hardcoding | The single config surface every skill and script reads instead of hardcoding a value. |
-| `scripts/lib/kitconfig.py` | #10 No hardcoding | Stdlib-only reader for `config/dev-model.yaml`, used where an engine must stay dependency-free (`pr_watch.py` declares zero third-party deps). |
-| `scripts/check_doc_budget.py`, `scripts/archive_plan_sessions.py` | #1 | The tripwire and sweep that keep the handoff file from ballooning; the same tripwire watches an instruction file's size. Which files are watched — and how big each may get — is the `doc_budgets:` list in `config/dev-model.yaml`; each entry is `{path, budget, archive, remedy}`, and the `remedy` string is what the warning tells you to run. An instruction file such as `AGENTS.md` has nothing to sweep into, so its entry omits `archive` and the warning prints the remedy alone. Warn-only by default — it exits 0 even when a doc is over budget, and returns 1 only under `--strict`. It exits 2 on a usage or config error whatever the flags, so a `path:` naming a doc you have since renamed will gate any pipeline that runs it. |
-| `scripts/skill_routing_eval.py` | #8 Mechanism over memory | Scores the prompts in `docs/agentic-dev-kit/skill-routing/cases.json` against every model-invoked skill's `description`, for both runtimes, and fails when a request misses its skill, a negative case reaches it, or two descriptions overlap. Lexical and offline; `make test` runs it. |
-| `scripts/pr_watch.py` | #5 | The poll-fix-ack and merge-evidence engine behind `pr-watch`. Exact-head receipts remain backward-compatible; a `fallback:delta` pass recorded with `--compose-parent` preserves and revalidates its full-review parent, delta ancestry, and changed paths. |
-| `scripts/panel_prompt.py` | #5, #9 Deterministic scaffolding | Assembles each lens's launch prompt for the isolated review panel from `fallback-review-panel.md`'s contract and the lens's configured `focus`, resolving the review base from the remote by default; a base supplied with `--base` is flagged in the prompt as not resolved from the remote. |
-| `scripts/review_eval.py` | #5, #8 | Maintainer tool that scores lens and optional verifier reports against known-bug and clean cases from the kit's history, to measure a reviewer prompt or compute change. A score is not a review of the PR being merged. |
-| `scripts/session_cleanup.py` | #8 Mechanism over memory | The completed-session cleanup lifecycle over `sweep_scratch.py`: a persisted inventory of the session's review rounds and worktrees, a default-discard seal with exception-only retention and `retire-evidence`, per-round retirement, preview/approve/apply with fresh guards, and `reconcile` for an inventory whose device number changed across a reboot. |
-| `scripts/verify_live_validation_bundle.py` | #9 Deterministic scaffolding | Verifies retained redacted live-runtime evidence, externally expected source/review/runtime bindings, applied-compute attestations, and the separate receipt required before a parity capability promotion. |
-| `scripts/dev_session.sh`, `scripts/launch_lane.py`, `scripts/reconcile_sessions.sh` | #3, #7 | Worktree/lane issuer and live board, environment-capable per-runtime launcher (Codex and Claude), and reconciler. The launcher can apply a compute tier (`--tier`), read the lane's ticket (`--ticket`), resume a Claude lane that stops without naming its terminal state, and records a Claude lane's token and cost usage in the terminal receipt. |
-| `scripts/hooks/pre-push` | #8 Mechanism over memory | A hook, not a memory — refuses a push that would corrupt the narrative files. |
-
-Trusted-client behavior is recorded separately from repository structure. The
-[lifecycle record](saved_plans/codex-hooks-live-validation_2026-08-23.md) covers the
-supported client's hook execution and trust surfaces; the
-[safety-doctrine record](saved_plans/codex-safety-doctrine-live-validation_2026-08-24.md)
-covers model-visible root routing and the resulting shared-doctrine read. Each record
-is bounded to its stamped client and revision. Neither makes a promise about future
-clients, and interactive-TUI `systemMessage` presentation remains unverified.
-
-Principle #7 (model/effort tiering) is doctrine actually woven into the pieces
-above, not just described by them: the tier table lives in `config/dev-model.yaml`
-and travels with each lane through `parallel`. **Principle #9 (deterministic
-scaffolding around LLM steps) ships in these places:**
-
-- `scripts/pr_watch.py`'s seen-set, a durable intermediate state;
-- `post-merge-systemize`'s fetch, digest and heartbeat engines
-  (`scripts/fetch_merged_prs.py`, `scripts/digest_merged_prs.py`,
-  `scripts/heartbeat_cli.py`), which produce the cache, digest, input cap and progress
-  record its shared workflow specifies, around the clustering step;
-- `triage-friction-log`'s draft and finalize engines (`scripts/triage_friction_log.py`,
-  `scripts/finalize_triage.py`), around the proposal step.
-
-Both recurring workflows keep an LLM-only path for a repository where their engine set
-is wholly absent, and a partial set fails closed. Read `PRINCIPLES.md` for both
-principles' full statement.
-
-**Runtime coverage and engine wiring are independent.** The aligned entries in
-`runtime-parity.md` point to a runtime-neutral definition plus thin Claude and Codex
-adapters.
-`parallel` and `pr-watch` ship deterministic engines, and so do `triage-friction-log`
-(`triage.draft_engine` and `triage.finalize_engine`) and `post-merge-systemize` (its
-configured fetch, digest and heartbeat engines). `session-start` and `wrap-up` use
-shared workflow doctrine, configured runtime-native integrations, and the particular
-shipped helpers each definition names. Runtime parity still does not imply that an
-optional engine is installed in a given repository: for the two recurring workflows,
-the complete configured set beneath `paths.engines` selects engine-backed mode, its
-absence selects the LLM-only path, and a partial set fails closed. The kit ships no
-tracker client or notification channel; those stay runtime-native.
-
-Both triage modes use `triage.state_path` and `triage.gate_path` as separate logical
-state locations. Expand `{mode}`, remove the configured `state.dirname` prefix, and
-resolve the remaining fragment through the shared state-path resolver; never hardcode a
-worktree-local gate path.
-
-The shared `session-start` and `wrap-up` definitions also declare their integration
-preflights and outcomes directly. Session start fails closed on missing repository,
-config, handoff, friction-log, or repository-state reads; unavailable forge, CI,
-tracker, and configured drift sources stay visible as degraded gaps rather than false
-empty or clean results. Forge, CI/cron, and tracker sources are always attempted and
-classified; forge readiness includes unfiltered review evidence rather than list metadata
-or locally acknowledged comments alone, and detached HEAD is named instead of rendered
-as a blank branch. Only explicitly
-unconfigured or untriggered declarations may be omitted.
-Wrap-up's handoff test runs before every pull request's review and decides whether the
-work left anything its pull request, commits and tracker issues do not record; when it
-left nothing, the usual result, nothing is committed. Otherwise its record rides that
-pull request before review. Friction is routed when it is found, and the full wrap-up
-closes a session on the operator's request. Wrap-up requires the configured document-budget engine, preserves
-operator-owned changes, sends an interactive issue-shaped finding through tracker search
-and an exact-payload decision before parking, and reserves the friction log for incomplete
-or accumulating findings and unavailable, declined, or ambiguous tracker routes. Its
-changed repository artifacts, including an updated existing project-status artifact,
-reach a terminal state only after the conditional branch/PR/review path settles
-and declared merge authority either permits the merge or holds the exact head for the
-operator. A non-lane PR without project merge policy defaults to the operator route, and
-conditional capabilities are classified only when their trigger occurs. Non-interactive
-runs never wait for tracker approval. A blocked forge or unsettled review path reports
-an incomplete resumable result with exact repository/PR evidence. Claude and Codex
-adapters only translate invocation and available mechanisms. Wrap-up selects one
-overall outcome by shared precedence, so an optional-integration degradation cannot
-mask an incomplete repository path or ambiguous authorized merge.
-These bookend declarations use existing config and upgrade through the shared workflow
-refresh; they add no installer migration or runtime-specific connector requirement.
-
-The shared triage workflow owns its pipeline configuration in `triage`. A new draft
-selects engine-backed mode only when both configured engines exist, selects an honest
-agent-executed LLM-only path when both are absent, and stops on a partial pair. Merged
-config, sandbox-aware atomic state, and an exact frozen inbox are required in either
-mode. Scheduled or unattended approval requires notification send and thread-read
-capabilities; an interactive run can present the same exact payloads in-session when
-notification is unavailable and records that degradation. Tracker availability never
-authorizes a write: the operator approves the canonical payload digest, the workflow
-persists the attempt before acting, and a failed or ambiguous response is read back by
-its idempotency marker before any retry. Finalization waits until every approved write
-is verified and sweeps only explicitly accounted, byte-identical frozen blocks. Test
-mode writes only its declared local evidence and optional `[TEST]` notification; it
-cannot edit the friction documents or create tracker/forge state. Approval or any
-unsettled tracker, repository, or review path remains operator-held with exact resume
-evidence.
-
-The shared systemize workflow treats the configured engine set atomically: all absent
-selects its honest LLM-only path, all present selects engine-backed mode, and a partial
-set stops with an actionable preflight failure. Notification and tracker access have
-explicit degraded paths, and a tracker write still requires payload-specific operator
-confirmation. Logical cache and digest paths resolve through the shared state sandbox;
-reports stay beneath `systemize.report_root`. Preflight rejects traversal, symlink or
-hard-link escape, artifact collisions, and tracked or control-file targets before an
-atomic write. An existing target must declare the expected artifact kind and complete
-same-run identity; foreign or malformed content stops without replacement. A
-shared-rule proposal is staged only in a clean isolated worktree; local changes to an
-intended destination stop that route instead of riding into its PR. The proposal
-takes the first fix level that works (a structural change, then a check shown failing
-on a past pull request's code, then a prose rule for a judgement call) and names it in
-the report. The optional `systemize.enforcement_table` names a Markdown table pairing
-each standing rule with what enforces it; the route reads it before proposing a rule
-and updates the row in the same patch. Without the key, the run reports the table as
-unconfigured.
-Set `systemize.operator_logins` to exact forge identities whose review findings are
-trusted; configured bot identities come from `review.bots` and explicit aliases only.
-The installer prompts for the operator list and never infers it from the repository
-owner or current authentication. Keep this prompted value as a one-line YAML flow
-sequence; `./init.sh` stops with a conversion example when it finds block style.
-The list may instead be set in the gitignored `config/dev-model.local.yaml`, so a
-repository can name its operator without the shipped template doing so.
-Because the installer migrates YAML with shell text tools, its preflight also requires
-unique bare top-level keys, a bare `systemize:` section line, and bare keys inside that
-section at the shipped two-space indentation. Rewrite tagged, quoted, anchored,
-explicit, duplicated, alternate-indented, or inline-commented section-key forms before
-retrying. Operator-login items must be simple plain login tokens or simple quoted
-strings; tags, anchors, aliases, typed scalars, escapes, and ambiguous flow syntax are
-refused before migration writes. Prompted init-owned sections must remain mappings at
-the shipped two-space child indentation; a partial `triage` flat map may use another
-consistent indentation. Keep every prompted value, and every value in a partial
-`triage` flat map, complete on the same line as its key. YAML tags, anchors, aliases,
-block scalars, and block children are unsupported on prompted values. Partial-`triage`
-string fields also reject double-quoted backslash escapes. Keep `review.bots`
-and `systemize.operator_logins` as complete same-line flow sequences; every other
-prompted value must be a same-line scalar, and flow mappings are unsupported. Quote a
-string whose plain spelling YAML could resolve as a non-string; string fields must be
-non-empty. The migrator preserves existing values, so set `triage.pr_draft` and
-`systemize.pr_draft` to the plain boolean `false` before running their workflows; a
-carried `true` now hard-stops rather than opening completed work as a draft. Block YAML
-on other fields can still be refused when its continuation resembles migrator-owned
-structure; normalize any refused value to an ordinary same-line form before retrying.
-
-The triage engines cover GitHub Issues and Linear through `--enable-tracker`, selected
-from `tracker.backend`. Linear requires the configured team/project, exact approved
-labels and `LINEAR_API_KEY`; see the shared
-[engine CLI](docs/agentic-dev-kit/workflows/triage-friction-log/engine-cli.md)
-for setup and invocation. Other tracker backends remain unavailable.
+| What you want to do | Read |
+| --- | --- |
+| Understand the design decisions | [Principles](PRINCIPLES.md) |
+| Work through a change from briefing to handoff | [Getting started](docs/getting-started.md) |
+| Find a command, interpret a review report or retire session scratch | [Developer guide](docs/developer-guide.md) |
+| Trace a workflow from the agent to its engine, state and evidence | [Architecture](docs/architecture.md) |
+| Decide which files to edit or preserve during an upgrade | [Ownership](docs/ownership.md) |
+| Recover from a refused install, review, lane or cleanup step | [Troubleshooting](docs/troubleshooting.md) |
+| Run unattended work under the full contract | [Autonomous-session playbook](docs/autonomous-session-playbook.md), including ready-by-default PRs with a bounded material unfinished-work draft exception |
+| Inspect a workflow's exact entry, outputs and stop conditions | [Shared Full workflows](docs/agentic-dev-kit/workflows/) and [Lite workflows](docs/agentic-dev-kit/lite/) |
 
 ## Parallel dev sessions
 
-When you want several agent sessions running at once, the kit keeps them from
-clobbering each other: one **cockpit** session owns the narrative files and the
-merges, while each unit of work runs in an isolated **lane** — its own git worktree,
-branch, and `DEVKIT_STATE_ROOT` state sandbox. The rule that makes it safe is
-**disjoint file footprints**: two lanes may run together only when no source file is
-edited by both (the sandbox prevents *state* collisions, not *source* merge conflicts).
-
-The flow: `parallel plan` clusters candidate work by footprint → launch a lane per
-disjoint cluster (`scripts/dev_session.sh new … --merge-class self|operator`) → each
-lane runs until it names its terminal state: `pr-ready` with a green, ready-for-review
-PR, or `no-pr` or `blocked` with a reason → the cockpit watches the board (`dev_session.sh
-list --watch`, which shows whether a headless lane is running and which lanes change
-the same files), reconciles every lane and completes the recorded merge path. A
-headless Claude lane whose runtime exits successfully without naming a terminal state is resumed in the same
-session up to `parallel.max_resumes` times; one still without it, or a Codex lane,
-which the launcher cannot resume, is recorded `stalled`. **Lanes assert their own ready state but never merge**: a
-`self`-class lane is closed out by the cockpit through `scripts/dev_session.sh merge`
-(no operator sign-off needed) while `pr_watch` classes its PR `standard`, an
-`operator`-class one, or a `self` lane whose PR grew into `review.safety_critical_paths`,
-only by an explicit operator decision.
-
-Full walkthrough — the lane contract, the live board, reconciliation, and a worked
-example — in **[`docs/parallel-dev.md`](docs/parallel-dev.md)**. For step-by-step
-recipes per use case (and what actually happens when you run each `parallel` verb),
-see **[`docs/parallel-howto.md`](docs/parallel-howto.md)**.
+Full can run work concurrently when the tasks touch disjoint source files.
+Each **lane** gets a Git worktree, branch and state sandbox. The **cockpit** is
+the coordinating session. It checks for overlap, reads each lane's terminal
+report, routes shared handoff and friction, and follows the project's merge
+policy. A lane that exits without a usable result still needs reconciliation.
+In this repository, consult the [living plan](docs/kit-handoff.md#whole-kit-plan)
+for the operator's lane merge instructions. See [parallel development](docs/parallel-dev.md)
+for the model and [parallel recipes](docs/parallel-howto.md) for the commands.
 
 ## Adapting it
 
-Once you've adopted the kit, it's yours. `config/dev-model.yaml` is the single
-place to point the skills and scripts at your project's paths, tracker, review
-bots, and model tiers — start there. Beyond config, edit the skills and scripts
-freely: they're prompts and small stdlib scripts, meant to be read and changed.
-Run the suite after modifying the engines:
+On Full, start with `config/dev-model.yaml`. Project paths, branch policy,
+reviewers and model tiers belong there. The full installer expects `review.bots`
+and `systemize.operator_logins` as same-line flow sequences; each other prompted
+value must be a same-line scalar. Before running the recurring workflows, set
+`triage.pr_draft` and `systemize.pr_draft` to the plain boolean `false`. For
+machine-local settings, use only the keys accepted by the
+[config reader](scripts/lib/kitconfig.py).
 
-```sh
-make test          # the whole suite; supplies pytest + pyyaml itself via uv
-make test-fast     # same, minus the `evidence`-marked tests — inner loop only, never a verification claim
-make mutation-test # same, minus the drift self-check — use this when mutating files
-```
+Keep tracker and notification credentials in their client environment. If you
+use a repo-root `.mcp.json`, prefer environment references to literal secrets.
+The lane setup copies this file into its worktree. The installer's credential
+check recognizes only certain key spellings. For runtime hook registrations,
+review the installer's report in your client. The
+[ownership guide](docs/ownership.md) covers shared hook installation.
 
-`make test` is the command, not a convenience wrapper. **In this repo** the probes you
-would otherwise reach for fail in a way that reads as *"pytest is unavailable here"* and
-is not:
-`uv run pytest` → `error: Failed to spawn: pytest` (pytest is not a project dependency);
-`python3 -m pytest` → `No module named pytest` (the system Python has none). A bare
-`python` is a different trap rather than another of these — it may not exist at all, and
-`command not found` says nothing about pytest either way. Your own tree may answer
-differently — if pytest is a dependency there, `uv run pytest` simply works — but the
-`Makefile` target is the supported entry point either way.
-
-Improvements that would help other adopters are welcome back here.
+When contributing to the kit, put shared behavior in the workflow both clients
+read. Run `make test` in the task worktree. For changes to reader guides, also
+run the [documentation checks](docs/documentation-checks.md) and inspect the
+rendered diagrams. The [repository instructions](AGENTS.md) describe verification,
+review and how to record the result.
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+MIT. See the [license](LICENSE).

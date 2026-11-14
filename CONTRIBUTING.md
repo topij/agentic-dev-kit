@@ -30,7 +30,9 @@ make test            # the verification command; it takes a while
 ```
 
 `make test-fast` is fine while you iterate, but it skips some tests. The PR should
-report a `make test` run.
+report a `make test` run. For a reader-guide or illustration change, also run the
+[documentation checks](docs/documentation-checks.md) and open the generated
+previews to inspect the diagrams.
 
 ## Rules that catch first-time contributors
 
