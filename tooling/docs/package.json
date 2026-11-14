@@ -7,7 +7,7 @@
   },
   "scripts": {
     "test": "node --test check.test.mjs",
-    "check": "node check.mjs README.md docs/developer-guide.md docs/getting-started.md docs/architecture.md docs/parallel-dev.md docs/parallel-howto.md docs/troubleshooting.md docs/ownership.md docs/documentation-checks.md",
+    "check": "node check.mjs README.md PRINCIPLES.md CONTRIBUTING.md docs/autonomous-session-playbook.md docs/developer-guide.md docs/getting-started.md docs/architecture.md docs/parallel-dev.md docs/parallel-howto.md docs/troubleshooting.md docs/ownership.md docs/documentation-checks.md",
     "verify": "npm test && npm run check"
   },
   "dependencies": {

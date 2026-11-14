@@ -1,24 +1,45 @@
 # Troubleshooting
 
-Start with the observed symptom, then keep the evidence named in its row before
-retrying. Commands assume the kit's `paths.engines: scripts`; adopters substitute
-their configured engine directory. Run installation checks in the repository being
-inspected. Workflow names are agent invocations, not shell commands.
+Find the observation you have in [installation and verification](#installation-and-verification),
+[PR review](#pr-review), [parallel lanes](#parallel-lanes) or [records and cleanup](#records-and-cleanup).
+Full commands below use the template engine directory, `scripts`. Substitute the
+target repository's `paths.engines` if it vendors the engines elsewhere. Lite install
+and upgrade commands use the doctor from the fetched kit clone.
+
+## Installation and verification
 
 | Symptom or report | Owning command or workflow | Evidence to keep | Next action and authority boundary |
 | --- | --- | --- | --- |
 | `Failed to spawn: pytest` or `No module named pytest` | `make test` | Attempted command, working directory and terminal output | Run `make test`, which supplies the test dependencies. Allow time for the terminal summary; a truncated run is not verification. See [verification](../AGENTS.md#verification). |
+| A new template briefing proposes work on the kit itself | `paths` and `doc_budgets` in `config/dev-model.yaml` | Paths selected for the plan, inbox and archives, and any existing project records | Point the config and budgets at the project records before seeding the template. See [Initialize a new project](../README.md#initialize-a-new-project). |
 | `differs`, `locally-edited` or `stale-and-edited` | `uv run scripts/kit_doctor.py` | Doctor report, installed baseline and local diff | Inspect the diff through [upgrade](agentic-dev-kit/workflows/upgrade.md). A hash mismatch alone does not authorize replacement or classify an edit. |
 | Adapter reports `adopter-owned` or `baseline unavailable` | `upgrade` installation inspection | Adapter bytes, baseline commit and history lookup result | Preserve authored content; inspect the historical baseline or use the workflow's explicit ownership decision. Do not overwrite an unclassified adapter. |
+| Lite verification prints `refused:` or `stop: verify (L5):` | The kit clone’s `kit_doctor.py --verify-lite` | Kit commit, target root, install baseline, both verification results if available and the named file | Follow [Lite install verification](agentic-dev-kit/workflows/adopt.md#l5--verify). During upgrade, use [U5](agentic-dev-kit/workflows/upgrade.md#u5--check-before-the-commit) with the kit commit approved for that upgrade. |
 | Explicit reviewer model pin has a cache warning | `uv run scripts/kit_doctor.py` | Exact configured model and cache observation | Confirm availability in the invoking client before deliberately changing compute. The cache report is advisory; it does not authorize an automatic model upgrade. See [installation diagnosis](developer-guide.md#diagnose-an-installation). |
+| Shared hook install is reported instead of performed | `init.sh` in a linked worktree | Checkout identity and installer output | Follow the [upgrade workflow's hook step](agentic-dev-kit/workflows/upgrade.md). Shared Git administration requires the deliberate install route, not another bare installer retry. |
+
+## PR review
+
+| Symptom or report | Owning command or workflow | Evidence to keep | Next action and authority boundary |
+| --- | --- | --- | --- |
 | `converged: true` but `mergeable: false` | `uv run scripts/pr_watch.py <PR> --json` | Exact repository, PR head, `merge_blockers`, `review_evidence`, read gaps | Follow each blocker in the [report reference](agentic-dev-kit/workflows/pr-watch/report-fields.md). Review completion and actor merge authority remain separate. |
+| `review_owed` lists reviewers at convergence | `pr-watch` | PR head and reviewer names | Request review from each named reviewer and poll again. An empty list means nobody is owed a request. A `null` result calls for a re-poll. Follow the [review request procedure](agentic-dev-kit/workflows/pr-watch.md#stop-conditions) if it persists at the same head. |
 | Reviewer skipped or unavailable | `pr-watch` | Full bot status body, current head, pending-review state and computed review class | Follow the [fallback contract](agentic-dev-kit/fallback-review-panel.md). Check existing head coverage before launching reviewers; an outage is not a waiver. |
 | `review_rounds.spent` with findings left | `pr-watch` | Reviewed heads, unresolved findings, dispositions and proposed repair scope | Post the workflow's decision packet and hold for the operator. A spent budget does not permit an extra fix round or merging past findings. See [stop conditions](agentic-dev-kit/workflows/pr-watch.md#stop-conditions). |
 | `mergeable: true` but no authority to merge | Project merge policy / lane cockpit | Exact head, current poll and request authority | Hold for the authorized actor. A lane never merges itself; use its [cockpit route](agentic-dev-kit/workflows/parallel.md). |
+
+## Parallel lanes
+
+| Symptom or report | Owning command or workflow | Evidence to keep | Next action and authority boundary |
+| --- | --- | --- | --- |
 | Lane launch or activation refuses | `scripts/dev_session.sh` / `scripts/launch_lane.py` | Exact command, scope, descriptor/receipt if produced, and refusal output | Resume through the [parallel workflow](agentic-dev-kit/workflows/parallel.md); do not invent launch receipts or repair authority fields by hand. |
 | Lane receipt status `stalled`, `launch_lane.py` exit 75, or `stalled` in the board's RUN column | `scripts/launch_lane.py` / `dev_session.sh list` | Terminal receipt, including `terminal.lane_state` and `terminal.resumes`, and the lane's final text | The lane exited without a `LANE-TERMINAL:` line, after any resumes `parallel.max_resumes` allows (a Codex lane is not resumed). Read its final text and PR state, then reconcile it as held or parked. See [parallel-headless](agentic-dev-kit/workflows/parallel-headless.md). |
 | Headless command refused as a relative path, or not found on the trusted path | `scripts/launch_lane.py` | Configured `parallel.<runtime>_headless_command` and the refusal | Name a bare command on the trusted path or an absolute path. For a user-local runtime install, link the binary into one of the trusted directories the message names. |
-| Shared hook install is reported instead of performed | `init.sh` in a linked worktree | Checkout identity and installer output | Follow the [upgrade workflow's hook step](agentic-dev-kit/workflows/upgrade.md). Shared Git administration requires the deliberate install route, not another bare installer retry. |
+
+## Records and cleanup
+
+| Symptom or report | Owning command or workflow | Evidence to keep | Next action and authority boundary |
+| --- | --- | --- | --- |
 | Document budget warning | `uv run scripts/check_doc_budget.py` | File and configured budget named by the report | Route the record through its owning workflow. For an instruction file whose entry has no `archive` (the kit's own config has one for `AGENTS.md`), the fix is the remedy's consolidation, made as its own reviewed change, not a raised budget. A warning does not authorize archival, tracker filing or deletion. |
 | Cleanup says `kept`, `active` or `unavailable` | `uv run scripts/session_cleanup.py preview <session>` | Session id, retained-evidence index, exact paths and keep reasons | Preserve the inventory and follow [cleanup recovery](agentic-dev-kit/session-cleanup.md). End writers and resolve the cause; do not broaden sweep roots or remove guards. A preview token is not consent. |
 | `.git/devkit/<registry>` is large, or `evidence_summary` shows `present` bytes from completed work | `uv run scripts/session_cleanup.py retire-evidence <session>` | Session id, the plan's `retire`/`kept` reasons and `bytes` | Apply under authorization covering that inventory's evidence. A kept exception or `source` item needs its deletion condition checked before `--include`; an inventory with `held` evidence (a round marked `unverified`) needs that round's data confirmed gone first. Never delete inside the registry by hand. |
