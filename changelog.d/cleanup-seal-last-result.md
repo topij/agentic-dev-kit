@@ -10,7 +10,7 @@ change keeps its `evidence` until the next apply of that inventory or round repl
 it, so tolerate both shapes until then. This replaces what the
 `session-cleanup-seal-size` fragment says about a seal copy in `last_result`.
 
-CHANGEDCHANGED (gate semantics): `seal` and `seal --round` still check a seal that retains at
+CHANGED (gate semantics): `seal` and `seal --round` still check a seal that retains at
 least one item against the `session.json` bound, but the projection no longer adds a
 copy of the seal: it is the record with the new seal in place and a `retired`
 tombstone on every retained item (those earlier seals hold included). So a retaining

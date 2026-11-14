@@ -278,15 +278,18 @@ refuses if that exceeds the limit. The refusal says how many of the items are
 unretired items that earlier seals hold. Retain fewer items, or seal them in a new
 inventory. A seal with an empty `retain` is not checked: it adds no evidence to
 strand, and it is the smallest seal a round can take, so refusing it would leave the
-round no way to retire.
+round no way to retire. The 1 MiB bound itself still applies to it: in a record
+already that near the limit, even a discard-only seal's save refuses, and the round
+stays unsealed until room is made.
 
-The projection is exact for the seals and their tombstones. It is not a guarantee
-that the evidence can be retired, because it does not reserve what else is
-recorded: a discard-only seal's discard list (bounded per seal only by the 1 MiB
-manifest read limit), what an apply records (path outcomes, the evidence summary,
-approvals and statuses), another round's receipt, a reconcile's history. A `last_result` that an
+The projection counts the seals and their tombstones, up to the size digits of a
+source rewritten between the hash read and the copy. It is not a guarantee that the
+evidence can be retired, because it does not reserve what else is recorded: a
+discard-only seal's discard list (bounded per seal only by the 1 MiB manifest read
+limit), what an apply records (path outcomes, the evidence summary, approvals and
+statuses), another round's receipt, a reconcile's history. A `last_result` that an
 earlier version of the engine stored still holds its seal copy until the next apply
-of that round or inventory replaces it.
+of that round or inventory replaces it, and is projected as stored.
 
 Those later writes use the same budget, and one that would cross the limit still
 refuses.

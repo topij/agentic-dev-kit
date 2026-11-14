@@ -727,11 +727,11 @@ class Registry:
         # Only a seal that retains something is checked (#1335 kept this skip on
         # the operator's decision). A discard-only round or inventory seal, the
         # normal completion path, adds no retained item, so it strands nothing.
-        # Refusing it would wedge its round: the smallest seal a round can take
-        # is discard-only, so a refused one leaves the round with no way to
-        # retire. Its discard list is stored in the record and is not reserved:
-        # it uses the room earlier seals' checks counted on for their tombstones,
-        # and publish refuses a save over LIMIT. A manifest with neither retain
+        # Refusing it here would wedge its round: the smallest seal a round can
+        # take is discard-only, and a round with no seal cannot be applied.
+        # Its discard list is not reserved: it uses the room earlier seals'
+        # checks counted on for their tombstones, and publish's own bound still
+        # refuses its save in a record too near LIMIT. A manifest with neither retain
         # nor discard is refused above; one with `retire` diagnostics needs
         # retained replacements, so its `retain` is not empty and it is checked.
         if planned:
@@ -776,11 +776,12 @@ class Registry:
         empty `retain` is not checked (see the caller): it adds no retained item,
         and refusing it would leave its round no way to retire.
 
-        The projection is exact for the seals and their tombstones. It is not a
-        guarantee that the evidence can be retired, because it does not reserve
-        what else is recorded: a discard-only seal's discard list, what an apply
-        records (path outcomes, the evidence summary, approvals and statuses),
-        another round's receipt, a reconcile's history. A `last_result` written before #1335 still holds
+        The projection counts the seals and their tombstones, up to the size
+        digits noted at the end. It is not a guarantee that the evidence can be
+        retired, because it does not reserve what else is recorded: a
+        discard-only seal's discard list, what an apply records (path outcomes,
+        the evidence summary, approvals and statuses), another round's receipt,
+        a reconcile's history. A `last_result` written before #1335 still holds
         its seal copy until the next apply of that round or inventory replaces
         it, and is projected as stored.
         publish still refuses a save over LIMIT, so a seal that passes here can
@@ -788,8 +789,9 @@ class Registry:
         saves its tombstones before deleting anything. An apply does not: it
         removes its rounds' and worktrees' paths before its final save, so that
         save can refuse after the removal and leave the inventory incomplete.
-        A round whose retaining seal is refused here can still be sealed
-        discard-only, or with fewer items; the refusal deletes nothing.
+        A round whose retaining seal is refused here can be sealed with fewer
+        items or discard-only, unless the record is so near LIMIT that
+        publish refuses even that save; the refusal deletes nothing.
 
         The projection uses the hashes and sizes read just before the copy. A
         source rewritten between that read and the copy is stored as copied, so
