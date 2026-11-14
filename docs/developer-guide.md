@@ -15,25 +15,40 @@ configured `paths.engines` directory in an adopted repository.
 
 | Your situation | Do this | Continue with |
 | --- | --- | --- |
-| Fresh repository made from the template | Run `./init.sh`, then inspect `config/dev-model.yaml`. | [Getting started](getting-started.md) |
-| Existing repository with its own agent rules, config, or CI | Invoke `adopt` and review its selective install plan before it writes. | [Adopt workflow](agentic-dev-kit/workflows/adopt.md) |
-| Repository that already has the kit | Invoke `upgrade` in its assigned task worktree to inspect drift, migrate config, and refresh kit-owned files. | [Upgrade workflow](agentic-dev-kit/workflows/upgrade.md) |
-| A normal development session | Invoke `session-start`, use a task worktree, invoke `wrap-up` before review, then watch the PR. | [Session loop](#run-a-development-session) |
+| Fresh repository made from the template | Set the record paths and budgets for your project, then run `./init.sh`. | [Template quickstart](../README.md#quickstart) |
+| Existing repository with its own agent rules, config, or CI | Use the kit's `adopt` workflow to inspect the repository, choose full or lite, and review the proposed files. | [Choose the profile](agentic-dev-kit/workflows/adopt.md#choose-the-profile) |
+| Repository that already has the kit | Follow the `upgrade` workflow for the installed profile in an assigned task worktree. | [Upgrade workflow](agentic-dev-kit/workflows/upgrade.md) |
+| Working in a full installation | Use a task worktree, run the handoff test and watch the ready PR. | [Full session](#run-a-development-session) |
+| Working in a lite installation | Use the repository records, review the staged change and follow the repository's delivery route. | [Lite session](#run-a-lite-session) |
 
-Do not use `cp -r` on a mature repository: it can overwrite the files whose
-ownership `adopt` must inspect. Re-running `init.sh` migrates config and renders
-unclaimed templates; it does not replace the drift inspection and file refresh in
-`upgrade`.
+On a mature repository, `adopt` inspects existing files before proposing what to
+install. When upgrading a full installation, `upgrade` checks drift and identifies
+the files to refresh. Running `init.sh` alone migrates config and renders unclaimed
+templates.
 
 For a refusal or unexpected report, use the [troubleshooting table](troubleshooting.md).
 For upgrades and file edits, consult the [ownership reference](ownership.md).
 For changes to these guides, run the [documentation checks](documentation-checks.md).
 
+## Run a lite session
+
+When `config/dev-model.yaml` declares `profile: lite`, invoke `session-start` to
+read the plan, friction inbox and working tree. If configured, it also reads
+`backlog.path` and the sources the repository declares. [Lite session-start](agentic-dev-kit/lite/lite-session-start.md)
+
+Use `wrap-up` to stage the change, record unresolved work and run the same-context
+`review` before committing. When the repository declares safety-critical paths,
+a change to one of them or to the config itself also needs a fresh-context review
+and the operator's go-ahead before the commit. A repository that declares a
+protected branch opens a PR for the operator to merge. [Lite review](agentic-dev-kit/lite/lite-review.md) · [Lite wrap-up](agentic-dev-kit/lite/lite-wrap-up.md)
+
 ## Run a development session
 
-1. Invoke `session-start`. It reads the configured handoff and friction log, the
-   repository state, and available forge, CI, and tracker sources. An unavailable
-   source is reported as a gap. The workflow recommends work but makes no changes.
+1. In a full installation, invoke `session-start`. It needs the merged config,
+   handoff, friction log and working-tree state to brief you. It reports gaps
+   in optional sources such as the forge, CI or tracker, and recommends work when
+   the environment and inputs support it. Its PR poll may save when it observed
+   the checks on a head. It leaves review findings unacknowledged.
 2. Reuse the worktree assigned to this task, or create a dedicated linked worktree
    and task branch before editing. Keep unrelated work in its original checkout.
    In **this kit repository**, cockpit branches use `chore/<slug>` or `feat/<slug>`;
@@ -54,30 +69,23 @@ For changes to these guides, run the [documentation checks](documentation-checks
    remote, protected branch and task-branch convention.
 3. Make the change and run the repository's verification command. For this kit,
    run `make test` with a long enough tool timeout to receive the pytest summary.
-4. Run `wrap-up`'s handoff test before requesting each PR's opening review,
-   preferably before opening the PR. It asks whether the work left anything the PR, its
-   commits and the tracker do not already record — a decision, an abandoned approach, a next step
-   with no ticket. If so, it commits that to the workstream's entry in the
-   configured handoff on the same PR, so one review covers both; if not, it commits
-   nothing, which is the usual result. Route friction when you find it. Tracker
-   writes need a decision on their exact payload. Run the full `wrap-up` to close a
-   session that leaves half-finished state or decisions only in the conversation. Verify any final edits, then open completed work ready for review.
-5. Invoke `pr-watch` for the exact PR, and continue through CI and review findings.
-   Ready status starts review; it does not grant merge authority. Follow the
-   project's merge policy for the final act.
+4. Run `wrap-up`'s handoff test before the PR's opening review. If a decision or
+   next step would otherwise disappear with this conversation, commit it to the
+   relevant workstream on this branch. Route friction when you find it. A tracker
+   write needs a decision on its exact payload. Verify the final edits.
+5. Open completed work ready for review, run `pr-watch --assert-ready` for that
+   PR and follow the watch loop. The project and the operator's request determine
+   who can merge the reviewed head.
 
 ```mermaid
-flowchart LR
-    Brief["session-start<br/>briefing and environment"] --> Task["task worktree<br/>branch and edit"]
-    Task --> Wrap{"wrap-up handoff test<br/>unrecorded handoff?"}
-    Wrap -->|yes| Record["commit record<br/>with the change"]
-    Wrap -->|no| Verify
-    Record --> Verify["project verification"]
-    Verify --> PR["open ready PR<br/>assert ready"]
-    PR --> Watch["pr-watch<br/>CI and independent review<br/>lens panel by default"]
-    Watch --> Authority{"merge gates and<br/>project authority?"}
-    Authority -->|authorized| Merge["merge and read back"]
-    Authority -->|operator decision needed| Hold["hold exact PR head"]
+flowchart TD
+    accTitle: Handoff decision before opening a full-profile PR
+    accDescr: If a decision or next step is missing from durable records, commit it to the same branch. Verify the final changes, open the PR ready, assert readiness and follow the PR.
+    Wrap{"Does a decision or next step<br/>still need a record?"}
+    Wrap -->|yes| Record["Commit the handoff on this branch"]
+    Wrap -->|no| Verify["Verify the final changes"]
+    Record --> Verify
+    Verify --> Watch["Open ready PR, assert ready and watch"]
 ```
 
 For the full first-session walkthrough, use [Getting started](getting-started.md).
@@ -87,22 +95,18 @@ For the review loop and its stop conditions, use the [PR watch workflow](agentic
 
 | Report field | What to do with it |
 | --- | --- |
-| `converged` | The watch loop has no remaining checks or new findings to handle in its observed scope. Still inspect read gaps and the review request. |
-| `review_evidence` | Inspect whether independent review covers the current head through bot coverage or a recorded receipt. A push requires evidence for the new head. |
-| `merge_blockers` | Resolve the named blocker, or continue polling when the check rollup is settling. A receipt cannot override a current-head changes-requested review. |
-| `mergeable` | The engine's merge gate is satisfied; the project's merge policy must also authorize the actor. |
-| `done` | Legacy alias for `mergeable`; do not use it to mean the watch loop ended. |
+| `converged` | Checks and new findings have settled in the poll's observed scope. Inspect read gaps and settle the review request on this head. |
+| `review_owed` | At convergence, request review from each named bot. An empty list calls for no request. For `null`, poll again. If it stays `null` at the same head, run the required fallback review and report the unreadable bot state. |
+| `review_class` and `review_evidence` | Check whether independent review covers this head. For fallback review, a standard PR takes the selected lens. A safety-critical PR takes the panel. A new head needs its own coverage. |
+| `merge_blockers` | Follow the named action. A receipt marked `--repair-pending` holds the merge until its promised repair is pushed and the new head reviewed, or the repair is explicitly withdrawn. |
+| `mergeable` and `done` | `done` is a legacy alias for `mergeable`. When true, consult the project's merge policy and current authorization. The REST backend only polls and always reports `mergeable: false`. |
 
-Independent review is the kit's isolated lens panel by default, run at the converged
-head under the [fallback review contract](agentic-dev-kit/fallback-review-panel.md).
-A third-party review bot is opt-in through `review.bots`; when a configured bot is
-down, the same pass runs, since an outage is not a waiver. The computed review class determines the required lenses,
-and `panel_prompt.py` assembles each lens's prompt from the contract. The optional
-verifier, whose compute is `review.fallback_panel.verifier_compute`, checks each
-finding before disposition; it does not grant merge authority. Record dispositions with the
-review receipt so the findings survive outside local watch state. Follow the
-[watch loop](agentic-dev-kit/workflows/pr-watch.md) for review requests, round
-budgets and contained LOW repairs.
+By default the agent runs the required fresh-context review at convergence. A
+project can opt into a third-party bot through `review.bots`. If it becomes
+unavailable, check existing coverage and pending reviewers before running a
+fallback review. Record findings and their dispositions on the PR with the
+receipt. If the round budget is spent with actionable findings, follow the
+operator decision route. [PR watch stop conditions](agentic-dev-kit/workflows/pr-watch.md#stop-conditions) · [Fallback review](agentic-dev-kit/fallback-review-panel.md)
 
 When changing reviewer prompts or compute, use the kit's
 [reviewer evaluation guide](agentic-dev-kit/review-eval/reviewer-eval.md).
@@ -149,20 +153,21 @@ current terminal into the worktree. For unattended lanes, use the shared
 [headless companion](agentic-dev-kit/workflows/parallel-headless.md); its launch
 descriptor and wrapper carry the required environment and receipt.
 
-`--merge-class operator` keeps the final merge with the operator. A `self` class
-still needs project and current-request authority and must merge through the
-cockpit's `dev_session.sh merge` wrapper. See the [task recipes](parallel-howto.md)
-for watching, reconciling, and removing lanes.
+`--merge-class operator` keeps the final merge with the operator. For this kit
+repository, check the **Whole-kit plan** entry before issuing any lane. Its D2
+hold requires operator-class lanes and operator merges while it applies.
+[Kit handoff](kit-handoff.md#whole-kit-plan) · [Lane recipes](parallel-howto.md)
 
 The neutral `cheap`, `default`, and `expensive` tiers help choose compute. For an
 interactive lane a suggested tier is not proof that a runtime applied a model or
 effort setting; the operator applies it. A headless lane launched with
 `launch_lane.py --tier <tier>` gets `models.runtime_mappings.<runtime>.<tier>` on its
-argv, and its receipt records the compute and, for Claude, the token and cost usage.
+argv. Its receipt records the requested model and effort. Claude also reports
+token and cost usage for the launch and any resumed rounds.
 Follow the [parallel workflow's tier route](agentic-dev-kit/workflows/parallel.md#per-lane-effort-tier-risk--reasoning-effort--model).
 
-A lane finishes by naming its terminal state on its last line:
-`LANE-TERMINAL: pr-ready #<n>`, `no-pr <reason>` or `blocked <reason>`. A headless
+A headless lane names its outcome on its final line with `LANE-TERMINAL:`
+followed by `pr-ready #<n>`, `no-pr <reason>` or `blocked <reason>`. A headless
 Claude lane whose runtime exits successfully without it is resumed up to
 `parallel.max_resumes` times when its session can be resumed. A lane that still names
 no terminal state, including a Codex lane without one, is recorded `stalled` and shows

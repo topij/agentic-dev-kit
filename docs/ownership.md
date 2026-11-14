@@ -1,42 +1,70 @@
 # Ownership and safe edits
 
-Ownership answers who decides a file's content and how an upgrade treats it.
-Location alone is not proof: an adapter beside a kit file can contain adopter-authored
-policy. Start with the merged configuration, installed baseline and
-[`kit_doctor.py`](../scripts/kit_doctor.py) report in the target repository.
-
-| Surface | Source of authority | How to change or refresh it |
-| --- | --- | --- |
-| `config/dev-model.yaml` and allowed `config/dev-model.local.yaml` overlay | Adopter's project choices; shared reader defines supported syntax | Change project values in configuration. Upgrade migrates missing keys while preserving supported existing values. Keep secrets in the allowed local mechanism. |
-| Engines under `paths.engines` and kit source templates | Kit source and the installed manifest | Use [upgrade](agentic-dev-kit/workflows/upgrade.md) to inspect drift, reconcile local engine edits and refresh selected files. Do not use a hash mismatch as permission to discard work. |
-| Shared workflow definitions under `docs/agentic-dev-kit/workflows/` | Runtime-neutral behavioral contract | Change shared behavior here, then verify bindings still enter it. Runtime-specific copies of policy drift apart. |
-| `.claude/skills/`, `.agents/skills/` and companion interface files | Known generated form or adopter-authored content, as classified against the baseline | Refresh recognized kit forms through upgrade. Preserve `adopter-owned` content and inspect unavailable baseline history. See [runtime parity](agentic-dev-kit/runtime-parity.md). |
-| Claude lens definitions | Adopter's merged review configuration and kit rendering source | Preview the render and inspect its diff before replacement; do not copy the kit's model choices into another project. |
-| Root `AGENTS.md`, `CLAUDE.md`, handoff and friction documents after adoption | Adopter's rendered and claimed content | Edit as project records. The installer seeds missing or explicitly unclaimed templates; upgrade's no-clobber route preserves existing files. In this kit, live records use `docs/kit-*.md`; `docs/handoff.md` is shipped starting content. |
-| Shared hook shim in Git administration | Deliberate installation for all linked checkouts | Follow the explicit shared-hook step in upgrade. A task worktree does not own the shared hooks merely because it can see them. |
-| Lane source checkout and branch | Assigned lane's declared source footprint | Edit only assigned files; cockpit owns shared narrative coordination. A worktree isolates source edits, not permissions to overlap another lane. |
-| Lane workflow state | `DEVKIT_STATE_ROOT` and the configured state-path resolver | Use the engine's resolved paths, including its workflow-specific read/write rules. Do not copy approval evidence from another session or construct a production `state/` path by hand. |
-| Review rounds and disposable scratch | Allocation receipt and session inventory | Record ownership and writers before review. Discard completed payloads by default; retain only an exception that names its unfinished task, next action and deletion condition, and retire it through `retire-evidence`. A temporary directory name is not deletion authority. |
-| Sealed session evidence | `<git-common-dir>/devkit/<scratch.session_registry>/` and its `session.json` index | Holds only retention exceptions; retire them through `retire-evidence` under operator authorization, never by hand. This local evidence survives task-worktree removal, but does not travel in a fresh clone. Follow [cleanup](agentic-dev-kit/session-cleanup.md) for preview and apply. |
-| This repository's documentation tooling and CI | Maintainer source under `tooling/docs/` and `.github/workflows/` | Run [documentation checks](documentation-checks.md) when editing reader guides. This tooling is repository-only; adopting the engines does not require Node or a browser. |
+A checkout can contain a kit engine, a skill written by the adopter, and a living
+plan full of project decisions. Those files can all appear in the same upgrade diff.
+Use the install profile, the recorded baseline and the file's role to decide which
+copy to take. The [upgrade workflow](agentic-dev-kit/workflows/upgrade.md) defines the procedure.
 
 ## From source to installed content
 
 ```mermaid
-flowchart TB
-    Source["Kit source and templates"] --> Inspect["Upgrade inspection<br/>baseline and local bytes"]
-    Config["Adopter configuration"] --> Preview["Preview generated content"]
-    Inspect --> Known["Recognized kit-owned form"]
-    Inspect --> Unknown["Authored or unclassified content"]
-    Known --> Preview
-    Preview --> Diff["Inspect diff and refresh selected files"]
-    Unknown --> Preserve["Preserve and resolve ownership"]
-    Diff --> Baseline["Record installed baseline"]
+flowchart TD
+    accTitle: What the upgrade inspector compares
+    accDescr: The inspector compares the selected kit revision, the recorded installation and the adopter's current files. Its report distinguishes kit updates from local decisions that need the operator's attention.
+    Kit["Selected kit revision"] --> Report["Installation report"]
+    Baseline["Recorded installation"] --> Report
+    Local["Files in adopter checkout"] --> Report
+    Report --> Refresh["Select kit updates<br/>for the upgrade"]
+    Report --> Edit["Inspect local edits<br/>with the operator"]
+    Report --> Keep["Honor recorded<br/>installation choices"]
 ```
 
-The [upgrade contract](agentic-dev-kit/workflows/upgrade.md) governs inspection,
-selection and baseline recording. Recording a baseline is a write after the selected
-installation; it is not a way to make an unexplained drift report disappear.
-The manifest records ownership and provenance, not permission to overwrite or delete.
-For runtime state and retention relationships, see
-[Architecture](architecture.md#isolation-and-state).
+Compare the upstream copy, the bytes recorded for the previous installation and the
+bytes in the adopter checkout. For example, when the checkout still matches the
+trusted baseline and upstream has changed, the report can identify a `stale` file.
+When the checkout and upstream have both moved, inspect `stale-and-edited` before
+taking a new copy. A plain `differs` leaves the cause open. Recording a new baseline
+after the approved refresh gives the next upgrade its comparison point.
+
+## Project records and policy
+
+| File | Who changes it and why |
+| --- | --- |
+| Living plan, friction inbox and their project records | The adopter owns the content. Point the kit at the project's files. This source repository uses `docs/kit-handoff.md` for its own work and ships `docs/handoff.md` as starting content. |
+| `config/dev-model.yaml` | The adopter sets paths and project policy using the schema for its profile. Full's `init.sh` migrates supported config and seeds unclaimed templates. Lite uses the small schema in [Lite adoption](agentic-dev-kit/workflows/adopt.md#lite-profile). |
+| Full `config/dev-model.local.yaml` | The checkout owner can set keys accepted by the [config reader](../scripts/lib/kitconfig.py), including `systemize.operator_logins`. Keep the overlay gitignored. A fresh clone or plain linked worktree reads tracked values until it has its own overlay. |
+| `AGENTS.md` and `CLAUDE.md` | The adopter maintains its root instructions. For Lite, keep the kit's session-discipline bullets and put project-specific source commands beneath the `session-start` or `wrap-up` headings. For Full, the installer seeds missing or explicitly unclaimed root guides. |
+
+## Lite installation
+
+Run the inspection from the **kit clone** against the **adopter's checkout**. During
+adoption, `kit_doctor.py --verify-lite` verifies the selected install and its skill
+bindings. During an upgrade, `kit_doctor.py --upgrade-lite` compares against the
+adopter's **committed** `kit-manifest.json`. A missing committed baseline stops the
+Lite upgrade. Recording a baseline from the new kit at that point would erase the
+comparison with what the repository installed. See [Lite upgrade](agentic-dev-kit/workflows/upgrade.md#lite-profile).
+
+| Surface | How an upgrade treats it |
+| --- | --- |
+| Workflows under `docs/agentic-dev-kit/lite/` | Kit-owned. If an edit belongs to the project, agree where to move it before taking the upstream copy. `--keep` applies only to a skill. |
+| Runtime skills and existing Claude commands | The report distinguishes a kit skill, a skill the operator kept, and a skipped skill whose installation would shadow a retained command. Review any `decide` row with the operator. |
+| Session-discipline section and backlog | Review proposed changes to the kit's `AGENTS.md` bullets separately from the repository's source commands. When `backlog.path` is configured, the repository owns the stories and Lite wrap-up maintains their statuses. |
+
+## Full installation
+
+| Surface | How an upgrade treats it |
+| --- | --- |
+| Engines under `paths.engines` and source templates | Inspect drift against the selected kit. Reconcile a local engine patch with the operator before refresh. Templates supply starting content for adopter-owned documents. |
+| Shared workflows and runtime bindings | The definitions under `docs/agentic-dev-kit/workflows/` own the behavior. Inspect `.claude/skills/`, `.agents/skills/` and companion files against their generated forms and baseline history. Preserve adopter-authored content or unclassified bindings while ownership is settled. See [runtime parity](agentic-dev-kit/runtime-parity.md). |
+| Claude lens definitions | Preview the render from the adopter's merged review configuration and inspect its diff before replacement. |
+| Hook shims in Git administration | Linked checkouts can share their hooks. Follow the explicit shared-hook installation step in [Full upgrade](agentic-dev-kit/workflows/upgrade.md) so a task checkout cannot change the other checkouts' hooks unexpectedly. |
+
+## Working files and retained evidence
+
+| Location | Who owns the contents |
+| --- | --- |
+| Lane worktree and branch | The lane edits its assigned source files. The cockpit coordinates overlapping work and owns the shared handoff and friction log. |
+| Lane state sandbox | The lane's workflow uses `DEVKIT_STATE_ROOT` and its prescribed read and write paths. Scope-aware PR watch in the cockpit uses that same state. See [isolation and state](architecture.md#isolation-and-state). |
+| Registered review rounds and disposable scratch | The session that created a path records it and its writers. A round can retire once its findings or receipt are recorded and the guards allow removal. |
+| Retained evidence in shared Git metadata | A seal may retain evidence for unfinished work, naming its next action and deletion condition. Linked worktrees share that local copy. Use `retire-evidence` to preview and apply authorized retirement. See the [cleanup contract](agentic-dev-kit/session-cleanup.md). |
+| Documentation tooling and CI in this kit repository | Maintainers run the [documentation checks](documentation-checks.md) when editing the reader guides. The Node and browser dependencies belong to this check. |
