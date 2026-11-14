@@ -20066,6 +20066,9 @@ def test_upgrade_verification_stops_at_the_failed_command(
 
 
 _KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/upgrade.md", "docs/agentic-dev-kit/workflows/adopt.md")
+# The workflows whose kit block takes `KIT_REF`. Upgrades read the tip of the remote's
+# default branch only; pinning an upgrade is tracked in #1445.
+_PINNED_KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/adopt.md",)
 
 # Fence labels that hold no command to run: transcripts and data. Every other fence,
 # an unlabelled one included, is read as shell.
@@ -20089,9 +20092,15 @@ def _kit_block(workflow: str) -> str:
 
 
 def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
-    """A PATH whose `git clone <url> <dest>` makes a clean one-commit repository at
-    <dest>, with `origin` set to <url>, and logs <dest>; every other git call, fetch
-    included, is the real git, and a fetch is logged too."""
+    """A PATH whose `git clone <url> <dest>` makes a clean repository at <dest>, with
+    `origin` set to <url> and the same commits every time, and logs <dest>. The first
+    commit carries an annotated tag `v1` and lightweight tags `20261114`, `FACADE` and
+    `both`; the default branch, `main` or `$STUB_DEFAULT_BRANCH` (a fork's `master`),
+    is one commit later, as is a branch `both`. The clone's HEAD is that default branch,
+    as `git clone` leaves it. The block's `fetch --depth 1 origin <ref>` and
+    `ls-remote origin` answer from those refs, with no network, and each is logged
+    (`$STUB_LSREMOTE_FAILS` makes `ls-remote` fail, as an unreachable remote does);
+    every other git call is the real git, and any other fetch is logged too."""
     real = shutil.which("git")
     assert real
     bins = tmp_path / "bin"
@@ -20101,13 +20110,43 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
     stub.write_text(
         '#!/bin/sh\n'
         'if [ "$1" = clone ]; then\n'
+        '  # Fixed dates: every stub clone holds the same commits, so a sha taken from one is\n'
+        '  # valid in the next, as one kit is for every adopter.\n'
+        '  export GIT_AUTHOR_DATE="2020-01-01T00:00:00Z" GIT_COMMITTER_DATE="2020-01-01T00:00:00Z"\n'
         '  url=; for last; do url="$prev"; prev="$last"; done\n'
         '  echo "$last" >> "$CLONES"\n'
-        '  "$REAL_GIT" init -q "$last" && "$REAL_GIT" -C "$last" remote add origin "$url" &&\n'
+        '  "$REAL_GIT" init -q -b "${STUB_DEFAULT_BRANCH:-main}" "$last" &&\n'
+        '    "$REAL_GIT" -C "$last" remote add origin "$url" &&\n'
         '    echo "{}" > "$last/kit-manifest.json" && "$REAL_GIT" -C "$last" add kit-manifest.json &&\n'
-        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -m kit\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -m kit &&\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t tag -a -m release v1 &&\n'
+        '    "$REAL_GIT" -C "$last" tag 20261114 && "$REAL_GIT" -C "$last" tag FACADE &&\n'
+        '    "$REAL_GIT" -C "$last" tag both &&\n'
+        '    echo "{\\"later\\": true}" > "$last/kit-manifest.json" &&\n'
+        '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -a -m later &&\n'
+        '    "$REAL_GIT" -C "$last" branch both\n'
         '  exit $?\n'
         'fi\n'
+        '# The block pins its ref with `git -C <kit> fetch --depth 1 origin <ref>`: resolve the\n'
+        '# ref in the stub clone (no network), as FETCH_HEAD, and log the ref asked for. Unpeeled,\n'
+        '# as real git writes it: an annotated tag is its TAG object, not its commit (PR 1443 R1).\n'
+        'case " $* " in *" fetch --depth 1 origin "*)\n'
+        '  for last; do :; done\n'
+        '  echo "$last" >> "$CLONES.refs"\n'
+        '  "$REAL_GIT" -C "$2" rev-parse -q --verify "$last^{commit}" >/dev/null || exit 1\n'
+        '  sha="$("$REAL_GIT" -C "$2" rev-parse -q --verify "$last^{object}")" || exit 1\n'
+        '  printf "%s\\t\\t%s\\n" "$sha" "$last" > "$2/.git/FETCH_HEAD"\n'
+        '  exit 0 ;;\n'
+        'esac\n'
+        '# A found clone is checked with `git -C <kit> ls-remote origin`: list the refs the\n'
+        '# stub clone was made with, which every stub clone shares, as real ls-remote prints\n'
+        '# them: `<sha><TAB><ref>`, an annotated tag followed by its peeled `<ref>^{}` line.\n'
+        'case " $* " in *" ls-remote origin "*)\n'
+        '  echo "ls-remote" >> "$CLONES.lsremote"\n'
+        '  if [ -n "${STUB_LSREMOTE_FAILS:-}" ]; then echo "fatal: unable to access origin" >&2; exit 128; fi\n'
+        '  "$REAL_GIT" -C "$2" show-ref -d --heads --tags | tr " " "\\t"\n'
+        '  exit $? ;;\n'
+        'esac\n'
         'case " $* " in *" fetch "*) echo "fetch $*" >> "$CLONES.fetch" ;; esac\n'
         'exec "$REAL_GIT" "$@"\n'
     )
@@ -20164,15 +20203,332 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
     _, task_a = _repo_with_task(tmp_path, "a")
     _, task_b = _repo_with_task(tmp_path, "b")
     kits = []
-    for task in (task_a, task_a, task_b):
+    for n, task in enumerate((task_a, task_a, task_b)):
         result = _run_kit_block(shell, block, env, task)
         assert result.returncode == 0, result.stderr
         kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+        # Only the re-run found its clone, and with `main` its `kit commit:` line says
+        # it did not re-check it. Only a block that takes `KIT_REF` prints that line.
+        if workflow in _PINNED_KIT_WORKFLOWS:
+            commit_line = next(line for line in result.stdout.splitlines() if line.startswith("kit commit: "))
+            assert (
+                "found, not cloned, and not re-checked against the remote's default branch" in commit_line
+            ) == (n == 1)
     assert kits[0] == kits[1] != kits[2]
     assert clones.read_text().splitlines() == [kits[0], kits[2]]
     assert Path(kits[0]).is_relative_to(_git_dir(task_a))
     assert Path(kits[2]).is_relative_to(_git_dir(task_b))
     assert _git(task_a, "status", "--porcelain").stdout == ""
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+@pytest.mark.parametrize("shell", ["bash", "zsh"])
+def test_the_kit_block_checks_out_the_named_ref_and_prints_its_commit(
+    tmp_path: Path, workflow: str, shell: str
+) -> None:
+    """The operator names a tag or sha in `KIT_REF`; the clone is at that commit and
+    the block prints the resolved sha before any copy. With none named it takes the
+    remote's default branch and fetches no ref."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    assert 'KIT_REF="${KIT_REF:-}"' in block
+    env, clones = _kit_world(tmp_path)
+    _, task_tag = _repo_with_task(tmp_path, "tag")
+    _, task_default = _repo_with_task(tmp_path, "default")
+    tagged = _run_kit_block(shell, block, dict(env, KIT_REF="v1"), task_tag)
+    assert tagged.returncode == 0, tagged.stderr
+    kit = Path(tagged.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    first = _git(kit, "rev-parse", "v1^{commit}").stdout.strip()
+    head = _git(kit, "rev-parse", "HEAD").stdout.strip()
+    assert head == first != _git(kit, "rev-parse", "main").stdout.strip()
+    assert f"kit commit: {head}   (ref requested: v1)" in tagged.stdout.splitlines()
+    assert _git(kit, "status", "--porcelain").stdout == ""
+    # A bare commit works the same way.
+    by_sha = _run_kit_block(shell, block, dict(env, KIT_REF=first), task_default)
+    assert by_sha.returncode == 0, by_sha.stderr
+    assert f"kit commit: {first}" in by_sha.stdout
+    # No ref named: the remote's default branch, and the line says so.
+    _, task_none = _repo_with_task(tmp_path, "none")
+    none = _run_kit_block(shell, block, env, task_none)
+    assert none.returncode == 0, none.stderr
+    kit_none = Path(none.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    tip = _git(kit_none, "rev-parse", "main").stdout.strip()
+    assert f"kit commit: {tip}   (ref requested: none, the remote's default branch)" in none.stdout
+    assert Path(str(clones) + ".refs").read_text().splitlines() == ["v1", first]
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+@pytest.mark.parametrize("shell", ["sh", "bash", "zsh"])
+def test_the_kit_block_stops_when_a_clone_it_finds_is_not_at_the_named_ref(
+    tmp_path: Path, workflow: str, shell: str
+) -> None:
+    """A re-run finds the clone an earlier run made. With a tag or sha named, that
+    clone must be at its commit, or Step 2 would copy, and the record name, a kit the
+    operator did not ask for (PR 1443 review)."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block(shell, block, dict(env, KIT_REF="v1"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    pinned = _git(kit, "rev-parse", "HEAD").stdout.strip()
+    later = _git(kit, "rev-parse", "main").stdout.strip()
+    assert pinned != later
+    refs = Path(str(clones) + ".refs")
+    fetched = refs.read_text()
+    # The same ref, by tag or by sha: found, checked, used. The tag is annotated, so
+    # only its peeled `^{}` line names the commit.
+    for ref in ("v1", pinned):
+        again = _run_kit_block(shell, block, dict(env, KIT_REF=ref), task)
+        assert again.returncode == 0, again.stderr
+        assert f"kit commit: {pinned}   (ref requested: {ref})" in again.stdout.splitlines()
+    # The tag was read from origin, the sha compared as written; neither fetched.
+    assert Path(str(clones) + ".lsremote").read_text().splitlines() == ["ls-remote"]
+    # A different commit named, by sha or by branch: refused before anything prints it.
+    for ref in (later, "refs/heads/main", "main"):
+        wrong = _run_kit_block(shell, block, dict(env, KIT_REF=ref), task)
+        assert wrong.returncode != 0
+        assert f"is not at {ref} ({later})" in wrong.stderr
+        assert "kit commit:" not in wrong.stdout
+    # A ref the remote does not have is named as that, not as a clone to delete.
+    missing = _run_kit_block(shell, block, dict(env, KIT_REF="no-such-tag"), task)
+    assert missing.returncode != 0
+    assert "could not resolve no-such-tag on " in missing.stderr and "delete" not in missing.stderr
+    # The check read the remote and left the clone as it was: nothing fetched into it.
+    assert refs.read_text() == fetched
+    assert not Path(str(clones) + ".fetch").exists()
+    assert _git(kit, "rev-parse", "HEAD").stdout.strip() == pinned
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_refuses_a_ref_that_git_would_read_as_an_option(
+    tmp_path: Path, workflow: str
+) -> None:
+    """`KIT_REF='--upload-pack=<command>'` handed to `git fetch` runs the command: the
+    block refuses any ref starting with `-` before it calls git at all."""
+    require_kit_paths(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    marker = tmp_path / "ran"
+    result = _run_kit_block(
+        "sh", _kit_block(workflow), dict(env, KIT_REF=f"--upload-pack=touch {marker}"), task
+    )
+    assert result.returncode != 0
+    assert "starts with -" in result.stderr
+    assert not marker.exists()
+    assert not clones.exists()
+    assert not (_git_dir(task) / "agentic-dev-kit").exists()
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_reads_an_uppercase_full_sha_alike_on_a_re_run(
+    tmp_path: Path, workflow: str
+) -> None:
+    """The clone and a later run's check both lower-case a full sha, so a re-run
+    with the same uppercase sha finds the clone at it rather than refusing it."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF="v1"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    pinned = _git(kit, "rev-parse", "HEAD").stdout.strip()
+    _, fresh_task = _repo_with_task(tmp_path, "b")
+    for repo in (fresh_task, fresh_task, task):
+        again = _run_kit_block("sh", block, dict(env, KIT_REF=pinned.upper()), repo)
+        assert again.returncode == 0, again.stderr
+        assert f"kit commit: {pinned}   (ref requested: {pinned})" in again.stdout.splitlines()
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_checks_a_hex_only_tag_through_ls_remote_on_a_re_run(
+    tmp_path: Path, workflow: str
+) -> None:
+    """A tag named only with hex digits, `20261114`, is not a full sha: a run that
+    finds its clone resolves it from origin rather than comparing it with HEAD as written."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF="20261114"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    tagged = _git(kit, "rev-parse", "20261114^{commit}").stdout.strip()
+    assert _git(kit, "rev-parse", "HEAD").stdout.strip() == tagged
+    lsremote = Path(str(clones) + ".lsremote")
+    assert not lsremote.exists()
+    again = _run_kit_block("sh", block, dict(env, KIT_REF="20261114"), task)
+    assert again.returncode == 0, again.stderr
+    assert f"kit commit: {tagged}   (ref requested: 20261114)" in again.stdout.splitlines()
+    assert lsremote.read_text().splitlines() == ["ls-remote"]
+
+
+def test_the_upgrade_kit_block_names_no_ref() -> None:
+    """Adopt takes `KIT_REF`; an upgrade reads the remote's default branch only, and says that
+    pinning one is tracked in #1445, so no adopter sets `KIT_REF` for an upgrade
+    expecting it to hold."""
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    assert workflow not in _PINNED_KIT_WORKFLOWS
+    assert "KIT_REF" not in (REPO_ROOT / workflow).read_text(encoding="utf-8")
+    assert "#1445" in (REPO_ROOT / workflow).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_stops_on_a_ref_it_cannot_check_out_and_a_re_run_refuses_the_clone(
+    tmp_path: Path, workflow: str
+) -> None:
+    """The block deletes nothing: it tells the operator to delete the clone it could
+    not move to the named ref, and until they do, a re-run naming that ref refuses the
+    clone (left at the default branch) rather than taking it."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    kit = _git_dir(task) / "agentic-dev-kit"
+    result = _run_kit_block("sh", block, dict(env, KIT_REF="no-such-ref"), task)
+    assert result.returncode != 0
+    assert "could not check out no-such-ref from " in result.stderr
+    assert f"delete {kit}, check the ref and re-run this block" in result.stderr
+    assert kit.exists()
+    again = _run_kit_block("sh", block, dict(env, KIT_REF="no-such-ref"), task)
+    assert again.returncode != 0 and "kit commit:" not in again.stdout
+    assert "could not resolve no-such-ref on " in again.stderr
+    assert clones.read_text().splitlines() == [str(kit)]
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_runs_no_rm_rf(workflow: str) -> None:
+    """A `Bash(rm -rf *)` permission deny matches a command's text, so a kit block
+    holding `rm -rf` is refused whole before it runs (PR 1443 round 6). No workflow
+    deletes with it; the adopt block deletes nothing at all."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    assert "rm -rf" not in block
+    assert not re.search(r"(?<![\w-])rm\s|-delete\b|\bunlink\b", block)
+    for doc in (REPO_ROOT / "docs/agentic-dev-kit/workflows").glob("*.md"):
+        assert "rm -rf" not in doc.read_text(encoding="utf-8"), doc
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+@pytest.mark.parametrize("ref, full", [("tags/v1", "refs/tags/v1^{}"), ("heads/both", "refs/heads/both")])
+def test_the_kit_block_resolves_a_partial_ref_name_on_a_re_run_as_git_fetch_does(
+    tmp_path: Path, workflow: str, ref: str, full: str
+) -> None:
+    """`git fetch origin tags/v1` and `heads/<branch>` take a name under `refs/`; the
+    re-run's `ls-remote` check resolves it the same way, so it accepts the clone."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF=ref), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    want = _git(kit, "rev-parse", full.removesuffix("^{}") + "^{commit}").stdout.strip()
+    assert _git(kit, "rev-parse", "HEAD").stdout.strip() == want
+    again = _run_kit_block("sh", block, dict(env, KIT_REF=ref), task)
+    assert again.returncode == 0, again.stderr
+    assert f"kit commit: {want}   (ref requested: {ref})" in again.stdout.splitlines()
+    assert Path(str(clones) + ".lsremote").read_text().splitlines() == ["ls-remote"]
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_installs_a_fork_whose_default_branch_is_not_main(
+    tmp_path: Path, workflow: str
+) -> None:
+    """A fork whose HEAD is `master`, with no `main`: an unset `KIT_REF` clones its
+    default branch and fetches no ref, a re-run says it did not re-check it, and a
+    named ref still works against the fork."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    env = dict(env, STUB_DEFAULT_BRANCH="master")
+    _, task = _repo_with_task(tmp_path, "a")
+    for n in range(2):
+        result = _run_kit_block("sh", block, env, task)
+        assert result.returncode == 0, result.stderr
+        kit = Path(result.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+        tip = _git(kit, "rev-parse", "master").stdout.strip()
+        assert _git(kit, "rev-parse", "HEAD").stdout.strip() == tip
+        assert f"kit commit: {tip}   (ref requested: none, the remote's default branch" in result.stdout
+        assert ("not re-checked against the remote's default branch" in result.stdout) == (n == 1)
+    assert "refs/heads/main" not in _git(kit, "show-ref").stdout
+    assert not Path(str(clones) + ".refs").exists()
+    _, named = _repo_with_task(tmp_path, "b")
+    tagged = _run_kit_block("sh", block, dict(env, KIT_REF="v1"), named)
+    assert tagged.returncode == 0, tagged.stderr
+    kit_b = Path(tagged.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    first = _git(kit_b, "rev-parse", "v1^{commit}").stdout.strip()
+    assert f"kit commit: {first}   (ref requested: v1)" in tagged.stdout.splitlines()
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_does_not_judge_a_found_clone_when_the_remote_cannot_be_read(
+    tmp_path: Path, workflow: str
+) -> None:
+    """An unreadable remote says nothing about the clone, so the block says the
+    remote could not be read and stops, without telling the operator to delete a
+    clone that may be at the right commit."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    assert _run_kit_block("sh", block, dict(env, KIT_REF="v1"), task).returncode == 0
+    result = _run_kit_block("sh", block, dict(env, KIT_REF="v1", STUB_LSREMOTE_FAILS="1"), task)
+    assert result.returncode != 0
+    assert "could not read" in result.stderr and "delete" not in result.stderr
+    assert "kit commit:" not in result.stdout
+    assert (_git_dir(task) / "agentic-dev-kit").exists()
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_takes_the_tag_over_a_branch_of_the_same_name(
+    tmp_path: Path, workflow: str
+) -> None:
+    """A tag `both` on the first commit and a branch `both` one commit later: the
+    fresh run checks out the tag, as `git fetch` resolves the name, and a re-run's
+    `ls-remote` check reads the tag too, so it accepts the clone."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF="both"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    tag = _git(kit, "rev-parse", "refs/tags/both^{commit}").stdout.strip()
+    assert tag != _git(kit, "rev-parse", "refs/heads/both").stdout.strip()
+    assert _git(kit, "rev-parse", "HEAD").stdout.strip() == tag
+    again = _run_kit_block("sh", block, dict(env, KIT_REF="both"), task)
+    assert again.returncode == 0, again.stderr
+    assert f"kit commit: {tag}   (ref requested: both)" in again.stdout.splitlines()
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_leaves_a_short_letter_hex_tag_as_named(
+    tmp_path: Path, workflow: str
+) -> None:
+    """`FACADE` is hex, but not a full sha: it is not lower-cased, so the fresh run
+    fetches the tag as named and a re-run resolves it through `ls-remote`."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF="FACADE"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    tag = _git(kit, "rev-parse", "FACADE^{commit}").stdout.strip()
+    assert _git(kit, "rev-parse", "HEAD").stdout.strip() == tag
+    assert Path(str(clones) + ".refs").read_text().splitlines() == ["FACADE"]
+    again = _run_kit_block("sh", block, dict(env, KIT_REF="FACADE"), task)
+    assert again.returncode == 0, again.stderr
+    assert f"kit commit: {tag}   (ref requested: FACADE)" in again.stdout.splitlines()
+    assert Path(str(clones) + ".lsremote").read_text().splitlines() == ["ls-remote"]
 
 
 def _tamper(kit: Path, how: str) -> None:
