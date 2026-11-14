@@ -35,11 +35,11 @@ KIT_FOUND=yes
 if [ ! -e "$KIT" ]; then
   KIT_FOUND=
   git clone --depth 1 "$KIT_URL" "$KIT" || exit 1
-  # Only a named ref is fetched. A clone this run made and could not move to it is
-  # removed, so the next run starts from nothing rather than from the default branch.
+  # Only a named ref is fetched. A clone this run made and could not move to it is left
+  # at the default branch for you to delete; until you do, a re-run naming a ref refuses it.
   if [ -n "$KIT_REF" ]; then
     git -C "$KIT" fetch --depth 1 origin "$KIT_REF" && git -C "$KIT" checkout -q --detach FETCH_HEAD ||
-      { rm -rf "$KIT"; echo "could not check out $KIT_REF from $KIT_URL; the clone this run made is removed: check the ref and re-run this block" >&2; exit 1; }
+      { echo "could not check out $KIT_REF from $KIT_URL: delete $KIT, check the ref and re-run this block" >&2; exit 1; }
   fi
 fi
 KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
@@ -49,7 +49,9 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
 # A clone this block found rather than made must still be at the ref you named, and
 # checking it must not change it: a full sha is compared with HEAD as written; a tag or
 # branch is read from the remote with `ls-remote`, which writes nothing into the clone
-# (a tag before a branch of the same name, an annotated tag by its `^{}` line).
+# (a name resolves as `git fetch` resolves it: as written, then under refs/, refs/tags/
+# and refs/heads/, so a tag before a branch of the same name; an annotated tag by its
+# `^{}` line, the commit it points at).
 if [ -z "$KIT_REF" ]; then KIT_SAID="ref requested: none, the remote's default branch"; else KIT_SAID="ref requested: $KIT_REF"; fi
 if [ -n "$KIT_FOUND" ] && [ -n "$KIT_REF" ]; then
   case "$KIT_REF" in
@@ -60,10 +62,12 @@ if [ -n "$KIT_FOUND" ] && [ -n "$KIT_REF" ]; then
     KIT_REFS="$(git -C "$KIT" ls-remote origin)" ||
       { echo "could not read $KIT_URL to check $KIT against $KIT_REF: re-run this block once it can be read" >&2; exit 1; }
     KIT_WANT="$(printf '%s\n' "$KIT_REFS" | awk -v r="$KIT_REF" '
-      $2 == r "^{}" { a = $1 } $2 == r { b = $1 }
-      $2 == "refs/tags/" r "^{}" { c = $1 } $2 == "refs/tags/" r { d = $1 } $2 == "refs/heads/" r { e = $1 }
-      END { if (length(a)) print a; else if (length(b)) print b; else if (length(c)) print c; else if (length(d)) print d; else print e }')"
-    [ -n "$KIT_WANT" ] || { echo "$KIT_URL has no tag or branch $KIT_REF: check the ref and re-run this block" >&2; exit 1; }
+      $2 == r "^{}" { p1 = $1 } $2 == r { u1 = $1 }
+      $2 == "refs/" r "^{}" { p2 = $1 } $2 == "refs/" r { u2 = $1 }
+      $2 == "refs/tags/" r "^{}" { p3 = $1 } $2 == "refs/tags/" r { u3 = $1 }
+      $2 == "refs/heads/" r { u4 = $1 }
+      END { print length(p1) ? p1 : length(u1) ? u1 : length(p2) ? p2 : length(u2) ? u2 : length(p3) ? p3 : length(u3) ? u3 : u4 }')"
+    [ -n "$KIT_WANT" ] || { echo "could not resolve $KIT_REF on $KIT_URL: check the ref and re-run this block" >&2; exit 1; }
   fi
   [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
     { echo "$KIT is not at $KIT_REF ($KIT_WANT): delete $KIT and re-run this block" >&2; exit 1; }
@@ -105,7 +109,8 @@ without judging the clone; re-run it once the remote can be read. With no ref na
 not check, because the default branch moves: its `kit commit:` line says the clone was
 found and not re-checked, and if the commit it names is not the kit you mean to adopt,
 delete `$KIT` and re-run the block. When the block cannot check out a ref you named, it
-removes the clone it just made, so a re-run starts again from nothing. It writes into the git directory, so a
+stops and tells you to delete the clone it just made, which is left at the default
+branch: until you delete it, a re-run that names a ref refuses it. It writes into the git directory, so a
 sandbox that allows writes only inside the working tree needs to allow this one. Delete
 the clone once the adoption has landed.
 

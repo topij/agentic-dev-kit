@@ -20066,8 +20066,8 @@ def test_upgrade_verification_stops_at_the_failed_command(
 
 
 _KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/upgrade.md", "docs/agentic-dev-kit/workflows/adopt.md")
-# The workflows whose kit block takes `KIT_REF`. Upgrades read the kit's `main` only;
-# pinning an upgrade is tracked in #1445.
+# The workflows whose kit block takes `KIT_REF`. Upgrades read the tip of the remote's
+# default branch only; pinning an upgrade is tracked in #1445.
 _PINNED_KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/adopt.md",)
 
 # Fence labels that hold no command to run: transcripts and data. Every other fence,
@@ -20298,7 +20298,7 @@ def test_the_kit_block_stops_when_a_clone_it_finds_is_not_at_the_named_ref(
     # A ref the remote does not have is named as that, not as a clone to delete.
     missing = _run_kit_block(shell, block, dict(env, KIT_REF="no-such-tag"), task)
     assert missing.returncode != 0
-    assert "has no tag or branch no-such-tag" in missing.stderr and "delete" not in missing.stderr
+    assert "could not resolve no-such-tag on " in missing.stderr and "delete" not in missing.stderr
     # The check read the remote and left the clone as it was: nothing fetched into it.
     assert refs.read_text() == fetched
     assert not Path(str(clones) + ".fetch").exists()
@@ -20381,27 +20381,61 @@ def test_the_upgrade_kit_block_names_no_ref() -> None:
 
 
 @pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
-def test_the_kit_block_stops_on_a_ref_it_cannot_check_out_and_removes_its_clone(
+def test_the_kit_block_stops_on_a_ref_it_cannot_check_out_and_a_re_run_refuses_the_clone(
     tmp_path: Path, workflow: str
 ) -> None:
-    """The clone a run made and could not move to the named ref is removed, so the
-    message's "re-run" holds: the same ref stops again the same way, rather than a
-    re-run finding a clone left at the default branch."""
+    """The block deletes nothing: it tells the operator to delete the clone it could
+    not move to the named ref, and until they do, a re-run naming that ref refuses the
+    clone (left at the default branch) rather than taking it."""
     require_kit_paths(workflow)
     block = _kit_block(workflow)
     env, clones = _kit_world(tmp_path)
     _, task = _repo_with_task(tmp_path, "a")
     kit = _git_dir(task) / "agentic-dev-kit"
-    for _ in range(2):
-        result = _run_kit_block("sh", block, dict(env, KIT_REF="no-such-ref"), task)
-        assert result.returncode != 0
-        assert "could not check out no-such-ref" in result.stderr
-        assert "the clone this run made is removed" in result.stderr
-        assert not kit.exists()
-    fresh = _run_kit_block("sh", block, env, task)
-    assert fresh.returncode == 0, fresh.stderr
-    assert "found, not cloned" not in fresh.stdout
-    assert clones.read_text().splitlines() == [str(kit)] * 3
+    result = _run_kit_block("sh", block, dict(env, KIT_REF="no-such-ref"), task)
+    assert result.returncode != 0
+    assert "could not check out no-such-ref from " in result.stderr
+    assert f"delete {kit}, check the ref and re-run this block" in result.stderr
+    assert kit.exists()
+    again = _run_kit_block("sh", block, dict(env, KIT_REF="no-such-ref"), task)
+    assert again.returncode != 0 and "kit commit:" not in again.stdout
+    assert "could not resolve no-such-ref on " in again.stderr
+    assert clones.read_text().splitlines() == [str(kit)]
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_kit_block_runs_no_rm_rf(workflow: str) -> None:
+    """A `Bash(rm -rf *)` permission deny matches a command's text, so a kit block
+    holding `rm -rf` is refused whole before it runs (PR 1443 round 6). No workflow
+    deletes with it; the adopt block deletes nothing at all."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    assert "rm -rf" not in block
+    assert not re.search(r"(?<![\w-])rm\s|-delete\b|\bunlink\b", block)
+    for doc in (REPO_ROOT / "docs/agentic-dev-kit/workflows").glob("*.md"):
+        assert "rm -rf" not in doc.read_text(encoding="utf-8"), doc
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+@pytest.mark.parametrize("ref, full", [("tags/v1", "refs/tags/v1^{}"), ("heads/both", "refs/heads/both")])
+def test_the_kit_block_resolves_a_partial_ref_name_on_a_re_run_as_git_fetch_does(
+    tmp_path: Path, workflow: str, ref: str, full: str
+) -> None:
+    """`git fetch origin tags/v1` and `heads/<branch>` take a name under `refs/`; the
+    re-run's `ls-remote` check resolves it the same way, so it accepts the clone."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF=ref), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    want = _git(kit, "rev-parse", full.removesuffix("^{}") + "^{commit}").stdout.strip()
+    assert _git(kit, "rev-parse", "HEAD").stdout.strip() == want
+    again = _run_kit_block("sh", block, dict(env, KIT_REF=ref), task)
+    assert again.returncode == 0, again.stderr
+    assert f"kit commit: {want}   (ref requested: {ref})" in again.stdout.splitlines()
+    assert Path(str(clones) + ".lsremote").read_text().splitlines() == ["ls-remote"]
 
 
 @pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
