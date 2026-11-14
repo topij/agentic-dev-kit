@@ -41,7 +41,7 @@ Bootstraps the agentic-dev-kit in the current repo:
      OPENS AN HTML COMMENT beginning with the unrendered marker or the kit-own
      marker. A file that merely mentions a marker is in use and is left
      byte-identical.
-  5. Appends the kit's state-sandbox paths and its two local-overlay paths
+  5. Appends the kit's state-sandbox paths and its local-overlay paths
      (config/*.local.yaml, .claude/settings.local.json) to .gitignore if
      they're missing (never duplicates a line on re-run).
   6. Installs the pre-push hook as a shim (honoring core.hooksPath), and

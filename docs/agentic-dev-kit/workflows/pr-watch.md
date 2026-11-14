@@ -218,10 +218,15 @@ Repeat until the report says **converged**:
    pull request instead (`gh pr close <PR#>`, then `gh pr reopen <PR#>`, then
    `gh pr view <PR#> --json state` to confirm it is `OPEN` again): a
    `pull_request` trigger with no `types:` fires on `reopened`, at the same head.
-   Where the workflow on the **default branch** declares `workflow_dispatch`,
-   `gh workflow run <workflow> --ref <branch>` asks for the run directly. Both are
-   cockpit steps: a headless lane's profile grants neither command, so a lane
-   reports the missing run in its terminal summary instead.
+   Closing is visible to the pull request's subscribers, and if the reopen fails
+   (the head branch was deleted, say) the pull request stays closed until the head
+   is restored.
+   Alternatively, `gh workflow run <workflow> --ref <branch>` asks for a run
+   directly, where the workflow declares `workflow_dispatch` both on the default
+   branch and in `<branch>`'s own copy. That run tests the branch tip, not the
+   merge with the base a `pull_request` run tests, though it reports a check of
+   the same name. Both are operator or cockpit steps: a lane does not run them, and
+   reports the missing run in its final report instead.
 
 1. **If a check is `failing`:** investigate (`gh run view <run-id> --log-failed`, or
    `gh pr checks <PR#>`), fix the cause in the code, run your project's local gate
