@@ -214,8 +214,9 @@ about which items are missing. The engine gates nothing on it (blocking
 `converged` would wedge the loop) and prints it in the human render as well as the
 JSON. Session-start reports review findings unavailable when it is not empty, so a
 false positive (a comment deleted between the two reads) costs that poll's
-findings. Triage's terminal `pr-watch` receipt also requires it empty, but a REST
-report never reaches that check. Empty on the `gh` backend.
+findings. `lib/merge_predicate.py` requires it empty, so `dev_session.sh merge`, the
+reconciler's `held` and triage's terminal `pr-watch` receipt all do, but a REST report
+is never mergeable and so never reaches those checks as merge-ready. Empty on the `gh` backend.
 
 **`unavailable_reads`** lists, as `{surface, url, reason}`, any surface the REST
 read was refused. Today that is only `commit-statuses`, on any `403` from the

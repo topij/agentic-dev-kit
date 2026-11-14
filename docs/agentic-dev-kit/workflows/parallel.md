@@ -343,9 +343,12 @@ wrap-up **from this cockpit session**:
    <prefix>/<scope> --state all`) and classifies the newest one itself, rather than
    asking the forge only for merged ones: a stale merged PR would otherwise mask the
    in-flight PR that is the lane's actual state. It resolves
-   **merged**; **held** (an operator-class lane whose open PR is already merge-ready —
-   green, review-clean, receipt bound to head — so only your merge decision is
-   missing); **parked** with the reason (`EMPTY — 0 commits, never started`, `PR closed
+   **merged**; **held** (a lane whose open PR is already merge-ready — green,
+   review-clean, receipt bound to head — and that only you can merge, so only your
+   merge decision is missing: an operator-class lane, or a self-class lane whose PR
+   `pr_watch` classes as operator-merge, which `dev_session.sh merge` refuses; a
+   self-class lane whose `review_class` is missing, partial, unclassified or malformed stays
+   **open**); **parked** with the reason (`EMPTY — 0 commits, never started`, `PR closed
    unmerged`, `N commit(s), no PR opened`); or **open** (still in flight). It then
    prints the `launched N, merged M, parked K` tally, which grows a `held H` term when
    any scope is held — exit 3 if any scope is open or parked, **4** if every scope is

@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 from urllib.parse import urlparse
 
+import merge_predicate
 from kitconfig import get, load_config, repo_root
 
 from .canonical import CanonicalError, decode_bytes, digest, digest_bytes, loads_exact
@@ -652,18 +653,13 @@ def validate_sweep_cleanup(sweep_cleanup: Any) -> None:
 
 
 def terminal_pr_watch_receipt(receipt: Any, *, head: str, url: str) -> bool:
-    return (
-        isinstance(receipt, dict)
-        and receipt.get("converged") is True
-        and receipt.get("mergeable") is True
-        and receipt.get("done") is True
-        and receipt.get("merge_blockers") == []
-        and receipt.get("head") == head
-        and receipt.get("url") == url
-        and receipt.get("truncated_reads") == []
-        and isinstance(receipt.get("review_evidence"), dict)
-        and receipt["review_evidence"].get("valid") is True
-    )
+    """Whether a `pr_watch.py --json` report is merge-ready for this head and URL.
+
+    The reads are `merge_predicate.readiness`, shared with `dev_session.sh merge`
+    and `reconcile_sessions.sh`, and called through the module so nothing here
+    spells a report field."""
+    verdict, _detail = merge_predicate.readiness(receipt, head=head, url=url)
+    return verdict == merge_predicate.READY
 
 
 CONFIG_REBIND_KIND = "triage-config-rebind"
