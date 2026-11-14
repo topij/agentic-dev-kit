@@ -19,7 +19,7 @@ unknown revision (`#576`). Clone it into the adopter checkout's own git director
 Run this **kit block** from inside the repo being adopted into:
 
 ```bash
-KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to install; main, the tip of the kit's main branch, when you name none
+KIT_REF="${KIT_REF:-}"   # the tag, branch or full commit sha to install; unset or empty installs the remote's default branch
 # A ref is an argument to git below: one starting with `-` would be read as an option
 # (`--upload-pack=<command>` runs that command), so it is refused before any git call.
 # A full sha is lower-cased, so the clone and a later run's check compare it alike.
@@ -34,48 +34,57 @@ KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
 KIT_FOUND=yes
 if [ ! -e "$KIT" ]; then
   KIT_FOUND=
-  git clone --depth 1 "$KIT_URL" "$KIT" &&
-    git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
-    git -C "$KIT" checkout -q --detach FETCH_HEAD ||
-    { echo "could not check out $KIT_REF in $KIT: delete $KIT and re-run this block" >&2; exit 1; }
+  git clone --depth 1 "$KIT_URL" "$KIT" || exit 1
+  # Only a named ref is fetched. A clone this run made and could not move to it is
+  # removed, so the next run starts from nothing rather than from the default branch.
+  if [ -n "$KIT_REF" ]; then
+    git -C "$KIT" fetch --depth 1 origin "$KIT_REF" && git -C "$KIT" checkout -q --detach FETCH_HEAD ||
+      { rm -rf "$KIT"; echo "could not check out $KIT_REF from $KIT_URL; the clone this run made is removed: check the ref and re-run this block" >&2; exit 1; }
+  fi
 fi
 KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
-# A clone this block found rather than made must still be at the ref you named. Nothing
-# here fetches into it, so a clone a later step deepened stays deep: a full sha is compared
-# with HEAD as written; a tag or branch is read from origin with `ls-remote`, an annotated
-# tag by its `^{}` line, the commit it points at.
-KIT_SAID="ref requested: $KIT_REF"
-if [ -n "$KIT_FOUND" ] && [ "$KIT_REF" != main ]; then
+# A clone this block found rather than made must still be at the ref you named, and
+# checking it must not change it: a full sha is compared with HEAD as written; a tag or
+# branch is read from the remote with `ls-remote`, which writes nothing into the clone
+# (a tag before a branch of the same name, an annotated tag by its `^{}` line).
+if [ -z "$KIT_REF" ]; then KIT_SAID="ref requested: none, the remote's default branch"; else KIT_SAID="ref requested: $KIT_REF"; fi
+if [ -n "$KIT_FOUND" ] && [ -n "$KIT_REF" ]; then
   case "$KIT_REF" in
     *[!0-9a-f]*) KIT_WANT= ;;
     *) KIT_WANT="$KIT_REF"; [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ] || KIT_WANT= ;;
   esac
-  [ -n "$KIT_WANT" ] || KIT_WANT="$(git -C "$KIT" ls-remote origin | awk -v r="$KIT_REF" '
-    $2 == r "^{}" { a = $1 } $2 == r { b = $1 }
-    $2 == "refs/tags/" r "^{}" { c = $1 } $2 == "refs/tags/" r { d = $1 } $2 == "refs/heads/" r { e = $1 }
-    END { if (length(a)) print a; else if (length(b)) print b; else if (length(c)) print c; else if (length(d)) print d; else print e }')"
-  [ -n "$KIT_WANT" ] && [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
-    { echo "$KIT is not at $KIT_REF, or origin could not be read: delete $KIT and re-run this block" >&2; exit 1; }
+  if [ -z "$KIT_WANT" ]; then
+    KIT_REFS="$(git -C "$KIT" ls-remote origin)" ||
+      { echo "could not read $KIT_URL to check $KIT against $KIT_REF: re-run this block once it can be read" >&2; exit 1; }
+    KIT_WANT="$(printf '%s\n' "$KIT_REFS" | awk -v r="$KIT_REF" '
+      $2 == r "^{}" { a = $1 } $2 == r { b = $1 }
+      $2 == "refs/tags/" r "^{}" { c = $1 } $2 == "refs/tags/" r { d = $1 } $2 == "refs/heads/" r { e = $1 }
+      END { if (length(a)) print a; else if (length(b)) print b; else if (length(c)) print c; else if (length(d)) print d; else print e }')"
+    [ -n "$KIT_WANT" ] || { echo "$KIT_URL has no tag or branch $KIT_REF: check the ref and re-run this block" >&2; exit 1; }
+  fi
+  [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    { echo "$KIT is not at $KIT_REF ($KIT_WANT): delete $KIT and re-run this block" >&2; exit 1; }
 elif [ -n "$KIT_FOUND" ]; then
-  KIT_SAID="$KIT_SAID; found, not cloned, and not re-checked against main: this is the commit the clone holds"
+  KIT_SAID="$KIT_SAID; found, not cloned, and not re-checked against the remote's default branch: this is the commit the clone holds"
 fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   ($KIT_SAID)"
 ```
 
-**Name the ref you are installing.** Set `KIT_REF` to a release tag or a full commit sha
-before the block runs (`KIT_REF=<tag-or-sha>`, or edit the default line). Naming none
-installs `main` as it stands when the block runs, which is a different kit next week;
-a tag or sha installs the same kit every time. The block prints the resolved commit on its
-`kit commit:` line before any copy: write that sha in the adoption's pull request, so the
-repository records which kit commit it installed. The steps below run the named ref's own
+**Name the ref you are installing.** Set `KIT_REF` to a full commit sha, a tag or a
+branch before the block runs (`KIT_REF=<ref>`, or edit the default line). A full sha is
+the only pin that cannot move: a tag, like a branch, can be moved to another commit. Naming none installs the remote's default branch
+(the kit's is `main`) as it stands when the block runs, which is a different kit next
+week. Whatever you name, the block prints the resolved commit on its `kit commit:` line
+before any copy: write that sha in the adoption's pull request, so the repository records
+which kit commit it installed. The steps below run the named ref's own
 engines with the flags this document names, so a ref older than one of those flags stops
 that step with `kit_doctor.py: error: unrecognized arguments: <flag>`: name a ref no older
 than the copy of this document you are following. This pins the install only: `upgrade.md`
-reads the kit's `main`, and pinning an upgrade is tracked in #1445.
+reads the tip of the remote's default branch, and pinning an upgrade is tracked in #1445.
 
 The path depends only on this checkout, so the block is safe to re-run from any shell or
 session: it finds the same clone again instead of making another, which matters once
@@ -88,12 +97,15 @@ does not see ignored files, a pattern added to the clone's `.git/info/exclude` i
 entries marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone:
 `status` stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any
 of these happened in the clone, delete `$KIT` and re-run the block. An existing clone is
-from an earlier adoption attempt in this checkout. When you named a tag or sha, the block
-stops unless the clone's `HEAD` is the commit that ref names: a full sha is compared as
-written, and a tag or branch is read from the kit's origin with `git ls-remote`, so the
-check fetches nothing into the clone. With `main` it does not check, because `main` moves:
-its `kit commit:` line says the clone was found and not re-checked, and if the commit it
-names is not the kit you mean to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
+from an earlier adoption attempt in this checkout. When you named a ref, the block stops
+unless the clone's `HEAD` is the commit that ref names: a full sha is compared as
+written, and a tag or branch is read from the kit's remote with `git ls-remote`, which
+leaves the clone as it is. When the remote cannot be read, the block says so and stops
+without judging the clone; re-run it once the remote can be read. With no ref named it does
+not check, because the default branch moves: its `kit commit:` line says the clone was
+found and not re-checked, and if the commit it names is not the kit you mean to adopt,
+delete `$KIT` and re-run the block. When the block cannot check out a ref you named, it
+removes the clone it just made, so a re-run starts again from nothing. It writes into the git directory, so a
 sandbox that allows writes only inside the working tree needs to allow this one. Delete
 the clone once the adoption has landed.
 
@@ -703,8 +715,8 @@ one word.
 ### L1 — Inspect (read-only)
 
 First run Step 0's **kit block**, from the checkout the install is committed in, with
-`KIT_REF` set to the tag or sha you are installing (it installs `main` when you name
-none). Write down the path its `KIT=<path> at <sha>` line prints: that is `<kit>`. Write
+`KIT_REF` set to the commit sha or tag you are installing (it installs the remote's
+default branch when you name none). Write down the path its `KIT=<path> at <sha>` line prints: that is `<kit>`. Write
 down the sha its `kit commit:` line prints too, for the install's pull request. Write down what
 `git rev-parse --show-toplevel` prints in that checkout: that is `<root>`. Then:
 

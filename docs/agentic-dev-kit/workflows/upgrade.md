@@ -112,8 +112,9 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 ```
 
-An upgrade reads the kit's `main` only: unlike `adopt.md`'s kit block, this one takes no
-ref, and pinning an upgrade to a tag or sha is tracked in #1445.
+An upgrade reads the tip of the remote's default branch only (the kit's is `main`):
+unlike `adopt.md`'s kit block, this one takes no ref, and pinning an upgrade to a tag or
+sha is tracked in #1445.
 
 The path depends only on the checkout the block runs in and the branch checked out there,
 which here is the task worktree and its task branch, so the block is safe to re-run from
