@@ -131,21 +131,14 @@ on 2026-10-31.
 [#1280](https://github.com/topij/agentic-dev-kit/issues/1280),
 [#1335](https://github.com/topij/agentic-dev-kit/issues/1335).
 
-#1334 delivers #1327's items 1 and 3: `rounds_without_seal` is documented as rounds that recorded no disposition,
-and a seal that retains an item refuses, before copying, unless `session.json` can take the seal, its own first
-apply's copy and every item's retirement tombstone. That reservation is partial: its docstring in `session_cleanup.py`
-lists what it leaves out, and #1335 proposes storing `last_result` without the seal copy so that it covers every write
-that grows with the evidence. #1349 added the test of the refusal's count (#1336). Item 2 was #1331's.
+#1334 delivered #1327's items 1 and 3: `rounds_without_seal` is documented as rounds that recorded no disposition,
+and a seal that retains an item refuses, before copying, unless `session.json` can take it. #1442 (`f76c72e`) took
+#1335's proposal: `last_result` is stored without the seal copy, so a retaining seal no longer reserves room for one.
+On the operator's choice in #1442, a discard-only seal is still not size-checked. What the check still leaves out is
+in `check_seal_size`'s docstring in `session_cleanup.py` and in `changelog.d/cleanup-seal-last-result.md`. #1349
+added the test of the refusal's count (#1336). Item 2 was #1331's. #1327 was retired as delivered on 2026-11-13.
 
-#1442 implements #1335: `last_result` is stored without the seal copy, and every seal is size-checked, discard-only
-seals included. Its round-1 panel found that checking a discard-only seal can refuse a round whose smallest discard no
-longer fits, and that no engine route then retires that round; the PR is held for the operator's choice between
-skipping the check for discard-only seals again and adding an operator escape (dispositions on #1442). The #1334 paragraph above
-describes the engine at `171d9f4` and goes false when #1442 merges; the section's Status paragraph does not. #1327 was retired as delivered on
-2026-11-13.
-
-▶ Next: the operator's choice on #1442 (its round-1 disposition comment states both options); once it merges,
-replace the #1334 paragraph above with what then holds.
+▶ Next: the operator decides whether #1335 is done; it is still open after #1442 merged.
 
 ### Reviewer profiles
 
@@ -353,8 +346,10 @@ cockpit recorded at the same head read identically, and `reconcile_sessions.sh` 
 into the lane's state directory was refused by the profile. The probe's pull request was abandoned unmerged and its
 branches deleted; its receipts and notes are local only, untracked under `saved_plans/s2-probe-evidence_2026-11-13/`
 in the primary checkout. Step 2a's remedy, binding the receipt out of the lane's reach (#490, #1430), is not started.
-Steps 3a, 2e and 2d were run as headless lanes on 2026-11-13 and are open, each held for the operator: #1440 (3a,
-#1370), #1441 (2e, #345) and #1443 (2d); what each needs is in its last disposition comment. The operator decided the plan's
+Steps 3a, 2e and 2d ran as headless lanes on 2026-11-13, and the operator merged each on 2026-11-14 after its
+review rounds: #1440 (3a, `e4a4bd1`), #1441 (2e, `e094cc0`) and #1443 (2d, `52c4cbe`). The operator split #1443:
+adopt installs a named kit ref, upgrades still read the tip of the kit's default branch, upgrade pinning is #1445,
+and #1448 holds the adopt pin's remaining gaps. #1370, #1371 and #345 are still open after those merges. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
 `--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
 reading them. The hold is prose and binds only a session that reads this entry or the plan: the kit's
@@ -362,8 +357,8 @@ documents and engines still describe and accept self-merge, `parallel.md` for on
 operator's decision under the conditions D2 states. A probe result alone lifts nothing.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: the operator's decisions on #1440 (one more repair round, or merge and follow up), #1443 (U2's pinned-ref read
-needs an engine mode or a different U2) and the merge of #1441; then step 2a's remedy (#490, #1430). The primary
+▶ Next: step 2a's remedy (#490, #1430); the operator decides whether #1370, #1371 and #345 are done, now that
+#1440 and #1441 have merged. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on
 2026-11-14), so the D3 trial runs from that checkout; the tracked value stays `[]`. Time-bound: the D3 trial's systemize runs on 2026-11-27,
 2026-12-11 and 2026-12-13, and its judgement on 2026-12-13 after the last run (shift these dates if step 1a merges
