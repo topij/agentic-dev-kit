@@ -36,5 +36,10 @@ state/
 # schema of record; this only supplies values.
 config/*.local.yaml
 
+# Claude Code's per-checkout settings overlay: one operator's own permission
+# grants. Before this line it stayed out of git only where the operator's
+# global ignore file named it. init.sh seeds the same line for an adopter.
+.claude/settings.local.json
+
 # macOS directory metadata — never belongs in the repo
 .DS_Store
