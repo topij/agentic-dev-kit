@@ -20485,7 +20485,8 @@ _KIT_GUARD_MESSAGES = frozenset({
     "…", "...", "msg",
 })
 # Any expansion of KIT that is not the `${KIT:?` form, which stops on an unset KIT.
-_UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?)")
+# `(?!\w)`: `${KIT_REF:?…}` and the like are other variables, not an unguarded KIT.
+_UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?|\w)")
 
 
 def _kit_bound_lines(block: str) -> list[str]:
