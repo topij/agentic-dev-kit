@@ -311,6 +311,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/archive_plan_sessions.py", "engine"),
     ("scripts/dev_session.sh", "engine"),
     ("scripts/launch_lane.py", "engine"),
+    ("scripts/lane_usage.py", "engine"),
     ("scripts/reconcile_sessions.sh", "engine"),
     ("scripts/kit_doctor.py", "engine"),
     # The executable half of live-validation-evidence.md. It, its test and its
@@ -409,6 +410,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_check_memory_budget.py", "test"),
     ("scripts/tests/test_ci_workflow.py", "test"),
     ("scripts/tests/test_lane_launcher.py", "test"),
+    ("scripts/tests/test_lane_usage.py", "test"),
     ("scripts/tests/test_dev_session_board.py", "test"),
     ("scripts/tests/test_init_sh.py", "test"),
     ("scripts/tests/test_kit_doctor.py", "test"),
