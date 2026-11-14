@@ -2239,8 +2239,114 @@ def test_gitignore_entries_added_exactly_once_across_reruns(tmp_path: Path) -> N
         # to write an identity into a tracked path while asserting it is ignored
         # (panel, adversarial lens — a HIGH on the change that added the overlay).
         "config/*.local.yaml",
+        # Claude Code's per-checkout settings overlay. Before this was seeded it
+        # stayed out of git only through an operator's global ignore file.
+        ".claude/settings.local.json",
     ):
         assert lines.count(entry) == 1, f"{entry!r} appears {lines.count(entry)} times"
+
+
+def _git_without_operator_ignores(
+    repo: Path, *argv: str
+) -> subprocess.CompletedProcess[str]:
+    """Run git in `repo` with the operator's own ignore file out of reach.
+
+    `_env` nulls the global CONFIG, and that is not enough for a question about
+    ignore rules: with `core.excludesFile` unset git still reads
+    `$XDG_CONFIG_HOME/git/ignore`, falling back to `~/.config/git/ignore`. On a
+    machine whose file names `.claude/settings.local.json`, the first version of
+    the tests below failed for that reason: the path was ignored before the
+    install ran, and `git add` refused it. Pointing `XDG_CONFIG_HOME` at a
+    directory that holds nothing leaves the repository's own rules as the only
+    ones."""
+    empty = repo.parent / "no-operator-git-config"
+    empty.mkdir(exist_ok=True)
+    return subprocess.run(
+        ["git", *argv],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**_env(repo.parent), "XDG_CONFIG_HOME": str(empty)},
+    )
+
+
+def test_the_claude_settings_overlay_is_ignored_by_the_repo_not_by_the_operator(
+    tmp_path: Path,
+) -> None:
+    """`.claude/settings.local.json` holds one operator's own permission grants.
+    It used to stay untracked only where that operator's GLOBAL ignore file
+    named it, so a checkout on another machine had nothing keeping `git add -A`
+    from committing it.
+
+    Asked of git rather than of the `.gitignore` text, without the operator's
+    own ignore file: the claim is that the repository's rules ignore the path,
+    and `check-ignore -v` names the file the matching rule came from. Before the
+    install the same question answers "not ignored", which is what shows the
+    fixture has no other rule doing the work."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    overlay = ".claude/settings.local.json"
+    _write(repo, overlay, '{"permissions": {"allow": ["Bash(make release)"]}}\n')
+
+    before = _git_without_operator_ignores(repo, "check-ignore", "-v", "--", overlay)
+    assert before.returncode == 1, f"already ignored before the install: {before.stdout}"
+
+    _run_init(repo)
+
+    after = _git_without_operator_ignores(repo, "check-ignore", "-v", "--", overlay)
+    assert after.returncode == 0, f"not ignored after the install: {after.stderr}"
+    assert after.stdout.startswith(".gitignore:"), after.stdout
+    status = _git_without_operator_ignores(
+        repo, "status", "--porcelain", "--untracked-files=all"
+    )
+    assert status.returncode == 0, status.stderr
+    assert overlay not in status.stdout, status.stdout
+
+
+def test_the_claude_settings_overlay_line_is_seeded_before_the_file_exists(
+    tmp_path: Path,
+) -> None:
+    """The client writes the overlay the first time an operator answers "always
+    allow", which is after the install on a fresh adoption. A line seeded only
+    when the file was already there would miss exactly that repository. The
+    install itself creates `.claude/` for the lens agent definitions, so this
+    pins only that the FILE need not exist, not the directory."""
+    repo = _fixture(tmp_path, config=shipped_config())
+    assert not (repo / ".claude").exists()
+
+    _run_init(repo)
+
+    lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert ".claude/settings.local.json" in lines
+
+
+def test_the_claude_settings_overlay_line_leaves_a_tracked_overlay_tracked(
+    tmp_path: Path,
+) -> None:
+    """Hygiene lines are always added, so the line lands in a repository that
+    commits its overlay on purpose. Git ignores only untracked paths, so that
+    file stays tracked and an edit to it still shows as a change."""
+    repo = _fixture(tmp_path, config=shipped_config(), git=True)
+    overlay = ".claude/settings.local.json"
+    _write(repo, overlay, "{}\n")
+
+    def git(*argv: str) -> str:
+        done = _git_without_operator_ignores(repo, *argv)
+        assert done.returncode == 0, f"git {argv}: {done.stderr}"
+        return done.stdout
+
+    # Not `_commit`: its `git add` runs under `_env`, which leaves the
+    # operator's ignore file in force, and that file may name this very path.
+    git("add", "--", overlay)
+    git("-c", "user.email=t@example.invalid", "-c", "user.name=fixture", "commit", "-qm", "fixture")
+
+    _run_init(repo)
+
+    lines = (repo / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert overlay in lines
+    assert git("ls-files", "--", overlay).strip() == overlay
+    _write(repo, overlay, '{"permissions": {}}\n')
+    assert overlay in git("status", "--porcelain", "--", overlay)
 
 
 def test_gitignore_gains_mcp_json_only_for_literal_credentials(tmp_path: Path) -> None:

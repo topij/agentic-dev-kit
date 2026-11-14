@@ -39,10 +39,22 @@ name: Test
 #      future release process built on tags would silently get no CI, and would
 #      have no reason to look here. Add `tags:` at that point rather than
 #      rediscovering this.
+#
+# `workflow_dispatch:` is the trigger for a head whose event was never delivered
+# (#345). A forge incident can drop the webhook for a push, and then the head
+# has no run at all: nothing to wait for and nothing for `gh run rerun` to
+# rerun. Pushing a commit to get one moves the head, which invalidates a review
+# receipt bound to the reviewed sha. A dispatch asks for the run at the head as
+# it stands. It takes no inputs, and unused it costs nothing. It is also the
+# one way a branch with no open PR can get a run, by asking: consequence 1
+# above still holds for what runs unasked. In the
+# `concurrency:` block below a dispatched run has no pull request number, so it
+# takes the `github.run_id` arm and is alone in its group, like a `push` run.
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # Supersede a PR's own older run when it is pushed again, rather than letting
 # both queue for the same scarce runner — the starvation above is what makes
@@ -91,16 +103,38 @@ permissions:
   contents: read
 
 jobs:
+  # EVERY `uses:` IN THIS FILE NAMES A COMMIT SHA, with the tag it was resolved
+  # from as a trailing comment. A tag is mutable: whoever controls it can move it
+  # and run other code in this job. That holds for a GitHub-owned action as much
+  # as for the third-party one below, whose own comment says the rest. Bump a
+  # pin by resolving the tag again (`gh api repos/<owner>/<action>/commits/<tag>
+  # --jq .sha`) and changing sha and comment together.
   toolkit:
     runs-on: ubuntu-latest
+    # A DECLARED bound, not a measurement of this job: without one a hung step
+    # holds its runner for the forge's own default, which is hours. Set well
+    # above what the suite needs so that a slow runner does not read as a
+    # failure; raise it if the suite grows into it.
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          # No later step pushes or fetches, so the token has no reason to stay
+          # in the checkout's git config where every later step, the test suite
+          # included, could read it. The `documentation` job sets the same.
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.12"
       - name: Install test dependencies
         # Standalone entry-point boundaries execute uv against disposable projects.
-        run: python -m pip install pytest pyyaml uv==0.12.3
+        #
+        # All three are pinned. Unpinned, `pytest` and `pyyaml` resolved to
+        # whatever was newest when the job ran, so a release of either could
+        # turn CI red, or change what the suite checks, with no change to this
+        # repo. The versions are the ones `uv run --with pytest --with pyyaml`
+        # resolved locally at 171d9f4 on 2026-11-13. Bump them deliberately.
+        run: python -m pip install pytest==9.2.0 pyyaml==6.0.3 uv==0.12.3
       - name: Lint Python (ruff)
         # The kit shipped engines that nothing had ever linted (issue #58). Two
         # of them were copied into a mature repo with repo-wide ruff and failed
@@ -119,8 +153,8 @@ jobs:
         # PINNED TO A COMMIT SHA, not the `v3` tag. This is the workflow's only
         # non-GitHub-owned action, and a tag is mutable: whoever controls it can
         # move it and run arbitrary code with this job's GITHUB_TOKEN on every
-        # push and pull_request. `permissions:` above reduces what that token
-        # can do; the SHA is what stops the swap.
+        # run. `permissions:` above reduces what that token can do; the SHA is
+        # what stops the swap.
         #
         # `version` is pinned too. Without it the action resolves to whatever
         # ruff released most recently (there is no pyproject.toml for it to read
@@ -165,10 +199,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020  # v4
         with:
           node-version: '22'
           cache: npm
@@ -181,7 +215,7 @@ jobs:
         run: npm --prefix tooling/docs run verify
       - name: Retain diagram previews
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
           name: documentation-previews
           path: tooling/docs/previews/
