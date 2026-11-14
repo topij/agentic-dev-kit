@@ -724,18 +724,24 @@ class Registry:
         # Bytes the copy below will write, counted as copy_evidence counts them:
         # once per content not already stored.
         unique = dict(hashes)
-        # Every seal is checked, with no skip (#1335). A seal with an empty
-        # `retain` (a discard-only round or inventory seal, the normal completion
-        # path) adds no retained item, but its discard list is stored in the
-        # record, and unchecked it could use the room earlier seals' checks
-        # reserved for their tombstones. A refusal here copies and writes nothing.
-        self.check_seal_size(record, owner, {
-            "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
-                         for item, (sha, size) in zip(planned, hashes, strict=True)],
-            "retired": retired, "discarded": discards, "evidence_complete": True,
-            "bytes": {"retained": sum(size for _, size in hashes),
-                      "copied": sum(size for sha, size in unique.items()
-                                    if not os.path.lexists(target / sha))}})
+        # Only a seal that retains something is checked (#1335 kept this skip on
+        # the operator's decision). A discard-only round or inventory seal, the
+        # normal completion path, adds no retained item, so it strands nothing.
+        # Refusing it would wedge its round: the smallest seal a round can take
+        # is discard-only, so a refused one leaves the round with no way to
+        # retire. Its discard list is stored in the record and is not reserved:
+        # it uses the room earlier seals' checks counted on for their tombstones,
+        # and publish refuses a save over LIMIT. A manifest with neither retain
+        # nor discard is refused above; one with `retire` diagnostics needs
+        # retained replacements, so its `retain` is not empty and it is checked.
+        if planned:
+            self.check_seal_size(record, owner, {
+                "retained": [{**item, "sha256": sha, "size": size, "retained": str(target / sha)}
+                             for item, (sha, size) in zip(planned, hashes, strict=True)],
+                "retired": retired, "discarded": discards, "evidence_complete": True,
+                "bytes": {"retained": sum(size for _, size in hashes),
+                          "copied": sum(size for sha, size in unique.items()
+                                        if not os.path.lexists(target / sha))}})
         retained, copied = [], 0
         if planned:
             target.mkdir(mode=0o700, exist_ok=True)
@@ -766,15 +772,15 @@ class Registry:
         nor its tombstones. If a tombstone write refuses, some or all of the
         evidence cannot be retired. So the record is projected with this seal in
         place and a tombstone on every retained item (those earlier seals hold
-        included), and refused here, before any byte is copied. Every seal is
-        checked, one with an empty `retain` included: its discard list uses the
-        same budget.
+        included), and refused here, before any byte is copied. A seal with an
+        empty `retain` is not checked (see the caller): it adds no retained item,
+        and refusing it would leave its round no way to retire.
 
         The projection is exact for the seals and their tombstones. It is not a
         guarantee that the evidence can be retired, because it does not reserve
-        what else is recorded later: what an apply records (path outcomes, the
-        evidence summary, approvals and statuses), another round's receipt, a
-        reconcile's history. A `last_result` written before #1335 still holds
+        what else is recorded: a discard-only seal's discard list, what an apply
+        records (path outcomes, the evidence summary, approvals and statuses),
+        another round's receipt, a reconcile's history. A `last_result` written before #1335 still holds
         its seal copy until the next apply of that round or inventory replaces
         it, and is projected as stored.
         publish still refuses a save over LIMIT, so a seal that passes here can
@@ -782,8 +788,8 @@ class Registry:
         saves its tombstones before deleting anything. An apply does not: it
         removes its rounds' and worktrees' paths before its final save, so that
         save can refuse after the removal and leave the inventory incomplete.
-        A round whose seal is refused here cannot be retired with `--round`
-        until a seal fits; the refusal deletes nothing.
+        A round whose retaining seal is refused here can still be sealed
+        discard-only, or with fewer items; the refusal deletes nothing.
 
         The projection uses the hashes and sizes read just before the copy. A
         source rewritten between that read and the copy is stored as copied, so
@@ -808,7 +814,7 @@ class Registry:
                 f"seal and a retirement tombstone on each of its "
                 f"{len(seal['retained'])} retained items and the {earlier} unretired items earlier "
                 f"seals hold would be {size} bytes, over its {LIMIT}-byte limit; retain fewer "
-                f"items or shorten the discard list, or seal them in a new inventory")
+                f"items, or seal them in a new inventory")
 
     @staticmethod
     def stored_result(result: dict) -> dict:

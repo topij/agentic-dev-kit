@@ -2860,16 +2860,16 @@ def deep_session(request, tmp_path, monkeypatch):
     yield from make_session(base, monkeypatch)
 
 
-def test_a_discard_only_seal_is_checked_against_the_tombstone_budget(deep_session, monkeypatch):
-    # #1335: a seal that retains nothing still stores its discard list, so it is
-    # checked like any other: it may not use the room earlier seals reserved for
-    # their tombstones. The refusal comes before anything is written or removed.
-    # #1345: both limits are measured from the record the discard-only seal
+def test_a_discard_only_seal_is_not_refused_for_earlier_seals_budget(deep_session, monkeypatch):
+    # #1327, #1335: a seal that retains nothing strands nothing, and it is the
+    # smallest seal a round can take, so refusing it would wedge the round. The
+    # budget earlier seals used does not refuse it, even where its projection
+    # would cross the limit; one that retains an item names their share.
+    # #1345: LIMIT is the measured size of the record the discard-only seal
     # writes, not a fixed headroom, since what a seal adds grows with the
-    # absolute paths under the basetemp. At the limit one byte under the
-    # projection the sealed record itself still fits (two tombstones are more
-    # than one byte), so only the check can refuse it; one that retains an item
-    # is over that limit too, and names the earlier seals' share.
+    # absolute paths under the basetemp. The projection of that record adds a
+    # tombstone on each of the two earlier items, so it is over LIMIT: the
+    # discard-only seal passes only because it is not checked.
     registry, record, _ = deep_session
     first = allocate(registry, record)
     seal(registry, record, first, scope=first["id"])
@@ -2889,10 +2889,7 @@ def test_a_discard_only_seal_is_checked_against_the_tombstone_budget(deep_sessio
     path.write_bytes(before)
     assert set(os.listdir(evidence)) == held
     assert discarded < projected
-    monkeypatch.setattr(cleanup, "LIMIT", projected - 1)
-    with pytest.raises(cleanup.sweep.ConfigError,
-                       match=r"each of its 0 retained items and the 2 unretired items earlier seals hold"):
-        discarding()
+    monkeypatch.setattr(cleanup, "LIMIT", discarded)
     with pytest.raises(cleanup.sweep.ConfigError,
                        match=r"each of its 1 retained items and the 2 unretired items earlier seals hold"):
         registry.seal_round(registry.load(record["id"]), second["id"], {"evidence_complete": True, "retain": [
@@ -2900,7 +2897,6 @@ def test_a_discard_only_seal_is_checked_against_the_tombstone_budget(deep_sessio
     assert path.read_bytes() == before
     assert set(os.listdir(evidence)) == held
     assert report.read_text() == "x" * 4096 and Path(first["path"]).is_dir()
-    monkeypatch.setattr(cleanup, "LIMIT", projected)
     discarding()
     assert len(path.read_bytes()) == discarded
     assert registry.load(record["id"])["rounds"][1]["seal"]["retained"] == []
