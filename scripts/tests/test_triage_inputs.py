@@ -85,6 +85,26 @@ def test_cli_rejects_symlink_request_before_engine(tmp_path: Path) -> None:
     assert "unsafe artifact at held parent" in result.stdout
 
 
+def test_cli_request_under_symlinked_parent_is_refused_with_a_named_cause(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    request = linked / "request.json"
+    request.write_text("{}", encoding="utf-8")
+    result = subprocess.run(
+        [sys.executable, str(ENGINE_DIR / "triage_friction_log.py"), "new", "--request", str(request)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 2
+    envelope = loads_exact(result.stdout.strip().encode())
+    assert "symlinked" in envelope["detail"] and linked.name in envelope["detail"], (
+        f"request under a symlinked parent was refused with a bare OS error instead of a named cause: {envelope['detail']!r}"
+    )
+
+
 @pytest.mark.parametrize("arguments", [["new", "resume"], ["--unknown-flag"]])
 def test_cli_argument_errors_emit_complete_canonical_hard_stop(arguments: list[str]) -> None:
     result = subprocess.run(

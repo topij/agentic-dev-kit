@@ -93,6 +93,17 @@ def test_saved_index_that_omits_historical_entry_is_refused_before_tracker_calls
     assert state_path.read_bytes() == retained
 
 
+def test_observe_refuses_a_symlinked_ancestor_by_name_as_operator_held(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    target = linked / "state.json"
+    with pytest.raises(TriageError, match="symlinked parent is refused: linked") as excinfo:
+        observe(target)
+    assert excinfo.value.outcome == "operator-held"
+
+
 def test_preflight_rejects_tracked_and_control_artifact_targets(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
