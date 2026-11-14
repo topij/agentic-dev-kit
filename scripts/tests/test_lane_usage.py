@@ -176,6 +176,7 @@ def test_a_located_session_that_dispatched_nothing_is_a_real_zero(tmp_path: Path
     sub = lane_usage.build_report(sessions, projects)["lanes"][0]["subagents"]
     assert sub == {
         "available": True,
+        "complete": True,
         "agent_count": 0,
         "tokens": dict.fromkeys(lane_usage.TOKEN_FIELDS, 0),
         "total_tokens": 0,
@@ -257,3 +258,86 @@ def test_cli_honours_devkit_sessions_dir(tmp_path: Path) -> None:
     report = json.loads(result.stdout)
     assert report["sessions_dir"] == str(sessions.resolve())
     assert report["lanes"][0]["result"]["total_tokens"] == 5
+
+
+def test_records_of_one_response_are_counted_once(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage=_usage(1, 1))
+    directory = projects / "-p" / SID_A / "subagents"
+    directory.mkdir(parents=True)
+    block = {"id": "msg_1", "usage": {"input_tokens": 100, "output_tokens": 10}}
+    streamed = {"id": "msg_2", "usage": {"input_tokens": 5, "output_tokens": 1}}
+    final = {"id": "msg_2", "usage": {"input_tokens": 5, "output_tokens": 9}}
+    lines = [
+        {"requestId": "req_1", "message": block},
+        {"requestId": "req_1", "message": block},
+        {"requestId": "req_2", "message": streamed},
+        {"requestId": "req_2", "message": final},
+    ]
+    (directory / "a.jsonl").write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    agent = row["subagents"]["agents"][0]
+    assert agent["assistant_messages"] == 2
+    assert row["subagent_tokens"] == 110 + 14
+
+
+@pytest.mark.parametrize(
+    ("usage", "reason"),
+    [
+        ({"source": "claude json result", "usage": {}}, "no round recorded runtime usage"),
+        (
+            {"usage": {"input_tokens": -5, "output_tokens": 3}},
+            "malformed figures in launch",
+        ),
+        ({"usage": {"input_tokens": 1}, "total_cost_usd": "free"}, "malformed figures"),
+    ],
+)
+def test_empty_or_malformed_usage_is_not_a_measurement(
+    tmp_path: Path, usage: dict, reason: str
+) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage=usage, session_id=None)
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    assert row["result"]["available"] is False
+    assert reason in row["result"]["reason"]
+    assert row["tokens"] is None
+
+
+def test_an_explicit_zero_is_a_measurement(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage={"usage": {"output_tokens": 0}}, session_id=None)
+    assert lane_usage.build_report(sessions, projects)["lanes"][0]["tokens"] == 0
+
+
+def test_a_missing_session_or_unreadable_transcript_makes_the_sum_incomplete(
+    tmp_path: Path,
+) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(
+        sessions,
+        "lane-a",
+        usage=_usage(1, 1),
+        resumes=[{"round": 1, "session_id": SID_B, "usage": None}],
+    )
+    _subagent(projects, SID_A, "agent-1", [{"usage": {"output_tokens": 3}}])
+    (projects / "-home-user-repo" / SID_A / "subagents" / "bad.jsonl").write_bytes(b"\xff\xfe")
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    sub = row["subagents"]
+    assert sub["available"] is True and sub["complete"] is False
+    assert SID_B in sub["reason"] and "unreadable transcript(s) bad" in sub["reason"]
+    assert sub["total_tokens"] == 3
+    assert row["subagent_tokens"] is None
+
+
+def test_text_report_names_each_sources_gap(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    projects.mkdir()
+    _lane(sessions, "lane-a", usage=_usage(1, 1))
+    text = lane_usage.render_text(lane_usage.build_report(sessions, projects))
+    assert "lane-a subagents: no transcript directory" in text
+
+
+def test_a_missing_sessions_dir_exits_2(tmp_path: Path) -> None:
+    result = _run("--sessions-dir", str(tmp_path / "nope"))
+    assert result.returncode == 2
+    assert "sessions directory not found" in result.stderr

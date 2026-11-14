@@ -16,7 +16,8 @@ Two sources, kept apart because neither is known to contain the other:
   carrying its own `usage` block. The session ids come from the receipt (the launch
   round's result object and each resume entry), so no project-slug guess is needed.
   The transcript layout is a harness artifact, not a documented interface: a missing
-  or unreadable one is reported, never treated as zero.
+  or unreadable one is reported, never treated as zero. The records Claude Code
+  writes per content block of one response are counted once.
 
 Whether the result object's `usage` already counts subagent spend is the runtime's
 definition, which this does not check, so the two are never added together.
@@ -28,7 +29,8 @@ reported it.
 
 **Best-effort by contract.** It reads, never writes, and a malformed receipt or
 transcript becomes an explicit note on its row. Exit 0 unless `--strict` is passed
-and no lane had any usage, or the sessions directory cannot be found (exit 2).
+and no lane had any usage; exit 2 when the sessions directory cannot be resolved
+or does not exist, or `--since` is not a date.
 
 Usage:
     uv run <engine-dir>/lane_usage.py                  # every lane, ranked
@@ -63,7 +65,10 @@ def _empty_tokens() -> dict[str, int]:
 
 
 def _int(value: object) -> int | None:
-    return value if isinstance(value, int) and not isinstance(value, bool) else None
+    """A non-negative int, or None: a negative token count is not a measurement."""
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return value
+    return None
 
 
 def _finite(value: object) -> float | int | None:
@@ -137,16 +142,32 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
     models: set[str] = set()
     counted: list[str] = []
     missing: list[str] = []
+    invalid: list[str] = []
     for name, usage in rounds:
         if not isinstance(usage, dict):
             missing.append(name)
             continue
-        counted.append(name)
         figures = usage.get("usage")
-        if isinstance(figures, dict):
-            for field in TOKEN_FIELDS:
-                tokens[field] += _int(figures.get(field)) or 0
+        figures = figures if isinstance(figures, dict) else {}
+        reported = [field for field in TOKEN_FIELDS if field in figures]
+        valid = {f: _int(figures[f]) for f in reported if _int(figures[f]) is not None}
         round_cost = _finite(usage.get("total_cost_usd"))
+        if round_cost is not None and round_cost < 0:
+            round_cost = None
+        if len(valid) != len(reported) or (
+            usage.get("total_cost_usd") is not None and round_cost is None
+        ):
+            # A field the runtime reported but that is not a non-negative number
+            # makes the round's figures untrustworthy, so none of them count.
+            invalid.append(name)
+            continue
+        if not valid and round_cost is None:
+            # An empty usage object says nothing; counting it would read as zero.
+            missing.append(name)
+            continue
+        counted.append(name)
+        for field, value in valid.items():
+            tokens[field] += value
         if round_cost is not None:
             cost = round_cost if cost is None else cost + round_cost
         round_models = usage.get("models")
@@ -154,7 +175,10 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
             models.update(str(m) for m in round_models)
 
     if not counted:
-        return {"available": False, "reason": "no round recorded runtime usage"}
+        reason = "no round recorded runtime usage"
+        if invalid:
+            reason += f"; malformed figures in {', '.join(invalid)}"
+        return {"available": False, "reason": reason}
     result: dict[str, Any] = {
         "available": True,
         "tokens": tokens,
@@ -165,14 +189,21 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
     }
     if missing:
         result["rounds_without_usage"] = missing
+    if invalid:
+        result["rounds_with_malformed_usage"] = invalid
     return result
 
 
 # --- subagent-transcript source --------------------------------------------------
 
 
-def _iter_records(path: Path):
-    """Parsed records of a .jsonl transcript; an unparseable line is skipped."""
+def _read_records(path: Path) -> list[dict[str, Any]] | None:
+    """Parsed records of a .jsonl transcript, or None when the file cannot be read.
+
+    An unparseable line is skipped (a transcript being written can end mid-line);
+    an unreadable file is reported by the caller, not counted as an empty one.
+    """
+    records: list[dict[str, Any]] = []
     try:
         with path.open(encoding="utf-8") as handle:
             for line in handle:
@@ -184,33 +215,55 @@ def _iter_records(path: Path):
                 except (ValueError, RecursionError):
                     continue
                 if isinstance(record, dict):
-                    yield record
+                    records.append(record)
     except (OSError, UnicodeDecodeError):
-        return
+        return None
+    return records
 
 
 def summarize_agent(transcript: Path) -> dict[str, Any]:
-    """Total one subagent transcript's per-message usage."""
+    """Total one subagent transcript's usage, once per API response.
+
+    Claude Code writes one record per content block of a response, each repeating
+    that response's `usage`, so records sharing `(requestId, message.id)` are one
+    response: the record with the largest `output_tokens` stands for it (a
+    streamed response's last record carries the final count). A record with
+    neither id is counted on its own.
+    """
+    records = _read_records(transcript)
     tokens = _empty_tokens()
     models: set[str] = set()
-    messages = 0
-    for record in _iter_records(transcript):
+    responses: dict[object, dict[str, Any]] = {}
+    for index, record in enumerate(records or []):
         message = record.get("message")
         if not isinstance(message, dict):
             continue
         usage = message.get("usage")
         if not isinstance(usage, dict):
             continue
-        messages += 1
         model = message.get("model")
         if isinstance(model, str):
             models.add(model)
+        request_id, message_id = record.get("requestId"), message.get("id")
+        key: object = (
+            (str(request_id), str(message_id))
+            if isinstance(request_id, str) or isinstance(message_id, str)
+            else index
+        )
+        kept = responses.get(key)
+        if kept is None or (_int(usage.get("output_tokens")) or 0) > (
+            _int(kept.get("output_tokens")) or 0
+        ):
+            responses[key] = usage
+    for usage in responses.values():
         for field in TOKEN_FIELDS:
             tokens[field] += _int(usage.get(field)) or 0
+    messages = len(responses)
     meta = _read_json(transcript.with_name(f"{transcript.stem}.meta.json"))
     description = meta.get("description") if isinstance(meta, dict) else None
     return {
         "agent_id": transcript.stem,
+        "readable": records is not None,
         "description": description if isinstance(description, str) else None,
         "models": sorted(models),
         "assistant_messages": messages,
@@ -264,15 +317,28 @@ def subagent_usage(projects_root: Path, session_ids: list[str]) -> dict[str, Any
     for agent in agents:
         for field in TOKEN_FIELDS:
             tokens[field] += agent["tokens"][field]
-    return {
+    missing = [sid for sid in session_ids if sid not in located]
+    unreadable = [a["agent_id"] for a in agents if not a["readable"]]
+    gaps = []
+    if missing:
+        gaps.append(f"no transcript directory for session(s) {', '.join(missing)}")
+    if unreadable:
+        gaps.append(f"unreadable transcript(s) {', '.join(unreadable)}")
+    result: dict[str, Any] = {
         # A located session with no subagents/ directory is a real zero: the
         # transcript exists and the lane dispatched nothing.
         "available": True,
+        # False when a session or transcript the lane had could not be read: the
+        # totals are then a lower bound, and the flat `subagent_tokens` is None.
+        "complete": not gaps,
         "agent_count": len(agents),
         "tokens": tokens,
         "total_tokens": sum(tokens.values()),
         "agents": sorted(agents, key=lambda a: -sum(a["tokens"].values())),
     }
+    if gaps:
+        result["reason"] = "; ".join(gaps)
+    return result
 
 
 # --- receipts --------------------------------------------------------------------
@@ -332,13 +398,16 @@ def _with_flat_fields(row: dict[str, Any]) -> dict[str, Any]:
 
     `tokens` and `cost_usd` are the runtime's own figures (the result source);
     `subagent_tokens` is the transcript sum, kept separate for the reason the module
-    docstring gives. Each is None when its source is unavailable, never 0.
+    docstring gives. Each is None when its source is unavailable, never 0, and
+    `subagent_tokens` is also None when the transcript sum is incomplete.
     """
     result, subagents = row["result"], row["subagents"]
     row["tokens"] = result.get("total_tokens") if result.get("available") else None
     row["cost_usd"] = result.get("total_cost_usd") if result.get("available") else None
     row["subagent_tokens"] = (
-        subagents.get("total_tokens") if subagents.get("available") else None
+        subagents.get("total_tokens")
+        if subagents.get("available") and subagents.get("complete")
+        else None
     )
     return row
 
@@ -413,11 +482,24 @@ def _default_sessions_dir(cwd: Path) -> Path | None:
     except (OSError, subprocess.SubprocessError):
         return None
     first = listing.split(b"\0", 1)[0]
-    if not first.startswith(b"worktree "):
-        return None
-    primary = Path(os.fsdecode(first[len(b"worktree "):]))
-    if not primary.is_absolute() or not (primary / ".git").exists():
-        return None
+    primary: Path | None = None
+    if first.startswith(b"worktree "):
+        primary = Path(os.fsdecode(first[len(b"worktree "):]))
+    # As repo_root.sh: a separate git dir or a submodule lists its git directory,
+    # not a checkout, first; fall back to the invoking checkout's root then.
+    if primary is None or not primary.is_absolute() or not (primary / ".git").exists():
+        try:
+            top = subprocess.run(
+                ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+                capture_output=True,
+                check=True,
+                timeout=30,
+            ).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if not top:
+            return None
+        primary = Path(os.fsdecode(top))
     return primary.parent / "dev-model-sessions"
 
 
@@ -446,13 +528,22 @@ def render_text(report: dict[str, Any]) -> str:
         )
     if not report["lanes"]:
         lines.append("(no launch receipts found)")
-    missing = report["lanes_without_usage"]
-    if missing:
+    if report["lanes_without_usage"]:
         lines.append("")
-        lines.append("no usage recorded from either source:")
-        for row in report["lanes"]:
-            if row["scope"] in missing:
-                lines.append(f"  {row['scope']}: {row['result'].get('reason')}")
+        lines.append(
+            "no usage recorded from either source: "
+            + ", ".join(report["lanes_without_usage"])
+        )
+    notes = []
+    for row in report["lanes"]:
+        for source in ("result", "subagents"):
+            reason = row[source].get("reason")
+            if reason:
+                notes.append(f"  {row['scope']} {source}: {reason}")
+    if notes:
+        lines.append("")
+        lines.append("gaps:")
+        lines.extend(notes)
     return "\n".join(lines) + "\n"
 
 
@@ -492,6 +583,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         sessions_dir = found
+
+    if not sessions_dir.is_dir():
+        print(f"error: sessions directory not found: {sessions_dir}", file=sys.stderr)
+        return 2
 
     report = build_report(
         sessions_dir,

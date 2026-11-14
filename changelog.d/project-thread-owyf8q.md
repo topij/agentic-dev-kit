@@ -9,7 +9,9 @@ separately, the subagent transcripts under `--projects-root` (default
 Options: `--since <date>`, `--rank-by result-tokens|subagent-tokens|cost`, `--json`,
 `--strict` (exit 1 when no lane had figures from either source). A bad `--since` or an
 unresolvable sessions directory exits 2. Each `--json` lane row carries flat `tokens`,
-`cost_usd` and `subagent_tokens`, each None when its source has no figures.
+`cost_usd` and `subagent_tokens`, each None when its source has no figures;
+`subagent_tokens` is also None when a session or transcript the lane had could not be
+read. A missing or non-directory `--sessions-dir` exits 2.
 
 Nothing to change to keep working: no receipt shape, config key or gate changes. Run
 `init.sh` (or `/upgrade`) to install the engine and its test. The report never adds the

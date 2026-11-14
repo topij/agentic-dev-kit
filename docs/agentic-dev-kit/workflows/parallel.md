@@ -326,7 +326,8 @@ the result object already counts subagent spend is the runtime's definition. Tra
 figures are tokens only: no price table is kept, and the layout is a harness artifact
 that can change. A lane with no figures from either source is listed with the reason,
 never as zero. Each `--json` lane row also carries flat `tokens`, `cost_usd` and
-`subagent_tokens` (None when that source has no figures) for a budget or queue engine
+`subagent_tokens` (None when that source has no figures, or, for transcripts, when one
+of the lane's sessions or transcripts could not be read) for a budget or queue engine
 to read. It only reads; a per-lane budget is not implemented.
 
 ### Joint wrap-up — the cockpit owns the handoff
