@@ -241,8 +241,11 @@ scripts/reconcile_sessions.sh <scope-1> <scope-2> …   # merged / held / parked
 
 `held` is a lane whose PR is already merge-ready (green, review-clean, receipt bound
 to head) and that only you can merge: an operator-class lane, or a self-class lane whose
-PR is not classed standard, which `dev_session.sh merge` refuses. The batch cannot
-advance it; only your merge decision can.
+PR `pr_watch` classes as operator-merge (its `review_class` names a safety-critical path,
+the config that declares them, or a class other than `standard`), which
+`dev_session.sh merge` refuses. The batch cannot advance it; only your merge decision
+can. A self-class lane whose `review_class` is missing, partial, unclassified or malformed is not
+held: it stays `open`, and the reconciler says it could not evaluate it.
 
 Three of those four are terminal — `merged`, `held`, `parked`. `open` is not: it says
 reconciliation is unfinished, and it alone keeps the batch un-closeable. Exit codes

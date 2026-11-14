@@ -112,7 +112,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "a08e0bee2d50bdefadba49fc78e2d5c57aa8f4db0818d3cdf389fb5fc55d25a3"
+      "sha256": "323f334297f8284e4fb44fef2a56ffe53c4100428af7fe8c6666de62e8c2e577"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -120,7 +120,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "9a1fbeaef8274f01c5981e52b4793dbf0c09a769028ead554888edd9ca916671"
+      "sha256": "e6761bb741eca4a9db47f610aa4da9b60b24f8cabd271870a6d89474d46b9f2f"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -390,7 +390,7 @@
         "scripts/lib/triage/model.py"
       ],
       "role": "engine",
-      "sha256": "360713ae727c3ea3bb9a5787018951a96b9950fba8271725a2216917bbae1e1c"
+      "sha256": "f43f9a5a602597fd04c340e8b23613fdaf148421567edb86d31b716b73e0b14f"
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
@@ -676,11 +676,11 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "a77e64289f843e65f3196ac196c08c5edac722cd1cad4cf5b436b18d3d8e94ae"
+      "sha256": "b509fdd11c4040ec1fd8c60dae3fa6feb90672e3a0d1b14cb63d1d361ce2abc9"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
-      "sha256": "dc5ec7f541e450e7390907435786cbb3ba126eeede0148b0ec742ef540eddbb4"
+      "sha256": "58b400f8d39d44d0b60b847ccf8f60c77f3cc1345e5b8dc3b48dbe15c0742001"
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
@@ -812,7 +812,7 @@
     },
     "scripts/tests/test_merge_predicate.py": {
       "role": "test",
-      "sha256": "2bdecc51672f80b13b12df303eb060b8bf9d9fdf5c7138dbdb51f0b66aa39b2f"
+      "sha256": "edb5889c9d99b7ae839a1eaf739887960cc4280132f35a812190362eb8aa7d07"
     },
     "scripts/tests/test_mutation_gate.py": {
       "role": "test",
@@ -824,7 +824,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "81ee60af55cfe5593679a187eee45209b40dd7acc9a414dc88a2b910ea8dede9"
+      "sha256": "ecfe495c9ae7b84198479332c4853aab378fa65cd844496b8d3c925a96bbb231"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
@@ -832,7 +832,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "2452c07ebed2ab4f7bc9d09486547860bfe85b9bde4d5ba6c2f8a0a575f161cf"
+      "sha256": "a9dcb26c237c43989e60651fba697b4d9f9d3281ec0ee511939dac62ac8e7455"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
@@ -840,7 +840,7 @@
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
-      "sha256": "d05206e275fdfbd791f647343b459e99d393be7048788b1121cf5343c038b982"
+      "sha256": "7464338d12fa240f895cfd4893cc14cc010c28b5f0ed3115d55d3b8f5cdfe870"
     },
     "scripts/tests/test_record_prose.py": {
       "role": "test",

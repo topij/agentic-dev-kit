@@ -191,10 +191,11 @@ def test_an_identity_the_caller_lost_never_matches(identity: dict) -> None:
 
 @pytest.mark.parametrize("char", CONTROL_CHARACTERS)
 def test_a_control_character_never_fuses_into_a_matching_identity(char: str) -> None:
-    """The earlier wrapper scrubbed and then compared in the shell, where a
-    deleted tab or NUL fused `tr<TAB>unk` into the recorded `trunk` (#537).
-    Identity is now compared here on the raw value, and the reported value is
-    scrubbed to a space only for printing."""
+    """The earlier wrapper scrubbed in Python and then compared in the shell,
+    so it turned each control character into a space: deleting it instead would
+    have fused `tr<TAB>unk` into the recorded `trunk` (#537). Identity is now
+    compared here on the raw value, and the reported value is scrubbed to a
+    space only for printing."""
     report = ready_report(base=f"tr{char}unk")
     assert merge_predicate.readiness(report, pr="8", base="trunk", head=HEAD) == (
         "wrong-base",
@@ -332,6 +333,17 @@ def test_the_merge_gate_needs_readiness_and_a_standard_class() -> None:
     assert gate(ready_report(base=""), pr="8", base="", head=HEAD)[0] == "wrong-base"
 
 
+def test_the_merge_gate_refuses_an_identity_it_was_not_given() -> None:
+    """`readiness` skips a `base` of `None`, so the gate's own check is what
+    refuses a merge whose base was never compared, and it answers before the
+    report is read at all."""
+    gate = merge_predicate.merge_gate
+    assert gate(ready_report(), pr="8", base=None, head=HEAD) == ("wrong-base", "")
+    assert gate(ready_report(base="other"), pr="8", base=None, head=HEAD) == ("wrong-base", "")
+    assert gate(None, pr="", base="trunk", head=HEAD) == ("wrong-pr", "")
+    assert gate(None, pr="8", base="", head=HEAD) == ("wrong-base", "")
+
+
 SAFETY = {**STANDARD, "class": "safety-critical", "matched_paths": ["scripts/pr_watch.py"]}
 
 
@@ -357,6 +369,14 @@ SAFETY = {**STANDARD, "class": "safety-critical", "matched_paths": ["scripts/pr_
         ("self", without("review_class"), "unknown"),
         ("self", ready_report(review_class={"class": "safety-critical"}), "unknown"),
         ("self", ready_report(review_class={**SAFETY, "unclassified": "why"}), "unknown"),
+        # Four keys, but values no `pr_watch` writes: not standard to the gate,
+        # and too unclear to widen `held`.
+        ("self", ready_report(review_class={**SAFETY, "class": 7}), "unknown"),
+        ("self", ready_report(review_class={**SAFETY, "class": ""}), "unknown"),
+        ("self", ready_report(review_class={**SAFETY, "matched_paths": "x"}), "unknown"),
+        ("self", ready_report(review_class={**SAFETY, "matched_paths": [7]}), "unknown"),
+        ("self", ready_report(review_class={**SAFETY, "changes_config": "yes"}), "unknown"),
+        ("self", ready_report(review_class={**STANDARD, "changes_config": None}), "unknown"),
         ("self", None, "unknown"),
         # Lane metadata that is not exactly one of the two classes holds nothing.
         ("", ready_report(review_class=SAFETY), "not-held"),
@@ -375,6 +395,20 @@ def test_held_needs_the_pull_request_identity() -> None:
     for pr, base in (("", "trunk"), ("8", "")):
         answer = merge_predicate.held(report, merge_class="operator", pr=pr, base=base, head=HEAD)
         assert answer == "not-held"
+
+
+def test_held_refuses_an_identity_it_was_not_given_before_reading_the_report() -> None:
+    """`readiness` skips a `base` of `None`, so `held`'s own check is what keeps
+    an uncompared base from reading `held`. It answers before the report is
+    read: a lost identity is `not-held` even beside a report that would be
+    `unknown`."""
+    held = merge_predicate.held
+    for merge_class in ("operator", "self"):
+        report = ready_report(review_class=SAFETY, base="other")
+        assert held(report, merge_class=merge_class, pr="8", base=None, head=HEAD) == "not-held"
+        for pr, base in (("", "trunk"), ("8", "")):
+            answer = held(None, merge_class=merge_class, pr=pr, base=base, head=HEAD)
+            assert answer == "not-held"
 
 
 # --------------------------------------------------------------------------- #

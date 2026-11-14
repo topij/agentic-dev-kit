@@ -15,7 +15,9 @@ Stdlib only: the shell engines run this file with a bare ``python3`` from hooks
 and scheduled jobs, where nothing else is installed.
 
 Every read fails closed. An absent key, a wrong type or an unexpected value
-reads as "not ready" or "not standard"; no read has a permissive default. The
+reads as "not ready" or "not standard"; no read has a permissive default.
+``held`` is the one reader that "not standard" widens, so it also refuses to
+take that answer from a value ``pr_watch`` never writes. The
 verdict flags are read, never re-derived: ``pr_watch.py`` computes
 ``mergeable``, and a second derivation here could drift from the engine's.
 
@@ -193,7 +195,11 @@ def merge_gate(report: Any, *, pr: Any, base: Any, head: Any) -> tuple[str, str]
 
     `(READY, "")` only when the report is merge-ready for exactly this pull
     request, base and head and is classed standard. Otherwise the first failing
-    readiness verdict, or `class-<review class verdict>` with its reason."""
+    readiness verdict, or `class-<review class verdict>` with its reason.
+
+    `pr` and `base` are checked here before `readiness` because `readiness`
+    skips a `base` of `None`, and the merge gate must never authorize without
+    comparing the base."""
     if not (_expected(pr) and _expected(base)):
         return WRONG_PR if not _expected(pr) else WRONG_BASE, ""
     verdict, detail = readiness(report, pr=pr, base=base, head=head)
@@ -210,8 +216,11 @@ def held(report: Any, *, merge_class: Any, pr: Any, base: Any, head: Any) -> str
 
     `HELD` when the report is merge-ready for exactly this pull request and
     either the lane's persisted merge class is `operator`, or it is `self` and
-    the review class is `CLASS_NOT_STANDARD`: the one verdict on which
-    `merge_gate` tells the lane the operator lands it (#1370).
+    the review class is `CLASS_NOT_STANDARD` with every field of the shape
+    `pr_watch` writes: the verdict on which `merge_gate` refuses because the
+    pull request is operator-merge, and the operator lands it (#1370).
+    `CLASS_UNCLASSIFIED`'s refusal also ends with the operator landing it, but
+    only once a fetch and a retry still cannot class it, so it is not held.
 
     `held` is a terminal claim, so the safe direction here is the opposite of
     the merge gate's: anything unclear must NOT widen it. Each input that could
@@ -225,7 +234,14 @@ def held(report: Any, *, merge_class: Any, pr: Any, base: Any, head: Any) -> str
     - `self`, ready, `CLASS_MISSING` or `CLASS_UNCLASSIFIED`: `UNKNOWN`. The
       wrapper refuses this merge too, but its remedy is an upgrade or a fetch,
       not an operator merge, so the lane is not finished. The caller reports it
-      `open` and says it could not be evaluated."""
+      `open` and says it could not be evaluated.
+    - `self`, ready, `CLASS_NOT_STANDARD` from a `review_class` whose `class`
+      is not a non-empty string, whose `matched_paths` is not a list of
+      strings, or whose `changes_config` is not a bool: `UNKNOWN`. The gate
+      refuses it either way, but no `pr_watch` writes those values, so they
+      do not say the pull request is operator-merge.
+    - a `pr` or `base` that is not a non-empty string: `NOT_HELD`, checked
+      before `readiness` because `readiness` skips a `base` of `None`."""
     if merge_class not in ("operator", "self"):
         return NOT_HELD
     if not (_expected(pr) and _expected(base)):
@@ -239,10 +255,25 @@ def held(report: Any, *, merge_class: Any, pr: Any, base: Any, head: Any) -> str
         return HELD
     klass, _why = review_class(report)
     if klass == CLASS_NOT_STANDARD:
-        return HELD
+        return HELD if _written_by_pr_watch(report["review_class"]) else UNKNOWN
     if klass == CLASS_STANDARD:
         return NOT_HELD
     return UNKNOWN
+
+
+def _written_by_pr_watch(rc: dict) -> bool:
+    """Does `rc` carry the value types `pr_watch.pr_review_class` writes?
+
+    Only `held` asks. A junk value reads as not standard, which is the safe
+    answer for the merge gate, but `held` is widened by that answer, so it
+    takes it only from a class `pr_watch` could have written."""
+    paths = rc.get("matched_paths")
+    return (
+        _expected(rc.get("class"))
+        and isinstance(paths, list)
+        and all(isinstance(path, str) for path in paths)
+        and isinstance(rc.get("changes_config"), bool)
+    )
 
 
 def _load(stream: Any) -> Any:

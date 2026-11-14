@@ -25,10 +25,20 @@ is never `mergeable`), so this changes only a stubbed or hand-built report.
   `review_evidence` before it reports a lane `held`.
 - `terminal_pr_watch_receipt` newly requires `head` and `url` to be non-empty strings.
 
-A `pr_watch.py` from before 2026-07-27 (no `truncated_reads`; `converged` and
-`review_evidence` are older still) fails every one of these checks, and
-`dev_session.sh merge` refuses with `run pr-watch to convergence first`, which in that
-case means: upgrade `pr_watch.py` together with the other four files.
+A `pr_watch.py` from before 2026-07-27 writes no `truncated_reads`, so its report fails
+that check whatever else it says (one from before 2026-07-25 also writes no `mergeable`
+or `converged`). `dev_session.sh merge` then refuses with `run pr-watch to convergence
+first`, which in that case means: upgrade `pr_watch.py` together with the other four
+files.
+
+CHANGED (config keys): the shipped `review.safety_critical_paths` adds
+`scripts/lib/merge_predicate.py` and `scripts/devkit/lib/merge_predicate.py`, because
+`dev_session.sh merge` authorizes on its verdict. When upgrading an existing
+installation, add the installed path (`<engine-dir>/lib/merge_predicate.py`) to your own
+`review.safety_critical_paths` and to your runtime safety-critical bindings (the
+`paths:` list of `.claude/rules/safety-critical-changes.md`, if you keep one), or a pull
+request that changes the merge gate is classed standard: a `self` lane may merge it
+itself, and a fallback review of it takes one lens instead of two.
 
 CHANGED (gate semantics): `dev_session.sh merge` reads `review_class` more strictly
 (#1371). A `review_class` lacking any of `class`, `matched_paths`, `changes_config` or
@@ -39,10 +49,11 @@ refusal for a report with no usable `review_class` now ends `: <what is absent>;
 pr_watch.py together with dev_session.sh, then retry`.
 
 CHANGED (gate semantics): `reconcile_sessions.sh` reports a `self` lane `held` when its
-open pull request is merge-ready and `review_class` is not standard, which is the pull
-request `dev_session.sh merge` refuses as operator-merge (#1370). Such a batch can now
-exit 4 where it exited 3. A `self` lane's open pull request is therefore polled with
-`pr_watch.py --json --no-persist`, as an `operator` lane's already was. A merge-ready
-`self` lane whose `review_class` is absent, partial or unclassified stays `open` and is
-listed under the `could not evaluate for 'held'` note. If you match the reconciler's
+open pull request is merge-ready and its whole, classified `review_class` is not
+standard, which is the pull request `dev_session.sh merge` refuses as operator-merge
+(#1370). Such a batch can now exit 4 where it exited 3. A `self` lane's open pull
+request is therefore polled with `pr_watch.py --json --no-persist`, as an `operator`
+lane's already was. A merge-ready `self` lane whose `review_class` is absent, partial,
+unclassified or carries a value `pr_watch.py` never writes stays `open` and is listed
+under the `could not evaluate for 'held'` note. If you match the reconciler's
 exit status or `held` rows per lane class, expect `held` and 4 for these lanes.

@@ -3664,7 +3664,7 @@ def test_bot_coverage_at_the_head_is_evidence_with_no_receipt() -> None:
     the head there was no literal that described what happened, so an honest
     agent recorded nothing and the gate was unreachable — wedged precisely when
     review had gone well, and hardest on an autonomous lane, whose
-    `dev_session.sh merge` reads `mergeable` and nothing else.
+    `dev_session.sh merge` cannot merge without `mergeable`.
     """
     pr_watch = _load_pr_watch()
     view = _green_view(
@@ -3991,8 +3991,9 @@ def test_a_receipt_cannot_authorize_a_merge_over_a_standing_bot_objection() -> N
     the gate returned `mergeable: True` with an EMPTY blocker list, and the
     receipt carried none of the engine's "this is less than it looks" markers —
     no `override`, no `bot_signal`, no `bots_behind_head`. It read completely
-    clean. `dev_session.sh merge` reads `mergeable` and nothing else, so this was
-    reachable on the real autonomous-merge path, not only in the JSON report.
+    clean. `dev_session.sh merge` then read `mergeable` and no other verdict
+    field, so this was reachable on the real autonomous-merge path, not only in
+    the JSON report.
 
     `reviewDecision` stays empty throughout: that is the `gh` shape for a
     non-required bot reviewer, and `gh` is the only transport `--record-review`
@@ -5054,8 +5055,10 @@ def test_a_pending_bot_still_blocks_a_merge_its_coverage_would_allow() -> None:
     assert any("has not reported yet" in b for b in report["merge_blockers"])
 
 
-def test_the_merge_wrapper_reads_a_coverage_route_report_as_mergeable() -> None:
-    """`safety-critical-changes.md` rule 4, applied to a merge gate.
+def test_the_merge_gate_command_reads_a_coverage_route_report_as_ready() -> None:
+    """`safety-critical-changes.md` rule 4, applied to a merge gate. This runs
+    the command `dev_session.sh merge` runs, `lib/merge_predicate.py merge`, not
+    the wrapper itself; `test_portability.py` runs the wrapper.
 
     Unit tests on `decide_mergeable` are insufficient by that rule: the thing
     that actually authorizes a merge is `dev_session.sh merge`, which shells out
@@ -9024,7 +9027,8 @@ def test_truncation_is_printed_where_a_human_reads_it(
 ) -> None:
     """The other HIGH: `truncated_reads` had no consumer at all, while the comment
     introducing it claimed it was "what makes the failure visible". `render` never
-    printed it and `dev_session.sh merge` reads only `mergeable`.
+    printed it and `dev_session.sh merge` then read only `mergeable` among the
+    verdict fields.
 
     The precedent the comment cited — `review_bots.signal` — works precisely
     because `render` branches on it. So the render line IS the mechanism here.

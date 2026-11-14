@@ -688,12 +688,15 @@ def test_self_merge_refuses_a_cross_repository_pr_before_review(tmp_path: Path) 
 
 
 @pytest.mark.evidence
-def test_self_merge_refuses_a_report_that_is_done_but_not_mergeable(
+def test_self_merge_refuses_a_report_missing_any_merge_ready_field(
     tmp_path: Path,
 ) -> None:
-    """The gate reads `mergeable`, and fails CLOSED when it is false or absent.
+    """The wrapper refuses a report that fails any field the shared predicate
+    requires: `mergeable`, `converged`, `done`, an empty `merge_blockers` and
+    `truncated_reads`, and valid `review_evidence`. It fails CLOSED when any
+    of them is false or absent.
 
-    The first two cases, deliberately pinned together:
+    The first two cases are about `mergeable`, deliberately pinned together:
 
     - **`mergeable: false` alongside `done: true`.** These are equal in any report
       the engine actually produces, so this input is intentionally inconsistent:

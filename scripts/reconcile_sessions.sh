@@ -20,9 +20,13 @@
 #               review-clean, and carrying an independent-
 #               review receipt bound to the current head) and
 #               that only the operator can merge: an OPERATOR-
-#               class lane, or a SELF-class lane whose PR is
-#               not classed standard, because `dev_session.sh
-#               merge` refuses that PR. The lane is finished;
+#               class lane, or a SELF-class lane whose PR
+#               `pr_watch` classes as operator-merge (a whole,
+#               classified `review_class` that is not
+#               standard), which `dev_session.sh merge` refuses
+#               and the operator lands. A missing, partial,
+#               unclassified or malformed one is not held:
+#               the lane stays `open`. The lane is finished;
 #               only the operator's merge decision is missing,
 #               so the batch itself can no longer advance it.
 #   • open    — a PR is still open with work left on it        → batch not closeable
@@ -468,8 +472,9 @@ _resolve_repo_nwo() {
 # lane HELD for the operator?
 #
 #   0 — held: the PR is merge-ready, and either the lane is operator-class or
-#       it is self-class and the PR is not classed standard, so
-#       `dev_session.sh merge` refuses it and the operator lands it (#1370)
+#       it is self-class and the PR is classed operator-merge (the `not-standard`
+#       review-class verdict), so `dev_session.sh merge` refuses it and the
+#       operator lands it (#1370)
 #   1 — not held (lane is genuinely still open)
 #   2 — could not be determined; caller reports `open` and says why
 #
@@ -489,9 +494,9 @@ _resolve_repo_nwo() {
 # 3. A non-persisting pr_watch poll against the lane's own state sandbox must
 #    be merge-ready for this exact PR, base, and head, as lib/merge_predicate.py
 #    defines it. For a self-class lane the same report must also class the PR
-#    as not standard; one whose class is missing or could not be computed is
-#    rc 2, because the remedy there is an upgrade or a fetch and not an
-#    operator merge. Read the engine verdicts; do not rebuild
+#    as not standard; one whose class is missing, could not be computed, or
+#    carries a value pr_watch never writes is rc 2, because the remedy there
+#    is an upgrade or a fetch and not an operator merge. Read the engine verdicts; do not rebuild
 #    their predicates from forge rollups. `--no-persist` keeps this probe
 #    from acknowledging anything: in serialized use, reconciliation preserves a lane's
 #    seen-set, pending acknowledgements, and review receipt. Serialize operations

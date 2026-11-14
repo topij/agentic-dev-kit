@@ -387,8 +387,8 @@ def test_self_merge_lane_with_the_same_mergeable_pr_stays_open(harness: Harness)
 
 
 def test_self_lane_the_merge_wrapper_refuses_for_its_class_is_held(harness: Harness) -> None:
-    """#1370. `dev_session.sh merge` refuses a `self` lane whose PR is not
-    classed standard, and the operator lands it. Reported `open`, that lane kept
+    """#1370. `dev_session.sh merge` refuses a `self` lane whose PR is classed
+    operator-merge, and the operator lands it. Reported `open`, that lane kept
     the batch from ever reaching exit 4. The report here is merge-ready, so only
     the class separates it from the lane in the test above."""
     harness.branch("lane/grown")

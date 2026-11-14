@@ -163,8 +163,9 @@ pre-assigned merge class: a self-merge lane goes through the deterministic wrapp
 (re-polls CI/review/merge readiness at act time and refuses missing or operator
 metadata, and a PR whose `review_class` is not `standard`); an operator lane is merged only after explicit cockpit sign-off. **held** is
 that second kind, seen from the reconciler: a lane whose PR is already merge-ready and
-that only the operator can merge (an operator lane, or a self lane whose PR is not
-classed standard, which the wrapper refuses), so the batch has nothing left to do and
+that only the operator can merge (an operator lane, or a self lane whose PR `pr_watch`
+classes as operator-merge, which the wrapper refuses; a missing, partial, unclassified or malformed
+`review_class` leaves the lane `open`), so the batch has nothing left to do and
 the sign-off is the only thing outstanding. Exit **4** is reached only when no lane is open or parked and at least one
 is held; an all-merged batch still exits **0**, because a held lane has not shipped. The exact
 `pr-watch` / `merge` / `rm` command sequence lives in

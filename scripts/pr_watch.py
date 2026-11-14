@@ -956,7 +956,8 @@ def _resolve_backend() -> tuple[str, str | None]:
 # because REST does not get to say "mergeable" at all.
 #
 # It costs nothing today. `dev_session.sh cmd_merge` shells out to `gh repo view`
-# + `gh pr list` (via `_resolve_lane_pr`) BEFORE it reads `mergeable`, and
+# + `gh pr list` (via `_resolve_lane_pr`) BEFORE it polls this engine and hands
+# the report to `lib/merge_predicate.py`, and
 # finishes with `gh pr merge` — so with no `gh` there is no merge path to feed.
 # The bound turns that accident into an invariant.
 #
@@ -3674,7 +3675,10 @@ def qualifying_bot_coverage(review_bots: dict, head: str | None) -> list[str]:
     run — so the honest agent recorded nothing and ``mergeable`` was
     unreachable. That wedged the merge gate precisely when review had gone
     *well*, and it wedged it hardest on an autonomous lane, whose
-    ``dev_session.sh merge`` reads ``mergeable`` and nothing else.
+    ``dev_session.sh merge`` cannot merge without ``mergeable``: its gate,
+    ``merge_gate`` in ``lib/merge_predicate.py``, requires ``mergeable`` with the
+    other verdict fields and a standard ``review_class``, and no receipt or
+    override stands in for any of them.
 
     **Why this route is safe where a fourth receipt literal would not have
     been.** Every receipt is SELF-REPORTED: the agent that wants the merge
@@ -5751,7 +5755,10 @@ def build_report(
       more to fix?" A converged PR is NOT necessarily safe to merge.
     - ``mergeable`` — :func:`decide_mergeable`: ``converged`` AND no
       ``merge_blockers`` AND current-head review evidence. The **merge-gate**
-      predicate, and what ``dev_session.sh merge`` re-checks at act time.
+      predicate. ``dev_session.sh merge`` requires it at act time, through
+      ``lib/merge_predicate.py``, together with ``converged``, ``done``, empty
+      ``merge_blockers`` and ``truncated_reads``, valid ``review_evidence`` and a
+      standard ``review_class``.
     - ``done`` — legacy alias, always equal to ``mergeable``. Kept so an older
       ``dev_session.sh`` reading ``done`` still gates on merge authorization
       rather than falling open; see :func:`decide_done`.
