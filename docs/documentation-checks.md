@@ -19,8 +19,9 @@ update it deliberately with the package manifest.
 
 ## What is checked
 
-The `check` script in the package manifest lists the source pages: README,
-developer guide, getting started, architecture, parallel development and recipes,
+The `check` script in the package manifest lists the source pages, including the README,
+principles, contributor guide, autonomous playbook, developer guide, getting started,
+architecture, parallel development and recipes,
 troubleshooting, ownership, and this page. Add a new reader guide there when linking
 it from the navigation. A missing requested source fails the command.
 
@@ -44,7 +45,10 @@ Each Mermaid fence is parsed and rendered in Chromium using the locked Mermaid
 package. Browser requests are limited to its local module assets. The check retains
 PNG previews, SVGs, Mermaid source, source locations and its result under
 `tooling/docs/previews/`. Open a run's `index.md` and inspect labels, clipping and
-legibility; a successful render alone does not establish visual quality.
+legibility. Read each diagram at a normal Markdown column width. Trace the
+decision paths using the labels alone, and check that each exit agrees with the
+paragraph beside it. Use Mermaid’s `accTitle` and `accDescr` to describe what the
+diagram explains for someone reading it with a screen reader.
 
 ## CI and failure recovery
 

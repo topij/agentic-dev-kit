@@ -1,117 +1,87 @@
 # Parallel sessions — a step-by-step how-to
 
-This is the task-oriented companion to [`parallel-dev.md`](parallel-dev.md). That
-page explains the **model** — cockpit + isolated lanes, disjoint file footprints, why
-it's safe. This one is the **recipe book**: for each thing you actually want to do,
-the exact commands and *what happens when you run them*.
+Use these recipes to prepare a full-profile lane, start its agent, inspect its PR
+and retire the worktree. The [parallel development guide](parallel-dev.md) explains
+how to decide which tasks can run side by side.
 
 Examples use the template default `paths.engines: scripts`. If you adopted the kit
 under `scripts/devkit`, substitute that configured directory. Invoke the shared
 workflow as `/parallel` in Claude Code or `$parallel` in Codex.
 
-If you read only one section, read the next one — it's the point almost everyone
-trips on the first time.
+The examples use operator-class lanes. In the kit repository, consult the
+**Whole-kit plan** before launching or merging a lane. The D2 hold assigns all
+lane merges to the operator while it applies. [Kit handoff](kit-handoff.md#whole-kit-plan)
 
 ## The mental model — three separate things
 
-Starting a parallel session involves three things that are easy to conflate:
+The **cockpit** coordinates work. Running `new` there creates a **lane on disk**
+with its own branch, worktree and state directory. A **separate agent process**
+does the work, started differently for attended and unattended lanes.
 
-1. **This session** — the agent session you're already in. When it runs a `parallel`
-   verb it acts as a *launcher / coordinator*. It **does not** turn into the new
-   session, and it **does not** touch your current branch, checkout, or scratch state.
-2. **The artifacts on disk** — a git **worktree**, a **branch**, and a **state
-   sandbox** that `dev_session.sh new` creates. Inert until someone opens them.
-3. **The new session** — a *separate* process for the configured agent runtime that you start
-   in a **new terminal**. This is the one that actually does work in the new worktree.
-
-The single most common surprise:
-
-> **An in-agent workflow cannot open a new interactive terminal for you.**
-
-A `parallel` skill runs *inside* your current agent process — it can't `cd` your
-terminal into a new directory or spawn a fresh REPL there. For an interactive lane,
-`new` does the setup and hands you launch or activation guidance; *you* use it in
-a new terminal to start the session. (Headless lanes are the exception — see
-[Use case 4](#use-case-4--launch-an-unattended-headless-lane) — because there is no
-human terminal to hand the line to.)
-
-So "what is `parallel new` for, if I still have to open the terminal myself?" — it
-creates the worktree, branch, and sandbox and emits launch guidance. When a launcher
-is configured, that guidance includes a copy-paste launch command. Otherwise it
-prints the lane's `source .../activate` command; start your agent after activating.
-
-Keep that three-way split in mind and every verb below makes sense.
+```mermaid
+flowchart TD
+    accTitle: Starting an interactive or headless lane
+    accDescr: The cockpit creates the branch, worktree and state directory. An interactive lane starts when the operator follows the printed command in another terminal. A headless lane starts when the wrapper receives its issued descriptor and a task prompt.
+    Cockpit["Cockpit creates the lane"] --> Lane["Branch, worktree and state directory"]
+    Lane -->|interactive new| Terminal["Follow the printed command<br/>in a new terminal"]
+    Lane -->|headless new| Descriptor["Give launch_lane.py the issued<br/>descriptor and task prompt"]
+    Terminal --> Agent["Agent works in the lane"]
+    Descriptor --> Agent
+```
 
 ## What each invocation does, at a glance
 
-| You run | What happens | Touches your current branch? | Read-only? |
-|---|---|---|---|
-| `parallel` &nbsp;or&nbsp; `… list` | Prints the board of active lanes | No | Yes |
-| `parallel list --watch` | Same board, auto-refreshing | No | Yes |
-| `parallel plan` | Proposes a disjoint batch to launch | No | Yes (until you confirm) |
-| `dev_session.sh new <scope> --merge-class <class>` | Creates worktree + branch + sandbox, persists merge policy, prints launch or activation guidance | No | No — writes to disk, but **not** to your checkout |
-| `dev_session.sh merge <scope>` | Re-polls and merges an eligible self-merge lane; refuses operator/missing metadata, and a PR `pr_watch` does not class `standard` | No | No |
-| *(you use the printed guidance)* | Launches or activates the lane in a **new terminal** | No | — |
+| Task | Invocation | Result |
+| --- | --- | --- |
+| Inspect lanes | `scripts/dev_session.sh list` | Shows a snapshot. Add `--watch` to refresh it. |
+| Plan a batch in the agent session | `/parallel plan` or `$parallel plan` | Proposes tasks with disjoint files for the operator to select. |
+| Prepare a lane | `scripts/dev_session.sh new cli-help --merge-class operator` | Creates a branch, worktree and state directory, then prints launch instructions. |
+| Poll a lane PR | `scripts/dev_session.sh pr-watch cli-help --json` | Reads the PR and saves the comment keys reported by this poll in the lane's state. |
+| Check the branch outcome | `scripts/reconcile_sessions.sh cli-help` | Looks up the branch and PR. Its held check can record when it observed the checks on a head. |
 
-Even `new` doesn't touch *your* working tree: the worktree it creates is a separate
-directory under a `dev-model-sessions/` folder beside your primary checkout (override
-with `DEVKIT_SESSIONS_DIR`).
+The shell examples assume you are at the repository root. By default lanes
+live under `dev-model-sessions/` beside the primary checkout. Set
+`DEVKIT_SESSIONS_DIR` to choose a different sessions directory.
 
 ---
 
 ## Use case 1 — See what's already running
 
-You just want to know what lanes exist and where they stand. This is the safe,
-read-only default.
-
 ```bash
 scripts/dev_session.sh list          # or just run parallel with no argument
 ```
 
-You get one row per lane: `SCOPE · BRANCH · PR · CI (✓/✗/…) · DIRTY (uncommitted
-count) · RUN · OVERLAP · SANDBOX path`. RUN says whether a headless lane is running,
-has finished (its receipt status, such as `completed` or `stalled`) or was lost; OVERLAP names other lanes changing the same files. Nothing is
-created or changed. If there are no lanes, the table is empty.
-
-**Follow it live** while a batch is in flight:
+Read the branch, PR, CI status, uncommitted changes and sandbox path for the
+scope you want. To follow a batch as it runs, use the watch form.
 
 ```bash
 scripts/dev_session.sh list --watch        # re-render every 30s
 scripts/dev_session.sh list --watch 10     # …every 10s
 ```
 
-The watch board marks every row that changed since the last frame with a leading `*`
-(CI flipped, a commit landed, the dirty count moved, a PR went draft→ready or merged),
-which is also how you spot a **silently-dead lane** that stops moving. `Ctrl-C` to
-stop.
+The watch board marks a changed row with `*`. Inspect `RUN` when a lane stops
+moving. A `completed` launch means the headless agent returned a recognized final
+line. Read `terminal.lane_state` to distinguish `pr-ready`, `no-pr` and `blocked`.
+When `OVERLAP` names another lane, sequence the conflicting edits. A `?` means
+the file list for that lane could not be checked. Press `Ctrl-C` to stop.
 
 ---
 
 ## Use case 2 — Start one independent session, decoupled from your current branch
 
-This is the "I want a fresh session that isn't tied to what I'm working on right now"
-case. One command sets it up:
+Choose a lowercase slug for the work. This example prepares an interactive lane
+for a CLI help change.
 
 ```bash
-scripts/dev_session.sh new <scope> --merge-class <self|operator>
+scripts/dev_session.sh new cli-help --merge-class operator
 ```
 
-Substitute a lowercase slug for `<scope>` (e.g. `add-rate-limit`, `fix-cli-help`).
-`<scope>` is a placeholder: typed literally, the shell reads `<scope` as an input
-redirection and the command fails, and `dev_session.sh` itself refuses any scope that is
-not a lowercase slug.
+The command performs these steps.
 
-What this does:
-
-1. Creates a git **worktree** in the `dev-model-sessions/` directory beside your primary checkout (a linked
-   worktree sharing this repo's objects — not a full clone).
-2. Creates a fresh branch using `vcs.dev_branch_prefix`, branched off the configured
-   `origin/<vcs.protected_branch>` by default — **not** off your current branch. That's
-   what makes the new session independent: it starts from a clean base, so it can't
-   inherit or disturb your in-progress work.
-3. Sets up an isolated state sandbox (`DEVKIT_STATE_ROOT`) so the new session's
-   scratch-state writes never collide with yours.
-4. Prints a **copy-paste launch line** when the selected runtime has a launcher:
+1. Creates a linked worktree and a branch under `vcs.dev_branch_prefix` from
+   the configured `origin/<vcs.protected_branch>`.
+2. Sets up the lane's state directory (`DEVKIT_STATE_ROOT`).
+3. Prints a launch command when the selected runtime has a launcher.
 
    ```text
    cd <worktree> && export DEVKIT_STATE_ROOT=<sandbox> && export DEVKIT_ROOT=<repo> && <configured-launcher>
@@ -135,22 +105,16 @@ Useful options:
 - `--launcher <command>` — override the configured command for this lane; use
   `--launcher none` to print activation-only guidance.
 
-> **Do I even need `new` for a throwaway?** If you only want to read or experiment with
-> **no** branch and **no** state isolation, a plain `git worktree add ../scratch main`
-> works. But the moment the session runs project scripts that write to `state/cache/`,
-> use `new` so the two sessions don't clobber each other's scratch state.
+For source inspection alone, `git worktree add --detach ../scratch HEAD` gives
+you a detached checkout. Use a lane when project scripts need a separate state
+directory for their writes.
 
 ---
 
 ## Use case 3 — Plan and launch a *batch* of parallel lanes
 
-When you want several lanes at once, don't spin them up one ticket at a time — compose
-the batch so no two lanes edit the same source file (the sandbox prevents *state*
-collisions, not *source* merge conflicts). Start from the planner:
-
-```text
-parallel plan            # or: parallel plan <focus-area-or-ticket-list>
-```
+In the agent session, invoke `/parallel plan` in Claude Code or `$parallel plan`
+in Codex. Supply a focus area or ticket list if you have one.
 
 It gathers candidate work, **clusters it by file footprint**, drops stale-premise
 candidates, and proposes a disjoint batch — at most one lane per cluster — each tagged
@@ -159,41 +123,42 @@ confirm the set, then it prepares a lane per pick with `dev_session.sh new` and 
 its launch or activation guidance. The tier remains a recommendation until the
 runtime applies a model or effort control.
 
-From there, **this session becomes the cockpit**: it owns the shared narrative files
-and the merges, watches `list --watch`, and does the reconcile + wrap-up at the end.
-The full planning method, the lane contract, and a worked four-ticket example live in
-[`parallel-dev.md`](parallel-dev.md#the-workflow) — this how-to intentionally doesn't
-duplicate it.
+The cockpit watches `list --watch`, reconciles the branches and updates the
+shared handoff for outstanding work.
+See the [worked example](parallel-dev.md#a-worked-example) for a batch with
+overlapping auth tasks.
 
 ---
 
 ## Use case 4 — Launch an unattended (headless) lane
 
-A headless lane has **no human terminal** to hand a launch line to, so `new` behaves
-differently:
+Choose an unused scope and the runtime that will do the work. For example, to
+prepare a Codex lane for a documentation index, run this from the cockpit.
 
 ```bash
-scripts/dev_session.sh new <scope> --headless --merge-class <self|operator> --runtime <codex|claude>
+scripts/dev_session.sh new docs-index --headless --merge-class operator --runtime codex
 ```
 
-Instead of printing a copy-paste line, `--headless` writes a sticky
-`<worktree>/.devkit_state_root` marker file so the agent's tool calls resolve the
-sandbox from disk (they don't inherit a shell), and emits a machine-readable descriptor
-whose `prompt_preamble` carries the **lane contract** and whose `env` map contains the
-lane-specific roots. It also persists the canonical one-shot descriptor beside the
-lane metadata. For either runtime, launch it only through the kit-owned wrapper, which
-removes inherited lane/repository overrides, assigns the descriptor environment,
-verifies the child's independent identity observations, starts the runtime's
-config-owned headless command (`codex exec` or `claude -p`), and writes an
-observed/terminal receipt:
+The JSON printed by `new` includes `descriptor_path`. The file at that path binds
+the worktree, state directory, runtime and branch. A marker in the worktree lets
+the agent's tools find its state directory even from a fresh shell.
+
+Write the task-specific instructions to a regular file and pass it to the wrapper
+with the issued descriptor. Here `task_prompt` names your existing prompt and
+`lane_worktree` locates the session directory for the example above.
 
 ```bash
+task_prompt=/absolute/path/to/docs-index-task.txt
+lane_worktree="$(scripts/dev_session.sh path docs-index)" || exit 1
 python3 scripts/launch_lane.py \
-  --descriptor <session>/launch-descriptor.json \
-  --prompt-file <task-prompt> \
-  [--tier <cheap|default|expensive>] \
-  [--ticket <issue-number>]
+  --descriptor "${lane_worktree%/*}/launch-descriptor.json" \
+  --prompt-file "$task_prompt"
 ```
+
+The wrapper verifies the descriptor and the child's observed identity, starts the
+runtime and records the outcome. Add `--tier default` to request the mapped compute
+or `--ticket` with a GitHub issue number to include that issue in the prompt. On
+another tracker, put the ticket text in the task prompt.
 
 The contract covers ready-by-default PRs, the bounded draft exception, ready-state
 assertions, active CI polling, narrative ownership, branch checks, the closing
@@ -219,69 +184,66 @@ For the full JSON descriptor/receipt contract and verbatim-injection rule, see
 
 ## Use case 5 — Wind a session down
 
-When a lane's PR is merged (or you're abandoning it), reconcile and tear down.
+From the cockpit, use the same scope that created the lane. These examples
+follow the interactive `cli-help` lane.
 
-**Find a lane's worktree path** (e.g. to `cd` into it):
-
-```bash
-scripts/dev_session.sh path <scope>
-```
-
-That prints the **worktree** (`<sessions-dir>/<scope>/wt`), not the state sandbox. The
-sandbox is its sibling, `<sessions-dir>/<scope>/state` — there is no subcommand that
-prints it, so build it from the worktree path if you need to inspect scratch state.
-
-**Reconcile the whole batch to a terminal state** before you write anything to the
-shared handoff — an aggregate "everything's done" is not evidence a specific lane
-shipped:
+**Check its PR.** The scope wrapper resolves the lane's branch, PR and state
+directory. When a ready PR exists, poll it there.
 
 ```bash
-scripts/reconcile_sessions.sh <scope-1> <scope-2> …   # merged / held / parked / open
+scripts/dev_session.sh pr-watch cli-help --json
 ```
 
-`held` is an operator-class lane whose PR is already merge-ready (green, review-clean,
-receipt bound to head): the batch cannot advance it, only your merge decision can.
+Push any repairs and post replies before using `--mark-seen`. This
+acknowledges findings from the last persisting poll. If you ran an independent
+review, use the PR-watch workflow's receipt command for that review class. Pass
+the reviewed head and the actual findings through the scope wrapper. Then re-poll.
+[Review loop](agentic-dev-kit/workflows/pr-watch.md#loop)
 
-Three of those four are terminal — `merged`, `held`, `parked`. `open` is not: it says
-reconciliation is unfinished, and it alone keeps the batch un-closeable. Exit codes
-follow: **0** only when every lane merged; **4** when no lane is open or parked and at
-least one is held (distinct from 0, because a held lane has not landed); **3**
-otherwise, i.e. whenever any lane is open or parked.
-
-**Merge an eligible self-merge lane** through the safety wrapper. It reads the
-persisted class and branch, resolves the open PR, re-polls `pr-watch`, and merges only
-when every gate is currently clean. Operator-class or missing metadata is refused:
+**Reconcile the batch.** Use a bare scope for a branch under the configured prefix.
+Pass a custom branch by its full name if it contains a slash. For a slash-free
+branch named `guide-update`, use `--match 'guide-update'` and check that its
+row appears. This form matches existing local and remote refs. If both have
+gone, read the PR by its head branch to account for the lane. Use `--base` for a
+different target branch and reconcile each base separately. For the unattended
+example, include `docs-index` if you launched it too.
 
 ```bash
-scripts/dev_session.sh pr-watch <scope> --json
-scripts/dev_session.sh pr-watch <scope> --mark-seen
-scripts/dev_session.sh pr-watch <scope> --record-review <source> --head <polled-sha>
-scripts/dev_session.sh merge <scope>
+scripts/reconcile_sessions.sh cli-help
 ```
 
-Use the `head` field from the exact independently reviewed poll. The scope-aware
-wrapper keeps the cockpit's acknowledgments and head-bound receipt in the lane state
-sandbox; recording refuses if a push landed between the review and receipt.
+| Reconciler outcome | Next action |
+| --- | --- |
+| All merged (exit `0`) | Read the merged PRs for anything left to hand over. |
+| Merged or held, with a held PR (exit `4`) | Give the operator the reviewed PR and head for their decision. |
+| An open or parked row (exit `3`) | Continue or consciously park open work. Record the reason for each parked item. |
+| No board because an authoritative read failed | Resolve the reported error and run the same scopes again. |
 
-**Remove the worktree** once you're done with it:
+For an adopter that explicitly authorizes autonomous self-class lanes, consult
+the [scope-aware merge contract](agentic-dev-kit/workflows/parallel.md#per-lane-merge-class-self-merge-vs-operator-merge).
+It applies only when both project policy and the current request authorize the
+cockpit to merge. A safety-critical or unclassified PR needs the operator.
+
+**Remove a finished lane.** Run this once the worktree and its state are no
+longer needed.
 
 ```bash
-scripts/dev_session.sh rm <scope>                 # keeps the branch if it's unmerged
-scripts/dev_session.sh rm <scope> --keep-branch   # always keep the branch
-scripts/dev_session.sh rm <scope> --force          # discard uncommitted changes
+scripts/dev_session.sh rm cli-help
 ```
 
-`rm` tears down the *worktree*. It deletes the branch only once the branch has landed
-(an ancestor of the base, or the head of a squash-merged PR) and is not protected; an
-unmerged branch is kept even with `--force`, so delete it yourself if you mean to. Your cockpit session and current branch are untouched throughout.
+The command refuses a dirty worktree and preserves an unmerged branch.
+`--keep-branch` also preserves a landed branch. For a parked lane, inspect the
+worktree with `scripts/dev_session.sh path cli-help` and keep any state needed
+to resume before considering removal.
 
 ---
 
 ## FAQ
 
 **Does any of this affect my current branch or checkout?**
-No. Every verb either reads state (`list`, `plan`, `path`) or creates a *separate*
-worktree (`new`). Your current session stays on its own branch the whole time.
+Running the recipes from the cockpit keeps its checkout on the current branch.
+The lane commands manage other resources: `new` creates a branch and worktree,
+the scoped poll writes review state, and `rm` removes the lane worktree and sandbox.
 
 **Does the new session branch off my current branch?**
 No — off the configured `origin/<vcs.protected_branch>` by default, so it starts

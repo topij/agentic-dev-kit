@@ -1,74 +1,49 @@
 # Principles — a portable development model for AI-agent-driven codebases
 
-This document describes a development model for teams that build software with the
-help of AI coding agents (Claude Code, or similar tools), running both interactively
-and unattended. It assumes agents work in git worktrees on branches, open pull
-requests, and are reviewed before merge — and it assumes a **single human operator**
-who is not present for every step but who remains the final authority on risk,
-security, and irreversible decisions. The ten principles below are doctrine, not
-implementation: each names a failure mode it prevents, and points at the *kind* of
-mechanism (a file, a hook, a CI check, a launcher convention) that makes the doctrine
-stick instead of quietly eroding. Adopt them incrementally — each principle stands on
-its own.
+These principles come from running interactive and unattended coding sessions with
+a human operator who makes the final decisions about risk. The Full profile puts
+them into practice with worktrees, pull requests, checks and independent review.
+Lite uses the handoff, friction inbox and staged-change review in a smaller project.
+See [the profile comparison](README.md#choose-an-install-profile) for the install
+decision and [architecture](docs/architecture.md) for how the parts work together.
 
 ## 1. Living-plan handoff
 
-**Statement.** Maintain exactly one canonical, forward-looking plan document per
-project — the single source of truth for what's done, in progress, and next. Every
-work session starts by reading it and ends by updating it. Session-scoped notes,
-scratch plans, or an agent's own working memory are never the handoff mechanism;
-the living plan is.
+**Statement.** Keep a forward-looking plan in the repository. Each open workstream
+has a place where the next session can find its status, its owner and its next
+action. A commit records what changed. The plan holds the context needed to
+continue, such as a design decision that the commit and tracker leave unsaid.
 
-**Failure it prevents.** Without a canonical plan, "what's the state of things"
-becomes an oral tradition — reconstructed from memory, chat history, or a pile of
-stale session summaries that disagree with each other. Context degrades every time
-a new session (human or agent) has to re-derive it from scratch, and work silently
-duplicates or regresses because nobody could see what the last session actually
-concluded.
+**Failure it prevents.** A fresh session sees that an endpoint shipped, but only
+the previous conversation says who must choose the rollout date. A handoff entry
+that names the decision and its owner lets work resume without reconstructing the
+conversation. Copying every merged change into the same file would bury that entry.
 
-**Mechanism.** A single file (e.g. `plan.md`) with a lightweight structure: current
-priorities, a running log of recent session summaries, and an explicit "next step"
-pointer. A start-of-session routine reads it first; an end-of-session routine updates
-it last. Because a plan that only ever grows becomes unreadable, pair it with an
-archival mechanism — older entries move to a history file once the live document
-crosses a size budget, enforced by a cheap tripwire (a line-count check that warns,
-not blocks) rather than left to discipline alone.
+**Mechanism.** Read the plan at session start. On Full, run the handoff test before
+each PR's opening review. Add a record on that branch when the work leaves
+something to hand over. A lane sends its record to the cockpit. On Lite, include
+needed plan edits in the staged change that wrap-up reviews. Both routes give
+the next session a plan it can act on. [Full handoff](docs/agentic-dev-kit/workflows/wrap-up.md) · [Lite handoff](docs/agentic-dev-kit/lite/lite-wrap-up.md)
 
 ## 2. Friction flywheel
 
-**Statement.** Every session that surfaces friction — a bug, an awkward workflow, a
-recurring annoyance — records it immediately, at the moment it's fresh, and routes it
-by how completely it is understood. A finding the session can already reproduce,
-explain *and* say how to fix goes straight to the tracker as a work item; one missing
-any of those three goes to a lightweight inbox.
-On a regular cadence that inbox is triaged: single incidents get filed as tracked work
-items or simply noted; patterns that recur across multiple occurrences graduate into a
-permanent rule, check, or process change.
+**Statement.** Capture friction while the evidence is available. Give a finding
+a destination based on what the session knows and what the operator has approved.
 
-**Failure it prevents.** Friction that isn't captured the moment it's noticed is
-friction that's forgotten — the next session hits the same rough edge, or worse,
-the annoyance becomes so normalized that nobody thinks to fix it. The opposite
-failure is just as real: reacting to every single incident by rewriting the
-standing rules produces rule-bloat that nobody reads and that drowns the few
-rules that actually matter.
+**Failure it prevents.** A setup failure disappears with the terminal that showed
+it. Or someone responds to the first occurrence by adding a permanent rule for
+every subsequent session. Recording the failing step and what remains to be
+learned gives the next attempt a starting point.
 
-**Mechanism.** A dated inbox file written to when friction is found, plus a periodic (e.g.
-weekly) triage pass over it. Routing is asymmetric — down by default, up only on
-repetition — and each finding routes at whichever of those two moments it is *ready*
-for. A finding that already carries a reproduction, a named mechanism and a proposed
-fix is complete, so it goes **down** to the tracker as soon as it is found; the
-triage pass could add nothing to it but latency. The inbox holds the remainder —
-findings still missing one of those three, and single instances of a shape that only
-matters if it recurs. The triage pass then graduates *those*: still **down** for a
-single incident, and **up** into a rule or process change only for a genuine
-multi-occurrence **pattern**. Deferring the up-route to repetition is what keeps the
-flywheel self-regulating instead of ratcheting every week.
-
-The two moments differ in what they can know, which is why the split falls where it
-does. When you find it you have the live context and can say *why* something happened;
-at triage you have several entries side by side and can see that a shape has
-recurred. Asking either moment to do the other's job is what makes the inbox either a
-ticket queue or a graveyard.
+**Mechanism.** On Full, an issue-shaped finding has a reproduction, a named
+mechanism and a proposed fix. Search the tracker for existing work and present the
+exact filing for approval. Park a finding in the inbox when it needs diagnosis,
+needs to recur, or cannot be filed. Triage freezes the inbox for decisions about
+its entries. A separate workflow examines findings from *merged PR reviews* for
+recurring causes. When a change is warranted, try to remove the cause, then look
+for a check that catches it, and reserve prose for decisions requiring judgement.
+Lite routes explained findings through the project's configured friction route.
+[Full routing](docs/architecture.md#friction-flywheel) · [Lite wrap-up](docs/agentic-dev-kit/lite/lite-wrap-up.md)
 
 ## 3. Cockpit + isolated lanes
 
@@ -108,9 +83,9 @@ shipped.
 size or by feature boundary. Low-risk, easily-reversible, cosmetic changes can
 stack together into one PR; anything touching shared state, external side
 effects, security, or destructive operations gets its own tightly-scoped PR.
-Classify each unit of work's merge path — safe for the agent/author to merge
-itself once green, versus requiring a human's explicit sign-off — at planning
-time, not as an afterthought during review.
+Identify the authorized actor at planning time. In a lane, the cockpit
+coordinates the merge decision. The lane itself hands back a PR or explains why
+it stopped.
 
 **Failure it prevents.** Bundling a risky change alongside a pile of safe cosmetic
 ones dilutes review attention (a reviewer skimming twenty small diffs is less
@@ -126,8 +101,9 @@ one PR (one commit per change, so review-by-commit stays tractable); isolate
 anything touching shared/production state, security, or irreversible operations
 into its own PR. When planning a batch of work (especially parallel/autonomous
 lanes), tag each item's merge class up front — "self-mergeable once green" versus
-"requires operator sign-off" — as a required field in the plan, not a judgment
-call made in the moment.
+"requires operator sign-off" — as a required field in the plan. Check the final diff and
+project policy before acting on that assignment. For work in the kit repository,
+read the operator's [lane merge decision](docs/kit-handoff.md#whole-kit-plan).
 
 ## 5. PR follow-through to green-and-clean
 
