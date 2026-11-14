@@ -728,7 +728,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "cce521bebbc755bfda4f9a3e0fd0d1bbf0048bbd39d14f39e73eba87e9896ee4"
+      "sha256": "b19607839711dd8df7fc0747a36448a61c32d01c11921f2a2a31be3e057ab85c"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
