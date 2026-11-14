@@ -1331,7 +1331,8 @@ def test_expect_commit_accepts_a_clone_behind_its_origin_and_refuses_another_com
 ) -> None:
     """A kit block that named a tag or an older sha leaves a clone that is not its
     origin's HEAD. U2's plain read refuses it; `--expect-commit` with the commit the
-    block printed reads it, and refuses any other commit, naming both."""
+    block printed reads it, and refuses any other commit, naming both. The baseline
+    (commit A) is an ancestor of the clone (B), so this is no downgrade."""
     env = _env(tmp_path)
     bare = tmp_path / "upstream.git"
     _git(tmp_path, env, "clone", "-q", "--bare", str(kit_upstream["bare"]), str(bare))
@@ -1349,6 +1350,7 @@ def test_expect_commit_accepts_a_clone_behind_its_origin_and_refuses_another_com
         in done.stdout
     )
     assert _has_line(done, "record: owed")
+    assert "downgrade" not in done.stdout
     assert f"--apply --kit-commit {kit_upstream['head']}" in done.stdout
     other = _expect(kit, repo, env, kit_upstream["old_commit"])
     assert other.returncode == 1
@@ -1357,6 +1359,80 @@ def test_expect_commit_accepts_a_clone_behind_its_origin_and_refuses_another_com
         in other.stdout
     )
     assert _snapshot(repo) == before
+
+
+def test_expect_commit_reads_a_clone_at_the_baselines_own_commit(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """The commit the install was recorded from is not a downgrade of itself. (The
+    fixture's commit A is not a kit L5 passes, so the install is upgraded to B first.)"""
+    repo, env = _install(tmp_path, kit_upstream)
+    applied = _apply(kit, repo, env)
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "upgrade to B")
+    done = _expect(kit, repo, env, kit_upstream["head"])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "downgrade" not in done.stdout
+    assert _has_line(done, "record: not owed")
+
+
+def test_a_kit_older_than_the_installed_baseline_is_refused_as_a_downgrade(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """Installed from B, offered A (an ancestor of B): every file would read as the
+    kit's copy to take, so each mode refuses before any row, naming both commits."""
+    repo, env = _install(tmp_path, kit_upstream)
+    applied = _apply(kit, repo, env)
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    _git(repo, env, "add", "-A")
+    _git(repo, env, "commit", "-qm", "upgrade to B")
+    _git(kit, env, "checkout", "-q", "--detach", kit_upstream["old_commit"])
+    before = _snapshot(repo)
+    old, new = kit_upstream["old_commit"][:12], kit_upstream["head"][:12]
+    for done in (
+        _expect(kit, repo, env, kit_upstream["old_commit"]),
+        _pinned(kit, repo, env),
+        _apply(kit, repo, env),
+    ):
+        assert done.returncode == 1, done.stdout + done.stderr
+        assert f"is at {old}, which does not contain {new}" in done.stdout
+        assert "this would be a downgrade" in done.stdout
+        assert "apply (U4):" not in done.stdout
+    assert _snapshot(repo) == before
+
+
+def test_expect_commit_refuses_a_baseline_commit_missing_from_the_clones_history(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """A downgrade and a commit main never took look the same when the commit is
+    absent. With the commit chosen by `--expect-commit` that refuses; the plain read
+    keeps its changelog warning, as before the flag."""
+    repo, env = _install(tmp_path, kit_upstream)
+    missing = "0123456789abcdef0123456789abcdef01234567"
+    _edit_record(repo, lambda record: record.update(kit_commit=missing))
+    _git(repo, env, "commit", "-qam", "a baseline from a commit the kit never took")
+    done = _expect(kit, repo, env, kit_upstream["head"])
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert f"{missing[:12]}, the kit commit the committed baseline was installed from, is not in" in done.stdout
+    assert f"at {kit_upstream['head'][:12]} (--expect-commit)" in done.stdout
+    plain = _plan(kit, repo, env)
+    assert any("is not in this kit's history" in w for w in plain["changelog"]["warnings"])
+
+
+def test_expect_commit_notes_an_origin_it_cannot_read(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """The plain read refuses an unreadable origin; `--expect-commit` does not need
+    it, so it reads the clone and says what it could not check."""
+    repo, env = _install(tmp_path, kit_upstream)
+    _git(kit, env, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
+    done = _expect(kit, repo, env, kit_upstream["head"])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (
+        f"note: cannot read the HEAD of {kit}'s origin; reading {kit_upstream['head'][:12]}, "
+        "the commit --expect-commit names"
+    ) in done.stdout
 
 
 @pytest.mark.parametrize("mode", ["read", "apply"])

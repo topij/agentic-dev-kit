@@ -4995,23 +4995,65 @@ def _lite_agents_section(root: Path, kit: Path) -> dict:
     return {"status": "missing", "file": None, "diff": ""}
 
 
-def _lite_changelog(kit: Path, head: str, baseline_commit: str | None) -> dict:
+def _lite_deepen(kit: Path) -> str | None:
+    """Deepen a `--depth 1` kit clone, or say why it could not be: None when the
+    clone has its history.
+
+    Writes only into the kit clone's git directory. Both the baseline's ancestry
+    check and the changelog range need the history a shallow clone lacks.
+    """
+    shallow = _git_run(kit, "rev-parse", "--is-shallow-repository")
+    if shallow.stdout.strip() != "true":
+        return None
+    deepened = _git_run(kit, "fetch", "-q", "--unshallow", timeout=600)
+    if deepened.returncode != 0:
+        deepened = _git_run(kit, "fetch", "-q", "--depth=1000", timeout=600)
+    if deepened.returncode != 0:
+        return f"cannot deepen the kit clone: {deepened.stderr.strip()}"
+    return None
+
+
+def _lite_history_stop(kit: Path, head: str, baseline_commit: str | None, expected: bool) -> None:
+    """Refuse a kit clone that would take the install backwards.
+
+    The committed baseline names the kit commit the install came from. A clone
+    whose HEAD does not contain it, while the commit is in the clone's history,
+    is older than the install or beside it, and every file would read as the
+    kit's copy to take: a downgrade, refused in every mode. Origin's tip always
+    contains it, so the plain read only trips this on a baseline from a branch
+    main never took. A baseline absent from the history is a downgrade or a
+    commit main never took, which cannot be told apart: under `--expect-commit`,
+    where the operator chose the commit, that refuses too; otherwise the
+    changelog says so, as it did before `--expect-commit`.
+    """
+    if not baseline_commit:
+        return
+    if _git_run(kit, "merge-base", "--is-ancestor", baseline_commit, head).returncode == 0:
+        return
+    if _git_run(kit, "cat-file", "-e", f"{baseline_commit}^{{commit}}").returncode == 0:
+        raise LiteUpgradeStop(
+            f"the kit clone {kit} is at {head[:12]}, which does not contain {baseline_commit[:12]}, "
+            "the kit commit the committed baseline was installed from: this would be a downgrade "
+            f"— re-run Step 0's kit block with a ref at or after {baseline_commit[:12]}"
+        )
+    if expected:
+        raise LiteUpgradeStop(
+            f"{baseline_commit[:12]}, the kit commit the committed baseline was installed from, is "
+            f"not in the history of the kit clone {kit} at {head[:12]} (--expect-commit), so "
+            "whether this is a downgrade is unknown — stop and ask the operator"
+        )
+
+
+def _lite_changelog(kit: Path, head: str, baseline_commit: str | None, deepen_failed: str | None) -> dict:
     """The `changelog.d/` fragments the kit wrote after the baseline (#1408).
 
-    Deepens the clone first, which writes only into the kit clone's git
-    directory: a `--depth 1` clone has no history, and its range would be empty.
+    Reads the history `_lite_deepen` fetched: a `--depth 1` clone has none, and
+    its range would be empty, so a failed deepening reads no range.
     """
     result: dict = {"base": None, "bound": None, "entries": [], "warnings": []}
-    shallow = _git_run(kit, "rev-parse", "--is-shallow-repository")
-    if shallow.stdout.strip() == "true":
-        deepened = _git_run(kit, "fetch", "-q", "--unshallow", timeout=600)
-        if deepened.returncode != 0:
-            deepened = _git_run(kit, "fetch", "-q", "--depth=1000", timeout=600)
-        if deepened.returncode != 0:
-            result["warnings"].append(
-                f"cannot deepen the kit clone, so no changelog range is read: {deepened.stderr.strip()}"
-            )
-            return result
+    if deepen_failed:
+        result["warnings"].append(f"{deepen_failed}, so no changelog range is read")
+        return result
     base = None
     if baseline_commit and _git_run(kit, "merge-base", "--is-ancestor", baseline_commit, head).returncode == 0:
         base, result["bound"] = baseline_commit, "baseline"
@@ -5246,6 +5288,10 @@ def _upgrade_lite(
             "never recorded — stop and ask the operator; do not run adopt.md L4 from this kit"
         )
     baseline_commit = baseline.get("kit_commit") if isinstance(baseline.get("kit_commit"), str) else None
+    # Before any row is read: a kit older than the install would offer every file
+    # back as the kit's copy to take.
+    deepen_failed = _lite_deepen(kit)
+    _lite_history_stop(kit, head, baseline_commit, expect_commit is not None)
     try:
         report = inspect(root, kit_manifest, config, baseline)
     except OSError as exc:
@@ -5307,7 +5353,7 @@ def _upgrade_lite(
         stops.append(f"verify (L5): not run — {why}")
 
     agents = _lite_agents_section(root, kit)
-    changelog = _lite_changelog(kit, head, baseline_commit)
+    changelog = _lite_changelog(kit, head, baseline_commit, deepen_failed)
     date = _git_run(kit, "log", "-1", "--format=%cs", head).stdout.strip()
     decide = [r for r in rows if r.action == "decide"]
     apply_command = (
