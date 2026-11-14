@@ -100,11 +100,19 @@ directory instead, under the task branch's name. Run this **kit block**:
 <!-- systemize:2026-09-22 pattern; PRs #733,#734 -->
 
 ```bash
+KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to upgrade to; main, the tip of the kit's main branch, when you name none
+# A ref is an argument to git below: one starting with `-` would be read as an option
+# (`--upload-pack=<command>` runs that command), so it is refused before any git call.
+# A full sha is lower-cased, so the clone and a later run's check compare it alike.
+case "$KIT_REF" in
+  -*) echo "KIT_REF $KIT_REF starts with -: name a tag, a branch or a commit sha" >&2; exit 1 ;;
+  *[!0-9a-fA-F]*) ;;
+  *) { [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ]; } && KIT_REF="$(printf '%s' "$KIT_REF" | tr A-F a-f)" ;;
+esac
 KIT_HOME="$(git -C "${REPO:?REPO is not set — re-run the config check}" rev-parse --absolute-git-dir)" || exit 1
 KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || { echo "the kit block needs this task's branch checked out in $REPO" >&2; exit 1; }
 KIT="$KIT_HOME/agentic-dev-kit/$KIT_TASK"
 KIT_URL=https://github.com/topij/agentic-dev-kit
-KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to upgrade to; main, the tip of the kit's main branch, when you name none
 KIT_FOUND=yes
 if [ ! -e "$KIT" ]; then
   KIT_FOUND=
@@ -145,7 +153,11 @@ before the block runs (`KIT_REF=<tag-or-sha>`, or edit the default line). Naming
 upgrades to `main` as it stands when the block runs; a tag or sha upgrades to the same
 kit every time. The block prints the resolved commit on its `kit commit:` line before any
 copy: write that sha in the upgrade's pull request. The lite profile's U2 read needs that
-sha as well when you named a ref (below).
+sha as well when you named a ref (below), and runs the named ref's own `kit_doctor.py`
+with `--expect-commit`, so **a lite upgrade can name only a ref whose `kit_doctor.py`
+takes that flag**: `uv run <kit>/scripts/kit_doctor.py --help` lists it. An older ref
+stops U2 with `kit_doctor.py: error: unrecognized arguments: --expect-commit <sha>`;
+name a newer ref, or none.
 
 The path depends only on the checkout the block runs in and the branch checked out there,
 which here is the task worktree and its task branch, so the block is safe to re-run from
@@ -448,12 +460,19 @@ fallback. The fragment half does not read subjects, so the tripwire says nothing
 it:
 
 ```bash
-: "${REPO:?REPO is not set — re-run Step 0}" "${KIT:?KIT is not set — re-run the kit block in Step 0}"
+: "${REPO:?REPO is not set — re-run Step 0}" "${KIT:?KIT is not set — re-run the kit block in Step 0}" "${KIT_REF:?KIT_REF is not set — re-run the kit block in Step 0}"
 BASELINE="$(uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
 echo "baseline=${BASELINE:-NONE}"
 if [ -z "$BASELINE" ] ||
    ! git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
+  # A named ref whose history holds the baseline but not as an ancestor is older than
+  # the install, or beside it: upgrading to it would take the install backwards.
+  if [ -n "$BASELINE" ] && [ "$KIT_REF" != main ] &&
+     git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
+    echo "stop: the kit at $KIT_REF ($(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse --short=12 HEAD)) does not contain the installed baseline $BASELINE — this would be a downgrade; re-run the kit block with a ref at or after it" >&2
+    exit 1
+  fi
   echo "no usable install provenance — take the degraded path below"
 else
   COUNT="$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-list --count "$BASELINE..HEAD")"
@@ -505,7 +524,9 @@ silent. A *non-empty* baseline that `$KIT` cannot resolve fails the other way �
 `fatal: Invalid revision range` — which is loud but still never reaches the degraded path
 below, so the reader gets a git error instead of the procedure written for exactly their
 case. `merge-base --is-ancestor` covers both, and covers the baseline that resolves but
-sits on a history this checkout does not descend from.
+sits on a history this checkout does not descend from. That last one goes to the degraded
+path only when you named no ref: with `main` it is a baseline from a commit `main` never
+took.
 
 The `-z` test in front of it is deliberate redundancy, not a second guard: `merge-base
 --is-ancestor "" HEAD` already fails, so removing `-z` changes no outcome here. It is
@@ -532,6 +553,15 @@ procedure that broke rather than one that took its documented fallback. Run the
 guard against an undeepened clone and every upgrade quietly takes the degraded path, which
 is strictly worse than the error it replaced: an error stops you, a degraded read looks
 like an answer.
+
+**A named ref older than the install stops the upgrade.** When you set `KIT_REF` to a tag
+or sha, the clone can be older than the commit your install was recorded from, and
+copying from it would take the install backwards. So when the baseline is in the deepened
+clone's history but is not an ancestor of its `HEAD`, the block prints a `stop:` line
+naming the ref, its commit and the baseline, and exits 1: re-run the kit block with a ref
+at or after the baseline. A baseline that is absent from the clone's history cannot be
+told apart from one `main` never took, so it still takes the degraded path below. The
+`:` line guards `KIT_REF` too: the kit block sets it, `main` when you name none.
 
 A PR that produced no output has no entry, and a PR with no entry made no observable
 change. That is the changelog's contract rather than an omission to chase.
@@ -1330,7 +1360,12 @@ When you named a ref in the kit block, add `--expect-commit <sha>` to this comma
 with the full sha its `kit commit:` line printed. The read refuses a clone whose commit
 is not its origin's HEAD, which a tag or an older sha is not; `--expect-commit` checks
 the clone against that sha instead, names a newer origin in a `note:`, and changes
-nothing else about the read. Do not use `--kit-commit` here: a read given it is U5's,
+nothing else about the read. It is the named ref's own engine that reads the flag: a ref
+from before `--expect-commit` existed exits 2 with
+`kit_doctor.py: error: unrecognized arguments: --expect-commit <sha>`, and cannot be
+the target of a lite upgrade (see the kit block). A ref older than the commit your
+committed baseline was installed from is refused as a downgrade, naming both commits,
+and so is one whose history does not hold that commit. Do not use `--kit-commit` here: a read given it is U5's,
 which stops until U4 has run. With no ref named, the clone is `main`'s tip and the
 command runs as written.
 

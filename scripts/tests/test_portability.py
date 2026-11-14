@@ -19961,8 +19961,9 @@ def _kit_block(workflow: str) -> str:
 
 def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
     """A PATH whose `git clone <url> <dest>` makes a clean repository at <dest>, with
-    `origin` set to <url> and the same commits every time (an annotated tag `v1`, then
-    `main` one commit later), and logs <dest>. The block's `fetch --depth 1 origin <ref>`
+    `origin` set to <url> and the same commits every time (an annotated tag `v1` and
+    a lightweight, hex-only tag `20261114` on the same commit, then `main` one commit
+    later), and logs <dest>. The block's `fetch --depth 1 origin <ref>`
     and `ls-remote origin` answer from those refs, with no network, and each is logged;
     every other git call is the real git, and any other fetch is logged too."""
     real = shutil.which("git")
@@ -19983,6 +19984,7 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
         '    echo "{}" > "$last/kit-manifest.json" && "$REAL_GIT" -C "$last" add kit-manifest.json &&\n'
         '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -m kit &&\n'
         '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t tag -a -m release v1 &&\n'
+        '    "$REAL_GIT" -C "$last" tag 20261114 &&\n'
         '    echo "{\\"later\\": true}" > "$last/kit-manifest.json" &&\n'
         '    "$REAL_GIT" -C "$last" -c user.name=t -c user.email=t@t commit -q -a -m later\n'
         '  exit $?\n'
@@ -20154,6 +20156,70 @@ def test_the_kit_block_stops_when_a_clone_it_finds_is_not_at_the_named_ref(
     # would stay deep (PR 1443 R2).
     assert refs.read_text() == fetched
     assert not Path(str(clones) + ".fetch").exists()
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_refuses_a_ref_that_git_would_read_as_an_option(
+    tmp_path: Path, workflow: str
+) -> None:
+    """`KIT_REF='--upload-pack=<command>'` handed to `git fetch` runs the command: the
+    block refuses any ref starting with `-` before it calls git at all."""
+    require_kit_paths(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    marker = tmp_path / "ran"
+    result = _run_kit_block(
+        "sh", _kit_block(workflow), dict(env, KIT_REF=f"--upload-pack=touch {marker}"), task
+    )
+    assert result.returncode != 0
+    assert "starts with -" in result.stderr
+    assert not marker.exists()
+    assert not clones.exists()
+    assert not (_git_dir(task) / "agentic-dev-kit").exists()
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_reads_an_uppercase_full_sha_alike_on_a_re_run(
+    tmp_path: Path, workflow: str
+) -> None:
+    """The clone and a later run's check both lower-case a full sha, so a re-run
+    with the same uppercase sha finds the clone at it rather than refusing it."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, _ = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF="v1"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    pinned = _git(kit, "rev-parse", "HEAD").stdout.strip()
+    _, fresh_task = _repo_with_task(tmp_path, "b")
+    for repo in (fresh_task, fresh_task, task):
+        again = _run_kit_block("sh", block, dict(env, KIT_REF=pinned.upper()), repo)
+        assert again.returncode == 0, again.stderr
+        assert f"kit commit: {pinned}   (ref requested: {pinned})" in again.stdout.splitlines()
+
+
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_checks_a_hex_only_tag_through_ls_remote_on_a_re_run(
+    tmp_path: Path, workflow: str
+) -> None:
+    """A tag named only with hex digits, `20261114`, is not a full sha: a run that
+    finds its clone resolves it from origin rather than comparing it with HEAD as written."""
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    _, task = _repo_with_task(tmp_path, "a")
+    made = _run_kit_block("sh", block, dict(env, KIT_REF="20261114"), task)
+    assert made.returncode == 0, made.stderr
+    kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
+    tagged = _git(kit, "rev-parse", "20261114^{commit}").stdout.strip()
+    assert _git(kit, "rev-parse", "HEAD").stdout.strip() == tagged
+    lsremote = Path(str(clones) + ".lsremote")
+    assert not lsremote.exists()
+    again = _run_kit_block("sh", block, dict(env, KIT_REF="20261114"), task)
+    assert again.returncode == 0, again.stderr
+    assert f"kit commit: {tagged}   (ref requested: 20261114)" in again.stdout.splitlines()
+    assert lsremote.read_text().splitlines() == ["ls-remote"]
 
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)

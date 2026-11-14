@@ -6173,8 +6173,10 @@ def _changelog_lookup_block() -> str:
     return matching[0]
 
 
-def _run_lookup(tmp_path: Path, baseline: str, kit: Path) -> subprocess.CompletedProcess:
-    """Run the document's own block with $BASELINE pre-set and $KIT bound.
+def _run_lookup(
+    tmp_path: Path, baseline: str, kit: Path, kit_ref: str = "main"
+) -> subprocess.CompletedProcess:
+    """Run the document's own block with $BASELINE pre-set and $KIT and $KIT_REF bound.
 
     The `BASELINE=` assignment in the document shells out to `kit_doctor.py`,
     which needs an installed repo to report on. That resolution is not what this
@@ -6190,7 +6192,7 @@ def _run_lookup(tmp_path: Path, baseline: str, kit: Path) -> subprocess.Complete
     # `BASELINE=` line it guards for reads it (#1341).
     script = (
         f'set -u\nREPO={shlex.quote(str(tmp_path))}\nKIT={shlex.quote(str(kit))}\n'
-        f'BASELINE={shlex.quote(baseline)}\n{body}'
+        f'KIT_REF={shlex.quote(kit_ref)}\nBASELINE={shlex.quote(baseline)}\n{body}'
     )
     return subprocess.run(
         ["bash", "-c", script], capture_output=True, text=True, cwd=tmp_path
@@ -6233,6 +6235,54 @@ def test_upgrade_changelog_lookup_degrades_when_the_baseline_is_unusable(
         f"the {label} reached the changelog extraction, which is the fail-OPEN "
         f"direction this guard exists to close.\nstdout:\n{result.stdout}"
     )
+
+
+def _two_commit_kit(tmp_path: Path) -> tuple[Path, str, str]:
+    kit = tmp_path / "kit"
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e"}
+    subprocess.run(["git", "init", "-q", str(kit)], check=True)
+    shas = []
+    for subject in ("older (#1)", "newer (#2)"):
+        subprocess.run(["git", "-C", str(kit), "commit", "-q", "--allow-empty", "-m", subject],
+                       check=True, env=env)
+        shas.append(subprocess.run(["git", "-C", str(kit), "rev-parse", "HEAD"],
+                                   capture_output=True, text=True, check=True).stdout.strip())
+    (kit / "CHANGELOG.md").write_text("## #2 — newer\n\nthe entry for #2\n", encoding="utf-8")
+    return kit, shas[0], shas[1]
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_stops_a_named_ref_older_than_the_baseline(
+    tmp_path: Path,
+) -> None:
+    """Installed from the newer commit, upgrading to a named ref at the older one: the
+    block stops as a downgrade instead of degrading. With `main` named the same
+    history keeps the degraded path, and a baseline absent from the history degrades
+    either way, since nothing tells it from a commit main never took."""
+    kit, older, newer = _two_commit_kit(tmp_path)
+    subprocess.run(["git", "-C", str(kit), "checkout", "-q", "--detach", older], check=True)
+    stopped = _run_lookup(tmp_path, newer, kit, kit_ref="v1")
+    assert stopped.returncode == 1, stopped.stdout + stopped.stderr
+    assert f"does not contain the installed baseline {newer}" in stopped.stderr
+    assert "this would be a downgrade" in stopped.stderr
+    assert "degraded path" not in stopped.stdout and "the entry for #2" not in stopped.stdout
+    on_main = _run_lookup(tmp_path, newer, kit)
+    assert "degraded path" in on_main.stdout and on_main.returncode == 0
+    absent = _run_lookup(tmp_path, "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef", kit, kit_ref="v1")
+    assert "degraded path" in absent.stdout and absent.returncode == 0
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_upgrade_changelog_lookup_reads_a_named_ref_at_or_after_the_baseline(
+    tmp_path: Path,
+) -> None:
+    kit, older, newer = _two_commit_kit(tmp_path)
+    same = _run_lookup(tmp_path, newer, kit, kit_ref="v2")
+    assert same.returncode == 0 and "up to date" in same.stdout, same.stdout + same.stderr
+    later = _run_lookup(tmp_path, older, kit, kit_ref="v2")
+    assert later.returncode == 0 and "the entry for #2" in later.stdout
+    assert "downgrade" not in later.stderr
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")

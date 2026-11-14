@@ -19,10 +19,18 @@ unknown revision (`#576`). Clone it into the adopter checkout's own git director
 Run this **kit block** from inside the repo being adopted into:
 
 ```bash
+KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to install; main, the tip of the kit's main branch, when you name none
+# A ref is an argument to git below: one starting with `-` would be read as an option
+# (`--upload-pack=<command>` runs that command), so it is refused before any git call.
+# A full sha is lower-cased, so the clone and a later run's check compare it alike.
+case "$KIT_REF" in
+  -*) echo "KIT_REF $KIT_REF starts with -: name a tag, a branch or a commit sha" >&2; exit 1 ;;
+  *[!0-9a-fA-F]*) ;;
+  *) { [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ]; } && KIT_REF="$(printf '%s' "$KIT_REF" | tr A-F a-f)" ;;
+esac
 KIT_HOME="$(git rev-parse --absolute-git-dir)" || exit 1
 KIT="$KIT_HOME/agentic-dev-kit"
 KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
-KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to install; main, the tip of the kit's main branch, when you name none
 KIT_FOUND=yes
 if [ ! -e "$KIT" ]; then
   KIT_FOUND=
@@ -63,7 +71,11 @@ before the block runs (`KIT_REF=<tag-or-sha>`, or edit the default line). Naming
 installs `main` as it stands when the block runs, which is a different kit next week;
 a tag or sha installs the same kit every time. The block prints the resolved commit on its
 `kit commit:` line before any copy: write that sha in the adoption's pull request, so the
-repository records which kit commit it installed.
+repository records which kit commit it installed. The steps below run the named ref's own
+engines with the flags this document names, so a ref older than one of those flags stops
+that step with `kit_doctor.py: error: unrecognized arguments: <flag>`: name a ref no older
+than the copy of this document you are following. A later lite upgrade has the same limit
+for `--expect-commit` (`upgrade.md`, *Lite profile* U2).
 
 The path depends only on this checkout, so the block is safe to re-run from any shell or
 session: it finds the same clone again instead of making another, which matters once
