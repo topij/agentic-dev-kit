@@ -429,6 +429,15 @@ def _rank_value(row: dict[str, Any], rank_by: str) -> float:
     return float(value) if isinstance(value, (int, float)) else -1.0
 
 
+def _has_usage(row: dict[str, Any]) -> bool:
+    """A lane has usage when either source gave a complete figure.
+
+    A transcript sum with an unreadable transcript or a missing session is a lower
+    bound, not a measurement, so it does not count here (nor for `--strict`).
+    """
+    return row["tokens"] is not None or row["subagent_tokens"] is not None
+
+
 def build_report(
     sessions_dir: Path,
     projects_root: Path,
@@ -457,7 +466,7 @@ def build_report(
         "lanes_without_usage": [
             r["scope"]
             for r in rows
-            if not r["result"]["available"] and not r["subagents"]["available"]
+            if not _has_usage(r)
         ],
     }
 
@@ -599,9 +608,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write("\n")
     else:
         sys.stdout.write(render_text(report))
-    any_usage = any(
-        r["result"]["available"] or r["subagents"]["available"] for r in report["lanes"]
-    )
+    any_usage = any(_has_usage(r) for r in report["lanes"])
     return 1 if args.strict and not any_usage else 0
 
 

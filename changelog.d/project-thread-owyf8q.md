@@ -7,7 +7,7 @@ lane sessions directory (`--sessions-dir`, default `$DEVKIT_SESSIONS_DIR` or the
 separately, the subagent transcripts under `--projects-root` (default
 `$CLAUDE_PROJECTS_DIR` or `~/.claude/projects`) for the session ids the receipt names.
 Options: `--since <date>`, `--rank-by result-tokens|subagent-tokens|cost`, `--json`,
-`--strict` (exit 1 when no lane had figures from either source). A bad `--since` or an
+`--strict` (exit 1 when no lane had a complete figure from either source). A bad `--since` or an
 unresolvable sessions directory exits 2. Each `--json` lane row carries flat `tokens`,
 `cost_usd` and `subagent_tokens`, each None when its source has no figures;
 `subagent_tokens` is also None when a session or transcript the lane had could not be

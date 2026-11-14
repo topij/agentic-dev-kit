@@ -341,3 +341,15 @@ def test_a_missing_sessions_dir_exits_2(tmp_path: Path) -> None:
     result = _run("--sessions-dir", str(tmp_path / "nope"))
     assert result.returncode == 2
     assert "sessions directory not found" in result.stderr
+
+
+def test_strict_does_not_accept_an_incomplete_transcript_sum(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage=None)
+    directory = projects / "-p" / SID_A / "subagents"
+    directory.mkdir(parents=True)
+    (directory / "bad.jsonl").write_bytes(b"\xff\xfe")
+    common = ["--sessions-dir", str(sessions), "--projects-root", str(projects)]
+    strict = _run(*common, "--strict", "--json")
+    assert strict.returncode == 1, strict.stdout
+    assert json.loads(strict.stdout)["lanes_without_usage"] == ["lane-a"]
