@@ -353,3 +353,35 @@ def test_strict_does_not_accept_an_incomplete_transcript_sum(tmp_path: Path) -> 
     strict = _run(*common, "--strict", "--json")
     assert strict.returncode == 1, strict.stdout
     assert json.loads(strict.stdout)["lanes_without_usage"] == ["lane-a"]
+
+
+def test_a_cost_only_result_has_a_cost_but_no_token_total(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage={"usage": None, "total_cost_usd": 0.5}, session_id=None)
+    report = lane_usage.build_report(sessions, projects)
+    row = report["lanes"][0]
+    assert row["result"]["available"] is True
+    assert row["result"]["total_tokens"] is None and row["result"]["tokens"] is None
+    assert (row["tokens"], row["cost_usd"]) == (None, 0.5)
+    assert report["lanes_without_usage"] == []
+
+
+def test_a_missing_session_alone_ranks_and_renders_as_partial(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(
+        sessions,
+        "partial",
+        usage=None,
+        resumes=[{"round": 1, "session_id": SID_B, "usage": None}],
+    )
+    _subagent(projects, SID_A, "agent-1", [{"usage": {"output_tokens": 9000}}])
+    _lane(sessions, "whole", usage=None, session_id=SID_B.replace("2", "3"))
+    _subagent(projects, SID_B.replace("2", "3"), "agent-2", [{"usage": {"output_tokens": 5}}])
+    report = lane_usage.build_report(sessions, projects, rank_by="subagent-tokens")
+    rows = {r["scope"]: r for r in report["lanes"]}
+    assert rows["partial"]["subagents"]["complete"] is False
+    assert SID_B in rows["partial"]["subagents"]["reason"]
+    assert "unreadable" not in rows["partial"]["subagents"]["reason"]
+    # The larger but partial sum does not outrank a complete one.
+    assert [r["scope"] for r in report["lanes"]] == ["whole", "partial"]
+    assert ">=9,000 part" in lane_usage.render_text(report)

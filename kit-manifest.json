@@ -262,7 +262,7 @@
     },
     "scripts/lane_usage.py": {
       "role": "engine",
-      "sha256": "ac2dcdc96a0686e1708d7900e87c914e5d07bfa23df2424e611ee4e96b35ef99"
+      "sha256": "bc1f9f792eaa149f5f09c8f55bd2c4a1d55a741aceb7182f7ad8356759e56921"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -804,7 +804,7 @@
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",
-      "sha256": "0da3fc65e5efe92b1500647ed6df9e45393947e9f69168fbcef35890ff42df40"
+      "sha256": "7a010c36f1eccf1d78b856833de1eb08b9af53793653d84863f2720d2bde335c"
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",

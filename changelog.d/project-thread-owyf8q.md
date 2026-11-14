@@ -11,7 +11,8 @@ Options: `--since <date>`, `--rank-by result-tokens|subagent-tokens|cost`, `--js
 unresolvable sessions directory exits 2. Each `--json` lane row carries flat `tokens`,
 `cost_usd` and `subagent_tokens`, each None when its source has no figures;
 `subagent_tokens` is also None when a session or transcript the lane had could not be
-read. A missing or non-directory `--sessions-dir` exits 2.
+read (such a partial sum ranks as unavailable and shows as `>=N part`). `tokens` is
+None for a cost-only result. A missing or non-directory `--sessions-dir` exits 2.
 
 Nothing to change to keep working: no receipt shape, config key or gate changes. Run
 `init.sh` (or `/upgrade`) to install the engine and its test. The report never adds the

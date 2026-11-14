@@ -143,6 +143,7 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
     counted: list[str] = []
     missing: list[str] = []
     invalid: list[str] = []
+    token_rounds = 0
     for name, usage in rounds:
         if not isinstance(usage, dict):
             missing.append(name)
@@ -166,6 +167,7 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
             missing.append(name)
             continue
         counted.append(name)
+        token_rounds += bool(valid)
         for field, value in valid.items():
             tokens[field] += value
         if round_cost is not None:
@@ -181,8 +183,10 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
         return {"available": False, "reason": reason}
     result: dict[str, Any] = {
         "available": True,
-        "tokens": tokens,
-        "total_tokens": sum(tokens.values()),
+        # None when the counted rounds reported a cost but no token field: a
+        # cost-only result is not a token measurement of zero.
+        "tokens": tokens if token_rounds else None,
+        "total_tokens": sum(tokens.values()) if token_rounds else None,
         "total_cost_usd": cost,
         "models": sorted(models),
         "rounds_counted": counted,
@@ -420,12 +424,14 @@ def _receipts(sessions_dir: Path) -> list[Path]:
 
 
 def _rank_value(row: dict[str, Any], rank_by: str) -> float:
+    # The flat fields, so an incomplete transcript sum ranks as unavailable
+    # rather than as a total.
     if rank_by == "subagent-tokens":
-        value = row["subagents"].get("total_tokens")
+        value = row["subagent_tokens"]
     elif rank_by == "cost":
-        value = row["result"].get("total_cost_usd")
+        value = row["cost_usd"]
     else:
-        value = row["result"].get("total_tokens")
+        value = row["tokens"]
     return float(value) if isinstance(value, (int, float)) else -1.0
 
 
@@ -435,7 +441,11 @@ def _has_usage(row: dict[str, Any]) -> bool:
     A transcript sum with an unreadable transcript or a missing session is a lower
     bound, not a measurement, so it does not count here (nor for `--strict`).
     """
-    return row["tokens"] is not None or row["subagent_tokens"] is not None
+    return (
+        row["tokens"] is not None
+        or row["cost_usd"] is not None
+        or row["subagent_tokens"] is not None
+    )
 
 
 def build_report(
@@ -513,9 +523,12 @@ def _default_sessions_dir(cwd: Path) -> Path | None:
 
 
 def _format_tokens(source: dict[str, Any]) -> str:
-    if not source.get("available"):
+    total = source.get("total_tokens")
+    if not source.get("available") or total is None:
         return "—"
-    return f"{source['total_tokens']:,}"
+    if source.get("complete") is False:
+        return f">={total:,} part"
+    return f"{total:,}"
 
 
 def render_text(report: dict[str, Any]) -> str:
