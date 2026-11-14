@@ -19960,9 +19960,11 @@ def _kit_block(workflow: str) -> str:
 
 
 def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
-    """A PATH whose `git clone <url> <dest>` makes a clean one-commit repository at
-    <dest>, with `origin` set to <url>, and logs <dest>; every other git call, fetch
-    included, is the real git, and a fetch is logged too."""
+    """A PATH whose `git clone <url> <dest>` makes a clean repository at <dest>, with
+    `origin` set to <url> and the same commits every time (an annotated tag `v1`, then
+    `main` one commit later), and logs <dest>. The block's `fetch --depth 1 origin <ref>`
+    and `ls-remote origin` answer from those refs, with no network, and each is logged;
+    every other git call is the real git, and any other fetch is logged too."""
     real = shutil.which("git")
     assert real
     bins = tmp_path / "bin"
@@ -19995,6 +19997,14 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
         '  sha="$("$REAL_GIT" -C "$2" rev-parse -q --verify "$last^{object}")" || exit 1\n'
         '  printf "%s\\t\\t%s\\n" "$sha" "$last" > "$2/.git/FETCH_HEAD"\n'
         '  exit 0 ;;\n'
+        'esac\n'
+        '# A found clone is checked with `git -C <kit> ls-remote origin`: list the refs the\n'
+        '# stub clone was made with, which every stub clone shares, as real ls-remote prints\n'
+        '# them: `<sha><TAB><ref>`, an annotated tag followed by its peeled `<ref>^{}` line.\n'
+        'case " $* " in *" ls-remote origin "*)\n'
+        '  echo "ls-remote" >> "$CLONES.lsremote"\n'
+        '  "$REAL_GIT" -C "$2" show-ref -d --heads --tags | tr " " "\\t"\n'
+        '  exit $? ;;\n'
         'esac\n'
         'case " $* " in *" fetch "*) echo "fetch $*" >> "$CLONES.fetch" ;; esac\n'
         'exec "$REAL_GIT" "$@"\n'
@@ -20056,8 +20066,10 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
         result = _run_kit_block(shell, block, env, task)
         assert result.returncode == 0, result.stderr
         kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
-        # Only the re-run found its clone, and with `main` it says it did not re-check it.
-        assert ("not re-checked against main" in result.stderr) == (n == 1)
+        # Only the re-run found its clone, and with `main` its `kit commit:` line says
+        # it did not re-check it.
+        commit_line = next(line for line in result.stdout.splitlines() if line.startswith("kit commit: "))
+        assert ("found, not cloned, and not re-checked against main" in commit_line) == (n == 1)
     assert kits[0] == kits[1] != kits[2]
     assert clones.read_text().splitlines() == [kits[0], kits[2]]
     assert Path(kits[0]).is_relative_to(_git_dir(task_a))
@@ -20103,36 +20115,49 @@ def test_the_kit_block_checks_out_the_named_ref_and_prints_its_commit(
 
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("shell", ["sh", "bash", "zsh"])
 def test_the_kit_block_stops_when_a_clone_it_finds_is_not_at_the_named_ref(
-    tmp_path: Path, workflow: str
+    tmp_path: Path, workflow: str, shell: str
 ) -> None:
     """A re-run finds the clone an earlier run made. With a tag or sha named, that
     clone must be at its commit, or Step 2 would copy, and the record name, a kit the
     operator did not ask for (PR 1443 review)."""
+    if shutil.which(shell) is None:
+        pytest.skip(f"{shell} is not installed")
     require_kit_paths(workflow)
     block = _kit_block(workflow)
-    env, _ = _kit_world(tmp_path)
+    env, clones = _kit_world(tmp_path)
     _, task = _repo_with_task(tmp_path, "a")
-    made = _run_kit_block("sh", block, dict(env, KIT_REF="v1"), task)
+    made = _run_kit_block(shell, block, dict(env, KIT_REF="v1"), task)
     assert made.returncode == 0, made.stderr
     kit = Path(made.stdout.splitlines()[0].removeprefix("KIT=").split(" at ")[0])
     pinned = _git(kit, "rev-parse", "HEAD").stdout.strip()
     later = _git(kit, "rev-parse", "main").stdout.strip()
     assert pinned != later
-    # The same ref, by tag or by sha: found, checked, used.
+    refs = Path(str(clones) + ".refs")
+    fetched = refs.read_text()
+    # The same ref, by tag or by sha: found, checked, used. The tag is annotated, so
+    # only its peeled `^{}` line names the commit.
     for ref in ("v1", pinned):
-        again = _run_kit_block("sh", block, dict(env, KIT_REF=ref), task)
+        again = _run_kit_block(shell, block, dict(env, KIT_REF=ref), task)
         assert again.returncode == 0, again.stderr
-        assert f"kit commit: {pinned}" in again.stdout
-    # A different commit named: the found clone is refused before anything prints it.
-    wrong = _run_kit_block("sh", block, dict(env, KIT_REF=later), task)
-    assert wrong.returncode != 0
-    assert f"is not at {later}" in wrong.stderr
-    assert "kit commit:" not in wrong.stdout
+        assert f"kit commit: {pinned}   (ref requested: {ref})" in again.stdout.splitlines()
+    # The tag was read from origin, the sha compared as written; neither fetched.
+    assert Path(str(clones) + ".lsremote").read_text().splitlines() == ["ls-remote"]
+    # A different commit named, by sha or by branch: refused before anything prints it.
+    for ref in (later, "refs/heads/main", "no-such-tag"):
+        wrong = _run_kit_block(shell, block, dict(env, KIT_REF=ref), task)
+        assert wrong.returncode != 0
+        assert f"is not at {ref}" in wrong.stderr
+        assert "kit commit:" not in wrong.stdout
+    # Nothing the found-clone check ran fetched into the clone, so a deepened clone
+    # would stay deep (PR 1443 R2).
+    assert refs.read_text() == fetched
+    assert not Path(str(clones) + ".fetch").exists()
 
 
-def test_the_kit_block_stops_on_a_ref_it_cannot_check_out(tmp_path: Path) -> None:
-    workflow = "docs/agentic-dev-kit/workflows/adopt.md"
+@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_kit_block_stops_on_a_ref_it_cannot_check_out(tmp_path: Path, workflow: str) -> None:
     require_kit_paths(workflow)
     env, _ = _kit_world(tmp_path)
     _, task = _repo_with_task(tmp_path, "a")

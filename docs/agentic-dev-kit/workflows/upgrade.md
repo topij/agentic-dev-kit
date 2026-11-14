@@ -117,17 +117,27 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
-# A clone this block found rather than made must still be at the ref you named.
-# `^{commit}`: an annotated tag fetches as the tag object, not its commit.
+# A clone this block found rather than made must still be at the ref you named. Nothing
+# here fetches into it, so a clone a later step deepened stays deep: a full sha is compared
+# with HEAD as written; a tag or branch is read from origin with `ls-remote`, an annotated
+# tag by its `^{}` line, the commit it points at.
+KIT_SAID="ref requested: $KIT_REF"
 if [ -n "$KIT_FOUND" ] && [ "$KIT_REF" != main ]; then
-  git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
-    [ "$(git -C "$KIT" rev-parse 'FETCH_HEAD^{commit}')" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
-    { echo "$KIT is not at $KIT_REF: delete $KIT and re-run this block" >&2; exit 1; }
+  case "$KIT_REF" in
+    *[!0-9a-f]*) KIT_WANT= ;;
+    *) KIT_WANT="$KIT_REF"; [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ] || KIT_WANT= ;;
+  esac
+  [ -n "$KIT_WANT" ] || KIT_WANT="$(git -C "$KIT" ls-remote origin | awk -v r="$KIT_REF" '
+    $2 == r "^{}" { a = $1 } $2 == r { b = $1 }
+    $2 == "refs/tags/" r "^{}" { c = $1 } $2 == "refs/tags/" r { d = $1 } $2 == "refs/heads/" r { e = $1 }
+    END { if (length(a)) print a; else if (length(b)) print b; else if (length(c)) print c; else if (length(d)) print d; else print e }')"
+  [ -n "$KIT_WANT" ] && [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    { echo "$KIT is not at $KIT_REF, or origin could not be read: delete $KIT and re-run this block" >&2; exit 1; }
 elif [ -n "$KIT_FOUND" ]; then
-  echo "note: $KIT was found, not cloned, and is not re-checked against main; the commit below is whatever it holds" >&2
+  KIT_SAID="$KIT_SAID; found, not cloned, and not re-checked against main: this is the commit the clone holds"
 fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
-echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   (ref requested: $KIT_REF)"
+echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   ($KIT_SAID)"
 ```
 
 **Name the ref you are upgrading to.** Set `KIT_REF` to a release tag or a full commit sha
@@ -150,9 +160,12 @@ see ignored files, a pattern added to the clone's `.git/info/exclude` included, 
 marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone: `status`
 stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any of these
 happened in the clone, delete `$KIT` and re-run the block. When you named a tag or sha
-and the block finds a clone rather than making one, it fetches that ref again and stops
-unless the clone's `HEAD` is the commit it names; with `main` it does not, because `main`
-moves, so read the clone's commit on the line the block prints. It writes into the git
+and the block finds a clone rather than making one, it stops unless the clone's `HEAD` is
+the commit that ref names: a full sha is compared as written, and a tag or branch is read
+from the kit's origin with `git ls-remote`, so the check fetches nothing into the clone
+and a clone U2 deepened stays deep. With `main` it does not check, because `main` moves:
+its `kit commit:` line says the clone was found and not re-checked, so read the commit
+there. It writes into the git
 directory, so a sandbox that allows writes only inside the working tree needs to allow
 this one. No other task's checkout or branch reaches the path, and when the block ran in
 the task worktree, removing that worktree removes the clone with it. A clone made in a
@@ -1267,8 +1280,9 @@ checked out there. On a repository with a protected branch that is normally the 
 checkout on `<protected-branch>`, not the task worktree selected below, so removing
 that worktree leaves the clone in place: U6 deletes it by its path. Run every command below from it,
 never from another clone. `--upgrade-lite` refuses a clone that is not clean, and U2's
-read refuses one that is not at its origin's HEAD (#1405): when it does, delete the
-clone and run the kit block again, from this same checkout.
+read refuses one that is not at its origin's HEAD (#1405), or, when you named a ref, one
+that is not at the commit the kit block printed for it: when it does, delete the clone
+and run the kit block again, from this same checkout.
 
 Then read the configuration of the repository exactly as *Read the configuration* in
 the kit's `docs/agentic-dev-kit/lite/lite-wrap-up.md` says, every copy included
@@ -1312,11 +1326,13 @@ branch.
 uv run <kit>/scripts/kit_doctor.py --upgrade-lite --root <root> --branch <branch>
 ```
 
-When you named a ref in the kit block, add `--kit-commit <sha>` to this command, with
-the full sha its `kit commit:` line printed. The read refuses a clone whose commit is
-not its origin's HEAD, which a tag or an older sha is not; `--kit-commit` pins the
-clone's own commit instead. With no ref named, the clone is `main`'s tip and the command
-runs as written.
+When you named a ref in the kit block, add `--expect-commit <sha>` to this command,
+with the full sha its `kit commit:` line printed. The read refuses a clone whose commit
+is not its origin's HEAD, which a tag or an older sha is not; `--expect-commit` checks
+the clone against that sha instead, names a newer origin in a `note:`, and changes
+nothing else about the read. Do not use `--kit-commit` here: a read given it is U5's,
+which stops until U4 has run. With no ref named, the clone is `main`'s tip and the
+command runs as written.
 
 It writes nothing to the repository. To read the changelog it deepens a `--depth 1`
 kit clone, which writes only into the clone's git directory. It exits 1 with a
@@ -1444,7 +1460,8 @@ Done when the command exited 0.
 
 ### U5 — Check before the commit
 
-Run U2's command again with `--kit-commit <sha>`, the commit U4 applied, added to it. It
+Run U2's command again with `--kit-commit <sha>`, the commit U4 applied, added to it, in
+place of any `--expect-commit` (the two are refused together). It
 pins that commit in place of U2's freshness check, so a kit origin that moved since U4
 is named in a `note:` rather than refused. It repeats the write-target check on the
 checkout U6 commits in, and must exit 0 and print

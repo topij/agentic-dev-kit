@@ -35,17 +35,27 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
-# A clone this block found rather than made must still be at the ref you named.
-# `^{commit}`: an annotated tag fetches as the tag object, not its commit.
+# A clone this block found rather than made must still be at the ref you named. Nothing
+# here fetches into it, so a clone a later step deepened stays deep: a full sha is compared
+# with HEAD as written; a tag or branch is read from origin with `ls-remote`, an annotated
+# tag by its `^{}` line, the commit it points at.
+KIT_SAID="ref requested: $KIT_REF"
 if [ -n "$KIT_FOUND" ] && [ "$KIT_REF" != main ]; then
-  git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
-    [ "$(git -C "$KIT" rev-parse 'FETCH_HEAD^{commit}')" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
-    { echo "$KIT is not at $KIT_REF: delete $KIT and re-run this block" >&2; exit 1; }
+  case "$KIT_REF" in
+    *[!0-9a-f]*) KIT_WANT= ;;
+    *) KIT_WANT="$KIT_REF"; [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ] || KIT_WANT= ;;
+  esac
+  [ -n "$KIT_WANT" ] || KIT_WANT="$(git -C "$KIT" ls-remote origin | awk -v r="$KIT_REF" '
+    $2 == r "^{}" { a = $1 } $2 == r { b = $1 }
+    $2 == "refs/tags/" r "^{}" { c = $1 } $2 == "refs/tags/" r { d = $1 } $2 == "refs/heads/" r { e = $1 }
+    END { if (length(a)) print a; else if (length(b)) print b; else if (length(c)) print c; else if (length(d)) print d; else print e }')"
+  [ -n "$KIT_WANT" ] && [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    { echo "$KIT is not at $KIT_REF, or origin could not be read: delete $KIT and re-run this block" >&2; exit 1; }
 elif [ -n "$KIT_FOUND" ]; then
-  echo "note: $KIT was found, not cloned, and is not re-checked against main; the commit below is whatever it holds" >&2
+  KIT_SAID="$KIT_SAID; found, not cloned, and not re-checked against main: this is the commit the clone holds"
 fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
-echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   (ref requested: $KIT_REF)"
+echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   ($KIT_SAID)"
 ```
 
 **Name the ref you are installing.** Set `KIT_REF` to a release tag or a full commit sha
@@ -67,9 +77,11 @@ entries marked `--assume-unchanged` or `--skip-worktree`, or a commit made in th
 `status` stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any
 of these happened in the clone, delete `$KIT` and re-run the block. An existing clone is
 from an earlier adoption attempt in this checkout. When you named a tag or sha, the block
-fetches that ref again and stops unless the clone's `HEAD` is the commit it names. With
-`main` it does not, because `main` moves: the line the block prints names the clone's
-commit, and if that is not the kit you mean to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
+stops unless the clone's `HEAD` is the commit that ref names: a full sha is compared as
+written, and a tag or branch is read from the kit's origin with `git ls-remote`, so the
+check fetches nothing into the clone. With `main` it does not check, because `main` moves:
+its `kit commit:` line says the clone was found and not re-checked, and if the commit it
+names is not the kit you mean to adopt, delete `$KIT` and re-run the block. It writes into the git directory, so a
 sandbox that allows writes only inside the working tree needs to allow this one. Delete
 the clone once the adoption has landed.
 
