@@ -118,10 +118,13 @@ KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
 # A clone this block found rather than made must still be at the ref you named.
+# `^{commit}`: an annotated tag fetches as the tag object, not its commit.
 if [ -n "$KIT_FOUND" ] && [ "$KIT_REF" != main ]; then
   git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
-    [ "$(git -C "$KIT" rev-parse FETCH_HEAD)" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    [ "$(git -C "$KIT" rev-parse 'FETCH_HEAD^{commit}')" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
     { echo "$KIT is not at $KIT_REF: delete $KIT and re-run this block" >&2; exit 1; }
+elif [ -n "$KIT_FOUND" ]; then
+  echo "note: $KIT was found, not cloned, and is not re-checked against main; the commit below is whatever it holds" >&2
 fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   (ref requested: $KIT_REF)"

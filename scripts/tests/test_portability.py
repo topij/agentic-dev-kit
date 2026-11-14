@@ -19986,11 +19986,13 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
         '  exit $?\n'
         'fi\n'
         '# The block pins its ref with `git -C <kit> fetch --depth 1 origin <ref>`: resolve the\n'
-        '# ref in the stub clone (no network), as FETCH_HEAD, and log the ref asked for.\n'
+        '# ref in the stub clone (no network), as FETCH_HEAD, and log the ref asked for. Unpeeled,\n'
+        '# as real git writes it: an annotated tag is its TAG object, not its commit (PR 1443 R1).\n'
         'case " $* " in *" fetch --depth 1 origin "*)\n'
         '  for last; do :; done\n'
         '  echo "$last" >> "$CLONES.refs"\n'
-        '  sha="$("$REAL_GIT" -C "$2" rev-parse "$last^{commit}")" || exit 1\n'
+        '  "$REAL_GIT" -C "$2" rev-parse -q --verify "$last^{commit}" >/dev/null || exit 1\n'
+        '  sha="$("$REAL_GIT" -C "$2" rev-parse -q --verify "$last^{object}")" || exit 1\n'
         '  printf "%s\\t\\t%s\\n" "$sha" "$last" > "$2/.git/FETCH_HEAD"\n'
         '  exit 0 ;;\n'
         'esac\n'
@@ -20050,10 +20052,12 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
     _, task_a = _repo_with_task(tmp_path, "a")
     _, task_b = _repo_with_task(tmp_path, "b")
     kits = []
-    for task in (task_a, task_a, task_b):
+    for n, task in enumerate((task_a, task_a, task_b)):
         result = _run_kit_block(shell, block, env, task)
         assert result.returncode == 0, result.stderr
         kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
+        # Only the re-run found its clone, and with `main` it says it did not re-check it.
+        assert ("not re-checked against main" in result.stderr) == (n == 1)
     assert kits[0] == kits[1] != kits[2]
     assert clones.read_text().splitlines() == [kits[0], kits[2]]
     assert Path(kits[0]).is_relative_to(_git_dir(task_a))
