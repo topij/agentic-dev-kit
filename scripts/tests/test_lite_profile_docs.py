@@ -1457,6 +1457,7 @@ def test_verify_lite_usage(tmp_path: Path, args: list[str], message: str) -> Non
         ["--branch", "main"],
         ["--apply"],
         ["--kit-commit", "abc1234"],
+        ["--expect-commit", "abc1234"],
         ["--take", "docs/agentic-dev-kit/lite/lite-review.md"],
         ["--leave-absent", "docs/agentic-dev-kit/lite/lite-review.md"],
     ],

@@ -1239,6 +1239,13 @@ def test_a_task_branch_of_a_protected_repository_is_the_target(
         ["--upgrade-lite", "--root", "{repo}", "--branch", "main", "--record-install"],
         ["--root", "{repo}", "--branch", "main"],
         ["--upgrade-lite", "--root", ".", "--branch", "main"],
+        # `--expect-commit` is U2's read only: never beside `--kit-commit`, so a U5
+        # read cannot be made to skip L5, and never with `--apply` or outside the mode.
+        ["--upgrade-lite", "--root", "{repo}", "--branch", "main",
+         "--expect-commit", "abc1234", "--kit-commit", "abc1234"],
+        ["--upgrade-lite", "--root", "{repo}", "--branch", "main", "--apply",
+         "--expect-commit", "abc1234"],
+        ["--root", "{repo}", "--expect-commit", "abc1234"],
     ],
 )
 def test_usage_errors_exit_2_and_write_nothing(
@@ -1290,6 +1297,66 @@ def test_a_stale_clone_is_refused_naming_both_commits(tmp_path: Path, kit_upstre
     other = _doctor(kit, env, "--upgrade-lite", "--root", str(repo), "--branch", "main",
                     "--kit-commit", kit_upstream["old_commit"])
     assert other.returncode == 1 and "not --kit-commit" in other.stdout
+
+
+def _expect(kit: Path, repo: Path, env: dict[str, str], commit: str, *, json_out: bool = False):
+    return _doctor(kit, env, "--upgrade-lite", "--root", str(repo), "--branch", "main",
+                   "--expect-commit", commit, *(["--json"] if json_out else []))
+
+
+def test_expect_commit_at_the_clones_commit_reads_exactly_what_u2s_read_does(
+    tmp_path: Path, kit_upstream: dict, kit: Path
+) -> None:
+    """With the clone at its origin's tip as well, `--expect-commit` changes nothing in
+    the plan but the flag that says it was given: no L5 requirement, no U5 stop, the
+    same exit, rows, record and apply command."""
+    repo, env = _install(tmp_path, kit_upstream)
+    plain = _plan(kit, repo, env)
+    expected = _expect(kit, repo, env, kit_upstream["head"], json_out=True)
+    assert expected.returncode == 0, expected.stdout + expected.stderr
+    plan = json.loads(expected.stdout)
+    assert plain["kit"].pop("expected") is False
+    assert plan["kit"].pop("expected") is True
+    assert plan == plain
+    assert plan["record"] == "owed" and plan["stops"] == []
+    assert plan["verify"]["ran"] is False
+    # The same read pinned with `--kit-commit` is U5, which stops because U4 has not run:
+    # the case a pinned ref could not get through U2 before this flag.
+    pinned = _pinned(kit, repo, env)
+    assert pinned.returncode == 1 and "verify (L5): not run" in pinned.stdout
+
+
+def test_expect_commit_accepts_a_clone_behind_its_origin_and_refuses_another_commit(
+    tmp_path: Path, kit_upstream: dict
+) -> None:
+    """A kit block that named a tag or an older sha leaves a clone that is not its
+    origin's HEAD. U2's plain read refuses it; `--expect-commit` with the commit the
+    block printed reads it, and refuses any other commit, naming both."""
+    env = _env(tmp_path)
+    bare = tmp_path / "upstream.git"
+    _git(tmp_path, env, "clone", "-q", "--bare", str(kit_upstream["bare"]), str(bare))
+    kit = tmp_path / "kit"
+    _git(tmp_path, env, "clone", "-q", str(bare), str(kit))
+    repo, env = _install(tmp_path, kit_upstream)
+    later = _advance(tmp_path, bare, env)
+    before = _snapshot(repo)
+    assert _read(kit, repo, env, json_out=False).returncode == 1
+    done = _expect(kit, repo, env, kit_upstream["head"])
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "a clean clone at --expect-commit" in done.stdout
+    assert (
+        f"note: the kit's origin is at {later[:12]}; this reads {kit_upstream['head'][:12]}"
+        in done.stdout
+    )
+    assert _has_line(done, "record: owed")
+    assert f"--apply --kit-commit {kit_upstream['head']}" in done.stdout
+    other = _expect(kit, repo, env, kit_upstream["old_commit"])
+    assert other.returncode == 1
+    assert (
+        f"is at {kit_upstream['head'][:12]}, not --expect-commit {kit_upstream['old_commit']}"
+        in other.stdout
+    )
+    assert _snapshot(repo) == before
 
 
 @pytest.mark.parametrize("mode", ["read", "apply"])
@@ -1466,7 +1533,9 @@ def test_every_flag_the_lite_section_names_is_one_the_engine_takes(tmp_path: Pat
     import re
 
     flags = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", _lite_section()))
-    assert {"--upgrade-lite", "--apply", "--kit-commit", "--take", "--keep", "--leave-absent"} <= flags
+    assert {
+        "--upgrade-lite", "--apply", "--kit-commit", "--expect-commit", "--take", "--keep", "--leave-absent"
+    } <= flags
     usage = _doctor(REPO_ROOT, _env(tmp_path), "--help").stdout
     for flag in flags - {"--depth"}:
         assert flag in usage, flag
