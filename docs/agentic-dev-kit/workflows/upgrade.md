@@ -100,64 +100,20 @@ directory instead, under the task branch's name. Run this **kit block**:
 <!-- systemize:2026-09-22 pattern; PRs #733,#734 -->
 
 ```bash
-KIT_REF="${KIT_REF:-main}"   # the tag or commit sha to upgrade to; main, the tip of the kit's main branch, when you name none
-# A ref is an argument to git below: one starting with `-` would be read as an option
-# (`--upload-pack=<command>` runs that command), so it is refused before any git call.
-# A full sha is lower-cased, so the clone and a later run's check compare it alike.
-case "$KIT_REF" in
-  -*) echo "KIT_REF $KIT_REF starts with -: name a tag, a branch or a commit sha" >&2; exit 1 ;;
-  *[!0-9a-fA-F]*) ;;
-  *) { [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ]; } && KIT_REF="$(printf '%s' "$KIT_REF" | tr A-F a-f)" ;;
-esac
 KIT_HOME="$(git -C "${REPO:?REPO is not set — re-run the config check}" rev-parse --absolute-git-dir)" || exit 1
 KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || { echo "the kit block needs this task's branch checked out in $REPO" >&2; exit 1; }
 KIT="$KIT_HOME/agentic-dev-kit/$KIT_TASK"
 KIT_URL=https://github.com/topij/agentic-dev-kit
-KIT_FOUND=yes
-if [ ! -e "$KIT" ]; then
-  KIT_FOUND=
-  git clone --depth 1 "$KIT_URL" "$KIT" &&
-    git -C "$KIT" fetch --depth 1 origin "$KIT_REF" &&
-    git -C "$KIT" checkout -q --detach FETCH_HEAD ||
-    { echo "could not check out $KIT_REF in $KIT: delete $KIT and re-run this block" >&2; exit 1; }
-fi
+if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
 KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
-# A clone this block found rather than made must still be at the ref you named. Nothing
-# here fetches into it, so a clone a later step deepened stays deep: a full sha is compared
-# with HEAD as written; a tag or branch is read from origin with `ls-remote`, an annotated
-# tag by its `^{}` line, the commit it points at.
-KIT_SAID="ref requested: $KIT_REF"
-if [ -n "$KIT_FOUND" ] && [ "$KIT_REF" != main ]; then
-  case "$KIT_REF" in
-    *[!0-9a-f]*) KIT_WANT= ;;
-    *) KIT_WANT="$KIT_REF"; [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ] || KIT_WANT= ;;
-  esac
-  [ -n "$KIT_WANT" ] || KIT_WANT="$(git -C "$KIT" ls-remote origin | awk -v r="$KIT_REF" '
-    $2 == r "^{}" { a = $1 } $2 == r { b = $1 }
-    $2 == "refs/tags/" r "^{}" { c = $1 } $2 == "refs/tags/" r { d = $1 } $2 == "refs/heads/" r { e = $1 }
-    END { if (length(a)) print a; else if (length(b)) print b; else if (length(c)) print c; else if (length(d)) print d; else print e }')"
-  [ -n "$KIT_WANT" ] && [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
-    { echo "$KIT is not at $KIT_REF, or origin could not be read: delete $KIT and re-run this block" >&2; exit 1; }
-elif [ -n "$KIT_FOUND" ]; then
-  KIT_SAID="$KIT_SAID; found, not cloned, and not re-checked against main: this is the commit the clone holds"
-fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
-echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   ($KIT_SAID)"
 ```
 
-**Name the ref you are upgrading to.** Set `KIT_REF` to a release tag or a full commit sha
-before the block runs (`KIT_REF=<tag-or-sha>`, or edit the default line). Naming none
-upgrades to `main` as it stands when the block runs; a tag or sha upgrades to the same
-kit every time. The block prints the resolved commit on its `kit commit:` line before any
-copy: write that sha in the upgrade's pull request. The lite profile's U2 read needs that
-sha as well when you named a ref (below), and runs the named ref's own `kit_doctor.py`
-with `--expect-commit`, so **a lite upgrade can name only a ref whose `kit_doctor.py`
-takes that flag**: `uv run <kit>/scripts/kit_doctor.py --help` lists it. An older ref
-stops U2 with `kit_doctor.py: error: unrecognized arguments: --expect-commit <sha>`;
-name a newer ref, or none.
+An upgrade reads the kit's `main` only: unlike `adopt.md`'s kit block, this one takes no
+ref, and pinning an upgrade to a tag or sha is tracked in #1445.
 
 The path depends only on the checkout the block runs in and the branch checked out there,
 which here is the task worktree and its task branch, so the block is safe to re-run from
@@ -171,13 +127,7 @@ than let Step 4 record it. The check sees only what `git status` reports, so it 
 see ignored files, a pattern added to the clone's `.git/info/exclude` included, entries
 marked `--assume-unchanged` or `--skip-worktree`, or a commit made in the clone: `status`
 stays clean and `origin` unchanged, but `HEAD` is no longer a kit commit. If any of these
-happened in the clone, delete `$KIT` and re-run the block. When you named a tag or sha
-and the block finds a clone rather than making one, it stops unless the clone's `HEAD` is
-the commit that ref names: a full sha is compared as written, and a tag or branch is read
-from the kit's origin with `git ls-remote`, so the check fetches nothing into the clone
-and a clone U2 deepened stays deep. With `main` it does not check, because `main` moves:
-its `kit commit:` line says the clone was found and not re-checked, so read the commit
-there. It writes into the git
+happened in the clone, delete `$KIT` and re-run the block. It writes into the git
 directory, so a sandbox that allows writes only inside the working tree needs to allow
 this one. No other task's checkout or branch reaches the path, and when the block ran in
 the task worktree, removing that worktree removes the clone with it. A clone made in a
@@ -460,19 +410,12 @@ fallback. The fragment half does not read subjects, so the tripwire says nothing
 it:
 
 ```bash
-: "${REPO:?REPO is not set — re-run Step 0}" "${KIT:?KIT is not set — re-run the kit block in Step 0}" "${KIT_REF:?KIT_REF is not set — re-run the kit block in Step 0}"
+: "${REPO:?REPO is not set — re-run Step 0}" "${KIT:?KIT is not set — re-run the kit block in Step 0}"
 BASELINE="$(uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json" --json \
   | python3 -c 'import json,sys; print(json.load(sys.stdin).get("baseline_kit_commit") or "")')"
 echo "baseline=${BASELINE:-NONE}"
 if [ -z "$BASELINE" ] ||
    ! git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" merge-base --is-ancestor "$BASELINE" HEAD 2>/dev/null; then
-  # A named ref whose history holds the baseline but not as an ancestor is older than
-  # the install, or beside it: upgrading to it would take the install backwards.
-  if [ -n "$BASELINE" ] && [ "$KIT_REF" != main ] &&
-     git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
-    echo "stop: the kit at $KIT_REF ($(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-parse --short=12 HEAD)) does not contain the installed baseline $BASELINE — this would be a downgrade; re-run the kit block with a ref at or after it" >&2
-    exit 1
-  fi
   echo "no usable install provenance — take the degraded path below"
 else
   COUNT="$(git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-list --count "$BASELINE..HEAD")"
@@ -524,9 +467,7 @@ silent. A *non-empty* baseline that `$KIT` cannot resolve fails the other way �
 `fatal: Invalid revision range` — which is loud but still never reaches the degraded path
 below, so the reader gets a git error instead of the procedure written for exactly their
 case. `merge-base --is-ancestor` covers both, and covers the baseline that resolves but
-sits on a history this checkout does not descend from. That last one goes to the degraded
-path only when you named no ref: with `main` it is a baseline from a commit `main` never
-took.
+sits on a history this checkout does not descend from.
 
 The `-z` test in front of it is deliberate redundancy, not a second guard: `merge-base
 --is-ancestor "" HEAD` already fails, so removing `-z` changes no outcome here. It is
@@ -553,15 +494,6 @@ procedure that broke rather than one that took its documented fallback. Run the
 guard against an undeepened clone and every upgrade quietly takes the degraded path, which
 is strictly worse than the error it replaced: an error stops you, a degraded read looks
 like an answer.
-
-**A named ref older than the install stops the upgrade.** When you set `KIT_REF` to a tag
-or sha, the clone can be older than the commit your install was recorded from, and
-copying from it would take the install backwards. So when the baseline is in the deepened
-clone's history but is not an ancestor of its `HEAD`, the block prints a `stop:` line
-naming the ref, its commit and the baseline, and exits 1: re-run the kit block with a ref
-at or after the baseline. A baseline that is absent from the clone's history cannot be
-told apart from one `main` never took, so it still takes the degraded path below. The
-`:` line guards `KIT_REF` too: the kit block sets it, `main` when you name none.
 
 A PR that produced no output has no entry, and a PR with no entry made no observable
 change. That is the changelog's contract rather than an omission to chase.
@@ -1310,9 +1242,8 @@ checked out there. On a repository with a protected branch that is normally the 
 checkout on `<protected-branch>`, not the task worktree selected below, so removing
 that worktree leaves the clone in place: U6 deletes it by its path. Run every command below from it,
 never from another clone. `--upgrade-lite` refuses a clone that is not clean, and U2's
-read refuses one that is not at its origin's HEAD (#1405), or, when you named a ref, one
-that is not at the commit the kit block printed for it: when it does, delete the clone
-and run the kit block again, from this same checkout.
+read refuses one that is not at its origin's HEAD (#1405): when it does, delete the
+clone and run the kit block again, from this same checkout.
 
 Then read the configuration of the repository exactly as *Read the configuration* in
 the kit's `docs/agentic-dev-kit/lite/lite-wrap-up.md` says, every copy included
@@ -1355,19 +1286,6 @@ branch.
 ```bash
 uv run <kit>/scripts/kit_doctor.py --upgrade-lite --root <root> --branch <branch>
 ```
-
-When you named a ref in the kit block, add `--expect-commit <sha>` to this command,
-with the full sha its `kit commit:` line printed. The read refuses a clone whose commit
-is not its origin's HEAD, which a tag or an older sha is not; `--expect-commit` checks
-the clone against that sha instead, names a newer origin in a `note:`, and changes
-nothing else about the read. It is the named ref's own engine that reads the flag: a ref
-from before `--expect-commit` existed exits 2 with
-`kit_doctor.py: error: unrecognized arguments: --expect-commit <sha>`, and cannot be
-the target of a lite upgrade (see the kit block). A ref older than the commit your
-committed baseline was installed from is refused as a downgrade, naming both commits,
-and so is one whose history does not hold that commit. Do not use `--kit-commit` here: a read given it is U5's,
-which stops until U4 has run. With no ref named, the clone is `main`'s tip and the
-command runs as written.
 
 It writes nothing to the repository. To read the changelog it deepens a `--depth 1`
 kit clone, which writes only into the clone's git directory. It exits 1 with a
@@ -1495,8 +1413,7 @@ Done when the command exited 0.
 
 ### U5 — Check before the commit
 
-Run U2's command again with `--kit-commit <sha>`, the commit U4 applied, added to it, in
-place of any `--expect-commit` (the two are refused together). It
+Run U2's command again with `--kit-commit <sha>`, the commit U4 applied, added to it. It
 pins that commit in place of U2's freshness check, so a kit origin that moved since U4
 is named in a `note:` rather than refused. It repeats the write-target check on the
 checkout U6 commits in, and must exit 0 and print

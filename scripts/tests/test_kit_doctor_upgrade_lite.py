@@ -1239,13 +1239,6 @@ def test_a_task_branch_of_a_protected_repository_is_the_target(
         ["--upgrade-lite", "--root", "{repo}", "--branch", "main", "--record-install"],
         ["--root", "{repo}", "--branch", "main"],
         ["--upgrade-lite", "--root", ".", "--branch", "main"],
-        # `--expect-commit` is U2's read only: never beside `--kit-commit`, so a U5
-        # read cannot be made to skip L5, and never with `--apply` or outside the mode.
-        ["--upgrade-lite", "--root", "{repo}", "--branch", "main",
-         "--expect-commit", "abc1234", "--kit-commit", "abc1234"],
-        ["--upgrade-lite", "--root", "{repo}", "--branch", "main", "--apply",
-         "--expect-commit", "abc1234"],
-        ["--root", "{repo}", "--expect-commit", "abc1234"],
     ],
 )
 def test_usage_errors_exit_2_and_write_nothing(
@@ -1297,142 +1290,6 @@ def test_a_stale_clone_is_refused_naming_both_commits(tmp_path: Path, kit_upstre
     other = _doctor(kit, env, "--upgrade-lite", "--root", str(repo), "--branch", "main",
                     "--kit-commit", kit_upstream["old_commit"])
     assert other.returncode == 1 and "not --kit-commit" in other.stdout
-
-
-def _expect(kit: Path, repo: Path, env: dict[str, str], commit: str, *, json_out: bool = False):
-    return _doctor(kit, env, "--upgrade-lite", "--root", str(repo), "--branch", "main",
-                   "--expect-commit", commit, *(["--json"] if json_out else []))
-
-
-def test_expect_commit_at_the_clones_commit_reads_exactly_what_u2s_read_does(
-    tmp_path: Path, kit_upstream: dict, kit: Path
-) -> None:
-    """With the clone at its origin's tip as well, `--expect-commit` changes nothing in
-    the plan but the flag that says it was given: no L5 requirement, no U5 stop, the
-    same exit, rows, record and apply command."""
-    repo, env = _install(tmp_path, kit_upstream)
-    plain = _plan(kit, repo, env)
-    expected = _expect(kit, repo, env, kit_upstream["head"], json_out=True)
-    assert expected.returncode == 0, expected.stdout + expected.stderr
-    plan = json.loads(expected.stdout)
-    assert plain["kit"].pop("expected") is False
-    assert plan["kit"].pop("expected") is True
-    assert plan == plain
-    assert plan["record"] == "owed" and plan["stops"] == []
-    assert plan["verify"]["ran"] is False
-    # The same read pinned with `--kit-commit` is U5, which stops because U4 has not run:
-    # the case a pinned ref could not get through U2 before this flag.
-    pinned = _pinned(kit, repo, env)
-    assert pinned.returncode == 1 and "verify (L5): not run" in pinned.stdout
-
-
-def test_expect_commit_accepts_a_clone_behind_its_origin_and_refuses_another_commit(
-    tmp_path: Path, kit_upstream: dict
-) -> None:
-    """A kit block that named a tag or an older sha leaves a clone that is not its
-    origin's HEAD. U2's plain read refuses it; `--expect-commit` with the commit the
-    block printed reads it, and refuses any other commit, naming both. The baseline
-    (commit A) is an ancestor of the clone (B), so this is no downgrade."""
-    env = _env(tmp_path)
-    bare = tmp_path / "upstream.git"
-    _git(tmp_path, env, "clone", "-q", "--bare", str(kit_upstream["bare"]), str(bare))
-    kit = tmp_path / "kit"
-    _git(tmp_path, env, "clone", "-q", str(bare), str(kit))
-    repo, env = _install(tmp_path, kit_upstream)
-    later = _advance(tmp_path, bare, env)
-    before = _snapshot(repo)
-    assert _read(kit, repo, env, json_out=False).returncode == 1
-    done = _expect(kit, repo, env, kit_upstream["head"])
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert "a clean clone at --expect-commit" in done.stdout
-    assert (
-        f"note: the kit's origin is at {later[:12]}; this reads {kit_upstream['head'][:12]}"
-        in done.stdout
-    )
-    assert _has_line(done, "record: owed")
-    assert "downgrade" not in done.stdout
-    assert f"--apply --kit-commit {kit_upstream['head']}" in done.stdout
-    other = _expect(kit, repo, env, kit_upstream["old_commit"])
-    assert other.returncode == 1
-    assert (
-        f"is at {kit_upstream['head'][:12]}, not --expect-commit {kit_upstream['old_commit']}"
-        in other.stdout
-    )
-    assert _snapshot(repo) == before
-
-
-def test_expect_commit_reads_a_clone_at_the_baselines_own_commit(
-    tmp_path: Path, kit_upstream: dict, kit: Path
-) -> None:
-    """The commit the install was recorded from is not a downgrade of itself. (The
-    fixture's commit A is not a kit L5 passes, so the install is upgraded to B first.)"""
-    repo, env = _install(tmp_path, kit_upstream)
-    applied = _apply(kit, repo, env)
-    assert applied.returncode == 0, applied.stdout + applied.stderr
-    _git(repo, env, "add", "-A")
-    _git(repo, env, "commit", "-qm", "upgrade to B")
-    done = _expect(kit, repo, env, kit_upstream["head"])
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert "downgrade" not in done.stdout
-    assert _has_line(done, "record: not owed")
-
-
-def test_a_kit_older_than_the_installed_baseline_is_refused_as_a_downgrade(
-    tmp_path: Path, kit_upstream: dict, kit: Path
-) -> None:
-    """Installed from B, offered A (an ancestor of B): every file would read as the
-    kit's copy to take, so each mode refuses before any row, naming both commits."""
-    repo, env = _install(tmp_path, kit_upstream)
-    applied = _apply(kit, repo, env)
-    assert applied.returncode == 0, applied.stdout + applied.stderr
-    _git(repo, env, "add", "-A")
-    _git(repo, env, "commit", "-qm", "upgrade to B")
-    _git(kit, env, "checkout", "-q", "--detach", kit_upstream["old_commit"])
-    before = _snapshot(repo)
-    old, new = kit_upstream["old_commit"][:12], kit_upstream["head"][:12]
-    for done in (
-        _expect(kit, repo, env, kit_upstream["old_commit"]),
-        _pinned(kit, repo, env),
-        _apply(kit, repo, env),
-    ):
-        assert done.returncode == 1, done.stdout + done.stderr
-        assert f"is at {old}, which does not contain {new}" in done.stdout
-        assert "this would be a downgrade" in done.stdout
-        assert "apply (U4):" not in done.stdout
-    assert _snapshot(repo) == before
-
-
-def test_expect_commit_refuses_a_baseline_commit_missing_from_the_clones_history(
-    tmp_path: Path, kit_upstream: dict, kit: Path
-) -> None:
-    """A downgrade and a commit main never took look the same when the commit is
-    absent. With the commit chosen by `--expect-commit` that refuses; the plain read
-    keeps its changelog warning, as before the flag."""
-    repo, env = _install(tmp_path, kit_upstream)
-    missing = "0123456789abcdef0123456789abcdef01234567"
-    _edit_record(repo, lambda record: record.update(kit_commit=missing))
-    _git(repo, env, "commit", "-qam", "a baseline from a commit the kit never took")
-    done = _expect(kit, repo, env, kit_upstream["head"])
-    assert done.returncode == 1, done.stdout + done.stderr
-    assert f"{missing[:12]}, the kit commit the committed baseline was installed from, is not in" in done.stdout
-    assert f"at {kit_upstream['head'][:12]} (--expect-commit)" in done.stdout
-    plain = _plan(kit, repo, env)
-    assert any("is not in this kit's history" in w for w in plain["changelog"]["warnings"])
-
-
-def test_expect_commit_notes_an_origin_it_cannot_read(
-    tmp_path: Path, kit_upstream: dict, kit: Path
-) -> None:
-    """The plain read refuses an unreadable origin; `--expect-commit` does not need
-    it, so it reads the clone and says what it could not check."""
-    repo, env = _install(tmp_path, kit_upstream)
-    _git(kit, env, "remote", "set-url", "origin", str(tmp_path / "gone.git"))
-    done = _expect(kit, repo, env, kit_upstream["head"])
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert (
-        f"note: cannot read the HEAD of {kit}'s origin; reading {kit_upstream['head'][:12]}, "
-        "the commit --expect-commit names"
-    ) in done.stdout
 
 
 @pytest.mark.parametrize("mode", ["read", "apply"])
@@ -1609,9 +1466,7 @@ def test_every_flag_the_lite_section_names_is_one_the_engine_takes(tmp_path: Pat
     import re
 
     flags = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", _lite_section()))
-    assert {
-        "--upgrade-lite", "--apply", "--kit-commit", "--expect-commit", "--take", "--keep", "--leave-absent"
-    } <= flags
+    assert {"--upgrade-lite", "--apply", "--kit-commit", "--take", "--keep", "--leave-absent"} <= flags
     usage = _doctor(REPO_ROOT, _env(tmp_path), "--help").stdout
     for flag in flags - {"--depth"}:
         assert flag in usage, flag

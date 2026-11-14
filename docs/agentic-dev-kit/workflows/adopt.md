@@ -74,8 +74,8 @@ a tag or sha installs the same kit every time. The block prints the resolved com
 repository records which kit commit it installed. The steps below run the named ref's own
 engines with the flags this document names, so a ref older than one of those flags stops
 that step with `kit_doctor.py: error: unrecognized arguments: <flag>`: name a ref no older
-than the copy of this document you are following. A later lite upgrade has the same limit
-for `--expect-commit` (`upgrade.md`, *Lite profile* U2).
+than the copy of this document you are following. This pins the install only: `upgrade.md`
+reads the kit's `main`, and pinning an upgrade is tracked in #1445.
 
 The path depends only on this checkout, so the block is safe to re-run from any shell or
 session: it finds the same clone again instead of making another, which matters once

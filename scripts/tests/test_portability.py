@@ -19937,6 +19937,9 @@ def test_upgrade_verification_stops_at_the_failed_command(
 
 
 _KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/upgrade.md", "docs/agentic-dev-kit/workflows/adopt.md")
+# The workflows whose kit block takes `KIT_REF`. Upgrades read the kit's `main` only;
+# pinning an upgrade is tracked in #1445.
+_PINNED_KIT_WORKFLOWS = ("docs/agentic-dev-kit/workflows/adopt.md",)
 
 # Fence labels that hold no command to run: transcripts and data. Every other fence,
 # an unlabelled one included, is read as shell.
@@ -20069,9 +20072,10 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
         assert result.returncode == 0, result.stderr
         kits.append(result.stdout.strip().removeprefix("KIT=").split(" at ")[0])
         # Only the re-run found its clone, and with `main` its `kit commit:` line says
-        # it did not re-check it.
-        commit_line = next(line for line in result.stdout.splitlines() if line.startswith("kit commit: "))
-        assert ("found, not cloned, and not re-checked against main" in commit_line) == (n == 1)
+        # it did not re-check it. Only a block that takes `KIT_REF` prints that line.
+        if workflow in _PINNED_KIT_WORKFLOWS:
+            commit_line = next(line for line in result.stdout.splitlines() if line.startswith("kit commit: "))
+            assert ("found, not cloned, and not re-checked against main" in commit_line) == (n == 1)
     assert kits[0] == kits[1] != kits[2]
     assert clones.read_text().splitlines() == [kits[0], kits[2]]
     assert Path(kits[0]).is_relative_to(_git_dir(task_a))
@@ -20079,7 +20083,7 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
     assert _git(task_a, "status", "--porcelain").stdout == ""
 
 
-@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
 @pytest.mark.parametrize("shell", ["bash", "zsh"])
 def test_the_kit_block_checks_out_the_named_ref_and_prints_its_commit(
     tmp_path: Path, workflow: str, shell: str
@@ -20116,7 +20120,7 @@ def test_the_kit_block_checks_out_the_named_ref_and_prints_its_commit(
     assert Path(str(clones) + ".refs").read_text().splitlines() == ["v1", first, "main"]
 
 
-@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
 @pytest.mark.parametrize("shell", ["sh", "bash", "zsh"])
 def test_the_kit_block_stops_when_a_clone_it_finds_is_not_at_the_named_ref(
     tmp_path: Path, workflow: str, shell: str
@@ -20158,7 +20162,7 @@ def test_the_kit_block_stops_when_a_clone_it_finds_is_not_at_the_named_ref(
     assert not Path(str(clones) + ".fetch").exists()
 
 
-@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
 def test_the_kit_block_refuses_a_ref_that_git_would_read_as_an_option(
     tmp_path: Path, workflow: str
 ) -> None:
@@ -20178,7 +20182,7 @@ def test_the_kit_block_refuses_a_ref_that_git_would_read_as_an_option(
     assert not (_git_dir(task) / "agentic-dev-kit").exists()
 
 
-@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
 def test_the_kit_block_reads_an_uppercase_full_sha_alike_on_a_re_run(
     tmp_path: Path, workflow: str
 ) -> None:
@@ -20199,7 +20203,7 @@ def test_the_kit_block_reads_an_uppercase_full_sha_alike_on_a_re_run(
         assert f"kit commit: {pinned}   (ref requested: {pinned})" in again.stdout.splitlines()
 
 
-@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
 def test_the_kit_block_checks_a_hex_only_tag_through_ls_remote_on_a_re_run(
     tmp_path: Path, workflow: str
 ) -> None:
@@ -20222,7 +20226,18 @@ def test_the_kit_block_checks_a_hex_only_tag_through_ls_remote_on_a_re_run(
     assert lsremote.read_text().splitlines() == ["ls-remote"]
 
 
-@pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
+def test_the_upgrade_kit_block_reads_main_and_names_no_ref() -> None:
+    """Adopt takes `KIT_REF`; an upgrade reads the kit's `main` only, and says that
+    pinning one is tracked in #1445, so no adopter sets `KIT_REF` for an upgrade
+    expecting it to hold."""
+    workflow = "docs/agentic-dev-kit/workflows/upgrade.md"
+    require_kit_paths(workflow)
+    assert workflow not in _PINNED_KIT_WORKFLOWS
+    assert "KIT_REF" not in (REPO_ROOT / workflow).read_text(encoding="utf-8")
+    assert "#1445" in (REPO_ROOT / workflow).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
 def test_the_kit_block_stops_on_a_ref_it_cannot_check_out(tmp_path: Path, workflow: str) -> None:
     require_kit_paths(workflow)
     env, _ = _kit_world(tmp_path)
@@ -20485,8 +20500,7 @@ _KIT_GUARD_MESSAGES = frozenset({
     "…", "...", "msg",
 })
 # Any expansion of KIT that is not the `${KIT:?` form, which stops on an unset KIT.
-# `(?!\w)`: `${KIT_REF:?…}` and the like are other variables, not an unguarded KIT.
-_UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?|\w)")
+_UNGUARDED_KIT = re.compile(r"\$KIT\b|\$\{KIT(?!:\?)")
 
 
 def _kit_bound_lines(block: str) -> list[str]:

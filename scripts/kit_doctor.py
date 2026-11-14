@@ -4564,9 +4564,7 @@ def _lite_target(root: Path, branch: str) -> tuple[str, dict[str, list[str]]]:
     return current, protected
 
 
-def _lite_kit(
-    kit: Path, kit_commit: str | None, expect_commit: str | None = None
-) -> tuple[str, str | None, list[str]]:
+def _lite_kit(kit: Path, kit_commit: str | None) -> tuple[str, str | None, list[str]]:
     """The kit check: a clean clone, and either current with its origin (#1405) or
     at the commit the operator approved, `--kit-commit` (#1410).
 
@@ -4576,12 +4574,6 @@ def _lite_kit(
     apply, U5's read) it pins that commit instead. An origin that moved after U3
     is named, not refused: U3 approved that commit, and the next upgrade takes
     the rest.
-
-    `--expect-commit` is U2's read of a kit block that named a ref (a tag or an
-    older sha, never origin's tip): the clone must be at that commit instead of
-    at its origin's HEAD. It is only the freshness check moved; the read is
-    otherwise U2's, with none of `--kit-commit`'s U5 meaning, which is why the
-    two flags are refused together.
     """
     head = _lite_head(kit)
     if head is None:
@@ -4597,24 +4589,6 @@ def _lite_kit(
     words = remote.stdout.split() if remote.returncode == 0 else []
     upstream = words[0] if words else None
     notes: list[str] = []
-    if expect_commit is not None:
-        expected = expect_commit.strip().lower()
-        if not re.fullmatch(r"[0-9a-f]{7,64}", expected) or not head.startswith(expected):
-            raise LiteUpgradeStop(
-                f"the kit clone {kit} is at {head[:12]}, not --expect-commit {expect_commit}: "
-                "delete the clone and re-run Step 0's kit block with KIT_REF set to the ref you mean"
-            )
-        if upstream is None:
-            notes.append(
-                f"note: cannot read the HEAD of {kit}'s origin; reading {head[:12]}, the commit "
-                "--expect-commit names"
-            )
-        elif upstream != head:
-            notes.append(
-                f"note: the kit's origin is at {upstream[:12]}; this reads {head[:12]}, the commit "
-                "--expect-commit names"
-            )
-        return head, upstream, notes
     if kit_commit is None:
         if upstream is None:
             raise LiteUpgradeStop(
@@ -4995,65 +4969,23 @@ def _lite_agents_section(root: Path, kit: Path) -> dict:
     return {"status": "missing", "file": None, "diff": ""}
 
 
-def _lite_deepen(kit: Path) -> str | None:
-    """Deepen a `--depth 1` kit clone, or say why it could not be: None when the
-    clone has its history.
-
-    Writes only into the kit clone's git directory. Both the baseline's ancestry
-    check and the changelog range need the history a shallow clone lacks.
-    """
-    shallow = _git_run(kit, "rev-parse", "--is-shallow-repository")
-    if shallow.stdout.strip() != "true":
-        return None
-    deepened = _git_run(kit, "fetch", "-q", "--unshallow", timeout=600)
-    if deepened.returncode != 0:
-        deepened = _git_run(kit, "fetch", "-q", "--depth=1000", timeout=600)
-    if deepened.returncode != 0:
-        return f"cannot deepen the kit clone: {deepened.stderr.strip()}"
-    return None
-
-
-def _lite_history_stop(kit: Path, head: str, baseline_commit: str | None, expected: bool) -> None:
-    """Refuse a kit clone that would take the install backwards.
-
-    The committed baseline names the kit commit the install came from. A clone
-    whose HEAD does not contain it, while the commit is in the clone's history,
-    is older than the install or beside it, and every file would read as the
-    kit's copy to take: a downgrade, refused in every mode. Origin's tip always
-    contains it, so the plain read only trips this on a baseline from a branch
-    main never took. A baseline absent from the history is a downgrade or a
-    commit main never took, which cannot be told apart: under `--expect-commit`,
-    where the operator chose the commit, that refuses too; otherwise the
-    changelog says so, as it did before `--expect-commit`.
-    """
-    if not baseline_commit:
-        return
-    if _git_run(kit, "merge-base", "--is-ancestor", baseline_commit, head).returncode == 0:
-        return
-    if _git_run(kit, "cat-file", "-e", f"{baseline_commit}^{{commit}}").returncode == 0:
-        raise LiteUpgradeStop(
-            f"the kit clone {kit} is at {head[:12]}, which does not contain {baseline_commit[:12]}, "
-            "the kit commit the committed baseline was installed from: this would be a downgrade "
-            f"— re-run Step 0's kit block with a ref at or after {baseline_commit[:12]}"
-        )
-    if expected:
-        raise LiteUpgradeStop(
-            f"{baseline_commit[:12]}, the kit commit the committed baseline was installed from, is "
-            f"not in the history of the kit clone {kit} at {head[:12]} (--expect-commit), so "
-            "whether this is a downgrade is unknown — stop and ask the operator"
-        )
-
-
-def _lite_changelog(kit: Path, head: str, baseline_commit: str | None, deepen_failed: str | None) -> dict:
+def _lite_changelog(kit: Path, head: str, baseline_commit: str | None) -> dict:
     """The `changelog.d/` fragments the kit wrote after the baseline (#1408).
 
-    Reads the history `_lite_deepen` fetched: a `--depth 1` clone has none, and
-    its range would be empty, so a failed deepening reads no range.
+    Deepens the clone first, which writes only into the kit clone's git
+    directory: a `--depth 1` clone has no history, and its range would be empty.
     """
     result: dict = {"base": None, "bound": None, "entries": [], "warnings": []}
-    if deepen_failed:
-        result["warnings"].append(f"{deepen_failed}, so no changelog range is read")
-        return result
+    shallow = _git_run(kit, "rev-parse", "--is-shallow-repository")
+    if shallow.stdout.strip() == "true":
+        deepened = _git_run(kit, "fetch", "-q", "--unshallow", timeout=600)
+        if deepened.returncode != 0:
+            deepened = _git_run(kit, "fetch", "-q", "--depth=1000", timeout=600)
+        if deepened.returncode != 0:
+            result["warnings"].append(
+                f"cannot deepen the kit clone, so no changelog range is read: {deepened.stderr.strip()}"
+            )
+            return result
     base = None
     if baseline_commit and _git_run(kit, "merge-base", "--is-ancestor", baseline_commit, head).returncode == 0:
         base, result["bound"] = baseline_commit, "baseline"
@@ -5210,7 +5142,6 @@ def upgrade_lite(
     *,
     apply: bool = False,
     kit_commit: str | None = None,
-    expect_commit: str | None = None,
     take: tuple[str, ...] = (),
     keep: tuple[str, ...] = (),
     leave: tuple[str, ...] = (),
@@ -5229,9 +5160,7 @@ def upgrade_lite(
         print(line, file=out)
 
     try:
-        return _upgrade_lite(
-            root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say, expect_commit
-        )
+        return _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say)
     except LiteUpgradeUsage as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -5241,9 +5170,7 @@ def upgrade_lite(
         return 1
 
 
-def _upgrade_lite(
-    root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say, expect_commit=None
-) -> int:
+def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say) -> int:
     # Flags first: a path that is not a lite file is refused before anything is
     # read, so a near miss (`./docs/...`, a typo) can never be silently skipped
     # and later recorded as declined.
@@ -5265,9 +5192,7 @@ def _upgrade_lite(
     current, protected = _lite_target(root, branch)
     # Read mode pins too when given `--kit-commit`: U5 re-reads after U4 against the
     # commit U4 applied, which an origin that moved since must not refuse.
-    # `--expect-commit` moves only U2's freshness check to the commit the kit block
-    # printed for a named ref; nothing below reads it.
-    head, upstream, notes = _lite_kit(kit, kit_commit, expect_commit)
+    head, upstream, notes = _lite_kit(kit, kit_commit)
     config = _lite_load_config(root)
     try:
         kit_manifest = json.loads((kit / MANIFEST_NAME).read_text(encoding="utf-8"))
@@ -5288,10 +5213,6 @@ def _upgrade_lite(
             "never recorded — stop and ask the operator; do not run adopt.md L4 from this kit"
         )
     baseline_commit = baseline.get("kit_commit") if isinstance(baseline.get("kit_commit"), str) else None
-    # Before any row is read: a kit older than the install would offer every file
-    # back as the kit's copy to take.
-    deepen_failed = _lite_deepen(kit)
-    _lite_history_stop(kit, head, baseline_commit, expect_commit is not None)
     try:
         report = inspect(root, kit_manifest, config, baseline)
     except OSError as exc:
@@ -5353,7 +5274,7 @@ def _upgrade_lite(
         stops.append(f"verify (L5): not run — {why}")
 
     agents = _lite_agents_section(root, kit)
-    changelog = _lite_changelog(kit, head, baseline_commit, deepen_failed)
+    changelog = _lite_changelog(kit, head, baseline_commit)
     date = _git_run(kit, "log", "-1", "--format=%cs", head).stdout.strip()
     decide = [r for r in rows if r.action == "decide"]
     apply_command = (
@@ -5366,8 +5287,7 @@ def _upgrade_lite(
     if as_json:
         say(json.dumps({
             "kit": {"path": str(kit), "commit": head, "date": date, "origin": upstream,
-                    "pinned": kit_commit is not None,
-                    "expected": expect_commit is not None, "notes": notes},
+                    "pinned": kit_commit is not None, "notes": notes},
             "target": {"root": str(root), "branch": current, "protected": protected},
             "profile": "lite",
             "baseline": {"kit_commit": baseline_commit, "working_tree_differs": uncommitted},
@@ -5386,11 +5306,7 @@ def _upgrade_lite(
         }, indent=1))
         return 1 if stops else 0
 
-    if expect_commit is not None:
-        say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone at --expect-commit")
-        for note in notes:
-            say(f"  {note}")
-    elif kit_commit is None:
+    if kit_commit is None:
         say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone, current with its origin")
     else:
         say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone at --kit-commit")
@@ -5713,14 +5629,6 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
-        "--expect-commit",
-        default=None,
-        help=(
-            "(--upgrade-lite, read only) the commit the kit block printed for a named ref: "
-            "the clone must be at it in place of its origin's HEAD; not with --kit-commit"
-        ),
-    )
-    parser.add_argument(
         "--take",
         action="append",
         default=[],
@@ -5763,7 +5671,6 @@ def main(argv: list[str] | None = None) -> int:
             ("--branch", args.branch is not None),
             ("--apply", args.apply),
             ("--kit-commit", args.kit_commit is not None),
-            ("--expect-commit", args.expect_commit is not None),
             ("--take", bool(args.take)),
             ("--leave-absent", bool(args.leave_absent)),
         )
@@ -5823,12 +5730,6 @@ def main(argv: list[str] | None = None) -> int:
         decisions = bool(args.take or args.keep or args.leave_absent)
         if decisions and not args.apply:
             parser.error("--take, --keep and --leave-absent require --apply")
-        # U2's read of a named ref, or U4/U5's pinned commit: never both. A read given
-        # `--kit-commit` is U5 and must run L5, which `--expect-commit` must not loosen.
-        if args.expect_commit is not None and args.kit_commit is not None:
-            parser.error(
-                "--expect-commit is U2's read; --kit-commit is U4's apply and U5's read — pass one"
-            )
         if args.apply and args.kit_commit is None:
             parser.error("--apply requires --kit-commit, the kit commit the read mode printed")
         if args.apply and args.json:
@@ -5838,7 +5739,6 @@ def main(argv: list[str] | None = None) -> int:
             args.branch,
             apply=args.apply,
             kit_commit=args.kit_commit,
-            expect_commit=args.expect_commit,
             take=tuple(args.take),
             keep=tuple(args.keep),
             leave=tuple(args.leave_absent),

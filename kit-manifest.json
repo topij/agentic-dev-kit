@@ -104,7 +104,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "5c9c9bbfacfff97888e20c6c63fcfa7529e26395241461099614834bf09ce89c"
+      "sha256": "4e44a76513e819dec5c591abc95ceb9994a6123d7888779e05b2593470eccd01"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -167,7 +167,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "db80aadee5557011b8e7186098da92ba2aabfc18684afdcafa41c8667d5d3072"
+      "sha256": "f764e02c52fa067d2e793e940481299aa4b74c02c1d4499129935e55070582e7"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -258,7 +258,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "097c92ac506db2585a7cee6c8738f2c399fe7b42e90159b5f16a3277f3d854e7"
+      "sha256": "b63dd197c775933ef9e6a78d38a92f53253a08f95a359412938607a89df05c66"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -769,7 +769,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "23000743aa761faa866ae15b52ca821e521919c13508d5ec39b252df58c6a599"
+      "sha256": "aa71992b3f27d2079719241c5d285cae31d7d8b953b3fdab69157c636a60675e"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -777,7 +777,7 @@
     },
     "scripts/tests/test_kit_doctor_upgrade_lite.py": {
       "role": "repo-only",
-      "sha256": "4ef1f5e19497a1e866bc64bb0bd689a29e86add87856694c6383e18ec9abdf0d"
+      "sha256": "90e17a5f3f0852812f308c9d3a52a984768847ce19af5e91aaa3adb271254546"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
-      "sha256": "b9c44eed28dd4c1231c54718780821cf5df26af597908e969d3bdab6e49d3ad4"
+      "sha256": "6203dbfee4da8be876678e27f9138e84ded1c0621ebb39dc11207ebf1eb0e1e4"
     },
     "scripts/tests/test_live_validation_bundle.py": {
       "role": "repo-only",
@@ -813,7 +813,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "d499a471d3758f1bda4d6d5ea216310925b7d790d2b2c40afbb076d330b43d22"
+      "sha256": "23527985e0c7bb065aebad4ba533fe76b408003be51ad11ef82fa85b6864618b"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
