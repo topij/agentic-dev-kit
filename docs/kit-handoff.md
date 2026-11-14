@@ -140,12 +140,12 @@ that grows with the evidence. #1349 added the test of the refusal's count (#1336
 #1442 implements #1335: `last_result` is stored without the seal copy, and every seal is size-checked, discard-only
 seals included. Its round-1 panel found that checking a discard-only seal can refuse a round whose smallest discard no
 longer fits, and that no engine route then retires that round; the PR is held for the operator's choice between
-skipping the check for discard-only seals again and adding an operator escape (dispositions on #1442). The two
-paragraphs above describe the engine at `171d9f4` and go false when #1442 merges. #1327 was retired as delivered on
+skipping the check for discard-only seals again and adding an operator escape (dispositions on #1442). The #1334 paragraph above
+describes the engine at `171d9f4` and goes false when #1442 merges; the section's Status paragraph does not. #1327 was retired as delivered on
 2026-11-13.
 
 ▶ Next: the operator's choice on #1442 (its round-1 disposition comment states both options); once it merges,
-replace the two paragraphs above with what then holds.
+replace the #1334 paragraph above with what then holds.
 
 ### Reviewer profiles
 
@@ -345,7 +345,7 @@ dates if step 1a merges later). Run `post-merge-systemize backfill` and the `rec
 2026-11-27, 2026-12-11 and 2026-12-13, ticket each LOW recorded on two or more pull requests (operator approval), and
 judge the trial on 2026-12-13, after that day's run, against the plan's M3 inflow. The rule stays until the operator decides. Step 1b, the backlog pass, ran on 2026-11-13 with the operator's
 approval of each batch, and each step of the plan names its tickets. Its done-when, no open issue without a priority label, held on 2026-11-13:
-`gh issue list --state open --limit 1000 --search '-label:P1 -label:P2 -label:P3'` printed none when the pass ended. Its security finding S2, a lane writing the
+`gh issue list --state open --limit 1000 --search '-label:P1 -label:P2 -label:P3'` printed none when the pass ended. The plan's security finding S2, a lane writing the
 review receipt its own merge is judged by, was probed live at `171d9f4` on 2026-11-13 (step 2a's probe) and holds: a
 headless lane ran the `pr_watch.py --record-review` its profile grants on its own throwaway pull request, and once CI
 was green `dev_session.sh pr-watch <scope> --json` reported it `mergeable` with no review having run; a receipt the
