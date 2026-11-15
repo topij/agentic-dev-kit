@@ -16,10 +16,13 @@ Shallow-clone the kit (use your own fork's URL if you maintain one). Never clone
 reuse a shared path such as `/tmp/agentic-dev-kit`: another session's clone or a leftover
 skeleton can already be there, and a tree you did not clone for this adoption is a kit of
 unknown revision (`#576`). Clone it into the adopter checkout's own git directory instead.
-Run this **kit block** from inside the repo being adopted into:
+Run this **kit block** from inside the repo being adopted into. In the same shell
+invocation, put `KIT_REF='your-tag-or-sha'` before the block, substituting the ref
+you chose. To choose the remote's default branch explicitly, put `KIT_REF=''` there.
+Repeat that assignment each time you run the block.
 
 ```bash
-KIT_REF="${KIT_REF:-}"   # the tag, branch or full commit sha to install; unset or empty installs the remote's default branch
+: "${KIT_REF?set KIT_REF in this shell to the chosen ref, or explicitly empty for the default branch}"
 # A ref is an argument to git below: one starting with `-` would be read as an option
 # (`--upload-pack=<command>` runs that command), so it is refused before any git call.
 # A full sha is lower-cased, so the clone and a later run's check compare it alike.
@@ -34,13 +37,17 @@ KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
 KIT_FOUND=yes
 if [ ! -e "$KIT" ]; then
   KIT_FOUND=
-  git clone --depth 1 "$KIT_URL" "$KIT" || exit 1
-  # Only a named ref is fetched. A clone this run made and could not move to it is left
-  # at the default branch for you to delete; until you do, a re-run naming a ref refuses it.
+  KIT_STAGE="$KIT.pending"
+  mkdir "$KIT_STAGE" ||
+    { echo "cannot reserve $KIT_STAGE: check for an active or interrupted adoption before retrying" >&2; exit 1; }
+  # A concurrent run can finish between the existence check and our reservation.
+  [ ! -e "$KIT" ] || { echo "$KIT appeared during setup: inspect $KIT_STAGE and re-run" >&2; exit 1; }
+  git clone --depth 1 "$KIT_URL" "$KIT_STAGE" || exit 1
   if [ -n "$KIT_REF" ]; then
-    git -C "$KIT" fetch --depth 1 origin "$KIT_REF" && git -C "$KIT" checkout -q --detach FETCH_HEAD ||
-      { echo "could not check out $KIT_REF from $KIT_URL: delete $KIT, check the ref and re-run this block" >&2; exit 1; }
+    git -C "$KIT_STAGE" fetch --depth 1 origin "$KIT_REF" && git -C "$KIT_STAGE" checkout -q --detach FETCH_HEAD ||
+      { echo "could not check out $KIT_REF from $KIT_URL in $KIT_STAGE: check the ref before retrying" >&2; exit 1; }
   fi
+  mv "$KIT_STAGE" "$KIT" || exit 1
 fi
 KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
   [ -z "$KIT_STATUS" ] &&
@@ -78,11 +85,10 @@ echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
 echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   ($KIT_SAID)"
 ```
 
-**Name the ref you are installing.** Set `KIT_REF` to a full commit sha, a tag or a
-branch before the block runs (`KIT_REF=<ref>`, or edit the default line). A full sha is
-the only pin that cannot move: a tag, like a branch, can be moved to another commit. Naming none installs the remote's default branch
-(the kit's is `main`) as it stands when the block runs, which is a different kit next
-week. Whatever you name, the block prints the resolved commit on its `kit commit:` line
+**Name the ref you are installing.** A full commit sha pins an immutable commit.
+Tags and branches can move. An explicitly empty `KIT_REF` selects the remote's default
+branch for a fresh clone. An unset `KIT_REF` stops the block before it touches the checkout.
+The block prints the resolved commit on its `kit commit:` line
 before any copy: write that sha in the adoption's pull request, so the repository records
 which kit commit it installed. The steps below run the named ref's own
 engines with the flags this document names, so a ref older than one of those flags stops
@@ -105,14 +111,14 @@ from an earlier adoption attempt in this checkout. When you named a ref, the blo
 unless the clone's `HEAD` is the commit that ref names: a full sha is compared as
 written, and a tag or branch is read from the kit's remote with `git ls-remote`, which
 leaves the clone as it is. When the remote cannot be read, the block says so and stops
-without judging the clone; re-run it once the remote can be read. With no ref named it does
-not check, because the default branch moves: its `kit commit:` line says the clone was
+without judging the clone; re-run it once the remote can be read. With an explicitly empty ref it reuses the existing clone: its `kit commit:` line says the clone was
 found and not re-checked, and if the commit it names is not the kit you mean to adopt,
-delete `$KIT` and re-run the block. When the block cannot check out a ref you named, it
-stops and tells you to delete the clone it just made, which is left at the default
-branch: until you delete it, a re-run that names a ref refuses it. It writes into the git directory, so a
-sandbox that allows writes only inside the working tree needs to allow this one. Delete
-the clone once the adoption has landed.
+delete `$KIT` and re-run the block. A fresh clone stays at the sibling path `agentic-dev-kit.pending`
+until the requested checkout succeeds. An interrupted clone or failed checkout can leave
+that directory behind. Once you have confirmed the attempt has ended, inspect and remove
+that staging directory, then retry with the intended ref in the same invocation. The
+block writes into the git directory, so a sandbox that allows writes only inside the
+working tree needs to allow this one. Delete the clone once the adoption has landed.
 
 Everything below copies **from** that checkout **into** the current repo (the adopter) —
 **two trees, and from here every write must name which one.** Bind both roots now,
@@ -721,7 +727,8 @@ one word.
 
 First run Step 0's **kit block**, from the checkout the install is committed in, with
 `KIT_REF` set to the commit sha or tag you are installing (it installs the remote's
-default branch when you name none). Write down the path its `KIT=<path> at <sha>` line prints: that is `<kit>`. Write
+default branch for a fresh clone when you explicitly set `KIT_REF=''`). Write down the path
+its `KIT=<path> at <sha>` line prints: that is `<kit>`. Write
 down the sha its `kit commit:` line prints too, for the install's pull request. Write down what
 `git rev-parse --show-toplevel` prints in that checkout: that is `<root>`. Then:
 

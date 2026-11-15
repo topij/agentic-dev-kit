@@ -20190,6 +20190,7 @@ def _kit_world(tmp_path: Path) -> tuple[dict, Path]:
         PATH=f"{bins}{os.pathsep}{os.environ['PATH']}",
         REAL_GIT=real,
         CLONES=str(calls),
+        KIT_REF="",
         GIT_CONFIG_GLOBAL=str(empty),
         GIT_CONFIG_NOSYSTEM="1",
     )
@@ -20245,7 +20246,8 @@ def test_the_kit_block_finds_one_clone_per_checkout_and_never_a_shared_one(
                 "found, not cloned, and not re-checked against the remote's default branch" in commit_line
             ) == (n == 1)
     assert kits[0] == kits[1] != kits[2]
-    assert clones.read_text().splitlines() == [kits[0], kits[2]]
+    suffix = ".pending" if workflow in _PINNED_KIT_WORKFLOWS else ""
+    assert clones.read_text().splitlines() == [kits[0] + suffix, kits[2] + suffix]
     assert Path(kits[0]).is_relative_to(_git_dir(task_a))
     assert Path(kits[2]).is_relative_to(_git_dir(task_b))
     assert _git(task_a, "status", "--porcelain").stdout == ""
@@ -20263,7 +20265,6 @@ def test_the_kit_block_checks_out_the_named_ref_and_prints_its_commit(
         pytest.skip(f"{shell} is not installed")
     require_kit_paths(workflow)
     block = _kit_block(workflow)
-    assert 'KIT_REF="${KIT_REF:-}"' in block
     env, clones = _kit_world(tmp_path)
     _, task_tag = _repo_with_task(tmp_path, "tag")
     _, task_default = _repo_with_task(tmp_path, "default")
@@ -20411,12 +20412,9 @@ def test_the_upgrade_kit_block_names_no_ref() -> None:
 
 
 @pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
-def test_the_kit_block_stops_on_a_ref_it_cannot_check_out_and_a_re_run_refuses_the_clone(
+def test_the_kit_block_keeps_a_failed_checkout_out_of_the_install_path(
     tmp_path: Path, workflow: str
 ) -> None:
-    """The block deletes nothing: it tells the operator to delete the clone it could
-    not move to the named ref, and until they do, a re-run naming that ref refuses the
-    clone (left at the default branch) rather than taking it."""
     require_kit_paths(workflow)
     block = _kit_block(workflow)
     env, clones = _kit_world(tmp_path)
@@ -20425,12 +20423,33 @@ def test_the_kit_block_stops_on_a_ref_it_cannot_check_out_and_a_re_run_refuses_t
     result = _run_kit_block("sh", block, dict(env, KIT_REF="no-such-ref"), task)
     assert result.returncode != 0
     assert "could not check out no-such-ref from " in result.stderr
-    assert f"delete {kit}, check the ref and re-run this block" in result.stderr
-    assert kit.exists()
-    again = _run_kit_block("sh", block, dict(env, KIT_REF="no-such-ref"), task)
-    assert again.returncode != 0 and "kit commit:" not in again.stdout
-    assert "could not resolve no-such-ref on " in again.stderr
-    assert clones.read_text().splitlines() == [str(kit)]
+    assert not kit.exists()
+    for requested in ("no-such-ref", ""):
+        retry = _run_kit_block("sh", block, dict(env, KIT_REF=requested), task)
+        assert retry.returncode != 0 and "cannot reserve" in retry.stderr
+        assert "kit commit:" not in retry.stdout
+        assert not kit.exists()
+    assert clones.read_text().splitlines() == [str(kit) + ".pending"]
+
+
+@pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
+def test_the_adopt_block_requires_the_ref_choice_in_its_own_shell(tmp_path: Path, workflow: str) -> None:
+    require_kit_paths(workflow)
+    block = _kit_block(workflow)
+    env, clones = _kit_world(tmp_path)
+    del env["KIT_REF"]
+    _, task = _repo_with_task(tmp_path, "a")
+    subprocess.run(["sh", "-c", "export KIT_REF=v1"], env=env, cwd=task, check=True)
+    result = _run_kit_block("sh", block, env, task)
+    assert result.returncode != 0 and "set KIT_REF in this shell" in result.stderr
+    assert not clones.exists()
+    assert "kit commit:" not in result.stdout
+    pinned = _run_kit_block("sh", "KIT_REF=v1\n" + block, env, task)
+    assert pinned.returncode == 0, pinned.stderr
+    kit = _git_dir(task) / "agentic-dev-kit"
+    assert _git(kit, "rev-parse", "HEAD").stdout == _git(kit, "rev-parse", "v1^{commit}").stdout
+    retry = _run_kit_block("sh", block, env, task)
+    assert retry.returncode != 0 and "kit commit:" not in retry.stdout
 
 
 @pytest.mark.parametrize("workflow", _PINNED_KIT_WORKFLOWS)
@@ -20472,7 +20491,7 @@ def test_the_kit_block_resolves_a_partial_ref_name_on_a_re_run_as_git_fetch_does
 def test_the_kit_block_installs_a_fork_whose_default_branch_is_not_main(
     tmp_path: Path, workflow: str
 ) -> None:
-    """A fork whose HEAD is `master`, with no `main`: an unset `KIT_REF` clones its
+    """A fork whose HEAD is `master`, with no `main`: an explicitly empty `KIT_REF` clones its
     default branch and fetches no ref, a re-run says it did not re-check it, and a
     named ref still works against the fork."""
     require_kit_paths(workflow)
@@ -20600,7 +20619,8 @@ def test_the_kit_block_refuses_a_clone_that_is_no_longer_the_kit(tmp_path: Path,
     again = _run_kit_block("sh", block, env, task)
     assert again.returncode != 0
     assert "is not a clean clone of" in again.stderr
-    assert clones.read_text().splitlines() == [str(kit)]
+    suffix = ".pending" if workflow in _PINNED_KIT_WORKFLOWS else ""
+    assert clones.read_text().splitlines() == [str(kit) + suffix]
 
 
 @pytest.mark.parametrize("workflow", _KIT_WORKFLOWS)
