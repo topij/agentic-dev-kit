@@ -38,14 +38,27 @@ With `scratch.session_registry` configured, a worktree the session registered wi
 `track-worktree` retires through the sealed-inventory lifecycle below, not through a
 plain `git worktree remove`.
 
+**Watcher state in a merged PR's task worktree.** When retiring the session's own
+linked task worktree, its local `state/pr-watch/<PR>.json` may go with it under
+the same authorization. Verify that the file and its parent directories resolve
+inside this worktree's own state directory. Confirm on the forge that the merged PR matches this
+repository, branch and worktree head, and that the final review is recorded
+there for that head. Inspect the file: it must contain only superseded polling
+data or a review receipt whose evidence is already preserved. Check for active
+users, uncommitted or unpushed work, and other retained state, including ignored
+files. If anything still depends on the worktree or the evidence is uncertain,
+keep it. Retire the whole worktree by its normal route above. This exception is
+limited to the session-created watcher file inside that worktree.
+
 Delete a recorded path by its exact absolute path, never through a glob, a parent
 directory or a pattern. Before deleting, confirm the path is still the one recorded
 and that it is not a registered worktree (remove that with `git worktree remove`)
 and holds no commit that exists nowhere else.
 
 **Never delete**, whatever a rule above seems to allow: anything this session did not
-create; the primary checkout; the kit's `state/` sandboxes and anything the
-configuration names as state; the registry under `<git-common-dir>/devkit/`, retained
+create; the primary checkout; the kit's `state/` sandboxes and configured state
+apart from the worktree-local watcher file described above; the registry under
+`<git-common-dir>/devkit/`, retained
 evidence included (it leaves only through `retire-evidence` below, under operator
 authorization); an allocation receipt whose retirement has not completed; the handoff and
 friction-log files; shared caches such as the package manager's; or a tree with
