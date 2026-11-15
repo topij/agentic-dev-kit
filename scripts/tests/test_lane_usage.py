@@ -546,3 +546,53 @@ def test_malformed_resume_metadata_cannot_complete_a_total(resumes):
     assert result["total_tokens"] == 3
     assert result["tokens_complete"] is False and result["cost_complete"] is False
     assert "not counted" in result["reason"]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize(
+    ("extra_usage", "expected_sum", "gap"),
+    [
+        ({"output_tokens": 5, "input_tokens": 9}, 14, None),
+        ({"output_tokens": 4, "input_tokens": -1}, 5, "malformed token fields"),
+        ({"output_tokens": 4, "cache_read_input_tokens": 7}, 12, None),
+    ],
+)
+def test_repeated_response_records_preserve_fields_and_gaps(
+    tmp_path, reverse, extra_usage, expected_sum, gap
+):
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane", usage=None)
+    messages = [
+        {"id": "msg", "usage": {"output_tokens": 5}},
+        {"id": "msg", "usage": extra_usage},
+    ]
+    _subagent(projects, SID_A, "agent", messages[::-1] if reverse else messages)
+    run = _run("--sessions-dir", str(sessions), "--projects-root", str(projects), "--strict", "--json")
+    row = json.loads(run.stdout)["lanes"][0]
+    assert row["subagents"]["total_tokens"] == expected_sum
+    assert row["subagents"]["agents"][0]["assistant_messages"] == 1
+    if gap is None:
+        assert run.returncode == 0 and row["subagent_tokens"] == expected_sum
+    else:
+        assert run.returncode == 1 and row["subagent_tokens"] is None
+        assert gap in row["subagents"]["reason"]
+
+
+def test_conflicting_input_counts_produce_a_lower_bound(tmp_path):
+    _subagent(tmp_path, SID_A, "agent", [
+        {"id": "same", "usage": {"input_tokens": 17, "output_tokens": 1}},
+        {"id": "same", "usage": {"input_tokens": 12, "output_tokens": 2}},
+    ])
+    source = lane_usage.subagent_usage(tmp_path, [SID_A])
+    assert source["total_tokens"] == 14 and not source["complete"]
+    assert "conflicting response counts for input_tokens" in source["reason"]
+
+
+@pytest.mark.parametrize(("role", "complete"), [("assistant", False), ("user", True)])
+def test_nested_role_identifies_untyped_records_without_usage(tmp_path, role, complete):
+    _subagent(tmp_path, SID_A, "agent", [{"id": "first", "usage": {"output_tokens": 4}}])
+    path = tmp_path / "-home-user-repo" / SID_A / "subagents" / "agent.jsonl"
+    with path.open("a") as handle:
+        handle.write(json.dumps({"message": {"role": role, "content": []}}) + "\n")
+    source = lane_usage.subagent_usage(tmp_path, [SID_A])
+    assert source["complete"] is complete and source["total_tokens"] == 4

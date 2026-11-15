@@ -269,26 +269,28 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
 
     Claude Code writes one record per content block of a response, each repeating
     that response's `usage`, so records sharing `(requestId, message.id)` are one
-    response: the record with the largest `output_tokens` stands for it (a
-    streamed response's last record carries the final count). A record with
-    neither id is counted on its own.
-
-    `gaps` names what the sum leaves out: unparseable lines, and token fields that
-    are present but not a non-negative int. The valid figures are still summed.
+    response. Merge their reported fields and keep the largest streamed output
+    count. Conflicting input counts make the sum partial, with the smaller
+    observation retained as its lower bound. A record with neither id stands alone.
     """
     records, torn, readable = _read_records(transcript)
     tokens = _empty_tokens()
     models: set[str] = set()
-    responses: dict[object, dict[str, Any]] = {}
+    responses: dict[object, dict[str, int]] = {}
+    malformed: set[object] = set()
+    conflicting: set[str] = set()
     missing_usage = False
     for index, record in enumerate(records):
-        if record.get("type") not in (None, "assistant"):
-            continue
         message = record.get("message")
+        record_type = record.get("type")
+        if record_type is None and isinstance(message, dict):
+            # Older records carry the role in the message or omit both tags.
+            record_type = message.get("role", "assistant")
+        if record_type != "assistant":
+            continue
         usage = message.get("usage") if isinstance(message, dict) else None
         if not isinstance(usage, dict):
-            if record.get("type") == "assistant":
-                missing_usage = True
+            missing_usage = True
             continue
         model = message.get("model")
         if isinstance(model, str):
@@ -299,23 +301,25 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
             if isinstance(request_id, str) or isinstance(message_id, str)
             else index
         )
-        kept = responses.get(key)
-        if kept is None or (_int(usage.get("output_tokens")) or 0) > (
-            _int(kept.get("output_tokens")) or 0
-        ):
-            responses[key] = usage
-    malformed = 0
-    for usage in responses.values():
-        bad = not any(field in usage for field in TOKEN_FIELDS)
-        for field in TOKEN_FIELDS:
-            if field not in usage:
-                continue
+        kept = responses.setdefault(key, {})
+        fields = [field for field in TOKEN_FIELDS if field in usage]
+        if not fields:
+            malformed.add(key)
+        for field in fields:
             value = _int(usage[field])
             if value is None:
-                bad = True
-            else:
-                tokens[field] += value
-        malformed += bad
+                malformed.add(key)
+                continue
+            if field not in kept:
+                kept[field] = value
+            elif field == "output_tokens":
+                kept[field] = max(kept[field], value)
+            elif kept[field] != value:
+                conflicting.add(field)
+                kept[field] = min(kept[field], value)
+    for figures in responses.values():
+        for field, value in figures.items():
+            tokens[field] += value
     gaps = []
     if not readable:
         gaps.append("unreadable")
@@ -324,7 +328,9 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
     if torn:
         gaps.append(f"{torn} unparseable line(s)")
     if malformed:
-        gaps.append(f"{malformed} response(s) with malformed token fields")
+        gaps.append(f"{len(malformed)} response(s) with malformed token fields")
+    if conflicting:
+        gaps.append(f"conflicting response counts for {', '.join(sorted(conflicting))}")
     messages = len(responses)
     meta = _read_json(transcript.with_name(f"{transcript.stem}.meta.json"))
     description = meta.get("description") if isinstance(meta, dict) else None
