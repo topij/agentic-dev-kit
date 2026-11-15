@@ -89,7 +89,7 @@ change requests and higher-severity blockers remain separate obligations.
 
 For a lane coordinated from the cockpit, invoke the same engine through
 `<engine-dir>/dev_session.sh pr-watch <scope> ...`. That scope-aware wrapper pins the
-repository and stores polls, acknowledgments, and review receipts in the lane sandbox
+repository and stores polls, acknowledgments, and review receipts in the cockpit store
 that `dev_session.sh merge <scope>` re-checks.
 
 **Without `gh`, the engine polls but cannot authorize a merge** (*The REST backend*, in

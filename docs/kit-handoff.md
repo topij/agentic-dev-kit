@@ -345,7 +345,8 @@ was green `dev_session.sh pr-watch <scope> --json` reported it `mergeable` with 
 cockpit recorded at the same head read identically, and `reconcile_sessions.sh` called the lane held. A direct write
 into the lane's state directory was refused by the profile. The probe's pull request was abandoned unmerged and its
 branches deleted; its receipts and notes are local only, untracked under `saved_plans/s2-probe-evidence_2026-11-13/`
-in the primary checkout. Step 2a's remedy, binding the receipt out of the lane's reach (#490, #1430), is not started.
+in the primary checkout. Step 2a gives the cockpit its own per-session watch store. The live
+acceptance evidence belongs with the remedy before the operator resumes self-merge.
 Steps 3a, 2e and 2d ran as headless lanes on 2026-11-13, and the operator merged each on 2026-11-14 after its
 review rounds: #1440 (3a, `e4a4bd1`), #1441 (2e, `e094cc0`) and #1443 (2d, `52c4cbe`). The operator split #1443:
 adopt installs a named kit ref, upgrades still read the tip of the kit's default branch, upgrade pinning is #1445,
@@ -357,7 +358,8 @@ documents and engines still describe and accept self-merge, `parallel.md` for on
 operator's decision under the conditions D2 states. A probe result alone lifts nothing.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: step 2a's remedy (#490, #1430); the operator decides whether #1370, #1371 and #345 are done, now that
+▶ Next: verify the step 2a remedy against the saved baseline and retain D2 until it ships.
+The operator decides whether #1370, #1371 and #345 are done, now that
 #1440 and #1441 have merged. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on
 2026-11-14), so the D3 trial runs from that checkout; the tracked value stays `[]`. Time-bound: the D3 trial's systemize runs on 2026-11-27,

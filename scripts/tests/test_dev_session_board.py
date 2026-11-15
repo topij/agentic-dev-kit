@@ -269,11 +269,12 @@ def _pr_watch_mark_seen(repo: Repo, checkout: Path, pr: int, **extra: str):
     )
 
 
+@pytest.mark.parametrize("store", ["state", "cockpit-state"])
 def test_a_cockpit_poll_names_the_lane_that_holds_the_prs_watch_state(
-    repo: Repo,
+    repo: Repo, store: str,
 ) -> None:
     _new(repo, "alpha")
-    lane_state = repo.sessions / "alpha" / "state" / "pr-watch"
+    lane_state = repo.sessions / "alpha" / store / "pr-watch"
     lane_state.mkdir(parents=True)
     (lane_state / "41.json").write_text("{}", encoding="utf-8")
     hinted = _pr_watch_mark_seen(repo, repo.root, 41)
