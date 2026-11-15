@@ -117,7 +117,7 @@ def _pin_engine_backend(module: ModuleType) -> None:
     module._gh_graphql_usable = lambda _gh_path: True
 
 
-def _load_pr_watch(*, pin_defaults: bool = True) -> ModuleType:
+def _load_pr_watch(*, pin_defaults: bool = True, use_lane_identity: bool = False) -> ModuleType:
     """Load the engine fresh.
 
     ``pin_defaults=False`` leaves the module bound to whatever
@@ -135,6 +135,10 @@ def _load_pr_watch(*, pin_defaults: bool = True) -> ModuleType:
     if pin_defaults:
         _pin_engine_defaults(module)
     _pin_engine_backend(module)
+    # Receipt fixtures represent a coordinator even when pytest itself runs in
+    # a descriptor worktree. Identity tests supply their own checkout and state.
+    if not use_lane_identity:
+        module._under_lane_descriptor = lambda: False
     return module
 
 
@@ -9160,7 +9164,7 @@ def _poll_via_main(monkeypatch: pytest.MonkeyPatch, pr_watch, state: dict, view:
 def test_descriptor_lanes_cannot_issue_or_reuse_review_receipts(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, identity: str,
 ) -> None:
-    watch = _load_pr_watch()
+    watch = _load_pr_watch(use_lane_identity=True)
     session = tmp_path / "session"
     session.mkdir()
     (session / "launch-descriptor.json").write_text("{}", encoding="utf-8")
