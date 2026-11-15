@@ -218,12 +218,9 @@ def _resolve_state_root(start: Path, repo_root: Path, state_root_env: str | None
 
     ``$DEVKIT_STATE_ROOT`` -> ``.devkit_state_root`` marker -> ``<repo>/state``,
     the same precedence (and the same marker-only-when-the-env-var-is-unset rule)
-    as ``state_paths.resolver.state_root``. Honoring the marker is what keeps
-    ``dev_session.sh pr-watch <scope>`` — which exports the env var — and a bare
-    ``uv run pr_watch.py`` inside a marker-driven headless lane reading the SAME
-    per-PR file: while only the env var was honored, the two used different state,
-    so a ``--mark-seen`` through one path was invisible to the other and the merge
-    gate could re-surface already-acked findings.
+    as ``state_paths.resolver.state_root``. Bare lane polls use their sandbox.
+    The scope-aware cockpit wrappers explicitly select the session's separate
+    cockpit store for their polls, acknowledgements and review receipts.
 
     Inlined rather than importing state_paths on purpose: pr_watch is deliberately
     stdlib-only (``dependencies = []``) for the hot loop. Own-dir state, so no
@@ -285,12 +282,27 @@ def _default_sessions_dir(repo_root: Path) -> Path:
     return primary.parent / "dev-model-sessions"
 
 
+def _under_lane_descriptor() -> bool:
+    """Recognize the issued worktree or its sandbox, including older descriptors.
+
+    The issuer stores the descriptor outside both directories. Its presence
+    suffices for refusal, even after expiry or if its contents are damaged.
+    """
+    return (
+        REPO_ROOT.name == "wt"
+        and os.path.lexists(REPO_ROOT.parent / "launch-descriptor.json")
+    ) or (
+        _STATE_ROOT.name == "state"
+        and os.path.lexists(_STATE_ROOT.parent / "launch-descriptor.json")
+    )
+
+
 def lane_state_hint(pr: int) -> str | None:
     """A warning when this run reads the repo-root store but a lane holds this PR.
 
     A cockpit poll without ``DEVKIT_STATE_ROOT`` and outside any lane marker
-    reads ``<repo>/state``, while a headless lane's receipt, seen-set and settle
-    baseline live in its own sandbox. The report then shows the lane's PR as
+    reads ``<repo>/state``. The cockpit wrapper stores the session's receipt,
+    seen-set and settle baseline under ``cockpit-state/``. The report then shows the lane's PR as
     unreviewed and unsettled, which reads like a lane that claimed work it did
     not do (#563). This names the lane so the caller can poll through
     ``dev_session.sh pr-watch <scope>``. It changes no gate: the report this run
@@ -309,7 +321,8 @@ def lane_state_hint(pr: int) -> str | None:
         scopes = sorted(
             entry.name
             for entry in sessions.iterdir()
-            if (entry / "state" / "pr-watch" / f"{pr}.json").is_file()
+            if any((entry / root / "pr-watch" / f"{pr}.json").is_file()
+                   for root in ("cockpit-state", "state"))
         )
     except OSError:
         return None
@@ -318,7 +331,7 @@ def lane_state_hint(pr: int) -> str | None:
     named = ", ".join(scopes)
     return (
         f"warning: this run reads {_STATE_ROOT}, but lane session(s) {named} under "
-        f"{sessions} hold watch state for PR #{pr}. Their review receipt and settle "
+        f"{sessions} hold watch state for PR #{pr}. The cockpit receipt and settle "
         f"baseline are not visible here; poll with `dev_session.sh pr-watch <scope>`."
     )
 
@@ -4878,6 +4891,8 @@ def record_review(
     a receipt with no comment is the failure this whole argument exists to
     prevent. Do not "fix" the duplicate by persisting the receipt first.
     """
+    if _under_lane_descriptor():
+        raise ValueError("a headless lane cannot record independent review; use the cockpit's dev_session.sh pr-watch")
     require_gh_backend("--record-review")
     source = source.strip()
     if not source:
@@ -7373,7 +7388,7 @@ def main(argv: list[str] | None = None) -> int:
         seen,
         prior_head=state.get("head"),
         prior_max_total=int(state.get("max_total") or 0),
-        review_receipt=state.get("review_receipt"),
+        review_receipt=None if _under_lane_descriptor() else state.get("review_receipt"),
         review_rounds=state.get("review_rounds"),
         check_details=check_details,
         prior_pending_since=read_pending_since(state, view.get("headRefOid")),

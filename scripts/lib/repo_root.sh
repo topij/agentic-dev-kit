@@ -46,6 +46,24 @@ sys.stdout.buffer.write(first[0][len(b"worktree "):])
     printf '%s/dev-model-sessions\n' "$(dirname "$primary")"
 }
 
+# Select the coordinator's per-session watch store before replacing the caller's
+# environment. The engine checkout and inherited state root can independently
+# identify a descriptor launch. A lane may still poll its own sandbox directly.
+devkit_cockpit_watch_root() {
+    local session_dir="$1" checkout="$2" inherited="${DEVKIT_STATE_ROOT:-}"
+    local root="$session_dir/cockpit-state"
+    if [[ ( "$checkout" == */wt && -e "$checkout/../launch-descriptor.json" ) ||
+          ( "$inherited" == */state && -e "${inherited%/state}/launch-descriptor.json" ) ]]; then
+        echo "headless lane cannot use the cockpit watch store; run the scoped wrapper from the cockpit" >&2
+        return 1
+    fi
+    if [[ -L "$root" || -L "$root/pr-watch" || -L "$root/pr-watch/$3.json" ]]; then
+        echo "refusing symlink in cockpit watch store: $root" >&2
+        return 1
+    fi
+    printf '%s\n' "$root"
+}
+
 # Read one scalar from the kit's deliberately simple, hand-authored YAML config.
 # Supports top-level sections, one optional subsection, and scalar values. Keeping
 # this here lets every shell engine share the same config semantics without taking

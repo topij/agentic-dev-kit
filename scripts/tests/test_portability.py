@@ -1337,11 +1337,41 @@ def test_self_merge_refuses_when_identity_read_and_review_poll_disagree_on_head(
     assert f"{repo}|unset|repo view" in calls
     assert f"{repo}|owner/project|pr list" in calls
     assert "pr merge" not in calls
-    assert uv_log.read_text(encoding="utf-8").startswith(f"{session / 'state'}|")
+    assert uv_log.read_text(encoding="utf-8").startswith(f"{session / 'cockpit-state'}|")
+
+
+@pytest.mark.parametrize("origin", ["descriptor-worktree", "descriptor-environment",
+                                    "linked-root", "linked-watch-dir", "linked-pr-file"])
+def test_cockpit_store_refuses_lane_callers_and_redirected_paths(tmp_path: Path, origin: str) -> None:
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "launch-descriptor.json").write_text("{}", encoding="utf-8")
+    checkout = session / "wt" if origin == "descriptor-worktree" else tmp_path / "checkout"
+    checkout.mkdir()
+    sandbox = session / "state"
+    sandbox.mkdir()
+    watch = session / "cockpit-state"
+    if origin == "linked-root":
+        watch.symlink_to(sandbox, target_is_directory=True)
+    elif origin == "linked-watch-dir":
+        watch.mkdir()
+        (watch / "pr-watch").symlink_to(sandbox, target_is_directory=True)
+    elif origin == "linked-pr-file":
+        (watch / "pr-watch").mkdir(parents=True)
+        (watch / "pr-watch" / "9.json").symlink_to(sandbox / "old.json")
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1"; devkit_cockpit_watch_root "$2" "$3" 9', "bash",
+         str(ENGINE_DIR / "lib" / "repo_root.sh"), str(session), str(checkout)],
+        env={**os.environ, "DEVKIT_STATE_ROOT": str(sandbox) if origin == "descriptor-environment" else ""},
+        capture_output=True, text=True,
+    )
+    assert result.returncode != 0
+    assert "cockpit watch store" in result.stderr
+    assert not result.stdout
 
 
 @pytest.mark.evidence
-def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
+def test_scope_pr_watch_and_merge_share_cockpit_state_and_pinned_repo(
     tmp_path: Path,
 ) -> None:
     repo, engine_dir, sessions = _install_real_trunk_repo(tmp_path)
@@ -1398,7 +1428,7 @@ def test_scope_pr_watch_and_merge_share_lane_state_and_pinned_repo(
     assert record.returncode == 0, record.stderr
     assert merge.returncode == 0, merge.stderr
     uv_calls = uv_log.read_text(encoding="utf-8").splitlines()
-    expected_prefix = f"{session / 'state'}|owner/project|"
+    expected_prefix = f"{session / 'cockpit-state'}|owner/project|"
     assert len(uv_calls) == 2
     assert all(line.startswith(expected_prefix) for line in uv_calls)
     assert "--record-review fallback:codex --head reviewed-head" in uv_calls[0]
@@ -1465,7 +1495,7 @@ def test_scope_wrappers_canonicalize_a_relative_session_state_root(tmp_path: Pat
     assert watch.returncode == 0, watch.stderr
     assert merge.returncode == 0, merge.stderr
     roots = [line.split("|", 1)[0] for line in uv_log.read_text().splitlines()]
-    assert roots == [str(session / "state"), str(session / "state")]
+    assert roots == [str(session / "cockpit-state"), str(session / "cockpit-state")]
     assert all(Path(root).is_absolute() for root in roots)
 
 
@@ -3919,7 +3949,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             ),
             "pr-watch": (
                 "conditional",
-                "Required once a pull request carries the wrap-up's repository artifacts, whether the session's own pull request or a separate wrap-up pull request; the wrap-up is not complete until that pull request settles. For an isolated lane, the cockpit must invoke <engine-dir>/dev_session.sh pr-watch <scope> so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
+                "Required once a pull request carries the wrap-up's repository artifacts, whether the session's own pull request or a separate wrap-up pull request; the wrap-up is not complete until that pull request settles. For an isolated lane, the cockpit must invoke <engine-dir>/dev_session.sh pr-watch <scope> so polls, acknowledgements, and the head-bound review receipt share the session’s cockpit store with its merge wrapper; a direct runtime-native watcher does not satisfy this capability. If unavailable or unsettled, leave the pull request unmerged and report review follow-through owed; do not call the wrap-up complete.",
             ),
             "merge-authority": (
                 "conditional and authority-gated",
@@ -4027,7 +4057,7 @@ def _assert_bookend_integration_semantics(name: str, workflow: str) -> None:
             "the cockpit runs `<engine-dir>/dev_session.sh pr-watch <scope>`"
             in flattened
         )
-        assert "keeping the receipt in the lane sandbox" in flattened
+        assert "keeping the receipt in the cockpit store" in flattened
         assert (
             "the cockpit invokes `<engine-dir>/dev_session.sh merge <scope>`"
             in flattened
@@ -4616,7 +4646,7 @@ def test_bookend_integration_semantic_mutations_are_rejected() -> None:
             "If read-back verifies the merge landed, report `incomplete-resumable`", 1
         )),
         ("wrap-up", wrap, wrap.replace(
-            "the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the lane state sandbox with its merge wrapper; a direct runtime-native watcher does not satisfy this capability",
+            "the cockpit must invoke `<engine-dir>/dev_session.sh pr-watch <scope>` so polls, acknowledgements, and the head-bound review receipt share the session’s cockpit store with its merge wrapper; a direct runtime-native watcher does not satisfy this capability",
             "the runtime may invoke a direct watcher outside the lane state sandbox", 1
         )),
         ("wrap-up", wrap, wrap.replace(

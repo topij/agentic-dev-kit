@@ -917,7 +917,7 @@ cmd_print_contract() {
 
 # Resolve exactly one same-repository open PR for a recorded lane branch/base.
 # Prints `<repo-nwo> TAB <pr-number> TAB <listed-head>`; every caller then invokes
-# gh/pr-watch in that same repository and the lane's own state sandbox.
+# gh/pr-watch in that same repository and the cockpit's watch store for this session.
 _resolve_lane_pr() {
     local branch="$1" base="$2"
     local repo_json repo_nwo repo_owner pr_json pr_meta
@@ -993,7 +993,7 @@ print("\t".join(f(row.get(k) or "") for k in ("number", "baseRefName", "headRefN
 
 # Scope-aware front door for the PR watcher. Cockpit review happens outside the
 # lane process, so this wrapper is what keeps its polls, acknowledgments, and
-# head-bound review receipt in the same lane sandbox that cmd_merge re-checks.
+# head-bound review receipt in the cockpit store that cmd_merge re-checks.
 cmd_pr_watch() {
     local scope="${1:-}"
     [[ -n "$scope" ]] || _die "usage: dev_session.sh pr-watch <scope> [pr-watch options]"
@@ -1011,7 +1011,9 @@ cmd_pr_watch() {
     resolved="$(_resolve_lane_pr "$branch" "$base")" || return
     IFS=$'\t' read -r repo_nwo pr listed_head <<< "$resolved"
     [[ -n "$repo_nwo" && -n "$pr" ]] || _die "could not resolve lane PR identity"
-    GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" DEVKIT_ROOT="$REPO_ROOT" \
+    local watch_root
+    watch_root="$(devkit_cockpit_watch_root "$session_dir" "$REPO_ROOT" "$pr")" || return 1
+    GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$watch_root" DEVKIT_ROOT="$REPO_ROOT" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" "$@"
 }
 
@@ -1044,7 +1046,9 @@ cmd_merge() {
     IFS=$'\t' read -r repo_nwo pr listed_head <<< "$resolved"
     [[ -n "$repo_nwo" && -n "$pr" ]] || _die "could not resolve lane PR identity"
 
-    report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$session_dir/state" DEVKIT_ROOT="$REPO_ROOT" \
+    local watch_root
+    watch_root="$(devkit_cockpit_watch_root "$session_dir" "$REPO_ROOT" "$pr")" || return 1
+    report="$(GH_REPO="$repo_nwo" DEVKIT_STATE_ROOT="$watch_root" DEVKIT_ROOT="$REPO_ROOT" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist)" \
         || _die "pr-watch failed for PR #$pr"
     # The gate is `merge_gate` in lib/merge_predicate.py: the report must be
