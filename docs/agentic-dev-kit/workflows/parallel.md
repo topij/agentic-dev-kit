@@ -317,6 +317,20 @@ Codex lane records `usage: null`, because its final-text transport carries no fi
 `terminal.resumes[].usage` ([`parallel-headless.md`](parallel-headless.md),
 *Terminal state and bounded resume*).
 
+`<engine-dir>/lane_usage.py` reads those receipts and ranks lanes by them (`--since
+<date>`, `--rank-by result-tokens|subagent-tokens|cost`, `--json`). Beside the
+runtime's figures it sums the subagent transcripts Claude Code keeps under
+`~/.claude/projects/<project>/<session-id>/subagents/`, found through the session ids
+the receipt records. The two are shown side by side and never added, because whether
+the result object already counts subagent spend is the runtime's definition. Transcript
+figures are tokens only: no price table is kept, and the layout is a harness artifact
+that can change. A lane with no figures from either source is listed with the reason,
+never as zero. Each `--json` lane row also carries flat `tokens`, `cost_usd` and
+`subagent_tokens` for a budget or queue engine to read. Each is None when that source
+has no figures, and also when its sum is only a lower bound: a round of the lane that
+did not report that metric, or, for transcripts, a session, listing, transcript, line
+or token field that could not be read. It only reads; a per-lane budget is not implemented.
+
 ### Joint wrap-up — the cockpit owns the handoff
 
 `<handoff>` and `<friction-log>` are shared *narrative* files: a
