@@ -101,9 +101,12 @@ def test_the_read_cascade_selects_the_newer_copy_in_both_directions(ctx) -> None
     for path in (sandbox_copy, prod_copy):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("{}")
-    os.utime(prod_copy, (1, 1))
+    # Only relative order matters. Keep both fixture mtimes in the past so the
+    # scratch cleanup grace window can expire after the test.
+    os.utime(sandbox_copy, (20, 20))
+    os.utime(prod_copy, (10, 10))
     assert artifacts.state_read_path(settings, logical) == sandbox_copy
-    os.utime(prod_copy, (4_000_000_000, 4_000_000_000))
+    os.utime(prod_copy, (30, 30))
     assert artifacts.state_read_path(settings, logical) == prod_copy
 
 
