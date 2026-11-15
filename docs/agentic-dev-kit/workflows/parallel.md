@@ -463,7 +463,7 @@ it.
 ## Finishing a session
 
 From the cockpit, drive a lane's review loop through the scope-aware wrapper so its
-seen-set and receipt land in the same sandbox the merge gate reads:
+seen-set and receipt land in the session's cockpit store that the merge gate reads:
 
 ```bash
 <engine-dir>/dev_session.sh pr-watch <scope> --json
@@ -475,14 +475,17 @@ The receipt command uses the `head` from the exact poll whose diff was independe
 reviewed and refuses if a push landed before recording.
 
 The wrapper resolves the sessions directory from the repository's primary worktree, so
-when that primary is an ordinary checkout it works the same from the primary checkout,
-a linked cockpit worktree, or inside the lane's own worktree. A repository whose git
-directory lives elsewhere (`--separate-git-dir`, a submodule) resolves it beside the
-invoking checkout instead; set `DEVKIT_SESSIONS_DIR` there. **Poll a lane's PR through this wrapper, not with bare
-`pr_watch.py`.** A bare poll from the cockpit reads the cockpit's `state/`, where the
-lane's receipt and settle baseline are not, so a finished lane's PR reports as
-unreviewed and unsettled. `pr_watch.py` prints a warning naming the lane when it sees
-that case. For a `self` lane, once this
+when that primary is an ordinary checkout it works the same from the primary checkout
+or a linked cockpit worktree. A repository whose git directory lives elsewhere
+(`--separate-git-dir`, a submodule) resolves it beside the invoking checkout instead;
+set `DEVKIT_SESSIONS_DIR` there. **Poll a lane's PR through this wrapper.** The wrapper,
+merge and reconciliation use `<session>/cockpit-state/pr-watch/`. A bare lane poll
+uses `<session>/state/pr-watch/`, and a headless lane cannot record independent review.
+After upgrading, poll and handle findings from the cockpit, then record a fresh
+independent review there. Legacy lane receipts have no coordinator provenance.
+This separation relies on the launch profile. Isolating arbitrary lane code from
+the operator's filesystem and credentials requires separate runtime isolation.
+For a `self` lane, once this
 scope-aware `pr-watch` has converged, merge through the deterministic class gate:
 
 ```bash

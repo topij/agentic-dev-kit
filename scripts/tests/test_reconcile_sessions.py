@@ -25,7 +25,7 @@ against a real git repository with a real remote — so the classification, the
 tally line and the exit code are observed, never reconstructed. Both stubs
 RECORD what they were called with — the `uv` one its argv, `$DEVKIT_STATE_ROOT`
 and `$GH_REPO`; the `gh` one its whole argv — which is what pins the properties
-no output could show: that the probe reads the LANE's state sandbox rather than
+no output could show: that the probe reads the session's cockpit store rather than
 the caller's, that it is aimed at the repository the run already resolved, that
 that repository is resolved once per run, and that it passes `--no-persist` so
 reconciling never mutates a lane's seen-set, pending acknowledgements or receipt.
@@ -647,11 +647,11 @@ def test_an_ordinary_not_held_answer_is_silent(harness: Harness) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_the_probe_reads_the_lanes_own_sandbox_and_passes_no_persist(harness: Harness) -> None:
+def test_the_probe_reads_the_cockpit_store_and_passes_no_persist(harness: Harness) -> None:
     """Two properties of the invocation that no output could show: the state root
     it is handed, and the flags it carries.
 
-    The receipt and seen-set live in the LANE's sandbox, so a probe against the
+    The receipt and seen-set live in the session's cockpit store, so a probe against the
     caller's state root would answer for the wrong lane. And reconciliation is a
     report, so it must pass `--no-persist` — a pending seen-set replaced or
     consumed on the way past would acknowledge comments nobody read. (The settle
@@ -672,7 +672,7 @@ def test_the_probe_reads_the_lanes_own_sandbox_and_passes_no_persist(harness: Ha
     assert result.returncode == 4
     assert len(harness.uv_calls()) == 1
     state_root, _gh_repo, argv = harness.uv_calls()[0]
-    assert os.path.realpath(state_root) == os.path.realpath(session / "state")
+    assert os.path.realpath(state_root) == os.path.realpath(session / "cockpit-state")
     assert os.path.isabs(state_root)
     assert "--no-persist" in argv
     assert "--json" in argv
@@ -724,7 +724,7 @@ def test_a_relative_sessions_dir_still_yields_an_absolute_state_root(
     assert result.returncode == 4
     state_root, _nwo, _argv = harness.uv_calls()[0]
     assert os.path.isabs(state_root), state_root
-    assert os.path.realpath(state_root) == os.path.realpath(session / "state")
+    assert os.path.realpath(state_root) == os.path.realpath(session / "cockpit-state")
 
 
 def test_the_forge_repo_is_resolved_once_per_run_not_once_per_lane(
@@ -1552,7 +1552,7 @@ def test_the_index_matches_on_branch_identity_not_on_position(harness: Harness) 
     only_zzz = harness.run("zzz")
     assert _status_of(only_zzz.stdout, "zzz") == "open"
     assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
-        os.path.realpath(zzz / "state")
+        os.path.realpath(zzz / "cockpit-state")
     ]
 
     # And the operator lane must be probed against ITS OWN sandbox, which is what
@@ -1560,8 +1560,8 @@ def test_the_index_matches_on_branch_identity_not_on_position(harness: Harness) 
     only_aaa = harness.run("aaa")
     assert _status_of(only_aaa.stdout, "aaa") == "held"
     assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
-        os.path.realpath(zzz / "state"),
-        os.path.realpath(aaa / "state"),
+        os.path.realpath(zzz / "cockpit-state"),
+        os.path.realpath(aaa / "cockpit-state"),
     ]
 
 
@@ -1592,8 +1592,8 @@ def test_the_index_matches_on_branch_identity_in_the_other_direction(
     assert _status_of(result.stdout, "zzz") == "held"
     # Each lane is probed once, against its own sandbox (a self lane since #1370).
     assert [os.path.realpath(r) for r, _n, _a in harness.uv_calls()] == [
-        os.path.realpath(aaa / "state"),
-        os.path.realpath(zzz / "state"),
+        os.path.realpath(aaa / "cockpit-state"),
+        os.path.realpath(zzz / "cockpit-state"),
     ]
     assert result.returncode == 3
 

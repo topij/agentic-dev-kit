@@ -961,10 +961,8 @@ def _lane_worktree(tmp_path: Path, *, marker: str | None) -> Path:
 
 def test_marker_sandbox_is_honored_when_env_is_unset(tmp_path: Path) -> None:
     """The headless-lane mechanism: a background agent's Bash calls don't share a
-    shell, so an exported env var doesn't survive — the marker file is all that
-    does. Without this, `dev_session.sh pr-watch <scope>` (env) and a bare
-    `uv run pr_watch.py` (no env) in the same lane read DIFFERENT state files, so
-    a --mark-seen through one is invisible to the other."""
+    shell, so the marker keeps bare polls in the lane's own state root when
+    the descriptor environment is absent."""
     pr_watch = _load_pr_watch()
     sandbox = tmp_path / "sandbox-state"
     wt = _lane_worktree(tmp_path, marker=f"{sandbox}\n")
@@ -9156,6 +9154,32 @@ def _poll_via_main(monkeypatch: pytest.MonkeyPatch, pr_watch, state: dict, view:
     )
     assert pr_watch.main(["9", "--json"]) == 0
     return captured[0]
+
+
+@pytest.mark.parametrize("identity", ["worktree", "sandbox", "cockpit"])
+def test_descriptor_lanes_cannot_issue_or_reuse_review_receipts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, identity: str,
+) -> None:
+    watch = _load_pr_watch()
+    session = tmp_path / "session"
+    session.mkdir()
+    (session / "launch-descriptor.json").write_text("{}", encoding="utf-8")
+    checkout = session / "wt" if identity == "worktree" else tmp_path / "checkout"
+    root = session / ("state" if identity == "sandbox" else "cockpit-state")
+    monkeypatch.setattr(watch, "REPO_ROOT", checkout)
+    monkeypatch.setattr(watch, "_STATE_ROOT", root)
+    if identity == "cockpit":
+        receipt, _ = _record(monkeypatch, watch, lenses="adversarial,correctness")
+    else:
+        with pytest.raises(ValueError, match="headless lane cannot record"):
+            watch.record_review(9, "fallback:panel", "abc123")
+        # Legacy lane stores may still carry an otherwise valid receipt.
+        receipt = _settle_state()["review_receipt"]
+    report = _poll_via_main(
+        monkeypatch, watch, _settle_state(review_receipt=receipt), _green_view(headRefOid="abc123")
+    )
+    assert report["review_evidence"]["valid"] is (identity == "cockpit")
+    assert report["mergeable"] is (identity == "cockpit")
 
 
 def test_a_lost_state_file_cannot_authorize_a_merge(

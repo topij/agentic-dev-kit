@@ -491,7 +491,7 @@ _resolve_repo_nwo() {
 # 2. The persisted base must match the authoritative PR base. A missing base is
 #    incomplete session identity and therefore cannot widen the lane to held.
 #
-# 3. A non-persisting pr_watch poll against the lane's own state sandbox must
+# 3. A non-persisting pr_watch poll against the session's cockpit store must
 #    be merge-ready for this exact PR, base, and head, as lib/merge_predicate.py
 #    defines it. For a self-class lane the same report must also class the PR
 #    as not standard; one whose class is missing, could not be computed, or
@@ -500,15 +500,9 @@ _resolve_repo_nwo() {
 #    their predicates from forge rollups. `--no-persist` keeps this probe
 #    from acknowledging anything: in serialized use, reconciliation preserves a lane's
 #    seen-set, pending acknowledgements, and review receipt. Serialize operations
-#    on the same per-PR state file. A lane's own polls and the cockpit's polls,
-#    acknowledgements and receipts all persist to this same file, whatever the
-#    lane's class, so reconcile a batch once its lanes have stopped and the
-#    cockpit is not polling them: nothing here detects a live writer or locks
-#    the file. The one thing it
-#    may record on gh is the settle baseline — when the probe observed this head's
-#    rollup at its current size — which is a timing fact, computed exactly as
-#    the lane's own poll would, and cannot open the gate before the grace
-#    window has run from the first observation.
+#    on the same cockpit per-PR file. The cockpit watcher, merge wrapper and
+#    reconciler share this store. A lane's own polls use its state/ sandbox.
+#    On gh the probe can record the settle baseline for the cockpit's poll.
 _held_check() {
     local session_dir="$1" branch="$2" pr="$3" base="$4" head_oid="$5"
     local merge_class recorded_base report answer answer_rc
@@ -531,8 +525,10 @@ _held_check() {
     # this check only preserves the helper's fail-closed contract.
     _resolve_repo_nwo
     [[ -n "$REPO_NWO" ]] || return 2
+    local watch_root
+    watch_root="$(devkit_cockpit_watch_root "$session_dir" "$REPO_ROOT" "$pr")" || return 2
     report="$(_bounded_run 60 env \
-        "DEVKIT_STATE_ROOT=$session_dir/state" \
+        "DEVKIT_STATE_ROOT=$watch_root" \
         "DEVKIT_ROOT=$REPO_ROOT" \
         "GH_REPO=$REPO_NWO" \
         uv run "$SCRIPT_DIR/pr_watch.py" "$pr" --json --no-persist 2>/dev/null)" || return 2
