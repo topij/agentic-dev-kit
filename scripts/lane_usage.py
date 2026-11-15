@@ -143,6 +143,10 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
     counted: list[str] = []
     missing: list[str] = []
     invalid: list[str] = []
+    # Rounds that were counted but lack one metric: their sum for that metric is a
+    # lower bound, so it is not published as the lane's figure.
+    without_tokens: list[str] = []
+    without_cost: list[str] = []
     token_rounds = 0
     for name, usage in rounds:
         if not isinstance(usage, dict):
@@ -168,6 +172,10 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
             continue
         counted.append(name)
         token_rounds += bool(valid)
+        if not valid:
+            without_tokens.append(name)
+        if round_cost is None:
+            without_cost.append(name)
         for field, value in valid.items():
             tokens[field] += value
         if round_cost is not None:
@@ -181,6 +189,12 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
         if invalid:
             reason += f"; malformed figures in {', '.join(invalid)}"
         return {"available": False, "reason": reason}
+    # Each metric is complete only when every round of the lane reported it: a
+    # missing or malformed round, or a round that carried only the other metric,
+    # leaves that metric's sum a lower bound.
+    uncounted = missing + invalid
+    tokens_complete = token_rounds > 0 and not uncounted and not without_tokens
+    cost_complete = cost is not None and not uncounted and not without_cost
     result: dict[str, Any] = {
         "available": True,
         # None when the counted rounds reported a cost but no token field: a
@@ -188,6 +202,8 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
         "tokens": tokens if token_rounds else None,
         "total_tokens": sum(tokens.values()) if token_rounds else None,
         "total_cost_usd": cost,
+        "tokens_complete": tokens_complete,
+        "cost_complete": cost_complete,
         "models": sorted(models),
         "rounds_counted": counted,
     }
@@ -195,19 +211,31 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
         result["rounds_without_usage"] = missing
     if invalid:
         result["rounds_with_malformed_usage"] = invalid
+    gaps = []
+    if uncounted:
+        gaps.append(f"round(s) {', '.join(uncounted)} not counted")
+    if token_rounds and without_tokens:
+        gaps.append(f"no token figures in {', '.join(without_tokens)}")
+    if cost is not None and without_cost:
+        gaps.append(f"no cost in {', '.join(without_cost)}")
+    if gaps:
+        result["reason"] = "partial: " + "; ".join(gaps)
     return result
 
 
 # --- subagent-transcript source --------------------------------------------------
 
 
-def _read_records(path: Path) -> list[dict[str, Any]] | None:
-    """Parsed records of a .jsonl transcript, or None when the file cannot be read.
+def _read_records(path: Path) -> tuple[list[dict[str, Any]], int] | None:
+    """Parsed records of a .jsonl transcript and how many lines could not be parsed,
+    or None when the file cannot be read.
 
-    An unparseable line is skipped (a transcript being written can end mid-line);
-    an unreadable file is reported by the caller, not counted as an empty one.
+    An unparseable line (a transcript being written can end mid-line) does not
+    discard the rest, but it is counted: whatever it held is not in the sum, so the
+    caller reports the transcript as partial rather than as complete.
     """
     records: list[dict[str, Any]] = []
+    torn = 0
     try:
         with path.open(encoding="utf-8") as handle:
             for line in handle:
@@ -217,12 +245,15 @@ def _read_records(path: Path) -> list[dict[str, Any]] | None:
                 try:
                     record = json.loads(line)
                 except (ValueError, RecursionError):
+                    torn += 1
                     continue
                 if isinstance(record, dict):
                     records.append(record)
+                else:
+                    torn += 1
     except (OSError, UnicodeDecodeError):
         return None
-    return records
+    return records, torn
 
 
 def summarize_agent(transcript: Path) -> dict[str, Any]:
@@ -233,12 +264,16 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
     response: the record with the largest `output_tokens` stands for it (a
     streamed response's last record carries the final count). A record with
     neither id is counted on its own.
+
+    `gaps` names what the sum leaves out: unparseable lines, and token fields that
+    are present but not a non-negative int. The valid figures are still summed.
     """
-    records = _read_records(transcript)
+    read = _read_records(transcript)
+    records, torn = read if read is not None else ([], 0)
     tokens = _empty_tokens()
     models: set[str] = set()
     responses: dict[object, dict[str, Any]] = {}
-    for index, record in enumerate(records or []):
+    for index, record in enumerate(records):
         message = record.get("message")
         if not isinstance(message, dict):
             continue
@@ -259,15 +294,32 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
             _int(kept.get("output_tokens")) or 0
         ):
             responses[key] = usage
+    malformed = 0
     for usage in responses.values():
+        bad = False
         for field in TOKEN_FIELDS:
-            tokens[field] += _int(usage.get(field)) or 0
+            if field not in usage:
+                continue
+            value = _int(usage[field])
+            if value is None:
+                bad = True
+            else:
+                tokens[field] += value
+        malformed += bad
+    gaps = []
+    if read is None:
+        gaps.append("unreadable")
+    if torn:
+        gaps.append(f"{torn} unparseable line(s)")
+    if malformed:
+        gaps.append(f"{malformed} response(s) with malformed token fields")
     messages = len(responses)
     meta = _read_json(transcript.with_name(f"{transcript.stem}.meta.json"))
     description = meta.get("description") if isinstance(meta, dict) else None
     return {
         "agent_id": transcript.stem,
-        "readable": records is not None,
+        "readable": read is not None,
+        "gaps": gaps,
         "description": description if isinstance(description, str) else None,
         "models": sorted(models),
         "assistant_messages": messages,
@@ -275,25 +327,44 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
     }
 
 
-def _session_dirs(projects_root: Path, session_id: str) -> list[Path]:
-    """Every `<project>/<session_id>` directory under the transcript root.
+def _session_dirs(projects_root: Path, session_id: str) -> tuple[list[Path], list[str]]:
+    """Every `<project>/<session_id>` directory under the transcript root, and what
+    could not be looked at.
 
-    Session ids are UUIDs, so one match is the expected case; a guarded listing
-    keeps a pruned or unreadable root a no-data result rather than a crash.
+    Session ids are UUIDs, so one match is the expected case. A project directory
+    that cannot be checked is named in the second list: the session may be there,
+    so a sum without it is not complete.
     """
     found: list[Path] = []
+    errors: list[str] = []
     try:
-        projects = sorted(p for p in projects_root.iterdir() if p.is_dir())
-    except OSError:
-        return found
-    for project in projects:
+        entries = sorted(projects_root.iterdir())
+    except FileNotFoundError:
+        return found, errors
+    except OSError as exc:
+        return found, [f"cannot list {projects_root}: {exc.strerror or exc}"]
+    for project in entries:
         candidate = project / session_id
         try:
-            if candidate.is_dir():
+            if project.is_dir() and candidate.is_dir():
                 found.append(candidate)
-        except OSError:
-            continue
-    return found
+        except OSError as exc:
+            errors.append(f"cannot check {candidate}: {exc.strerror or exc}")
+    return found, errors
+
+
+def _transcripts(session_dir: Path) -> tuple[list[Path], str | None]:
+    """The `subagents/*.jsonl` files of one session, or the reason they could not be
+    listed. No `subagents/` directory is a session that dispatched nothing.
+    """
+    directory = session_dir / "subagents"
+    try:
+        entries = list(directory.iterdir())
+    except FileNotFoundError:
+        return [], None
+    except OSError as exc:
+        return [], f"cannot list {directory}: {exc.strerror or exc}"
+    return sorted(p for p in entries if p.suffix == ".jsonl"), None
 
 
 def subagent_usage(projects_root: Path, session_ids: list[str]) -> dict[str, Any]:
@@ -302,38 +373,47 @@ def subagent_usage(projects_root: Path, session_ids: list[str]) -> dict[str, Any
         return {"available": False, "reason": "receipt names no Claude session id"}
     agents: list[dict[str, Any]] = []
     located: list[str] = []
+    listing_errors: list[str] = []
     for session_id in session_ids:
-        dirs = _session_dirs(projects_root, session_id)
+        dirs, errors = _session_dirs(projects_root, session_id)
+        listing_errors.extend(errors)
         if dirs:
             located.append(session_id)
         for session_dir in dirs:
-            try:
-                paths = sorted((session_dir / "subagents").glob("*.jsonl"))
-            except OSError:
-                continue
+            paths, error = _transcripts(session_dir)
+            if error:
+                listing_errors.append(error)
             agents.extend(summarize_agent(p) for p in paths)
     if not located:
-        return {
-            "available": False,
-            "reason": f"no transcript directory for the lane's session under {projects_root}",
-        }
+        reason = f"no transcript directory for the lane's session under {projects_root}"
+        if listing_errors:
+            reason += "; " + "; ".join(listing_errors)
+        return {"available": False, "reason": reason}
     tokens = _empty_tokens()
     for agent in agents:
         for field in TOKEN_FIELDS:
             tokens[field] += agent["tokens"][field]
     missing = [sid for sid in session_ids if sid not in located]
-    unreadable = [a["agent_id"] for a in agents if not a["readable"]]
     gaps = []
     if missing:
         gaps.append(f"no transcript directory for session(s) {', '.join(missing)}")
+    gaps.extend(listing_errors)
+    unreadable = [a["agent_id"] for a in agents if not a["readable"]]
     if unreadable:
         gaps.append(f"unreadable transcript(s) {', '.join(unreadable)}")
+    gaps.extend(
+        f"{a['agent_id']}: {gap}"
+        for a in agents
+        if a["readable"]
+        for gap in a["gaps"]
+    )
     result: dict[str, Any] = {
         # A located session with no subagents/ directory is a real zero: the
         # transcript exists and the lane dispatched nothing.
         "available": True,
-        # False when a session or transcript the lane had could not be read: the
-        # totals are then a lower bound, and the flat `subagent_tokens` is None.
+        # False when anything the lane had could not be read in full (a session,
+        # a listing, a transcript, a line or a token field): the totals are then a
+        # lower bound, and the flat `subagent_tokens` is None.
         "complete": not gaps,
         "agent_count": len(agents),
         "tokens": tokens,
@@ -402,12 +482,19 @@ def _with_flat_fields(row: dict[str, Any]) -> dict[str, Any]:
 
     `tokens` and `cost_usd` are the runtime's own figures (the result source);
     `subagent_tokens` is the transcript sum, kept separate for the reason the module
-    docstring gives. Each is None when its source is unavailable, never 0, and
-    `subagent_tokens` is also None when the transcript sum is incomplete.
+    docstring gives. Each is None when its source is unavailable, never 0, and also
+    None when its sum is a lower bound: `tokens` or `cost_usd` when a round of the
+    lane did not report that metric, `subagent_tokens` when the transcript sum is
+    incomplete. Ranking, the text report and `--strict` all read these fields.
     """
     result, subagents = row["result"], row["subagents"]
-    row["tokens"] = result.get("total_tokens") if result.get("available") else None
-    row["cost_usd"] = result.get("total_cost_usd") if result.get("available") else None
+    available = bool(result.get("available"))
+    row["tokens"] = (
+        result.get("total_tokens") if available and result.get("tokens_complete") else None
+    )
+    row["cost_usd"] = (
+        result.get("total_cost_usd") if available and result.get("cost_complete") else None
+    )
     row["subagent_tokens"] = (
         subagents.get("total_tokens")
         if subagents.get("available") and subagents.get("complete")
@@ -526,9 +613,18 @@ def _format_tokens(source: dict[str, Any]) -> str:
     total = source.get("total_tokens")
     if not source.get("available") or total is None:
         return "—"
-    if source.get("complete") is False:
+    if source.get("complete", source.get("tokens_complete")) is False:
         return f">={total:,} part"
     return f"{total:,}"
+
+
+def _format_cost(result: dict[str, Any]) -> str:
+    cost = result.get("total_cost_usd")
+    if not result.get("available") or not isinstance(cost, (int, float)):
+        return "—"
+    if result.get("cost_complete") is False:
+        return f">={cost:.4f}"
+    return f"{cost:.4f}"
 
 
 def render_text(report: dict[str, Any]) -> str:
@@ -541,11 +637,10 @@ def render_text(report: dict[str, Any]) -> str:
         f"{'subagent tok':>14}",
     ]
     for row in report["lanes"]:
-        cost = row["result"].get("total_cost_usd")
         lines.append(
             f"{row['scope'][:28]:<28} {str(row.get('status'))[:10]:<10} "
             f"{str(row.get('model'))[:10]:<10} {_format_tokens(row['result']):>14} "
-            f"{(f'{cost:.4f}' if isinstance(cost, (int, float)) else '—'):>9} "
+            f"{_format_cost(row['result']):>9} "
             f"{_format_tokens(row['subagents']):>14}"
         )
     if not report["lanes"]:

@@ -9,10 +9,15 @@ separately, the subagent transcripts under `--projects-root` (default
 Options: `--since <date>`, `--rank-by result-tokens|subagent-tokens|cost`, `--json`,
 `--strict` (exit 1 when no lane had a complete figure from either source). A bad `--since` or an
 unresolvable sessions directory exits 2. Each `--json` lane row carries flat `tokens`,
-`cost_usd` and `subagent_tokens`, each None when its source has no figures;
-`subagent_tokens` is also None when a session or transcript the lane had could not be
-read (such a partial sum ranks as unavailable and shows as `>=N part`). `tokens` is
-None for a cost-only result. A missing or non-directory `--sessions-dir` exits 2.
+`cost_usd` and `subagent_tokens`, each None when its source has no figures and also
+None when its sum is only a lower bound. For `tokens` and `cost_usd` that means a round
+of the lane (the launch or a resume) did not report that metric; the result object
+says which in `tokens_complete`, `cost_complete` and `reason`. For `subagent_tokens` it
+means a session, a directory listing, a transcript, a line or a token field the lane
+had could not be read; the subagent object carries `complete: false` and `reason`. A
+partial figure ranks as unavailable, does not satisfy `--strict`, and shows in the
+text report as `>=N part` (tokens) or `>=N` (cost). `tokens` is None for a cost-only
+result. A missing or non-directory `--sessions-dir` exits 2.
 
 Nothing to change to keep working: no receipt shape, config key or gate changes. Run
 `init.sh` (or `/upgrade`) to install the engine and its test. The report never adds the

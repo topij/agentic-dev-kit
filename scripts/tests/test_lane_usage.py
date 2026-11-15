@@ -65,11 +65,20 @@ def _lane(
     return path
 
 
-def _subagent(projects: Path, session_id: str, agent: str, messages: list[dict], meta=None):
+def _subagent(
+    projects: Path,
+    session_id: str,
+    agent: str,
+    messages: list[dict],
+    meta=None,
+    *,
+    torn: bool = False,
+):
     directory = projects / "-home-user-repo" / session_id / "subagents"
     directory.mkdir(parents=True, exist_ok=True)
     lines = [json.dumps({"type": "assistant", "message": m}) for m in messages]
-    lines.insert(1, "{not json")  # a torn line must not discard the rest
+    if torn:
+        lines.insert(1, "{not json")
     (directory / f"{agent}.jsonl").write_text("\n".join(lines) + "\n")
     if meta is not None:
         (directory / f"{agent}.meta.json").write_text(json.dumps(meta))
@@ -100,8 +109,50 @@ def test_result_usage_sums_launch_and_resume_rounds_and_names_gaps(tmp_path: Pat
     assert result["rounds_counted"] == ["launch", "resume-1"]
     assert result["rounds_without_usage"] == ["resume-2"]
     assert row["session_ids"] == [SID_A]
+    # A resume round with no figures leaves both sums a lower bound, so neither is
+    # published as the lane's figure.
+    assert (result["tokens_complete"], result["cost_complete"]) == (False, False)
+    assert "resume-2 not counted" in result["reason"]
+    assert (row["tokens"], row["cost_usd"], row["subagent_tokens"]) == (None, None, None)
+
+
+def test_every_round_reporting_gives_complete_totals(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(
+        sessions,
+        "lane-a",
+        usage=_usage(10, 20, 5, cost=0.5),
+        resumes=[{"round": 1, "session_id": SID_A, "usage": _usage(1, 2, cost=0.25)}],
+    )
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    assert (row["result"]["tokens_complete"], row["result"]["cost_complete"]) == (True, True)
+    assert "reason" not in row["result"]
     assert (row["tokens"], row["cost_usd"]) == (38, pytest.approx(0.75))
-    assert row["subagent_tokens"] is None
+
+
+def test_mixed_token_only_and_cost_only_rounds_publish_neither_total(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "mixed", usage=_usage(100, 100), session_id=None,
+          resumes=[{"round": 1, "usage": {"usage": None, "total_cost_usd": 0.5}}])
+    _lane(sessions, "whole", usage=_usage(5, 5, cost=0.1), session_id=None)
+    report = lane_usage.build_report(sessions, projects)
+    rows = {r["scope"]: r for r in report["lanes"]}
+    mixed = rows["mixed"]
+    assert mixed["result"]["total_tokens"] == 200
+    assert mixed["result"]["total_cost_usd"] == 0.5
+    assert (mixed["tokens"], mixed["cost_usd"]) == (None, None)
+    assert "no token figures in resume-1" in mixed["result"]["reason"]
+    assert "no cost in launch" in mixed["result"]["reason"]
+    assert report["lanes_without_usage"] == ["mixed"]
+    # The larger but partial sums do not outrank complete ones, by tokens or cost.
+    assert [r["scope"] for r in report["lanes"]] == ["whole", "mixed"]
+    by_cost = lane_usage.build_report(sessions, projects, rank_by="cost")
+    assert [r["scope"] for r in by_cost["lanes"]] == ["whole", "mixed"]
+    text = lane_usage.render_text(report)
+    assert ">=200 part" in text and ">=0.5000" in text
+    common = ["--sessions-dir", str(sessions), "--projects-root", str(projects)]
+    (sessions / "whole" / "launch-receipt-d1.json").unlink()
+    assert _run(*common, "--strict").returncode == 1
 
 
 def test_a_lane_with_no_usage_is_reported_unavailable_never_zero(tmp_path: Path) -> None:
@@ -147,6 +198,11 @@ def test_subagent_transcripts_are_summed_per_session_and_kept_apart(tmp_path: Pa
     sub = row["subagents"]
     assert row["session_ids"] == [SID_A, SID_B]
     assert sub["available"] is True
+    # The boolean `output_tokens` is not a count: the valid figures are kept, and
+    # the sum is marked partial.
+    assert sub["complete"] is False
+    assert "agent-1: 1 response(s) with malformed token fields" in sub["reason"]
+    assert row["subagent_tokens"] is None
     assert sub["agent_count"] == 2
     assert sub["tokens"] == {
         "input_tokens": 100,
@@ -385,3 +441,72 @@ def test_a_missing_session_alone_ranks_and_renders_as_partial(tmp_path: Path) ->
     # The larger but partial sum does not outrank a complete one.
     assert [r["scope"] for r in report["lanes"]] == ["whole", "partial"]
     assert ">=9,000 part" in lane_usage.render_text(report)
+
+
+def test_a_torn_transcript_line_keeps_the_rest_but_marks_the_sum_partial(
+    tmp_path: Path,
+) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage=None)
+    _subagent(
+        projects,
+        SID_A,
+        "agent-1",
+        [{"usage": {"output_tokens": 4}}, {"usage": {"output_tokens": 6}}],
+        torn=True,
+    )
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    sub = row["subagents"]
+    assert sub["total_tokens"] == 10
+    assert sub["complete"] is False
+    assert "agent-1: 1 unparseable line(s)" in sub["reason"]
+    assert row["subagent_tokens"] is None
+
+
+def test_a_clean_transcript_is_a_complete_sum(tmp_path: Path) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage=None)
+    _subagent(projects, SID_A, "agent-1", [{"usage": {"output_tokens": 4}}])
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    assert row["subagents"]["complete"] is True
+    assert row["subagent_tokens"] == 4
+
+
+def test_a_listing_failure_makes_the_sum_partial(tmp_path: Path, monkeypatch) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage=None)
+    _subagent(projects, SID_A, "agent-1", [{"usage": {"output_tokens": 4}}])
+    real_iterdir = Path.iterdir
+
+    def failing_iterdir(self: Path):
+        if self.name == "subagents":
+            raise PermissionError(13, "Permission denied")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", failing_iterdir)
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    sub = row["subagents"]
+    assert sub["available"] is True and sub["complete"] is False
+    assert "cannot list" in sub["reason"] and "Permission denied" in sub["reason"]
+    assert row["subagent_tokens"] is None
+    assert row["scope"] in lane_usage.build_report(sessions, projects)["lanes_without_usage"]
+
+
+def test_a_project_that_cannot_be_checked_makes_the_sum_partial(
+    tmp_path: Path, monkeypatch
+) -> None:
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane-a", usage=None)
+    _subagent(projects, SID_A, "agent-1", [{"usage": {"output_tokens": 4}}])
+    (projects / "-other").mkdir()
+    real_is_dir = Path.is_dir
+
+    def failing_is_dir(self: Path) -> bool:
+        if self.parent.name == "-other":
+            raise PermissionError(13, "Permission denied")
+        return real_is_dir(self)
+
+    monkeypatch.setattr(Path, "is_dir", failing_is_dir)
+    sub = lane_usage.build_report(sessions, projects)["lanes"][0]["subagents"]
+    assert sub["complete"] is False
+    assert "cannot check" in sub["reason"]
