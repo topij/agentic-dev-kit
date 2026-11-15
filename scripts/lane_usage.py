@@ -45,6 +45,7 @@ import datetime as dt
 import json
 import math
 import os
+import stat
 import subprocess
 import sys
 import uuid
@@ -133,9 +134,13 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
     rounds: list[tuple[str, object]] = [("launch", terminal.get("usage"))]
     resumes = terminal.get("resumes")
     if isinstance(resumes, list):
-        for entry in resumes:
+        for index, entry in enumerate(resumes, 1):
             if isinstance(entry, dict):
-                rounds.append((f"resume-{entry.get('round')}", entry.get("usage")))
+                rounds.append((f"resume-{entry.get('round', index)}", entry.get("usage")))
+            else:
+                rounds.append((f"resume-{index}", None))
+    elif resumes is not None:
+        rounds.append(("resumes", None))
 
     tokens = _empty_tokens()
     cost: float | int | None = None
@@ -226,9 +231,8 @@ def result_usage(terminal: dict[str, Any]) -> dict[str, Any]:
 # --- subagent-transcript source --------------------------------------------------
 
 
-def _read_records(path: Path) -> tuple[list[dict[str, Any]], int] | None:
-    """Parsed records of a .jsonl transcript and how many lines could not be parsed,
-    or None when the file cannot be read.
+def _read_records(path: Path) -> tuple[list[dict[str, Any]], int, bool]:
+    """Return usable records, the malformed line count and whether all bytes were readable.
 
     An unparseable line (a transcript being written can end mid-line) does not
     discard the rest, but it is counted: whatever it held is not in the sum, so the
@@ -236,14 +240,18 @@ def _read_records(path: Path) -> tuple[list[dict[str, Any]], int] | None:
     """
     records: list[dict[str, Any]] = []
     torn = 0
+    readable = True
     try:
-        with path.open(encoding="utf-8") as handle:
+        with path.open("rb") as handle:
             for line in handle:
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    record = json.loads(line)
+                    record = json.loads(line.decode("utf-8"))
+                except UnicodeDecodeError:
+                    readable = False
+                    continue
                 except (ValueError, RecursionError):
                     torn += 1
                     continue
@@ -251,9 +259,9 @@ def _read_records(path: Path) -> tuple[list[dict[str, Any]], int] | None:
                     records.append(record)
                 else:
                     torn += 1
-    except (OSError, UnicodeDecodeError):
-        return None
-    return records, torn
+    except OSError:
+        readable = False
+    return records, torn, readable
 
 
 def summarize_agent(transcript: Path) -> dict[str, Any]:
@@ -268,17 +276,19 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
     `gaps` names what the sum leaves out: unparseable lines, and token fields that
     are present but not a non-negative int. The valid figures are still summed.
     """
-    read = _read_records(transcript)
-    records, torn = read if read is not None else ([], 0)
+    records, torn, readable = _read_records(transcript)
     tokens = _empty_tokens()
     models: set[str] = set()
     responses: dict[object, dict[str, Any]] = {}
+    missing_usage = False
     for index, record in enumerate(records):
-        message = record.get("message")
-        if not isinstance(message, dict):
+        if record.get("type") not in (None, "assistant"):
             continue
-        usage = message.get("usage")
+        message = record.get("message")
+        usage = message.get("usage") if isinstance(message, dict) else None
         if not isinstance(usage, dict):
+            if record.get("type") == "assistant":
+                missing_usage = True
             continue
         model = message.get("model")
         if isinstance(model, str):
@@ -296,7 +306,7 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
             responses[key] = usage
     malformed = 0
     for usage in responses.values():
-        bad = False
+        bad = not any(field in usage for field in TOKEN_FIELDS)
         for field in TOKEN_FIELDS:
             if field not in usage:
                 continue
@@ -307,8 +317,10 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
                 tokens[field] += value
         malformed += bad
     gaps = []
-    if read is None:
+    if not readable:
         gaps.append("unreadable")
+    if missing_usage or not responses:
+        gaps.append("missing assistant usage")
     if torn:
         gaps.append(f"{torn} unparseable line(s)")
     if malformed:
@@ -318,7 +330,7 @@ def summarize_agent(transcript: Path) -> dict[str, Any]:
     description = meta.get("description") if isinstance(meta, dict) else None
     return {
         "agent_id": transcript.stem,
-        "readable": read is not None,
+        "readable": readable,
         "gaps": gaps,
         "description": description if isinstance(description, str) else None,
         "models": sorted(models),
@@ -346,8 +358,10 @@ def _session_dirs(projects_root: Path, session_id: str) -> tuple[list[Path], lis
     for project in entries:
         candidate = project / session_id
         try:
-            if project.is_dir() and candidate.is_dir():
+            if stat.S_ISDIR(candidate.stat().st_mode):
                 found.append(candidate)
+        except (NotADirectoryError, FileNotFoundError):
+            continue
         except OSError as exc:
             errors.append(f"cannot check {candidate}: {exc.strerror or exc}")
     return found, errors
@@ -367,7 +381,9 @@ def _transcripts(session_dir: Path) -> tuple[list[Path], str | None]:
     return sorted(p for p in entries if p.suffix == ".jsonl"), None
 
 
-def subagent_usage(projects_root: Path, session_ids: list[str]) -> dict[str, Any]:
+def subagent_usage(
+    projects_root: Path, session_ids: list[str], *, missing_ids: bool = False
+) -> dict[str, Any]:
     """Sum the subagent transcripts of every session the lane ran under."""
     if not session_ids:
         return {"available": False, "reason": "receipt names no Claude session id"}
@@ -395,6 +411,8 @@ def subagent_usage(projects_root: Path, session_ids: list[str]) -> dict[str, Any
             tokens[field] += agent["tokens"][field]
     missing = [sid for sid in session_ids if sid not in located]
     gaps = []
+    if missing_ids:
+        gaps.append("a lane round has no Claude session id")
     if missing:
         gaps.append(f"no transcript directory for session(s) {', '.join(missing)}")
     gaps.extend(listing_errors)
@@ -468,12 +486,15 @@ def lane_row(receipt_path: Path, projects_root: Path) -> dict[str, Any]:
     if launch_id:
         session_ids.append(launch_id)
     resumes = terminal.get("resumes")
+    missing_ids = launch_id is None or (resumes is not None and not isinstance(resumes, list))
     for entry in resumes if isinstance(resumes, list) else []:
         sid = _canonical_session_id(entry.get("session_id")) if isinstance(entry, dict) else None
         if sid and sid not in session_ids:
             session_ids.append(sid)
+        if sid is None:
+            missing_ids = True
     row["session_ids"] = session_ids
-    row["subagents"] = subagent_usage(projects_root, session_ids)
+    row["subagents"] = subagent_usage(projects_root, session_ids, missing_ids=missing_ids)
     return _with_flat_fields(row)
 
 

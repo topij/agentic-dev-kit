@@ -499,14 +499,50 @@ def test_a_project_that_cannot_be_checked_makes_the_sum_partial(
     _lane(sessions, "lane-a", usage=None)
     _subagent(projects, SID_A, "agent-1", [{"usage": {"output_tokens": 4}}])
     (projects / "-other").mkdir()
-    real_is_dir = Path.is_dir
+    real_stat = Path.stat
 
-    def failing_is_dir(self: Path) -> bool:
+    def failing_stat(self: Path, *args, **kwargs):
         if self.parent.name == "-other":
             raise PermissionError(13, "Permission denied")
-        return real_is_dir(self)
+        return real_stat(self, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "is_dir", failing_is_dir)
+    monkeypatch.setattr(Path, "stat", failing_stat)
     sub = lane_usage.build_report(sessions, projects)["lanes"][0]["subagents"]
     assert sub["complete"] is False
     assert "cannot check" in sub["reason"]
+
+
+@pytest.mark.parametrize("damaged", [
+    b"{torn", b"\xff", b'{"type":"assistant","message":{}}',
+    b'{"message":{"usage":{"input_tokens":-1}}}', b'{"message":{"usage":{}}}',
+])
+def test_damaged_transcript_keeps_usable_records_as_partial(tmp_path, damaged):
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane", usage=None)
+    _subagent(projects, SID_A, "agent", [{"usage": {"output_tokens": 8}}])
+    path = projects / "-home-user-repo" / SID_A / "subagents" / "agent.jsonl"
+    with path.open("ab") as handle:
+        handle.write(damaged + b"\n")
+    run = _run("--sessions-dir", str(sessions), "--projects-root", str(projects), "--strict", "--json")
+    row = json.loads(run.stdout)["lanes"][0]
+    assert run.returncode == 1 and row["subagent_tokens"] is None
+    assert row["subagents"]["total_tokens"] == 8
+    assert "agent" in row["subagents"]["reason"]
+
+
+def test_missing_launch_identity_leaves_known_resume_transcripts_partial(tmp_path):
+    sessions, projects = tmp_path / "sessions", tmp_path / "projects"
+    _lane(sessions, "lane", usage=None, session_id=None,
+          resumes=[{"round": 1, "session_id": SID_B}])
+    _subagent(projects, SID_B, "agent", [{"usage": {"output_tokens": 8}}])
+    row = lane_usage.build_report(sessions, projects)["lanes"][0]
+    assert row["subagent_tokens"] is None and row["subagents"]["total_tokens"] == 8
+    assert "no Claude session id" in row["subagents"]["reason"]
+
+
+@pytest.mark.parametrize("resumes", [[None], "malformed"])
+def test_malformed_resume_metadata_cannot_complete_a_total(resumes):
+    result = lane_usage.result_usage({"usage": _usage(1, 2, cost=0.1), "resumes": resumes})
+    assert result["total_tokens"] == 3
+    assert result["tokens_complete"] is False and result["cost_complete"] is False
+    assert "not counted" in result["reason"]
