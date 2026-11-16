@@ -96,25 +96,89 @@ Also fetch the kit you are upgrading *to*. Never clone to or reuse a shared path
 `/tmp/agentic-dev-kit`: another session's clone, a previous upgrade's, or a skeleton a
 temp-directory reaper left behind can already be there, and a tree you did not clone for
 this task is a kit of unknown revision (`#576`). Clone it into this checkout's own git
-directory instead, under the task branch's name. Run this **kit block**:
+directory instead, under the task branch's name. In the same shell invocation as the
+**kit block**, set `KIT_REF` to your tag, branch or full commit SHA. Set `KIT_REF=''`
+explicitly for the remote default. Repeat the assignment on every retry:
 <!-- systemize:2026-09-22 pattern; PRs #733,#734 -->
 
 ```bash
+: "${KIT_REF?set KIT_REF in this shell to the chosen ref, or explicitly empty for the default branch}"
+# Reject option-shaped refs before invoking Git.
+# A full sha is lower-cased, so the clone and a later run's check compare it alike.
+case "$KIT_REF" in
+  -*) echo "KIT_REF $KIT_REF starts with -: name a tag, a branch or a commit sha" >&2; exit 1 ;;
+  *[!0-9a-fA-F]*) ;;
+  *) { [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ]; } && KIT_REF="$(printf '%s' "$KIT_REF" | tr A-F a-f)" ;;
+esac
 KIT_HOME="$(git -C "${REPO:?REPO is not set — re-run the config check}" rev-parse --absolute-git-dir)" || exit 1
 KIT_TASK="$(git -C "$REPO" symbolic-ref --short HEAD)" || { echo "the kit block needs this task's branch checked out in $REPO" >&2; exit 1; }
 KIT="$KIT_HOME/agentic-dev-kit/$KIT_TASK"
-KIT_URL=https://github.com/topij/agentic-dev-kit
-if [ ! -e "$KIT" ]; then git clone --depth 1 "$KIT_URL" "$KIT" || exit 1; fi
+KIT_URL=https://github.com/topij/agentic-dev-kit   # or your fork's URL
+KIT_FOUND=yes
+if [ ! -e "$KIT" ]; then
+  KIT_FOUND=
+  KIT_STAGE="$KIT.pending"
+  mkdir -p "${KIT%/*}" || exit 1
+  mkdir "$KIT_STAGE" ||
+    { echo "cannot reserve $KIT_STAGE: check for an active or interrupted upgrade before retrying" >&2; exit 1; }
+  # A concurrent run can finish between the existence check and our reservation.
+  [ ! -e "$KIT" ] || { echo "$KIT appeared during setup: inspect $KIT_STAGE and re-run" >&2; exit 1; }
+  git clone --depth 1 "$KIT_URL" "$KIT_STAGE" || exit 1
+  if [ -n "$KIT_REF" ]; then
+    git -C "$KIT_STAGE" fetch --depth 1 origin "$KIT_REF" && git -C "$KIT_STAGE" checkout -q --detach FETCH_HEAD ||
+      { echo "could not check out $KIT_REF from $KIT_URL in $KIT_STAGE: check the ref before retrying" >&2; exit 1; }
+  fi
+  mv "$KIT_STAGE" "$KIT" || exit 1
+fi
 KIT_STATUS="$(git --git-dir="$KIT/.git" --work-tree="$KIT" status --porcelain --untracked-files=all)" &&
   [ -z "$KIT_STATUS" ] &&
   [ "$(git --git-dir="$KIT/.git" config --get remote.origin.url)" = "$KIT_URL" ] ||
   { echo "$KIT is not a clean clone of $KIT_URL: delete it and re-run this block" >&2; exit 1; }
+# A clone this block found rather than made must still be at the ref you named, and
+# checking it must not change it: a full sha is compared with HEAD as written; a tag or
+# branch is read from the remote with `ls-remote`, which writes nothing into the clone
+# (a name resolves as `git fetch` resolves it: as written, then under refs/, refs/tags/
+# and refs/heads/, so a tag before a branch of the same name; an annotated tag by its
+# `^{}` line, the commit it points at).
+if [ -z "$KIT_REF" ]; then KIT_SAID="ref requested: none, the remote's default branch"; else KIT_SAID="ref requested: $KIT_REF"; fi
+if [ -n "$KIT_FOUND" ] && [ -n "$KIT_REF" ]; then
+  case "$KIT_REF" in
+    *[!0-9a-f]*) KIT_WANT= ;;
+    *) KIT_WANT="$KIT_REF"; [ "${#KIT_REF}" -eq 40 ] || [ "${#KIT_REF}" -eq 64 ] || KIT_WANT= ;;
+  esac
+  if [ -z "$KIT_WANT" ]; then
+    KIT_REFS="$(git -C "$KIT" ls-remote origin)" ||
+      { echo "could not read $KIT_URL to check $KIT against $KIT_REF: re-run this block once it can be read" >&2; exit 1; }
+    KIT_WANT="$(printf '%s\n' "$KIT_REFS" | awk -v r="$KIT_REF" '
+      $2 == r "^{}" { p1 = $1 } $2 == r { u1 = $1 }
+      $2 == "refs/" r "^{}" { p2 = $1 } $2 == "refs/" r { u2 = $1 }
+      $2 == "refs/tags/" r "^{}" { p3 = $1 } $2 == "refs/tags/" r { u3 = $1 }
+      $2 == "refs/heads/" r { u4 = $1 }
+      END { print length(p1) ? p1 : length(u1) ? u1 : length(p2) ? p2 : length(u2) ? u2 : length(p3) ? p3 : length(u3) ? u3 : u4 }')"
+    [ -n "$KIT_WANT" ] || { echo "could not resolve $KIT_REF on $KIT_URL: check the ref and re-run this block" >&2; exit 1; }
+  fi
+  [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    { echo "$KIT is not at $KIT_REF ($KIT_WANT): delete $KIT and re-run this block" >&2; exit 1; }
+elif [ -n "$KIT_FOUND" ]; then
+  KIT_REMOTE="$(git -C "$KIT" ls-remote --exit-code origin HEAD)" ||
+    { echo "could not read the default branch of $KIT_URL" >&2; exit 1; }
+  KIT_WANT="$(printf '%s\n' "$KIT_REMOTE" | awk '$2 == "HEAD" {print $1}')"
+  [ "$KIT_WANT" = "$(git -C "$KIT" rev-parse HEAD)" ] ||
+    { echo "$KIT is not at the remote default ($KIT_WANT): inspect the clone and repeat Step 0" >&2; exit 1; }
+fi
 echo "KIT=$KIT at $(git --git-dir="$KIT/.git" log -1 --format='%h %cs')"
+echo "kit commit: $(git --git-dir="$KIT/.git" rev-parse HEAD)   ($KIT_SAID)"
 ```
 
-An upgrade reads the tip of the remote's default branch only (the kit's is `main`):
-unlike `adopt.md`'s kit block, this one takes no ref, and pinning an upgrade to a tag or
-sha is tracked in #1445.
+Write down the full SHA on the `kit commit:` line. Tags and branches can move.
+Use that exact SHA through the upgrade and include it in the upgrade PR or direct commit.
+If a failed checkout leaves a `.pending` directory, inspect it after the attempt ends
+before removing it and retrying. A reused clone must match the selected ref, including
+the remote default when requested.
+
+Both profiles run the candidate's own doctor. Use a ref whose doctor accepts
+`--check-upgrade`. An older candidate reports an unrecognized argument. Stop there
+and select a supporting ref before following any instructions from the older clone.
 
 The path depends only on the checkout the block runs in and the branch checked out there,
 which here is the task worktree and its task branch, so the block is safe to re-run from
@@ -188,6 +252,21 @@ engine reached by an absolute path finds its own repo root wherever you invoke i
 which is why it takes `"$REPO"` above rather than `.`.
 
 ## Step 1 — Diff the installation (read-only)
+
+Set `UPGRADE_COMMIT` to the full SHA you wrote down in Step 0 in each shell that
+runs the preflight. Use the recorded value even when resuming. Run this before
+refreshing any engine or switching to the fetched workflow:
+
+```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}"/scripts/kit_doctor.py --root "${REPO:?REPO is not set — re-run Step 0}" --check-upgrade "${UPGRADE_COMMIT:?set UPGRADE_COMMIT to the full SHA recorded in Step 0}" || exit 1
+```
+
+The candidate must match that SHA and contain the installed commit from the adopter's
+committed `kit-manifest.json`. When shallow history prevents proof, the doctor fetches
+the candidate's history into the kit clone. A fetch failure names what blocked the
+comparison. On refusal, ordinary drift and changelog reports remain available for
+diagnosis. Stop all upgrade writes until the installed revision is established and
+this preflight succeeds.
 
 ```bash
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --manifest "${KIT:?KIT is not set — re-run the kit block in Step 0}/kit-manifest.json"
@@ -333,8 +412,7 @@ Without a trusted one — **including an existing `kit-manifest.json` that has n
 by tracks the *config schema*, not file contents, so it was wrong for every kit change
 that did not bump the schema (kit `#51`). Confirm with an actual diff in Step 3.
 
-A `baseline: none recorded` line here is expected on a first upgrade and is not an error;
-Step 4 writes the baseline. Do **not** run `--record-install` at this point — it writes a
+A `baseline: none recorded` line permits diagnosis only. Establish the installed revision before upgrading. Do **not** run `--record-install` at this point — it writes a
 file, and everything before Step 2 must stay read-only.
 
 ### Then read what the new files will *do* differently
@@ -517,9 +595,7 @@ There is no range to compute, so:
   block with its `BASELINE=` line replaced the same way, by
   `git -C "${KIT:?KIT is not set — re-run the kit block in Step 0}" rev-list -1 --before=<date> HEAD`. If that prints nothing, the date is
   older than the kit's first commit: use the root commit as in the bullet above.
-- Either way, **Step 4's `--record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}"` is what stops the next
-  upgrade paying this** — the same step, and the same `kit_commit` key, that the `STALE`
-  / `LOCALLY EDITED` split above already depends on.
+- These reads diagnose the install. Establish and commit its actual installed revision before retrying the preflight.
 
 A baseline **older than the changelog itself** also finds nothing, and that is not a fault
 either: the file records nothing before the PR it starts at, and says so in its own
@@ -544,6 +620,7 @@ Take the fetched kit's copy first:
 
 ```bash
 cd "${REPO:?REPO is not set — re-run Step 0}" || exit 1   # every write below lands here, not in $KIT
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}"/scripts/kit_doctor.py --root "${REPO:?REPO is not set — re-run Step 0}" --check-upgrade "${UPGRADE_COMMIT:?set UPGRADE_COMMIT to the full SHA recorded in Step 0}" || exit 1
 # Collect the permitted copies without changing the destination.
 set --
 _partial=0
@@ -1057,6 +1134,7 @@ new session, so file reconciliation alone is not evidence the runtime loaded it.
 `differs` unjudgeable for every adopter until now:**
 
 ```bash
+uv run "${KIT:?KIT is not set — re-run the kit block in Step 0}"/scripts/kit_doctor.py --root "${REPO:?REPO is not set — re-run Step 0}" --check-upgrade "${UPGRADE_COMMIT:?set UPGRADE_COMMIT to the full SHA recorded in Step 0}" || exit 1
 uv run "${REPO:?REPO is not set — re-run Step 0}"/<engine-dir>/kit_doctor.py --record-install --from-kit "${KIT:?KIT is not set — re-run the kit block in Step 0}"
 ```
 
@@ -1243,8 +1321,7 @@ checked out there. On a repository with a protected branch that is normally the 
 checkout on `<protected-branch>`, not the task worktree selected below, so removing
 that worktree leaves the clone in place: U6 deletes it by its path. Run every command below from it,
 never from another clone. `--upgrade-lite` refuses a clone that is not clean, and U2's
-read refuses one that is not at its origin's HEAD (#1405): when it does, delete the
-clone and run the kit block again, from this same checkout.
+read checks the full SHA from the `kit commit:` line. Write it down with the clone path.
 
 Then read the configuration of the repository exactly as *Read the configuration* in
 the kit's `docs/agentic-dev-kit/lite/lite-wrap-up.md` says, every copy included
@@ -1285,8 +1362,13 @@ branch.
 ### U2 — Read the upgrade (read-only)
 
 ```bash
-uv run <kit>/scripts/kit_doctor.py --upgrade-lite --root <root> --branch <branch>
+uv run <kit>/scripts/kit_doctor.py --upgrade-lite --root <root> --branch <branch> --check-upgrade <sha>
 ```
+
+Use the full SHA U1 selected. U2 checks the committed install's ancestry before
+offering copies. An older, unrelated or unresolvable candidate stops the upgrade.
+A baseline with unknown provenance permits diagnosis only. Every mode, including
+direct U4 apply, can fetch missing history into the clone to establish ancestry.
 
 It writes nothing to the repository. To read the changelog it deepens a `--depth 1`
 kit clone, which writes only into the clone's git directory. It exits 1 with a
@@ -1414,7 +1496,7 @@ Done when the command exited 0.
 
 ### U5 — Check before the commit
 
-Run U2's command again with `--kit-commit <sha>`, the commit U4 applied, added to it. It
+Run U2's command again, replacing `--check-upgrade <sha>` with `--kit-commit <sha>` for the commit U4 applied. It
 pins that commit in place of U2's freshness check, so a kit origin that moved since U4
 is named in a `note:` rather than refused. It repeats the write-target check on the
 checkout U6 commits in, and must exit 0 and print

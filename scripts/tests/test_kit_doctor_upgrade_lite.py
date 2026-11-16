@@ -631,7 +631,11 @@ def test_a_baseline_with_no_provenance_is_named_and_owes_the_record(
 ) -> None:
     repo, env = _install(tmp_path, kit_upstream, record_commit=False)
     done = _read(kit, repo, env, json_out=False)
-    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "apply (U4)" not in done.stdout
+    before = _snapshot(repo)
+    assert _apply(kit, repo, env).returncode == 1
+    assert _snapshot(repo) == before
     assert "baseline (committed): recorded, install provenance unknown" in done.stdout
     assert "record: owed" in done.stdout
 
@@ -1292,6 +1296,107 @@ def test_a_stale_clone_is_refused_naming_both_commits(tmp_path: Path, kit_upstre
     assert other.returncode == 1 and "not --kit-commit" in other.stdout
 
 
+@pytest.mark.parametrize("relationship", ["older", "diverged", "missing", "shallow-offline"])
+def test_upgrade_history_refusals_cover_all_entry_points(
+    tmp_path: Path, kit_upstream: dict, relationship: str
+) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    kit = tmp_path / "candidate"
+    options = ["--depth=1"] if relationship == "shallow-offline" else []
+    _git(tmp_path, env, "clone", *options, kit_upstream["bare"].as_uri(), str(kit))
+    installed = kit_upstream["head"]
+    if relationship == "older":
+        _git(kit, env, "checkout", "--detach", kit_upstream["old_commit"])
+    elif relationship == "diverged":
+        _git(kit, env, "checkout", "--detach", kit_upstream["old_commit"])
+        _git(kit, env, "commit", "--allow-empty", "-m", "side branch")
+    elif relationship == "missing":
+        installed = "a" * 40
+    else:
+        installed = kit_upstream["old_commit"]
+        _git(kit, env, "remote", "set-url", "origin", str(tmp_path / "unreachable"))
+
+    manifest = repo / "kit-manifest.json"
+    baseline = json.loads(manifest.read_text())
+    baseline["kit_commit"] = installed
+    manifest.write_text(json.dumps(baseline))
+    _git(repo, env, "commit", "--allow-empty", "-am", "installed revision")
+    head = _git(kit, env, "rev-parse", "HEAD")
+    # Neither a staged nor a working record left by another attempt can authorize this checkout.
+    baseline["kit_commit"] = head
+    manifest.write_text(json.dumps(baseline))
+    _git(repo, env, "add", "kit-manifest.json")
+    before = _snapshot(repo)
+    lite = ["--upgrade-lite", "--branch", "main"]
+    for args in (["--check-upgrade", head], [*lite, "--check-upgrade", head, "--json"],
+                 [*lite, "--apply", "--kit-commit", head], [*lite, "--kit-commit", head]):
+        result = _doctor(kit, env, "--root", str(repo), *args)
+        output = result.stdout + result.stderr
+        assert result.returncode == 1 and installed in output and head in output, output
+        if relationship == "shallow-offline":
+            assert "cannot deepen" in output and "unreachable" in output
+        assert "apply (U4)" not in output and '"apply"' not in output
+        assert _snapshot(repo) == before
+
+
+def test_selected_commit_is_checked_again_on_resume(tmp_path: Path, kit_upstream: dict, kit: Path) -> None:
+    repo, env = _install(tmp_path, kit_upstream)
+    selected = kit_upstream["head"]
+    args = ["--root", str(repo), "--check-upgrade", selected]
+    assert _doctor(kit, env, *args).returncode == 0
+    assert _doctor(kit, env, *args, "--upgrade-lite", "--branch", "main").returncode == 0
+    _git(kit, env, "checkout", "--detach", kit_upstream["old_commit"])
+    result = _doctor(kit, env, *args)
+    assert result.returncode == 1 and selected in result.stderr
+
+
+@pytest.mark.parametrize("candidate", ["changed", "downgrade", "old-engine"])
+def test_full_workflow_rechecks_the_selected_clone_before_copying(
+    tmp_path: Path, kit_upstream: dict, kit: Path, candidate: str
+) -> None:
+    import re
+
+    repo, env = _install(tmp_path, kit_upstream)
+    # Run the documented shell, using pytest's Python for the candidate doctor.
+    bins = tmp_path / "runner"
+    bins.mkdir()
+    uv = bins / "uv"
+    uv.write_text('#!/bin/sh\n[ "$1" = run ] || exit 2\nshift\nexec "$TEST_PYTHON" "$@"\n')
+    uv.chmod(0o755)
+    env.update(PATH=f"{bins}{os.pathsep}{env['PATH']}", TEST_PYTHON=sys.executable,
+               KIT=str(kit), REPO=str(repo), UPGRADE_COMMIT=kit_upstream["head"])
+    env.pop("KIT_REF", None)
+    doc = UPGRADE.read_text()
+    step1 = doc.split("## Step 1 —", 1)[1]
+    preflight = re.search(r"```bash\n(.*?)```", step1, re.DOTALL)[1]
+    refresh = next(b for b in re.findall(r"```bash\n(.*?)```", doc, re.DOTALL)
+                   if "not_installed" in b and "--no-clobber" in b)
+    assert subprocess.run(["sh", "-c", preflight], env=env).returncode == 0
+    if candidate == "old-engine":
+        (kit / "scripts/kit_doctor.py").write_text(
+            'import argparse\np = argparse.ArgumentParser()\np.add_argument("--root")\np.parse_args()\n'
+        )
+        _git(kit, env, "commit", "-am", "fixture engine without upgrade preflight")
+        env["UPGRADE_COMMIT"] = _git(kit, env, "rev-parse", "HEAD")
+    else:
+        _git(kit, env, "checkout", "--detach", kit_upstream["old_commit"])
+        if candidate == "downgrade":
+            manifest = repo / "kit-manifest.json"
+            record = json.loads(manifest.read_text())
+            record["kit_commit"] = kit_upstream["head"]
+            manifest.write_text(json.dumps(record))
+            _git(repo, env, "commit", "-am", "newer installed revision")
+            env["UPGRADE_COMMIT"] = kit_upstream["old_commit"]
+    before = _snapshot(repo)
+    for block in (preflight, refresh):
+        result = subprocess.run(["sh", "-c", block], env=env, text=True, capture_output=True)
+        assert result.returncode != 0, result.stdout + result.stderr
+        expected = {"old-engine": "unrecognized arguments", "changed": "differs from the selected commit",
+                    "downgrade": "does not contain the installed revision"}
+        assert expected[candidate] in result.stderr, result.stderr
+        assert before == _snapshot(repo)
+
+
 @pytest.mark.parametrize("mode", ["read", "apply"])
 def test_inherited_git_location_variables_do_not_redirect_the_operation(
     tmp_path: Path, kit_upstream: dict, kit: Path, mode: str
@@ -1398,7 +1503,11 @@ def test_the_changelog_of_a_baseline_with_no_provenance_starts_at_the_lite_profi
     tmp_path: Path, kit_upstream: dict, kit: Path
 ) -> None:
     repo, env = _install(tmp_path, kit_upstream, record_commit=False)
-    changelog = _plan(kit, repo, env)["changelog"]
+    done = _read(kit, repo, env)
+    assert done.returncode == 1
+    report = json.loads(done.stdout)
+    assert report["apply"] is None
+    changelog = report["changelog"]
     assert changelog["bound"] == "lite-profile" and changelog["base"] == kit_upstream["old_commit"]
     assert [e["path"] for e in changelog["entries"]] == [FRAGMENT]
     assert any("names no kit commit" in w for w in changelog["warnings"])

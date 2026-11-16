@@ -349,8 +349,7 @@ in the primary checkout. Step 2a gives the cockpit its own per-session watch sto
 acceptance evidence belongs with the remedy before the operator resumes self-merge.
 Steps 3a, 2e and 2d ran as headless lanes on 2026-11-13, and the operator merged each on 2026-11-14 after its
 review rounds: #1440 (3a, `e4a4bd1`), #1441 (2e, `e094cc0`) and #1443 (2d, `52c4cbe`). The operator split #1443:
-adopt installs a named kit ref, upgrades still read the tip of the kit's default branch, upgrade pinning is #1445,
-and #1448 holds the adopt pin's remaining gaps. #1370, #1371 and #345 are still open after those merges. The operator decided the plan's
+#1443 covered adoption, #1463 addressed its remaining pinning gaps, and #1445 took upgrade pinning. #1370, #1371 and #345 are still open after those merges. The operator decided the plan's
 D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
 `--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
 reading them. The hold is prose and binds only a session that reads this entry or the plan: the kit's

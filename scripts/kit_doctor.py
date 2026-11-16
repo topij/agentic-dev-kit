@@ -4571,11 +4571,12 @@ def _lite_target(root: Path, branch: str) -> tuple[str, dict[str, list[str]]]:
     return current, protected
 
 
-def _lite_kit(kit: Path, kit_commit: str | None) -> tuple[str, str | None, list[str]]:
+def _upgrade_kit(kit: Path, kit_commit: str | None, selected: str | None = None) -> tuple[str, str | None, list[str]]:
     """The kit check: a clean clone, and either current with its origin (#1405) or
     at the commit the operator approved, `--kit-commit` (#1410).
 
-    Without `--kit-commit` (U2's read) it refuses a clone whose HEAD is not its
+    A selected SHA binds the preflight to the commit Step 0 resolved. Without
+    either SHA (the default U2 read) it refuses a clone whose HEAD is not its
     origin's: a clone left by an upgrade that stopped early would otherwise read
     every file `unchanged` and conclude there is nothing to do. With it (U4's
     apply, U5's read) it pins that commit instead. An origin that moved after U3
@@ -4596,6 +4597,14 @@ def _lite_kit(kit: Path, kit_commit: str | None) -> tuple[str, str | None, list[
     words = remote.stdout.split() if remote.returncode == 0 else []
     upstream = words[0] if words else None
     notes: list[str] = []
+    if selected is not None:
+        if head != selected.lower():
+            raise LiteUpgradeStop(
+                f"kit HEAD {head} differs from the selected commit {selected}; repeat Step 0"
+            )
+        if upstream is None:
+            notes.append(f"note: cannot read the HEAD of {kit}'s origin; using selected commit {head}")
+        return head, upstream, notes
     if kit_commit is None:
         if upstream is None:
             raise LiteUpgradeStop(
@@ -4627,7 +4636,7 @@ def _lite_kit(kit: Path, kit_commit: str | None) -> tuple[str, str | None, list[
     return head, upstream, notes
 
 
-def _lite_committed_baseline(root: Path) -> dict | None:
+def _committed_install_baseline(root: Path) -> dict | None:
     """The baseline at HEAD, never the working tree's, or None when none is committed.
 
     The working tree's can be a record an abandoned attempt left, or one that
@@ -4642,6 +4651,37 @@ def _lite_committed_baseline(root: Path) -> dict | None:
     except json.JSONDecodeError:
         return None
     return parsed if _was_written_by_record_install(parsed) else None
+
+
+def _check_upgrade_history(kit: Path, head: str, installed: object) -> None:
+    """Prove the committed install is in the actual candidate's history before offering any writes."""
+    if not isinstance(installed, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", installed):
+        raise LiteUpgradeStop(
+            f"cannot compare kit HEAD {head}: establish the installed revision in the committed "
+            "install baseline before upgrading"
+        )
+    if installed == head:
+        return
+
+    comparison = f"installed kit {installed} to candidate {head}"
+    relation = _git_run(kit, "merge-base", "--is-ancestor", installed, head)
+    if relation.returncode == 0:
+        return
+    shallow = _git_run(kit, "rev-parse", "--is-shallow-repository")
+    if shallow.returncode or shallow.stdout.strip() not in ("true", "false"):
+        raise LiteUpgradeStop(f"cannot inspect clone history for {comparison}: {shallow.stderr.strip()}")
+    if shallow.stdout.strip() == "true":
+        # Fetch this HEAD's ancestry. A detached tag or branch can be outside
+        # the single default-branch refspec that a shallow clone starts with.
+        fetch = _git_run(kit, "fetch", "--unshallow", "origin", head, timeout=600)
+        if fetch.returncode:
+            raise LiteUpgradeStop(f"cannot deepen kit clone for {comparison}: {fetch.stderr.strip()}")
+        relation = _git_run(kit, "merge-base", "--is-ancestor", installed, head)
+        if relation.returncode == 0:
+            return
+    if relation.returncode == 1:
+        raise LiteUpgradeStop(f"refusing {comparison}: candidate does not contain the installed revision")
+    raise LiteUpgradeStop(f"cannot establish ancestry for {comparison}: {relation.stderr.strip()}")
 
 
 def _lite_paths(config: dict) -> dict[str, str]:
@@ -5149,6 +5189,7 @@ def upgrade_lite(
     *,
     apply: bool = False,
     kit_commit: str | None = None,
+    selected: str | None = None,
     take: tuple[str, ...] = (),
     keep: tuple[str, ...] = (),
     leave: tuple[str, ...] = (),
@@ -5167,7 +5208,7 @@ def upgrade_lite(
         print(line, file=out)
 
     try:
-        return _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say)
+        return _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say, selected)
     except LiteUpgradeUsage as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
@@ -5177,7 +5218,7 @@ def upgrade_lite(
         return 1
 
 
-def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say) -> int:
+def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, kit, say, selected) -> int:
     # Flags first: a path that is not a lite file is refused before anything is
     # read, so a near miss (`./docs/...`, a typo) can never be silently skipped
     # and later recorded as declined.
@@ -5199,7 +5240,7 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
     current, protected = _lite_target(root, branch)
     # Read mode pins too when given `--kit-commit`: U5 re-reads after U4 against the
     # commit U4 applied, which an origin that moved since must not refuse.
-    head, upstream, notes = _lite_kit(kit, kit_commit)
+    head, upstream, notes = _upgrade_kit(kit, kit_commit, selected)
     config = _lite_load_config(root)
     try:
         kit_manifest = json.loads((kit / MANIFEST_NAME).read_text(encoding="utf-8"))
@@ -5211,7 +5252,7 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
     stops: list[str] = []
     if schema := _lite_schema_stop(config, kit_manifest):
         stops.append(schema)
-    baseline = _lite_committed_baseline(root)
+    baseline = _committed_install_baseline(root)
     if baseline is None:
         # Never recorded here, and not by adopt.md L4 from this kit either: L4
         # would record the older files under the newer kit's commit (#1320).
@@ -5220,6 +5261,10 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
             "never recorded — stop and ask the operator; do not run adopt.md L4 from this kit"
         )
     baseline_commit = baseline.get("kit_commit") if isinstance(baseline.get("kit_commit"), str) else None
+    if baseline.get("kit_commit") is None and not apply:
+        stops.append("establish the installed revision in the committed install baseline before upgrading")
+    else:
+        _check_upgrade_history(kit, head, baseline.get("kit_commit"))
     try:
         report = inspect(root, kit_manifest, config, baseline)
     except OSError as exc:
@@ -5309,11 +5354,15 @@ def _upgrade_lite(root, branch, apply, kit_commit, take, keep, leave, as_json, k
             "changelog": changelog,
             "verify": {"ran": verify_record is not None, "lines": verify_lines},
             "stops": stops,
-            "apply": apply_command,
+            "apply": None if stops else apply_command,
         }, indent=1))
         return 1 if stops else 0
 
-    if kit_commit is None:
+    if selected is not None:
+        say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone at the selected commit")
+        for note in notes:
+            say(f"  {note}")
+    elif kit_commit is None:
         say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone, current with its origin")
     else:
         say(f"kit: {kit} at {head[:12]} ({date}) — a clean clone at --kit-commit")
@@ -5660,6 +5709,10 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="kit checkout whose current renderer and adapter descriptions define expected bytes",
     )
+    parser.add_argument(
+        "--check-upgrade", metavar="SHA",
+        help="check this clone's HEAD against the selected full SHA and the committed install baseline",
+    )
     parser.add_argument("--root", type=Path, default=None, help="repo root (default: discovered)")
     parser.add_argument(
         "--manifest", type=Path, default=None, help="manifest to COMPARE against (the kit's)"
@@ -5683,6 +5736,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         if present
     ]
+    if args.check_upgrade is not None and not args.upgrade_lite:
+        if any(value for key, value in vars(args).items() if key not in ("check_upgrade", "root")):
+            parser.error("standalone --check-upgrade takes only --root and the selected SHA")
+        if args.root is None or not args.root.is_absolute():
+            parser.error("--check-upgrade requires an absolute --root")
+        try:
+            root = args.root.resolve()
+            top = _git_run(root, "rev-parse", "--show-toplevel")
+            if top.returncode or Path(top.stdout.strip()).resolve() != root:
+                raise LiteUpgradeStop(f"--root must name the top of the adopter checkout: {root}")
+            head, _, notes = _upgrade_kit(KIT_ROOT, None, args.check_upgrade)
+            baseline = _committed_install_baseline(root)
+            _check_upgrade_history(KIT_ROOT, head, baseline.get("kit_commit") if baseline else None)
+        except LiteUpgradeStop as exc:
+            print(f"refused: {exc}", file=sys.stderr)
+            return 1
+        for note in notes:
+            print(note)
+        print(f"upgrade checked at {head}")
+        return 0
     if args.verify_lite:
         incompatible = [
             option
@@ -5737,6 +5810,8 @@ def main(argv: list[str] | None = None) -> int:
         decisions = bool(args.take or args.keep or args.leave_absent)
         if decisions and not args.apply:
             parser.error("--take, --keep and --leave-absent require --apply")
+        if args.check_upgrade is not None and (args.apply or args.kit_commit is not None):
+            parser.error("--check-upgrade selects the U2 read; use --kit-commit for U4/U5")
         if args.apply and args.kit_commit is None:
             parser.error("--apply requires --kit-commit, the kit commit the read mode printed")
         if args.apply and args.json:
@@ -5746,6 +5821,7 @@ def main(argv: list[str] | None = None) -> int:
             args.branch,
             apply=args.apply,
             kit_commit=args.kit_commit,
+            selected=args.check_upgrade,
             take=tuple(args.take),
             keep=tuple(args.keep),
             leave=tuple(args.leave_absent),
