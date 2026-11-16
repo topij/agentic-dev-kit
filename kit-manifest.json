@@ -104,7 +104,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "87eff4299ba0210eb82f6b04bad4b9f93c0c14491e71eae6397c699837469e4b"
+      "sha256": "fb37ecf0be9f7f4db6f160a2d063795376cfce96aed65555458b59485405692a"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -167,7 +167,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "6855321f93d26da1d2371444359cbf82a65d5a07420561ca378ab2322ed20a63"
+      "sha256": "4cfc5c79408a39588a1f3b457e76f568faa56ecc5f2fb8592bafb057fa6260f5"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -258,7 +258,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "ebe3c70198df4fb8b17fde67cc895d2b2fae300a0bc6496e6e04c4258803d743"
+      "sha256": "323467ecbf6f2a11d030833024e81e53889bc0501bddaea5016a36291cea4768"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -780,7 +780,7 @@
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
-      "sha256": "aa71992b3f27d2079719241c5d285cae31d7d8b953b3fdab69157c636a60675e"
+      "sha256": "d3e1203ba0766b8ddabb35e47188ec5258f61e6c52b7cfe959544dc098b58035"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
@@ -788,7 +788,7 @@
     },
     "scripts/tests/test_kit_doctor_upgrade_lite.py": {
       "role": "repo-only",
-      "sha256": "90e17a5f3f0852812f308c9d3a52a984768847ce19af5e91aaa3adb271254546"
+      "sha256": "ea975ae27365a23ae1455141a05b96067bfc22a6631e53cb63fef260899e9da4"
     },
     "scripts/tests/test_kit_repo_only.py": {
       "role": "test",
@@ -832,7 +832,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "90d0d4f11c5083314bfae4673594e3f818e4d89a143de7a086077023dd78ff7a"
+      "sha256": "0368e489896f2de78347474deb36a545f9ffd9614f26be822dfbec8dc577d5bc"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",

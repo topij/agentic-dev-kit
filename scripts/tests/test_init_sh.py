@@ -5485,7 +5485,7 @@ def _fake_kit_templates(tmp_path: Path) -> Path:
 
 
 def _run_template_copy(
-    repo: Path, src: Path, *, cwd: Path | None = None, check: bool = True
+    repo: Path, src: Path, *, cwd: Path | None = None, check: bool = True, preflight_status: int = 0
 ) -> subprocess.CompletedProcess[str]:
     """Run the extracted block with `$KIT`/`$REPO` bound as Step 0 binds them.
 
@@ -5508,15 +5508,36 @@ def _run_template_copy(
         "the init.sh invocation was not found in the extracted block, so the "
         "stub did not apply and the gate/installer interaction is untested"
     )
+    # These template fixtures isolate the copy logic. Exercise its actual doctor
+    # invocation and short circuit independently of the Git ancestry fixtures.
+    doctor = (
+        'uv() { [ "$1" = run ] && [ "$2" = "$KIT/scripts/kit_doctor.py" ] && '
+        '[ "$3" = --root ] && [ "$4" = "$REPO" ] && [ "$5" = --check-upgrade ] && '
+        '[ "$6" = "$UPGRADE_COMMIT" ] || return 2; return "$PREFLIGHT_STATUS"; }\n'
+    )
     return subprocess.run(
-        ["sh", "-c", stubbed],
+        ["sh", "-c", doctor + stubbed],
         cwd=cwd or repo,
         capture_output=True,
         text=True,
         stdin=subprocess.DEVNULL,
         check=check,
-        env={**os.environ, "REPO": str(repo), "KIT": str(src.parent.parent)},
+        env={**os.environ, "REPO": str(repo), "KIT": str(src.parent.parent),
+             "UPGRADE_COMMIT": "a" * 40, "PREFLIGHT_STATUS": str(preflight_status)},
     )
+
+
+@pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")
+def test_refused_candidate_stops_before_the_first_upgrade_copy(tmp_path: Path) -> None:
+    repo = tmp_path / "adopter"
+    repo.mkdir()
+    installer = repo / "init.sh"
+    installer.write_text("original installer")
+    src = _fake_kit_templates(tmp_path)
+    result = _run_template_copy(repo, src, check=False, preflight_status=2)
+    assert result.returncode != 0
+    assert installer.read_text() == "original installer"
+    assert list(repo.iterdir()) == [installer]
 
 
 @pytest.mark.kit_repo_only("docs/agentic-dev-kit/workflows/upgrade.md")

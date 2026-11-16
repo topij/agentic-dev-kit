@@ -93,8 +93,7 @@ before any copy: write that sha in the adoption's pull request, so the repositor
 which kit commit it installed. The steps below run the named ref's own
 engines with the flags this document names, so a ref older than one of those flags stops
 that step with `kit_doctor.py: error: unrecognized arguments: <flag>`: name a ref no older
-than the copy of this document you are following. This pins the install only: `upgrade.md`
-reads the tip of the remote's default branch, and pinning an upgrade is tracked in #1445.
+than the copy of this document you are following. For an upgrade, follow `upgrade.md` and select a ref containing the installed commit.
 
 The path depends only on this checkout, so the block is safe to re-run from any shell or
 session: it finds the same clone again instead of making another, which matters once
