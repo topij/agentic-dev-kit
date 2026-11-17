@@ -108,7 +108,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "53a56d1e02e6ed31b5a0bd278b79252e92ef73c2a2eada144c4a22d28d362a79"
+      "sha256": "7900f3162624fa4478ec079ba7948a6fad7f225e3adca7fc6a69ce22a4102e53"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -255,7 +255,7 @@
     },
     "scripts/isolated_lane.py": {
       "role": "engine",
-      "sha256": "ef163109c8fbc468ae904710aa96de3ea7194905db1b1ebf0cd0bb02ad762dba"
+      "sha256": "7ff71be6f19e4eea215a62d9639ec48d32cbf1cc2731f10edb7dcf3f30c1e66f"
     },
     "scripts/kit_doctor.py": {
       "required_by": [
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_isolated_lane.py": {
       "role": "test",
-      "sha256": "4bd8bd3a1638e45d13a1eb450fac7b44796886b7bb0439b4dff7f7d08a0363d4"
+      "sha256": "c5981bf63a446a22167b1a9af4f6420c2d7c23c78d47a5c58e5abc19606e1b1c"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",

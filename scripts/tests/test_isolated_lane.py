@@ -21,11 +21,19 @@ guest = load_module("isolated_guest", ENGINE / "lib/isolated_guest.py")
 REPO = "owner/project"
 
 
-@pytest.mark.parametrize("mutation", ["valid", "app", "extra", "always", "evaluate", "hidden"])
+@pytest.mark.parametrize(
+    "mutation", ["valid", "app", "extra", "always", "evaluate", "hidden", "deletable"]
+)
 def test_effective_update_rule_requires_only_operator_pr_bypass(monkeypatch, mutation):
     actor = {"actor_id": 9, "actor_type": "User", "bypass_mode": "pull_request"}
     actors = [actor]
-    detail = {"enforcement": "active", "rules": [{"type": "update"}], "bypass_actors": actors}
+    detail = {
+        "enforcement": "active",
+        "rules": [{"type": "update"}, {"type": "deletion"}],
+        "bypass_actors": actors,
+    }
+    if mutation == "deletable":
+        detail["rules"] = [{"type": "update"}]
     if mutation == "app":
         actor["actor_type"] = "Integration"
     if mutation == "extra":

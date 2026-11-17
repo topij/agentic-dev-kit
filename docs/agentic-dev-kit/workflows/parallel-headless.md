@@ -15,7 +15,7 @@ Run this opt-in route from a trusted cockpit checkout on macOS with Lima, Git,
 `gh`, OpenSSL and Python installed. The GitHub.com origin's protected branch
 must contain the kit's Claude headless engines at the cockpit's engine path.
 Install a dedicated App on the target with contents and pull requests write
-and metadata read. Configure an active repository update ruleset for
+and metadata read. Configure an active repository ruleset restricting updates and deletions for
 `vcs.protected_branch` with only the authenticated operator's user ID allowed
 to bypass via pull request. The host uses the operator's `gh` session to check
 that effective rule. Protect other sensitive branches and assess CI triggered

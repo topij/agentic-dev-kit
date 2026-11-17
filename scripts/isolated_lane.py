@@ -45,12 +45,14 @@ def protected_head(repo, base):
         actors = detail.get("bypass_actors")
         if (
             detail["enforcement"] == "active"
-            and any(item["type"] == "update" for item in detail["rules"])
+            and {"update", "deletion"}.issubset(item["type"] for item in detail["rules"])
             and actors
             == [{"actor_type": "User", "actor_id": operator, "bypass_mode": "pull_request"}]
         ):
             return gh(f"{route}/branches/{ref}")["commit"]["sha"]
-    raise ValueError("the configured base needs an active operator-only pull-request update rule")
+    raise ValueError(
+        "the configured base needs an active operator-only update and deletion ruleset"
+    )
 
 
 def api(method, path, token, data=None):
