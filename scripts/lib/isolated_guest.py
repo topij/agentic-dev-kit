@@ -57,6 +57,8 @@ def main():
                 "--headless",
                 "--base",
                 p["base"],
+                "--branch",
+                p["branch"],
                 "--runtime",
                 "claude",
                 "--merge-class",

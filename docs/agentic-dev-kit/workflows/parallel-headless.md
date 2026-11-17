@@ -43,8 +43,16 @@ On completion the host revokes the installation token, checks the open
 App-authored PR against the guest commit and prints the URL and head for
 independent host review. On failure inspect the reported private `LIMA_HOME`
 and instance `v` for recovery. A stopped failed VM may contain model credentials
-and unpublished work. Retire it after recovery. An uncatchable host interruption
-can leave a VM running and its short-lived token active until expiry.
+and unpublished work. Retire it after recovery. The host attempts token revocation
+and VM stop on SIGTERM, SIGHUP and keyboard interruption. An uncatchable host
+interruption can leave a VM running and its short-lived token active until expiry.
+
+A rejected or timed-out revocation request is retried once. If revocation still
+cannot be confirmed, the launcher reports the failure and exits unsuccessfully,
+preserving any original launch error. The token may remain usable until expiry.
+Suspend the App installation or revoke the grant through GitHub before recovery.
+An expired token can also cause revocation to be rejected, so inspect the PR
+independently when the launcher stops at that step.
 
 ### Unattended / headless launch — `new --headless`
 

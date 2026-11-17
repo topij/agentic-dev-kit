@@ -1,4 +1,4 @@
-"""Run a Claude PR lane in a fresh, unmounted macOS arm64 Lima guest."""
+"""Run a Claude PR lane in a fresh Linux Lima guest on a macOS arm64 host."""
 
 import argparse
 import base64
@@ -99,6 +99,7 @@ def installation_token(repo, app_id, key):
         {"repository_ids": [repo_id], "permissions": PERMISSIONS},
     )
     token = grant["token"]
+    completed = False
     try:
         scope = api("GET", "installation/repositories?per_page=2", token)
         if (
@@ -108,8 +109,22 @@ def installation_token(repo, app_id, key):
         ):
             raise ValueError("installation token scope differs from the requested grant")
         yield token, installation["app_slug"] + "[bot]"
+        completed = True
     finally:
-        api("DELETE", "installation/token", token)
+        for attempt in range(2):
+            try:
+                api("DELETE", "installation/token", token)
+                break
+            except (ValueError, OSError, http.client.HTTPException):
+                if attempt == 0:
+                    continue
+                print(
+                    "Token revocation could not be confirmed. Suspend the App installation "
+                    "or revoke the grant through GitHub before recovery.",
+                    file=sys.stderr,
+                )
+                if completed:
+                    raise
 
 
 def run_isolated(args):
@@ -133,7 +148,7 @@ def run_isolated(args):
     )
     if not match:
         raise ValueError("isolated requires a github.com origin")
-    repo = match[1]
+    repo = gh(f"repos/{match[1]}")["full_name"]
     head = protected_head(repo, base)
     branch = f"{prefix}/{args.scope}"
     refs = gh(f"repos/{repo}/git/matching-refs/heads/" + quote(branch, safe=""))
@@ -179,6 +194,7 @@ def run_isolated(args):
                 "base": base,
                 "head": head,
                 "scope": args.scope,
+                "branch": branch,
                 "token": token,
                 "engines": str(ENGINE.relative_to(root)),
                 "prompt": prompt,
@@ -230,6 +246,7 @@ def main():
         raise SystemExit(128 + signum)
 
     signal.signal(signal.SIGTERM, terminate)
+    signal.signal(signal.SIGHUP, terminate)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("scope")
     parser.add_argument("--app-id", type=int, required=True)
