@@ -157,7 +157,7 @@ python3 scripts/launch_lane.py \
 
 The wrapper verifies the descriptor and the child's observed identity, starts the
 runtime and records the outcome. Add `--tier default` to request the mapped compute
-or `--ticket` with a GitHub issue number to include that issue in the prompt. On
+or `--ticket <issue-number> --ticket-as-of <reviewed-UTC-time>` to include that issue in the prompt. On
 another tracker, put the ticket text in the task prompt.
 
 The contract covers ready-by-default PRs, the bounded draft exception, ready-state

@@ -471,32 +471,12 @@ operator's own answer.
   issued with `--merge-class self`, and no session runs `dev_session.sh merge`, the
   self-merge wrapper. The operator merges lane pull requests after reading them.
 
-  **This hold is prose.** It binds a session that reads this document or the handoff
-  entry that carries it, and nothing else. The kit's documents and engines still
-  describe and accept self-merge. `parallel.md`'s *Per-lane merge class* table, which
-  classes mechanical and standard lanes as self-merge for autonomous batches, is one
-  example, and this document does not list the others.
-  `dev_session.sh new` still accepts `--merge-class self` (`dev_session.sh:257-258`).
-  `dev_session.sh merge` gates on the session's stored class (`dev_session.sh:1033-1035`),
-  so a `self` session already on disk stays mergeable. On 2026-11-12, with the primary
-  checkout at `fd12e961`, no `merge_class` file existed under the default sessions
-  directory beside it (`ls <sessions-dir>/*/merge_class` matched nothing).
-  `dev_session.sh list` is not that check: it shows only a session that still has its
-  worktree. This pull request changes no engine and no workflow, so the mechanism is
-  step 2a.
+  **Decision on 2026-11-17.** The operator accepted step 2a for the shipped command
+  paths and retained operator-only lane merges. Revisit D2 with the operator at
+  step 2c, when reviewing lane identity and isolation from operator credentials.
+  Step 2a's acceptance does not release the hold. The kit's own handoff carries
+  this operating decision.
 
-  **What the operator reads is the pull request, not the merge-ready line.**
-  `reconcile_sessions.sh` reports an operator-class lane as held and merge-ready from
-  a `pr_watch.py` report read under the lane's state root
-  (`reconcile_sessions.sh:495-520`). That line rests on the same receipt as S2 and is
-  not independent evidence.
-
-  **It lifts when step 2a ships.** If 2a's probe finds nothing to repair, it lifts on
-  the operator's decision, recorded with the probe, and only if the probe covered each
-  route a lane has to the receipt (the granted `pr_watch.py --record-review`, and a
-  direct write of the state file under the lane's state root) and included a control
-  in which a receipt the cockpit recorded is accepted. A probe result alone lifts
-  nothing.
 - **D3. A LOW review finding is not ticketed until it recurs: yes, as a trial.** It is
   recorded in the pull request's typed disposition and nowhere else, and becomes a
   ticket on its second occurrence. `post-merge-systemize` already reads typed
@@ -575,8 +555,13 @@ operator's own answer.
   grants do not reach. Once 2c has given lanes their own identity (D1), that is a
   disposition comment authored by the operator's identity. Until then it is the
   cockpit's own state root, and `record_review` refuses under a lane descriptor.
-  **Done when** the same probe is refused at the new sha and still succeeds at the sha
-  before it. D2's hold lifts when this ships.
+  **Accepted on 2026-11-17.** The original criterion called for the same live probe
+  before and after the repair. The operator accepted the saved baseline at `171d9f4`,
+  the [live lane refusal and cockpit control on #1450](https://github.com/topij/agentic-dev-kit/pull/1450#issuecomment-6893775858),
+  and the local descriptor-fixture check in place of that replay. On 2026-11-16,
+  `pr_watch.py --record-review` at `9d8aff7`, using the source, lenses and reviewed
+  head from #1450, returned the lane-specific refusal and left the fixture store empty.
+  The live refusal used deliberately invalid inputs. D2 records the separate merge decision.
   **Tickets:** #490, #1430.
 - **2b. Author trust for text handed to an agent** `[M · safety-critical · cloud]`.
   `launch_lane.py --ticket` refuses an issue whose author is not the repository owner,
@@ -699,8 +684,8 @@ and the tests' patching can be moved to the new modules a seam at a time.
 
 ### The first three
 
-D2's hold on `self`-class lane merges is already in force. It is prose, and step 2a is
-what replaces it with a mechanism.
+The original sequence below predates the operator's 2026-11-17 acceptance of step 2a.
+D2 records when the operator will reconsider self-merge.
 
 If only three things happen next: **step 1**, because every later choice is easier
 against a backlog with priorities; **step 2a's probe**, because it is small and says

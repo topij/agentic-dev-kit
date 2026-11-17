@@ -188,7 +188,7 @@ deliberately:
    tracker is reachable; if your forge and tracker post a linkback on the lane's PR, that
    comment is an earlier and cheaper place to catch the difference.
 
-   **A headless lane launched with `launch_lane.py --ticket <n>` gets the ticket from the
+   **A headless lane launched with `launch_lane.py --ticket <n> --ticket-as-of <reviewed-UTC-time>` gets the ticket from the
    launcher.** The launcher reads the GitHub issue itself before launch, appends it to
    the prompt in a delimited block, records its number, URL and the block's digest (not
    its text) in the receipt's request, and refuses the launch when the read fails. So

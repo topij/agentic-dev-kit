@@ -108,11 +108,11 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "b81962d4a13c3ec4ed960ad35afc36e7400e97d3807513672608e0850b9ccab7"
+      "sha256": "317ea30551e05e179fb6a13f36f99342c833200cc48a785e666b67f9e4806a87"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
-      "sha256": "c13c06ad9ce76400e8b55354a3394b502447a2c499cc4cf3e46ad044b654bf54"
+      "sha256": "981c0a66557774465e137d28a48c8b577ddb02667c9ecca44821532f1eadb63e"
     },
     "docs/agentic-dev-kit/workflows/post-merge-systemize.md": {
       "role": "workflow",
@@ -120,18 +120,18 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "26bdfa7ff783e7425ba2f742be7c9aca4cb7213cfa9d4d17e1102ce05670c7d4"
+      "sha256": "f0e63218129b625031d9c0ffdcc82ce7346907ab1a609a07daa4c76dbcaa386e"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "e24cc6385ac9313bbf3606496c55d1da0a6b1450006fa41a3c264b28371d5e9c"
+      "sha256": "46a1becbb700c3bbfda5f11ebee7162f3eb598258fc9e3e96ae5b98724ab3124"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
-      "sha256": "448f9c5576c0d67db96ad18ffc1b8e313dc80781148bcb3683cfa24fc677333c"
+      "sha256": "26ae0b1267748fa9584f8e45c9e1a1c369bdac46320a56bcbcea598eb5e183c3"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log.md": {
       "role": "workflow",
@@ -247,7 +247,7 @@
     },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
-      "sha256": "9e2401c8ecce8ad9e3135b3bc4faaf46d665b2d9905776786192e30dd5a0abea"
+      "sha256": "6c003cb2e82d826cf84ad000cf01a249b0058ddcfadd6e4e88fb82099e869338"
     },
     "scripts/hooks/pre-push": {
       "role": "hook",
@@ -266,7 +266,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "00ded503681c11276b82f875ef3676e08c5df6ce102d80c4f4080302bb0b145c"
+      "sha256": "8438f28ad7a2c9b77e23be99676f7ad8c9fd53acc66c0e65f737ad4c1696b9d8"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -680,7 +680,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "cd44cc5860576c6d263ac6bd94ba11d415c9b4d4d423c1ef74f6338c55683e88"
+      "sha256": "29e2ed7fdc46fabf434a5081724cc86ad8135cd6a6d23f30f352899eb63f56e2"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -800,7 +800,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "1f8fddfe6a1cf59d5405c28d97fc7c986b76e56ee5fa6950f037a14a9f50f8a6"
+      "sha256": "f01eb841750f9913c8bb55bcc74b1702a01b59e9b8c33812b85fc9237d109ed8"
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",
@@ -840,7 +840,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "6d5ac55e6a1410e64f5debc4659b5b441bde6bf32230502587ecf6f9f0de3c17"
+      "sha256": "4107f169c6be01be9bff65dd73b39329f55b8efda2e8b0efe7a37e091df13749"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

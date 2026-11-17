@@ -172,7 +172,7 @@ Claude lane whose runtime exits successfully without it is resumed up to
 `parallel.max_resumes` times when its session can be resumed. A lane that still names
 no terminal state, including a Codex lane without one, is recorded `stalled` and shows
 so in the board's `RUN` column; a failed, denied or interrupted round is recorded as
-such instead. `launch_lane.py --ticket <n>` hands the lane its GitHub
+such instead. `launch_lane.py --ticket <n> --ticket-as-of <reviewed-UTC-time>` hands the lane its GitHub
 issue so the lane does not have to fetch it. `dev_session.sh <subcommand> --help`
 prints a subcommand's usage without creating anything.
 

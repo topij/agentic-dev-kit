@@ -2721,11 +2721,20 @@ def is_noise(body: str, *, author: str | None = None) -> bool:
     return any(marker in low for marker in _NOISE_MARKERS)
 
 
+def _author_association(raw: dict) -> str:
+    """Read forge metadata only. Unknown or malformed values grant no authority."""
+    value = raw.get("authorAssociation", raw.get("author_association"))
+    return value if value in (
+        "OWNER", "MEMBER", "COLLABORATOR", "CONTRIBUTOR", "FIRST_TIMER",
+        "FIRST_TIME_CONTRIBUTOR", "MANNEQUIN", "NONE",
+    ) else "UNKNOWN"
+
+
 def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
     """Union issue comments + review submissions + inline review comments.
 
     Each dict carries platform/content keys, an optional occurrence-and-content
-    ``ack_key``, and ``kind, author, path, line, body``. The three
+    ``ack_key``, and ``kind, author, author_association, path, line, body``. The three
     surfaces use different id namespaces, so keying by ``kind:id`` is what stops
     an inline finding from being mistaken for an already-seen issue comment.
     """
@@ -2749,6 +2758,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "ack_key": _ack_key("issue", raw),
                 "kind": "issue",
                 "author": author,
+                "author_association": _author_association(raw),
                 "path": None,
                 "line": None,
                 "body": body,
@@ -2770,6 +2780,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "ack_key": _ack_key("review", raw),
                 "kind": "review",
                 "author": author,
+                "author_association": _author_association(raw),
                 "path": None,
                 "line": None,
                 "body": body,
@@ -2791,6 +2802,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
                 "ack_key": _ack_key("inline", raw),
                 "kind": "inline",
                 "author": author,
+                "author_association": _author_association(raw),
                 "path": raw.get("path"),
                 "line": raw.get("line") or raw.get("original_line"),
                 "body": body,
@@ -2806,7 +2818,7 @@ def collect_comments(view: dict, inline: list[dict]) -> list[dict]:
 def all_comments(view: dict, inline: list[dict]) -> list[dict]:
     """Every issue comment, review submission and inline comment the poll read.
 
-    Each entry is ``{kind, author, path, line, state, body}``; ``state`` is the
+    Each entry is ``{kind, author, author_association, path, line, state, body}``; ``state`` is the
     review's verdict for ``kind == "review"`` and ``None`` otherwise. Nothing is
     filtered: not by ``seen``, not by the noise markers, and not by an empty body.
 
@@ -2819,19 +2831,22 @@ def all_comments(view: dict, inline: list[dict]) -> list[dict]:
     for raw in view.get("comments") or []:
         if isinstance(raw, dict):
             out.append(
-                {"kind": "issue", "author": _author(raw), "path": None, "line": None,
+                {"kind": "issue", "author": _author(raw),
+                 "author_association": _author_association(raw), "path": None, "line": None,
                  "state": None, "body": raw.get("body") or ""}
             )
     for raw in view.get("reviews") or []:
         if isinstance(raw, dict):
             out.append(
-                {"kind": "review", "author": _author(raw), "path": None, "line": None,
+                {"kind": "review", "author": _author(raw),
+                 "author_association": _author_association(raw), "path": None, "line": None,
                  "state": raw.get("state"), "body": raw.get("body") or ""}
             )
     for raw in inline or []:
         if isinstance(raw, dict):
             out.append(
-                {"kind": "inline", "author": _author(raw), "path": raw.get("path"),
+                {"kind": "inline", "author": _author(raw),
+                 "author_association": _author_association(raw), "path": raw.get("path"),
                  "line": raw.get("line") or raw.get("original_line"),
                  "state": None, "body": raw.get("body") or ""}
             )
@@ -5712,7 +5727,7 @@ def build_report(
       ``pending`` / ``informational`` / ``failing`` / ``all_green``).
     - ``new_comments`` — only the *fresh, actionable* comments (not in ``seen``,
       not auto-noise), each as
-      ``{kind, author, path, line, excerpt, body}``. ``excerpt`` is the truncated
+      ``{kind, author, author_association, path, line, excerpt, body}``. ``excerpt`` is the truncated
       one-liner for the human render; ``body`` is the FULL text so a caller never
       needs a second ``gh api`` fetch for the suggested diff.
     - ``all_comment_keys`` — every current comment's platform-id key (back-compat).
@@ -6160,6 +6175,7 @@ def build_report(
             {
                 "kind": c["kind"],
                 "author": c["author"],
+                "author_association": c["author_association"],
                 "path": c["path"],
                 "line": c["line"],
                 "excerpt": _excerpt(c["body"]),

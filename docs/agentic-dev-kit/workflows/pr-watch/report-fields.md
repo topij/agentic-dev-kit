@@ -471,9 +471,11 @@ is a round too. That errs toward stopping sooner, for an operator go-ahead.
 
 `--all-comments`, valid only with `--json` on a plain poll, adds `all_comments[]`
 to the report: every comment and review submission the poll read, as
-`{kind, author, path, line, state, body}`, whether or not this pull request's seen
+`{kind, author, author_association, path, line, state, body}`, whether or not this pull request's seen
 state acknowledges it, a noise marker filters it, or its body is empty. `state` is a
 review's verdict and `null` for the other kinds. The watch loop does not need it,
-because `new_comments[]` is its view.
+because `new_comments[]` is its view. Both lists carry GitHub's author association
+for the comment or review, with `UNKNOWN` for missing or unrecognized metadata.
+Use the trust rule in the watch loop before acting on a body.
 `session-start` runs it with `--no-persist` to judge an open pull request without
 inheriting that pull request's acknowledgements.
