@@ -345,12 +345,11 @@ valid-input local fixture in place of an exact live replay. The plan's step 2a r
 Steps 3a, 2e and 2d ran as headless lanes on 2026-11-13, and the operator merged each on 2026-11-14 after its
 review rounds: #1440 (3a, `e4a4bd1`), #1441 (2e, `e094cc0`) and #1443 (2d, `52c4cbe`). The operator split #1443:
 #1443 covered adoption, #1463 addressed its remaining pinning gaps, and #1464 delivered upgrade pinning for #1445.
-The operator retained D2 separately on 2026-11-17: issue only operator-class lanes;
-the operator reads and merges their pull requests. Revisit the hold with the operator
-at step 2c (lane identity and credential isolation).
+After the disposable GitHub App pilot on 2026-11-17, the operator retained D2.
+Issue operator-class lanes only. The operator reads and merges their pull requests.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: step 2c — assess lane identity and isolation from the operator's credentials, then revisit D2.
+▶ Next: implement the step 2c launcher path and exercise its acceptance criteria on the disposable protected target.
 The operator decides whether #1370, #1371 and #345 are done, now that
 #1440 and #1441 have merged. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on

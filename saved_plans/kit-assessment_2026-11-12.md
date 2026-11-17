@@ -246,7 +246,7 @@ lens publishes nothing" become things the forge enforces by author, and S1's bla
 radius shrinks to what the lane's credential can do. The identity needs a second
 account or an app installation, and D1 below records the operator's decision to have
 one. The isolation needs a separate OS user, a container or the runtime's own
-sandbox. Which of those is not decided; step 2c probes them.
+sandbox. The step 2c pilot below exercised an unmounted VM.
 
 ## DRY
 
@@ -455,7 +455,8 @@ operator's own answer.
 
 - **D1. A separate forge identity for lanes and lenses: yes, lanes first.** A second
   account with a fine-grained token scoped to this repository, for contents and pull
-  requests and nothing else. `launch_lane.py` passes that token to the child in place
+  requests and nothing else was the original proposal. The proposal has
+  `launch_lane.py` pass that token to the child in place
   of the operator's, and a ruleset on `main` leaves merging to the operator's account.
   Lenses follow with a read-only token. Not yet probed: how the ruleset and a
   fine-grained token behave together. That probe is part of step 2c. Until 2c ships,
@@ -465,17 +466,15 @@ operator's own answer.
   isolation from the credentials stored for the operator, as *Security* says. The
   recommendation the operator took on 2026-11-12 left that out. Review of this document
   raised it, the pull request's decision packet records it, and the operator authorized
-  writing it in on 2026-11-13. Which form the isolation takes is not decided; it is
-  part of step 2c.
+  writing it in on 2026-11-13. Step 2c records the GitHub App and VM pilot.
 - **D2. Hold `self`-class lane merges: yes.** In force from 2026-11-12: no lane is
   issued with `--merge-class self`, and no session runs `dev_session.sh merge`, the
   self-merge wrapper. The operator merges lane pull requests after reading them.
 
   **Decision on 2026-11-17.** The operator accepted step 2a for the shipped command
-  paths and retained operator-only lane merges. Revisit D2 with the operator at
-  step 2c, when reviewing lane identity and isolation from operator credentials.
-  Step 2a's acceptance does not release the hold. The kit's own handoff carries
-  this operating decision.
+  paths and revisited D2 after the step 2c pilot. Keep operator-only lane merges.
+  The operator holds the signing key and review evidence and reads each lane PR
+  before merging. The kit's own handoff carries this operating decision.
 
 - **D3. A LOW review finding is not ticketed until it recurs: yes, as a trial.** It is
   recorded in the pull request's typed disposition and nowhere else, and becomes a
@@ -584,6 +583,25 @@ operator's own answer.
   request, its child's environment does not carry the operator's token, and a command
   the lane runs through `make test` cannot obtain the operator's forge credential.
   **Tickets:** #615, #617, #618, #1025, #1138.
+
+  **Disposable pilot, 2026-11-17, kit `3088f25e`.** GitHub refused the App's
+  merge on the actor-restricted target. The operator exercised the merge control
+  ([App PR](https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/2),
+  [operator control](https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/1)).
+  A Claude lane launched through `dev_session.sh new` and `launch_lane.py` in
+  a Lima VM with no shared mounts or forwarded SSH agent used a repository-scoped
+  installation token to push and open
+  [the fixture PR](https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/3).
+  The model replies were scripted. On the host, `pr_watch.py --record-review`
+  refused the base revision and accepted the independent reviews at `60b2d141`.
+  The host revoked the token and suspended the installation. A separate
+  `make test` fixture observed a synthetic host file from the host lane and
+  reported it absent on fresh and resumed launches inside the VM.
+
+  The pilot supplied the VM and token handoff outside the kit. Exercise the
+  shipped entry point on the disposable target with a host-only canary, a clean
+  child environment, a successful push and PR creation, and a forge refusal
+  when the App attempts to merge. Keep independent review and merge on the host.
 - **2d. Pin what adopters install** `[S · standard · cloud]`. Per D5: `adopt.md` and
   `upgrade.md` take a ref, clone that ref, and print it before the first copy. Covers
   S5.
@@ -685,7 +703,7 @@ and the tests' patching can be moved to the new modules a seam at a time.
 ### The first three
 
 The original sequence below predates the operator's 2026-11-17 acceptance of step 2a.
-D2 records when the operator will reconsider self-merge.
+D2 records the operator's decision after the pilot.
 
 If only three things happen next: **step 1**, because every later choice is easier
 against a backlog with priorities; **step 2a's probe**, because it is small and says
