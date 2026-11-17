@@ -179,7 +179,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "3f98d5462e207ac8759b303e8d684178010a0cd27f5168a7bd9fc53cfde8705b"
+      "sha256": "6230220fe65ffce0bd318ead33d458d933216b71787c90c6148e3ab3b08fdee1"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -845,7 +845,7 @@
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
-      "sha256": "0368e489896f2de78347474deb36a545f9ffd9614f26be822dfbec8dc577d5bc"
+      "sha256": "0477a6c7bc56205f3c684b8835e492b0cefada04c265bd7a10b58ff59a339ffb"
     },
     "scripts/tests/test_pr_followup_hook.py": {
       "role": "test",
