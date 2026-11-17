@@ -120,7 +120,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "6bab569f2125c4262b7288c7629467a3c9dbd920af16c4d288e75f120d647785"
+      "sha256": "f0e63218129b625031d9c0ffdcc82ce7346907ab1a609a07daa4c76dbcaa386e"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
