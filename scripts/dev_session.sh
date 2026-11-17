@@ -1246,7 +1246,7 @@ main() {
     fi
     case "$sub" in
         new) cmd_new "$@" ;;
-        isolated) python3 -I "$SCRIPT_DIR/isolated_lane.py" "$@" ;;
+        isolated) exec python3 -I "$SCRIPT_DIR/isolated_lane.py" "$@" ;;
         list|ls) cmd_list "$@" ;;
         path) cmd_path "$@" ;;
         pr-watch) cmd_pr_watch "$@" ;;

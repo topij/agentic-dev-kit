@@ -1,5 +1,6 @@
 """Regression checks for the isolated launch's credential and protected-branch boundary."""
 
+import contextlib
 import importlib.util
 import json
 import subprocess
@@ -122,3 +123,68 @@ def test_guest_uses_allowlist_before_first_child(monkeypatch, tmp_path):
     monkeypatch.setattr(subprocess, "run", inspect)
     with pytest.raises(RuntimeError, match="inspected"):
         guest.main()
+
+
+def test_shell_entry_forwards_termination_to_launcher(monkeypatch, tmp_path):
+    """A SIGTERM to the public wrapper must reach the cleanup-owning process."""
+    import os
+    import shutil
+    import signal
+    import sys
+    import time
+
+    root = tmp_path / "repo"
+    engines = root / "scripts"
+    (engines / "lib").mkdir(parents=True)
+    shutil.copy(ENGINE / "dev_session.sh", engines / "dev_session.sh")
+    shutil.copy(ENGINE / "lib/repo_root.sh", engines / "lib/repo_root.sh")
+    (root / "config").mkdir()
+    (root / "config/dev-model.yaml").write_text("vcs:\n  protected_branch: main\n")
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    events = tmp_path / "events"
+    probe = tmp_path / "probe.py"
+    probe.write_text(
+        "import os,signal,time\n"
+        "from pathlib import Path\n"
+        f"events=Path({str(events)!r})\n"
+        "def terminate(signum,frame): raise SystemExit(128+signum)\n"
+        "signal.signal(signal.SIGTERM,terminate)\n"
+        "try:\n"
+        "    events.write_text(str(os.getpid()))\n"
+        "    while True: signal.pause()\n"
+        "finally: events.write_text('cleanup')\n"
+    )
+    shimdir = tmp_path / "bin"
+    shimdir.mkdir()
+    shim = shimdir / "python3"
+    shim.write_text(
+        f"#!{sys.executable}\n"
+        "import os,sys\n"
+        f"args=[{str(probe)!r}] if sys.argv[1:2]==['-I'] else sys.argv[1:]\n"
+        "os.execv(sys.executable,[sys.executable,*args])\n"
+    )
+    shim.chmod(0o755)
+    monkeypatch.setenv("PATH", str(shimdir) + os.pathsep + os.environ["PATH"])
+    process = subprocess.Popen(
+        [str(engines / "dev_session.sh"), "isolated", "fixture"],
+        cwd=root,
+        start_new_session=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        deadline = time.monotonic() + 10
+        while not events.exists() and process.poll() is None and time.monotonic() < deadline:
+            time.sleep(0.02)
+        assert events.exists(), process.poll()
+        assert int(events.read_text()) == process.pid
+        process.send_signal(signal.SIGTERM)
+        _, stderr = process.communicate(timeout=10)
+        assert process.returncode == 143, stderr
+        assert events.read_text() == "cleanup"
+    finally:
+        # Own the process group and finish every descendant even when the PID
+        # equality regression fails before the termination assertion.
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(process.pid, signal.SIGKILL)
+        process.wait()

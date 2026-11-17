@@ -227,7 +227,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "4e13a6491673041280b110e289e50ecc2fc5f8ac4d4c4c842a65194c358efe66"
+      "sha256": "9199b532f9a961405739d970231ecc8d5b2044318beb2eed98d51f339f260365"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_isolated_lane.py": {
       "role": "test",
-      "sha256": "c5981bf63a446a22167b1a9af4f6420c2d7c23c78d47a5c58e5abc19606e1b1c"
+      "sha256": "7e62635c6f7155f5758e5cd262ae5c00cfd9ac7ec1f04db3a45984ab119ca056"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
