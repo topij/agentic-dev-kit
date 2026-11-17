@@ -108,7 +108,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "317ea30551e05e179fb6a13f36f99342c833200cc48a785e666b67f9e4806a87"
+      "sha256": "53a56d1e02e6ed31b5a0bd278b79252e92ef73c2a2eada144c4a22d28d362a79"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -227,7 +227,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "bbfc3e0ac61d2c40486e1133128911fa5c5ceaa9578166b19bd838f4a7e3876d"
+      "sha256": "cf21cd07295450e0ef7110317e500f02916fc5f9282d18bd234fe000fcd12b75"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -253,12 +253,16 @@
       "role": "hook",
       "sha256": "6c9c98903149a2e1898a821a94a39d43e0ffa3567d326889f50c7031c7a0acb2"
     },
+    "scripts/isolated_lane.py": {
+      "role": "engine",
+      "sha256": "ef163109c8fbc468ae904710aa96de3ea7194905db1b1ebf0cd0bb02ad762dba"
+    },
     "scripts/kit_doctor.py": {
       "required_by": [
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "323467ecbf6f2a11d030833024e81e53889bc0501bddaea5016a36291cea4768"
+      "sha256": "69ca657dd70eb42757fe9e95907d655cc6f788aa92719beedd21b9f686a537f6"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -368,6 +372,10 @@
       "role": "engine",
       "sha256": "a4c29fb1808e0b3ec0a2ba80ffa97ba6c894f1a784463a5d126169542c300ef2"
     },
+    "scripts/lib/isolated_guest.py": {
+      "role": "engine",
+      "sha256": "fb05f2acb0831dce81fa42ba8c65241e8a4b92a59e75a1706353b9ca8294213a"
+    },
     "scripts/lib/kitconfig.py": {
       "required_by": [
         "scripts/archive_plan_sessions.py",
@@ -376,6 +384,7 @@
         "scripts/check_record_prose.py",
         "scripts/hooks/pr_followup_hook.py",
         "scripts/hooks/pre-push",
+        "scripts/isolated_lane.py",
         "scripts/kit_doctor.py",
         "scripts/launch_lane.py",
         "scripts/lib/systemize/config.py",
@@ -732,7 +741,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "b19607839711dd8df7fc0747a36448a61c32d01c11921f2a2a31be3e057ab85c"
+      "sha256": "deda8f01477bf696f5c12dcd2acf353d1a03866ff8f7eb79e4fa032379e35247"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -781,6 +790,10 @@
     "scripts/tests/test_init_sh.py": {
       "role": "test",
       "sha256": "d3e1203ba0766b8ddabb35e47188ec5258f61e6c52b7cfe959544dc098b58035"
+    },
+    "scripts/tests/test_isolated_lane.py": {
+      "role": "test",
+      "sha256": "4bd8bd3a1638e45d13a1eb450fac7b44796886b7bb0439b4dff7f7d08a0363d4"
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
