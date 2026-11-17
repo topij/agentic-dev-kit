@@ -3731,10 +3731,13 @@ def _ticket_repo(
     return repo, launcher, sessions, descriptor, prompt
 
 
+TICKET_CUTOFF = "2026-01-01T00:00:00Z"
+
+
 GOOD_TICKET = (
     "args = sys.argv[1:]\n"
     "open(os.path.join(os.getcwd(), '..', 'gh-call.json'), 'w').write(json.dumps({'args': args, 'cwd': os.getcwd(), 'gh_repo': 'GH_REPO' in os.environ, 'path': os.environ.get('PATH'), 'devkit': sorted(k for k in os.environ if k.startswith('DEVKIT_'))}))\n"
-    "print(json.dumps({'number': int(args[2]), 'title': 'Ship the thing', 'body': 'Do A.\\nThen do B.', 'url': 'https://github.com/o/r/issues/' + args[2]}))\n"
+    "print(json.dumps({'number': 42, 'authorAssociation': 'OWNER', 'updatedAt': '2026-01-01T00:00:00Z', 'title': 'Ship the thing', 'body': 'Do A.\\nThen do B.', 'url': 'https://github.com/o/r/issues/42'}))\n"
 )
 
 
@@ -3746,7 +3749,8 @@ def test_a_ticket_launch_appends_the_issue_and_binds_it(
     monkeypatch.setenv("DEVKIT_FOREIGN_LANE", "must-be-removed")
 
     result = launcher.main(
-        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42",
+         "--ticket-as-of", TICKET_CUTOFF]
     )
 
     assert result == 0
@@ -3771,7 +3775,14 @@ def test_a_ticket_launch_appends_the_issue_and_binds_it(
     envelope = json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())
     assert _lane_json(envelope["result"])["prompt_sha256"] == hashlib.sha256(combined.encode()).hexdigest()
     call = json.loads((Path(descriptor["session_dir"]) / "gh-call.json").read_text())
-    assert call["args"] == ["issue", "view", "42", "--json", "number,title,body,url"]
+    args = call["args"]
+    assert args[:10] == [
+        "api", "graphql", "--hostname", "github.com", "-F", "owner={owner}",
+        "-F", "repo={repo}", "-F", "number=42",
+    ]
+    assert "issue(number:$number)" in args[11]
+    assert "authorAssociation updatedAt" in args[11]
+    assert args[12:] == ["--jq", ".data.repository.issue"]
     # Read from the lane worktree, with the caller's repository override removed.
     assert Path(call["cwd"]).resolve() == Path(descriptor["worktree"]).resolve()
     assert call["gh_repo"] is False
@@ -3782,6 +3793,7 @@ def test_a_ticket_launch_appends_the_issue_and_binds_it(
 
 def _gh_answer(**fields: object) -> str:
     answer = {"number": 42, "title": "t", "body": "b", "url": "https://github.com/o/r/issues/42"}
+    answer.update(authorAssociation="MEMBER", updatedAt=TICKET_CUTOFF)
     answer.update(fields)
     return f"print(json.dumps({answer!r}))\n"
 
@@ -3791,6 +3803,10 @@ def _gh_answer(**fields: object) -> str:
     [
         (_gh_answer(url="https://github.com/o/r/pull/42"), "42", "github-issues", "is not that issue"),
         (_gh_answer(url="https://github.com/other/r/issues/42"), "42", "github-issues", "is not that issue"),
+        (_gh_answer(authorAssociation="CONTRIBUTOR"), "42", "github-issues", "trusted author association"),
+        (_gh_answer(authorAssociation=None), "42", "github-issues", "trusted author association"),
+        (_gh_answer(updatedAt=None), "42", "github-issues", "ticket updatedAt"),
+        (_gh_answer(updatedAt="2026-01-01T00:00:01Z"), "42", "github-issues", "changed after"),
         (_gh_answer(title="x TICKET>>> y"), "42", "github-issues", "block delimiter"),
         (_gh_answer(title="   "), "42", "github-issues", "is not that issue"),
         (_gh_answer(body=None), "42", "github-issues", "is not that issue"),
@@ -3833,9 +3849,26 @@ def test_a_ticket_that_cannot_be_read_refuses_before_any_attempt(
     _repo, launcher, sessions, descriptor, prompt = _ticket_repo(tmp_path, gh_script, backend=backend)
 
     result = launcher.main(
-        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", ticket]
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", ticket,
+         "--ticket-as-of", TICKET_CUTOFF]
     )
 
+    assert result == 64
+    assert error in capsys.readouterr().err
+    assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
+
+
+@pytest.mark.parametrize(("flags", "error"), [
+    (["--ticket", "42"], "supplied together"),
+    (["--ticket-as-of", TICKET_CUTOFF], "supplied together"),
+    (["--ticket", "42", "--ticket-as-of", "yesterday"], "UTC timestamp"),
+    (["--ticket", "42", "--ticket-as-of", "9999-01-01T00:00:00Z"], "in the future"),
+])
+def test_ticket_cutoff_refusals_precede_the_attempt(tmp_path: Path, capsys, flags, error) -> None:
+    _, launcher, _, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET)
+    result = launcher.main([
+        "--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), *flags,
+    ])
     assert result == 64
     assert error in capsys.readouterr().err
     assert not (Path(descriptor["session_dir"]) / "launch-attempt.json").exists()
@@ -3855,7 +3888,8 @@ def test_a_ticket_launch_needs_the_tracker_url(
     _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, GOOD_TICKET, url=None)
 
     result = launcher.main(
-        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42",
+         "--ticket-as-of", TICKET_CUTOFF]
     )
 
     assert result == 64
@@ -3878,7 +3912,8 @@ def test_more_ticket_reads_that_refuse_before_any_attempt(
     _repo, launcher, _sessions, descriptor, prompt = _ticket_repo(tmp_path, gh_script, url=url)
 
     result = launcher.main(
-        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42",
+         "--ticket-as-of", TICKET_CUTOFF]
     )
 
     assert result == 64
@@ -3896,7 +3931,8 @@ def test_a_ticket_read_that_hangs_is_cut_off(
     started = time.monotonic()
 
     result = launcher.main(
-        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42",
+         "--ticket-as-of", TICKET_CUTOFF]
     )
 
     assert result == 64
@@ -3916,7 +3952,8 @@ def test_a_ticket_read_needs_gh_on_the_trusted_path(
     )
 
     result = launcher.main(
-        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42",
+         "--ticket-as-of", TICKET_CUTOFF]
     )
 
     assert result == 64
@@ -3930,7 +3967,8 @@ def test_a_trailing_slash_on_tracker_url_is_normalised(tmp_path: Path) -> None:
     )
 
     result = launcher.main(
-        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42"]
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt), "--ticket", "42",
+         "--ticket-as-of", TICKET_CUTOFF]
     )
 
     assert result == 0

@@ -22,8 +22,9 @@ recorded ``stalled``. Exit status: 0 completed, 75 stalled, 70 failed, 64 refuse
 128+N interrupted by signal N.
 
 ``--ticket <n>`` reads GitHub issue ``n`` with the trusted ``gh`` before launch and
-appends it to the prompt in a delimited block bound into the request; a failed read
-refuses the launch (exit 64) before any attempt record.
+requires ``--ticket-as-of <UTC timestamp>``. Only an owner, member or collaborator
+issue last updated at or before that cutoff enters the prompt. A failed read or
+trust check refuses the launch (exit 64) before any attempt record.
 """
 
 from __future__ import annotations
@@ -48,6 +49,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any, BinaryIO
+from urllib.parse import urlsplit
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
@@ -240,7 +242,18 @@ def _lane_terminal_state(final_text: bytes | None) -> dict[str, Any] | None:
     return {"state": match["state"], "pr": None, "reason": match["reason"]}
 
 
-def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dict[str, Any]:
+def _ticket_time(value: object, field: str) -> dt.datetime:
+    try:
+        if not isinstance(value, str):
+            raise ValueError
+        return dt.datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+    except ValueError as exc:
+        raise LaunchError(f"{field} must be a UTC timestamp (YYYY-MM-DDTHH:MM:SSZ)") from exc
+
+
+def _read_ticket(
+    number_text: str, config: dict[str, Any], worktree: str, cutoff: dt.datetime
+) -> dict[str, Any]:
     """Read one GitHub issue for the lane's prompt, or refuse the launch."""
     if not TICKET_NUMBER.fullmatch(number_text):
         raise LaunchError("--ticket must be a positive issue number")
@@ -251,14 +264,18 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
             f"--ticket reads only the github-issues tracker backend (tracker.backend is "
             f"{backend!r}); put the ticket text in the prompt file instead"
         )
-    # The answer must be this tracker's issue: `gh issue view` also answers for a
-    # pull request with the same number, and resolves the repository from the
-    # worktree's remotes, so the url is held to `<tracker.url>/<n>` exactly, after
-    # dropping any trailing slash from `tracker.url`.
+    # Read content and provenance from one Issue object. Bind it to the configured
+    # tracker URL as well as the repository gh resolves from the worktree.
     tracker_url = get(config, "tracker.url", None)
     if not isinstance(tracker_url, str) or not tracker_url.startswith("https://"):
         raise LaunchError("--ticket needs tracker.url, the https:// issues url of the tracker")
     tracker_url = tracker_url.rstrip("/")
+    try:
+        tracker_host = urlsplit(tracker_url).hostname
+    except ValueError as exc:
+        raise LaunchError("--ticket needs a valid tracker.url host") from exc
+    if not tracker_host:
+        raise LaunchError("--ticket needs a valid tracker.url host")
     gh = shutil.which("gh", path=SAFE_EXECUTABLE_PATH)
     if gh is None:
         raise LaunchError("--ticket needs gh on the trusted executable path")
@@ -270,7 +287,14 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
     environment["PATH"] = SAFE_EXECUTABLE_PATH
     try:
         result = subprocess.run(
-            [gh, "issue", "view", str(number), "--json", "number,title,body,url"],
+            [
+                gh, "api", "graphql", "--hostname", tracker_host, "-F", "owner={owner}", "-F", "repo={repo}",
+                "-F", f"number={number}", "-f",
+                "query=query($owner:String!,$repo:String!,$number:Int!){"
+                "repository(owner:$owner,name:$repo){issue(number:$number){"
+                "number title body url authorAssociation updatedAt}}}",
+                "--jq", ".data.repository.issue",
+            ],
             cwd=worktree,
             env=environment,
             check=True,
@@ -302,6 +326,10 @@ def _read_ticket(number_text: str, config: dict[str, Any], worktree: str) -> dic
             ticket[field].encode("utf-8")
     except UnicodeEncodeError as exc:
         raise LaunchError(f"the tracker's answer for ticket #{number} is not UTF-8 text") from exc
+    if ticket.get("authorAssociation") not in ("OWNER", "MEMBER", "COLLABORATOR"):
+        raise LaunchError(f"ticket #{number} needs a trusted author association")
+    if _ticket_time(ticket.get("updatedAt"), "ticket updatedAt") > cutoff:
+        raise LaunchError(f"ticket #{number} changed after --ticket-as-of; review it again")
     return {key: ticket[key] for key in ("number", "title", "body", "url")}
 
 
@@ -1837,6 +1865,7 @@ def launch(
     prompt_path: Path,
     tier: str | None = None,
     ticket_number: str | None = None,
+    ticket_as_of: str | None = None,
 ) -> int:
     descriptor, descriptor_raw = _load_descriptor(descriptor_path)
     (
@@ -1861,11 +1890,17 @@ def launch(
         raise LaunchError("task prompt must be UTF-8 text") from exc
     ticket_binding: dict[str, Any] | None = None
     ticket_text = ""
+    if (ticket_number is None) != (ticket_as_of is None):
+        raise LaunchError("--ticket and --ticket-as-of must be supplied together")
     if ticket_number is not None:
+        cutoff = _ticket_time(ticket_as_of, "--ticket-as-of")
+        if cutoff > dt.datetime.now(dt.timezone.utc):
+            raise LaunchError("--ticket-as-of must not be in the future")
         ticket = _read_ticket(
             ticket_number,
             load_config(config_root / "config" / "dev-model.yaml"),
             descriptor["worktree"],
+            cutoff,
         )
         ticket_text = "\n\n" + _ticket_block(ticket)
         ticket_binding = {
@@ -2310,6 +2345,7 @@ def _parser() -> argparse.ArgumentParser:
         "lane's prompt; any read failure refuses the launch (tracker.backend must be "
         "github-issues)",
     )
+    parser.add_argument("--ticket-as-of", help="UTC cutoff for the reviewed ticket (YYYY-MM-DDTHH:MM:SSZ)")
     return parser
 
 
@@ -2323,6 +2359,7 @@ def main(argv: list[str] | None = None) -> int:
             Path(arguments.prompt_file),
             arguments.tier,
             arguments.ticket,
+            arguments.ticket_as_of,
         )
     except LaunchError as exc:
         print(f"[lane-launcher] error: {exc}", file=sys.stderr)

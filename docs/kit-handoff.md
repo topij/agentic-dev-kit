@@ -338,26 +338,19 @@ dates if step 1a merges later). Run `post-merge-systemize backfill` and the `rec
 2026-11-27, 2026-12-11 and 2026-12-13, ticket each LOW recorded on two or more pull requests (operator approval), and
 judge the trial on 2026-12-13, after that day's run, against the plan's M3 inflow. The rule stays until the operator decides. Step 1b, the backlog pass, ran on 2026-11-13 with the operator's
 approval of each batch, and each step of the plan names its tickets. Its done-when, no open issue without a priority label, held on 2026-11-13:
-`gh issue list --state open --limit 1000 --search '-label:P1 -label:P2 -label:P3'` printed none when the pass ended. The plan's security finding S2, a lane writing the
-review receipt its own merge is judged by, was probed live at `171d9f4` on 2026-11-13 (step 2a's probe) and holds: a
-headless lane ran the `pr_watch.py --record-review` its profile grants on its own throwaway pull request, and once CI
-was green `dev_session.sh pr-watch <scope> --json` reported it `mergeable` with no review having run; a receipt the
-cockpit recorded at the same head read identically, and `reconcile_sessions.sh` called the lane held. A direct write
-into the lane's state directory was refused by the profile. The probe's pull request was abandoned unmerged and its
-branches deleted; its receipts and notes are local only, untracked under `saved_plans/s2-probe-evidence_2026-11-13/`
-in the primary checkout. Step 2a gives the cockpit its own per-session watch store. The live
-acceptance evidence belongs with the remedy before the operator resumes self-merge.
+`gh issue list --state open --limit 1000 --search '-label:P1 -label:P2 -label:P3'` printed none when the pass ended. The pre-repair S2 evidence is local to the primary checkout,
+under `saved_plans/s2-probe-evidence_2026-11-13/`. On 2026-11-17 the operator accepted
+step 2a using that baseline, #1450's live lane refusal and cockpit control, and the
+valid-input local fixture in place of an exact live replay. The plan's step 2a records the evidence.
 Steps 3a, 2e and 2d ran as headless lanes on 2026-11-13, and the operator merged each on 2026-11-14 after its
 review rounds: #1440 (3a, `e4a4bd1`), #1441 (2e, `e094cc0`) and #1443 (2d, `52c4cbe`). The operator split #1443:
-#1443 covered adoption, #1463 addressed its remaining pinning gaps, and #1445 took upgrade pinning. #1370, #1371 and #345 are still open after those merges. The operator decided the plan's
-D1 to D6 on 2026-11-12; its Step 0 records them. One is in force now (D2): no lane is issued with
-`--merge-class self` and no session runs `dev_session.sh merge`; the operator merges lane pull requests after
-reading them. The hold is prose and binds only a session that reads this entry or the plan: the kit's
-documents and engines still describe and accept self-merge, `parallel.md` for one. It lifts when the plan's step 2a ships, or on the
-operator's decision under the conditions D2 states. A probe result alone lifts nothing.
+#1443 covered adoption, #1463 addressed its remaining pinning gaps, and #1464 delivered upgrade pinning for #1445.
+The operator retained D2 separately on 2026-11-17: issue only operator-class lanes;
+the operator reads and merges their pull requests. Revisit the hold with the operator
+at step 2c (lane identity and credential isolation).
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: verify the step 2a remedy against the saved baseline and retain D2 until it ships.
+▶ Next: step 2c — assess lane identity and isolation from the operator's credentials, then revisit D2.
 The operator decides whether #1370, #1371 and #345 are done, now that
 #1440 and #1441 have merged. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on

@@ -213,6 +213,7 @@ like good news, it looks like a missing handoff.
   `all_comments[]` holds every issue comment, every review submission with its
   `state` (including one submitted without a body), and every inline review comment,
   independent of `pr-watch` acknowledgement or seen state and of its noise markers.
+  Use the author-association rule in [pr-watch](pr-watch.md) when presenting a finding for action.
   Judge from `all_comments[]`, never from `new_comments[]`, which is the
   acknowledgement-filtered view the watch loop reads. `--no-persist` acknowledges
   nothing, so in serialized use this read leaves the pull request's seen-set and pending acknowledgements

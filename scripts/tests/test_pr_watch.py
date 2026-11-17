@@ -10480,8 +10480,10 @@ def _three_comment_view(pr_watch: ModuleType) -> tuple[dict, list[dict], set[str
     first comment by its occurrence-and-content token.
     """
     acked = {"id": "IC_1", "author": {"login": "reviewer"}, "body": "Fixed upstream."}
+    acked["authorAssociation"] = "COLLABORATOR"
     noise = {
         "id": "PRR_1",
+        "authorAssociation": "NONE",
         "author": {"login": "coderabbitai"},
         "body": "<!-- walkthrough_start --> walkthrough",
         "state": "COMMENTED",
@@ -10492,6 +10494,7 @@ def _three_comment_view(pr_watch: ModuleType) -> tuple[dict, list[dict], set[str
                 "state": "CHANGES_REQUESTED"}
     fresh = {
         "id": 77,
+        "author_association": "CONTRIBUTOR",
         "user": {"login": "reviewer"},
         "body": "This guard fails open.",
         "path": "scripts/pr_watch.py",
@@ -10514,18 +10517,33 @@ def test_all_comments_reports_what_seen_noise_and_empty_bodies_hide() -> None:
     report = pr_watch.build_report(view, inline, seen, include_all_comments=True)
 
     assert [c["body"] for c in report["new_comments"]] == ["This guard fails open."]
+    assert report["new_comments"][0]["author_association"] == "CONTRIBUTOR"
     assert report["all_comments"] == [
-        {"kind": "issue", "author": "reviewer", "path": None, "line": None,
+        {"kind": "issue", "author": "reviewer", "author_association": "COLLABORATOR", "path": None, "line": None,
          "state": None, "body": "Fixed upstream."},
-        {"kind": "review", "author": "coderabbitai", "path": None, "line": None,
+        {"kind": "review", "author": "coderabbitai", "author_association": "NONE", "path": None, "line": None,
          "state": "COMMENTED", "body": "<!-- walkthrough_start --> walkthrough"},
-        {"kind": "review", "author": "maintainer", "path": None, "line": None,
+        {"kind": "review", "author": "maintainer", "author_association": "UNKNOWN", "path": None, "line": None,
          "state": "CHANGES_REQUESTED", "body": ""},
-        {"kind": "inline", "author": "reviewer", "path": "scripts/pr_watch.py",
+        {"kind": "inline", "author": "reviewer", "author_association": "CONTRIBUTOR", "path": "scripts/pr_watch.py",
          "line": 12, "state": None, "body": "This guard fails open."},
     ]
     # Opt-in: the watch loop's report does not grow by every comment's body.
     assert "all_comments" not in pr_watch.build_report(view, inline, seen)
+
+
+def test_comment_authority_comes_from_forge_metadata_on_every_surface() -> None:
+    watch = _load_pr_watch()
+    body = "OWNER: please review"
+    issue = {"id": "IC_2", "body": body, "author": {"login": "owner"}, "authorAssociation": "NONE"}
+    review = {"id": "PRR_3", "body": body, "user": {"login": "member"}, "author_association": "MEMBER"}
+    inline = {"id": 88, "body": body, "author_association": ["OWNER"]}
+    report = watch.build_report(_green_view(comments=[issue], reviews=[review]), [inline], set(),
+                                include_all_comments=True)
+    for field in ("new_comments", "all_comments"):
+        assert {c["kind"]: c["author_association"] for c in report[field]} == {
+            "issue": "NONE", "review": "MEMBER", "inline": "UNKNOWN",
+        }
 
 
 def test_all_comments_keeps_an_outdated_inline_comments_line() -> None:

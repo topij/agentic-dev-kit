@@ -90,8 +90,16 @@ python3 <engine-dir>/launch_lane.py \
   --descriptor <session>/launch-descriptor.json \
   --prompt-file <task-prompt> \
   [--tier <cheap|default|expensive>] \
-  [--ticket <issue-number>]
+  [--ticket <issue-number> --ticket-as-of <UTC-timestamp>]
 ```
+
+For a ticket launch, review the issue and capture its `updatedAt` from the same
+read as its title and body (for example, `gh issue view <n> --json title,body,updatedAt`).
+Pass that UTC time as `--ticket-as-of` (YYYY-MM-DDTHH:MM:SSZ). The tracker must
+identify the author as `OWNER`, `MEMBER` or `COLLABORATOR`. A later update,
+including activity unrelated to the text, requires reviewing the issue again.
+The comparison uses GitHub's timestamp precision. It checks the original author's
+association and issue update time, not the identity of every past editor.
 
 `--ticket` has the launcher read that GitHub issue with the trusted `gh` before launch
 and append it after the task prompt, between `<<<TICKET` and `TICKET>>>` lines. The
