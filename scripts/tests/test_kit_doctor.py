@@ -2937,6 +2937,7 @@ def test_dependency_graph_of_the_real_kit_names_kitconfigs_importers():
         "scripts/hooks/pre-push",
         "scripts/kit_doctor.py",
         "scripts/launch_lane.py",
+        "scripts/isolated_lane.py",
         "scripts/panel_prompt.py",
         "scripts/pr_watch.py",
         "scripts/session_cleanup.py",

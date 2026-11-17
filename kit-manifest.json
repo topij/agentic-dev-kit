@@ -227,7 +227,7 @@
     },
     "scripts/dev_session.sh": {
       "role": "engine",
-      "sha256": "cf21cd07295450e0ef7110317e500f02916fc5f9282d18bd234fe000fcd12b75"
+      "sha256": "4e13a6491673041280b110e289e50ecc2fc5f8ac4d4c4c842a65194c358efe66"
     },
     "scripts/digest_merged_prs.py": {
       "role": "engine",
@@ -797,7 +797,7 @@
     },
     "scripts/tests/test_kit_doctor.py": {
       "role": "test",
-      "sha256": "f813d03ba7c69fea4541f12fca00460dbfb5edc13fc613c7201c2aba5686a171"
+      "sha256": "8bd8b2c684836ba81ad9b6723b284f7c0f54f0da74be09928da9ad8ed252baf3"
     },
     "scripts/tests/test_kit_doctor_upgrade_lite.py": {
       "role": "repo-only",

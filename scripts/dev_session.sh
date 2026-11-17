@@ -14,7 +14,7 @@
 #
 # Usage:
 #   scripts/dev_session.sh new <scope> [--base <protected>] [--prefix <configured>] [--branch <full>] [--merge-class self|operator] [--force] [--headless] [--runtime <name>] [--launcher <command>]
-#   scripts/dev_session.sh isolated <scope> --prompt-file <path> --app-id <id> --app-key <path> [--provision <guest-script>]
+#   <engine-dir>/dev_session.sh isolated <scope> --prompt-file <path> --app-id <id> --app-key <path> [--provision <guest-script>]
 #   scripts/dev_session.sh list [--watch [interval]]
 #   scripts/dev_session.sh path <scope>
 #   scripts/dev_session.sh pr-watch <scope> [pr-watch options]
@@ -1230,7 +1230,7 @@ _subcommand_usage() {
         remove) sub=rm ;;
     esac
     _header_help \
-        | awk -v sub_name="$sub" '$1 == "scripts/dev_session.sh" && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
+        | awk -v sub_name="$sub" '($1 == "scripts/dev_session.sh" || $1 == "<engine-dir>/dev_session.sh") && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
 }
 
 main() {
