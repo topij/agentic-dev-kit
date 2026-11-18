@@ -262,7 +262,7 @@ and the overlay still refuses `parallel.<runtime>_headless_command` (#629);
 Proposals not yet taken: a
 documented cloud-session lane route, and standing mandates (#472, which the review
 sequences after a terminal state and a cost record). #1173 was retired as delivered by
-#1235 on 2026-11-13; #1174's ranking report and per-lane budget stay open.
+#1235 on 2026-11-13. #1447 delivered the lane usage report; #1174 retains scheduled-workflow ranking and optional per-lane budgets.
 **Owner:** [#1239](https://github.com/topij/agentic-dev-kit/issues/1239),
 [#1174](https://github.com/topij/agentic-dev-kit/issues/1174),
 [#1242](https://github.com/topij/agentic-dev-kit/issues/1242),
@@ -349,7 +349,16 @@ After the disposable GitHub App pilot on 2026-11-17, the operator retained D2.
 Issue operator-class lanes only. The operator reads and merges their pull requests.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-▶ Next: implement the step 2c launcher path and exercise its acceptance criteria on the disposable protected target.
+#1467 shipped the opt-in App/Lima launcher. On 2026-11-18,
+`scripts/dev_session.sh isolated final-launcher-20261118` at
+`7c62d5d6d6ee52c2e6d6a20e184edf36d1b14472` completed the disposable-target run:
+[App PR #7](https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/7) records the guest
+`make test` probes and protected merge refusal. The plan's step 2c links the host/guest
+acceptance record and its limits. The model replies were scripted; lane merges remain operator-only.
+
+▶ Next: choose the remaining step 2c work: #615's push/gh argument gates, #617's validated
+profile-byte handoff, #618's post-exit origin check, or fallback-reviewer isolation
+(#1025 and #1138). The isolated launcher acceptance does not complete these items.
 The operator decides whether #1370, #1371 and #345 are done, now that
 #1440 and #1441 have merged. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on
