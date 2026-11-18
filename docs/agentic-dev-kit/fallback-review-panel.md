@@ -519,8 +519,35 @@ author re-reading their own diff. **Cite them by name, never by number.**
    writes, and lenses run concurrently — one lens's mutations can appear to
    another as an external process corrupting the repo, and the companion has the
    occasion this was discovered on, where one lens nearly destroyed live work.
-   Give each lens a scratch copy or its own git worktree, and require it to leave
-   the shared tree byte-identical.
+   For writable Git operations, make an independent clone with
+   `git clone --no-hardlinks --no-local --no-checkout`, then remove its `origin`
+   before checking out the reviewed commit. Never use `cp -R` (or another directory
+   copier) on a linked worktree: its `.git` is a gitfile pointing at the source's
+   administration, so refs, worktree registration and hooks can still be shared.
+   Adding another worktree of the handed repository also shares administration.
+
+   Bind `REVIEW_SOURCE` to the absolute handed-tree path, `REVIEW_COPY` to a fresh
+   absolute path beside it inside the allocated round, and `REVIEW_HEAD` to the
+   full reviewed commit SHA. Run this recipe, stopping if any command fails:
+
+   <!-- reviewer-writable-clone:begin -->
+   ```sh
+   (
+     set -eu
+     git clone --no-hardlinks --no-local --no-checkout -- "${REVIEW_SOURCE:?}" "${REVIEW_COPY:?}"
+     git -C "$REVIEW_COPY" remote remove origin
+     git -C "$REVIEW_COPY" checkout --detach "${REVIEW_HEAD:?}"
+   )
+   ```
+   <!-- reviewer-writable-clone:end -->
+
+   `--no-local` also avoids inheriting source object alternates; removing `origin`
+   avoids leaving a push destination back to the handed tree. Do not add `--shared`
+   or `--reference`. If the commit is unavailable, stop and obtain it only in your
+   private clone. An archive without Git metadata remains suitable for file-only
+   probes; do not copy a `.git` file or directory into it. Leave the handed tree
+   and its Git administration unchanged. This recipe separates Git storage; it
+   does not isolate credentials or inherited Git configuration.
 
    A runtime may hand a lens the live checkout, or a worktree holding somebody's
    in-progress work — on this repo `dev_session.sh` builds lanes with
@@ -603,8 +630,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
     own route.
 
     - **A writable tree**, which mutation testing needs, has to be a copy you
-      made. Extracting an archive and cloning with `--no-hardlinks` both reach
-      the revision from a source you cannot write to. If your sandbox refuses
+      made. Use **No writes in the tree you were given**'s independent-clone
+      recipe for Git operations, or extract an archive without Git metadata for
+      file-only probes. If your sandbox refuses
       every route, report mutation testing as **not performed** rather than
       skipping it quietly: **Mutation-test new branches** is then unmet and the
       cockpit needs to know.
@@ -1010,9 +1038,14 @@ never by number.**
    finding about code the head does not have is refuted only with that evidence. Say
    whether it was wrong when it was made or has gone stale since.
 6. **Re-run, don't trust.** When a finding rests on something that was executed, run it
-   again yourself. A lens's output is testimony. Make any copy you need beside the tree
-   you were handed, inside the allocated review round, at a fresh path namespaced by
-   role and revision (`verifier-<short-sha>-copy`). Never reach it by removing and
+   again yourself. A lens's output is testimony. For writable Git operations, use
+   the independent-clone recipe in this doctrine's
+   **No writes in the tree you were given**:
+   `git clone --no-hardlinks --no-local --no-checkout`, remove `origin`, then check
+   out the reviewed SHA. Never copy a linked worktree's `.git` gitfile or add a
+   worktree of the handed repository: those share its administration. Make the clone
+   beside the tree you were handed, inside the allocated review round, at a fresh
+   path namespaced by role and revision (`verifier-<short-sha>-copy`). Never reach it by removing and
    recreating a path: a sandbox refusing `rm -rf` is refusing the wrong route. Never
    write in the tree you were handed.
 7. **Severity is not yours.** Do not relabel a finding's severity, its regression

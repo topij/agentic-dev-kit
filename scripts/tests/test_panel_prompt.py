@@ -18,8 +18,9 @@ the script still emits something plausible-looking:
 **What these tests do NOT cover**, stated because a shorter list would overstate
 them: they do not run `git ls-remote`, so the remote-resolution path is exercised
 only through an injected base; they say nothing about whether a lens *obeys* the
-assembled prompt; and they do not check the doctrine's prose, which is the same
-gap `test_mutation_gate.py` records for itself.
+assembled prompt. The writable-clone fixture executes the doctrine's shell recipe;
+other doctrine prose is not checked, which is the same gap
+`test_mutation_gate.py` records for itself.
 """
 
 from __future__ import annotations
@@ -2655,3 +2656,121 @@ def test_scratch_authority_import_cannot_be_shadowed_by_lib(repo, tmp_path, mana
     )
     assert result.returncode == (0 if managed else 2), result.stderr
     assert not marker.exists()
+
+
+# --- writable copies own their Git administration (#1138) ----------------------
+
+
+def _review_copy_source(repo, tmp_path):
+    require_kit_paths("Makefile", "init.sh")
+    for name in ("Makefile", "init.sh"):
+        shutil.copyfile(REPO_ROOT / name, repo / name)
+    (repo / "scripts/hooks").mkdir()
+    (repo / "scripts/hooks/pre-push").write_text("#!/bin/sh\nexit 0\n")
+    _git(repo, "add", "Makefile", "init.sh", "scripts/hooks/pre-push")
+    _git(repo, "commit", "-qm", "hook fixture")
+    hook = repo / ".git/hooks/pre-push"
+    hook.write_text("#!/bin/sh\n# devkit-hook-shim fixture sentinel\nexit 0\n")
+    hook.chmod(0o755)
+    source = tmp_path / "handed linked tree"
+    _git(repo, "worktree", "add", "--detach", str(source), "HEAD")
+    return source, hook
+
+
+def _review_source_snapshot(repo, source, hook):
+    return {
+        "refs": _git(repo, "show-ref"),
+        "worktrees": _git(repo, "worktree", "list", "--porcelain"),
+        "hook": hook.read_bytes(),
+        "hook_mode": hook.stat().st_mode,
+        "head": _git(source, "rev-parse", "HEAD"),
+        "status": _git(source, "status", "--short"),
+        "gitfile": (source / ".git").read_bytes(),
+        "config": (repo / ".git/config").read_bytes(),
+    }
+
+
+def _exercise_reviewer_git_writes(copy, child):
+    _git(copy, "update-ref", "refs/heads/reviewer-probe", "HEAD")
+    _git(copy, "worktree", "add", "--detach", str(child), "HEAD")
+    result = subprocess.run(
+        ["make", "install-hooks"], cwd=copy, capture_output=True, text=True,
+        env={**os.environ, "DEVKIT_INSTALL_SHARED_HOOKS": "1"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "installed " in result.stdout
+
+
+def test_copying_linked_gitfile_shares_refs_worktree_admin_and_hooks(repo, tmp_path):
+    source, hook = _review_copy_source(repo, tmp_path)
+    before = _review_source_snapshot(repo, source, hook)
+    copy = tmp_path / "unsafe copied tree"
+    shutil.copytree(source, copy)
+    assert (copy / ".git").is_file()
+    assert _git(copy, "rev-parse", "--path-format=absolute", "--git-common-dir") == str(repo / ".git")
+    _exercise_reviewer_git_writes(copy, tmp_path / "unsafe child")
+    after = _review_source_snapshot(repo, source, hook)
+    assert after["refs"] != before["refs"]
+    assert after["worktrees"] != before["worktrees"]
+    assert after["hook"] != before["hook"]
+
+
+@pytest.mark.parametrize("borrow_objects", [False, True])
+def test_documented_writable_clone_preserves_handed_git_administration(repo, tmp_path, borrow_objects):
+    source, hook = _review_copy_source(repo, tmp_path)
+    head = _git(source, "rev-parse", "HEAD")
+    if borrow_objects:
+        # A local clone can otherwise inherit the source's object alternates.
+        store = tmp_path / "object store.git"
+        _git(repo, "clone", "--bare", "--no-hardlinks", str(repo), str(store))
+        (repo / ".git/objects/info/alternates").write_text(str(store / "objects") + "\n")
+        _git(repo, "repack", "-a", "-d")
+        _git(repo, "prune-packed")
+    before = _review_source_snapshot(repo, source, hook)
+    copy = tmp_path / "private writable tree"
+    section = doctrine_text().split("<!-- reviewer-writable-clone:begin -->", 1)[1]
+    recipe = section.split("```sh\n", 1)[1].split("```", 1)[0]
+    result = subprocess.run(
+        ["sh", "-c", recipe], cwd=tmp_path, capture_output=True, text=True,
+        env={**os.environ, "REVIEW_SOURCE": str(source), "REVIEW_COPY": str(copy), "REVIEW_HEAD": head},
+    )
+    assert result.returncode == 0, result.stderr
+    assert (copy / ".git").is_dir()
+    assert _git(copy, "rev-parse", "--path-format=absolute", "--git-common-dir") == str(copy / ".git")
+    assert not (copy / ".git/objects/info/alternates").exists()
+    assert _git(copy, "remote") == ""
+    assert _git(copy, "rev-parse", "HEAD") == head
+    assert not _run_ok(copy, "symbolic-ref", "-q", "HEAD")
+    _exercise_reviewer_git_writes(copy, tmp_path / "private child")
+    assert _review_source_snapshot(repo, source, hook) == before
+    assert _run_ok(copy, "show-ref", "--verify", "refs/heads/reviewer-probe")
+    assert "private child" in _git(copy, "worktree", "list", "--porcelain")
+    assert (copy / ".git/hooks/pre-push").read_bytes() != before["hook"]
+    source_objects = { (p.stat().st_dev, p.stat().st_ino)
+                       for p in (repo / ".git/objects").rglob("*") if p.is_file() }
+    copy_objects = { (p.stat().st_dev, p.stat().st_ino)
+                     for p in (copy / ".git/objects").rglob("*") if p.is_file() }
+    assert source_objects and copy_objects
+    assert source_objects.isdisjoint(copy_objects)
+    # Object reads must not depend on the source repository or its alternates.
+    shutil.rmtree(repo / ".git/objects")
+    if borrow_objects:
+        shutil.rmtree(store)
+    assert _git(copy, "show", f"{head}:a.txt") == "head"
+    _git(copy, "fsck", "--full")
+
+
+@pytest.mark.parametrize("verifier", [False, True])
+def test_private_clone_recipe_is_present_before_the_reviewer_contract(repo, tmp_path, verifier):
+    if verifier:
+        out = _verifier(repo, tmp_path)
+        heading = "## The contract the verifier gets"
+    else:
+        base, head = _revs(repo)
+        out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
+        heading = "## The contract every lens gets"
+    assert out.returncode == 0, out.stderr
+    early = out.stdout.split(heading, 1)[0]
+    assert "git clone --no-hardlinks --no-local --no-checkout" in early
+    assert "remove the clone's `origin`" in early
+    assert "Never copy a linked worktree's `.git` gitfile" in early
