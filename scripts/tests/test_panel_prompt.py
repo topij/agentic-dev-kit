@@ -2687,6 +2687,7 @@ def _review_source_snapshot(repo, source, hook):
         "status": _git(source, "status", "--short"),
         "gitfile": (source / ".git").read_bytes(),
         "config": (repo / ".git/config").read_bytes(),
+        "index": Path(_git(source, "rev-parse", "--path-format=absolute", "--git-path", "index")).read_bytes(),
     }
 
 
@@ -2716,30 +2717,63 @@ def test_copying_linked_gitfile_shares_refs_worktree_admin_and_hooks(repo, tmp_p
 
 
 @pytest.mark.parametrize("borrow_objects", [False, True])
-def test_documented_writable_clone_preserves_handed_git_administration(repo, tmp_path, borrow_objects):
+@pytest.mark.parametrize("inherited_routing", [False, True])
+def test_documented_writable_clone_preserves_handed_git_administration(
+    repo, tmp_path, borrow_objects, inherited_routing,
+):
     source, hook = _review_copy_source(repo, tmp_path)
     head = _git(source, "rev-parse", "HEAD")
+    _git(repo, "commit", "--allow-empty", "-qm", "later handed revision")
+    _git(source, "checkout", "--detach", _git(repo, "rev-parse", "HEAD"))
+    assert _git(source, "rev-parse", "HEAD") != head
+    _git(repo, "remote", "set-url", "origin", "https://example.invalid/handed.git")
+    _git(repo, "update-ref", "refs/remotes/origin/main", head)
     if borrow_objects:
-        # A local clone can otherwise inherit the source's object alternates.
+        # The reviewed commit must be read through the alternate, not a local copy.
         store = tmp_path / "object store.git"
         _git(repo, "clone", "--bare", "--no-hardlinks", str(repo), str(store))
-        (repo / ".git/objects/info/alternates").write_text(str(store / "objects") + "\n")
-        _git(repo, "repack", "-a", "-d")
-        _git(repo, "prune-packed")
+        alternate = repo / ".git/objects/info/alternates"
+        alternate.write_text(str(store / "objects") + "\n")
+        _loose_object(repo, head).unlink()
+        assert _run_ok(source, "cat-file", "-e", head)
+        alternate.unlink()
+        assert not _run_ok(source, "cat-file", "-e", head)
+        alternate.write_text(str(store / "objects") + "\n")
     before = _review_source_snapshot(repo, source, hook)
     copy = tmp_path / "private writable tree"
+    config = tmp_path / "reviewer.gitconfig"
+    config.write_text("[clone]\n\tdefaultRemoteName = upstream\n")
+    env = {
+        **os.environ, "GIT_CONFIG_GLOBAL": str(config), "GIT_CONFIG_NOSYSTEM": "1",
+        "REVIEW_SOURCE": str(source), "REVIEW_COPY": str(copy), "REVIEW_HEAD": head,
+    }
+    if inherited_routing:
+        env.update({
+            "GIT_DIR": _git(source, "rev-parse", "--absolute-git-dir"),
+            "GIT_WORK_TREE": str(source), "GIT_COMMON_DIR": str(repo / ".git"),
+            "GIT_INDEX_FILE": _git(source, "rev-parse", "--path-format=absolute", "--git-path", "index"),
+            "GIT_OBJECT_DIRECTORY": str(repo / ".git/objects"),
+            "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(repo / ".git/objects"),
+            "GIT_NAMESPACE": "inherited-reviewer",
+        })
     section = doctrine_text().split("<!-- reviewer-writable-clone:begin -->", 1)[1]
     recipe = section.split("```sh\n", 1)[1].split("```", 1)[0]
+    # A later operation must remain inside the recipe's sanitized environment.
+    prefix, closing, suffix = recipe.rpartition(")")
+    assert closing
+    recipe = prefix + 'git -C "$REVIEW_COPY" update-ref refs/heads/environment-probe HEAD\n' + closing + suffix
     result = subprocess.run(
         ["sh", "-c", recipe], cwd=tmp_path, capture_output=True, text=True,
-        env={**os.environ, "REVIEW_SOURCE": str(source), "REVIEW_COPY": str(copy), "REVIEW_HEAD": head},
+        env=env,
     )
     assert result.returncode == 0, result.stderr
+    assert _review_source_snapshot(repo, source, hook) == before
     assert (copy / ".git").is_dir()
     assert _git(copy, "rev-parse", "--path-format=absolute", "--git-common-dir") == str(copy / ".git")
     assert not (copy / ".git/objects/info/alternates").exists()
     assert _git(copy, "remote") == ""
     assert _git(copy, "rev-parse", "HEAD") == head
+    assert _git(copy, "rev-parse", "refs/heads/environment-probe") == head
     assert not _run_ok(copy, "symbolic-ref", "-q", "HEAD")
     _exercise_reviewer_git_writes(copy, tmp_path / "private child")
     assert _review_source_snapshot(repo, source, hook) == before
@@ -2770,7 +2804,10 @@ def test_private_clone_recipe_is_present_before_the_reviewer_contract(repo, tmp_
         out = _run(repo, "--lens", "adversarial", "--head", head, "--base", base, "--branch", "b")
         heading = "## The contract every lens gets"
     assert out.returncode == 0, out.stderr
+    assert heading in out.stdout
     early = out.stdout.split(heading, 1)[0]
-    assert "git clone --no-hardlinks --no-local --no-checkout" in early
-    assert "remove the clone's `origin`" in early
+    assert "git clone --no-hardlinks --no-local --no-checkout --origin origin" in early
+    assert "remove the clone's `origin`, then check out the reviewed SHA" in early
+    assert "clear the recipe's Git routing variables" in early
+    assert "verification in the recipe's sanitized subshell" in early
     assert "Never copy a linked worktree's `.git` gitfile" in early

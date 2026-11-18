@@ -520,7 +520,8 @@ author re-reading their own diff. **Cite them by name, never by number.**
    another as an external process corrupting the repo, and the companion has the
    occasion this was discovered on, where one lens nearly destroyed live work.
    For writable Git operations, make an independent clone with
-   `git clone --no-hardlinks --no-local --no-checkout`, then remove its `origin`
+   `git clone --no-hardlinks --no-local --no-checkout --origin origin` in the
+   sanitized subshell below, then remove its `origin`
    before checking out the reviewed commit. Never use `cp -R` (or another directory
    copier) on a linked worktree: its `.git` is a gitfile pointing at the source's
    administration, so refs, worktree registration and hooks can still be shared.
@@ -534,20 +535,31 @@ author re-reading their own diff. **Cite them by name, never by number.**
    ```sh
    (
      set -eu
-     git clone --no-hardlinks --no-local --no-checkout -- "${REVIEW_SOURCE:?}" "${REVIEW_COPY:?}"
+     unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR \
+       GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_NAMESPACE \
+       GIT_CONFIG GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_IMPLICIT_WORK_TREE \
+       GIT_GRAFT_FILE GIT_NO_REPLACE_OBJECTS GIT_REPLACE_REF_BASE GIT_PREFIX \
+       GIT_SHALLOW_FILE GIT_QUARANTINE_PATH
+     git clone --no-hardlinks --no-local --no-checkout --origin origin -- "${REVIEW_SOURCE:?}" "${REVIEW_COPY:?}"
      git -C "$REVIEW_COPY" remote remove origin
      git -C "$REVIEW_COPY" checkout --detach "${REVIEW_HEAD:?}"
+     # Run private-copy Git operations and verification here, before leaving this subshell.
    )
    ```
    <!-- reviewer-writable-clone:end -->
 
+   Keep later private-copy Git operations and verification in this sanitized
+   subshell; a new shell must repeat the `unset` block first. An inherited
+   `GIT_DIR` overrides `git -C`, and object/index routing variables can also send
+   writes back into the handed repository. `--origin origin` overrides an
+   inherited `clone.defaultRemoteName`, so the removal names the remote created.
    `--no-local` also avoids inheriting source object alternates; removing `origin`
    avoids leaving a push destination back to the handed tree. Do not add `--shared`
    or `--reference`. If the commit is unavailable, stop and obtain it only in your
    private clone. An archive without Git metadata remains suitable for file-only
    probes; do not copy a `.git` file or directory into it. Leave the handed tree
    and its Git administration unchanged. This recipe separates Git storage; it
-   does not isolate credentials or inherited Git configuration.
+   does not isolate credentials or configuration read from Git config files.
 
    A runtime may hand a lens the live checkout, or a worktree holding somebody's
    in-progress work — on this repo `dev_session.sh` builds lanes with
@@ -1041,13 +1053,15 @@ never by number.**
    again yourself. A lens's output is testimony. For writable Git operations, use
    the independent-clone recipe in this doctrine's
    **No writes in the tree you were given**:
-   `git clone --no-hardlinks --no-local --no-checkout`, remove `origin`, then check
+   clear the recipe's Git routing variables, use
+   `git clone --no-hardlinks --no-local --no-checkout --origin origin`, remove `origin`, then check
    out the reviewed SHA. Never copy a linked worktree's `.git` gitfile or add a
    worktree of the handed repository: those share its administration. Make the clone
    beside the tree you were handed, inside the allocated review round, at a fresh
    path namespaced by role and revision (`verifier-<short-sha>-copy`). Never reach it by removing and
    recreating a path: a sandbox refusing `rm -rf` is refusing the wrong route. Never
-   write in the tree you were handed.
+   write in the tree you were handed. Keep later private-copy operations and
+   verification in the recipe's sanitized subshell.
 7. **Severity is not yours.** Do not relabel a finding's severity, its regression
    classification or its pre-existing label. Your verdict says whether the finding
    holds. If you think a label is wrong, say so in the reason.
