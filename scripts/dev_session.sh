@@ -14,6 +14,7 @@
 #
 # Usage:
 #   scripts/dev_session.sh new <scope> [--base <protected>] [--prefix <configured>] [--branch <full>] [--merge-class self|operator] [--force] [--headless] [--runtime <name>] [--launcher <command>]
+#   <engine-dir>/dev_session.sh isolated <scope> --prompt-file <path> --app-id <id> --app-key <path> [--provision <guest-script>]
 #   scripts/dev_session.sh list [--watch [interval]]
 #   scripts/dev_session.sh path <scope>
 #   scripts/dev_session.sh pr-watch <scope> [pr-watch options]
@@ -1229,7 +1230,7 @@ _subcommand_usage() {
         remove) sub=rm ;;
     esac
     _header_help \
-        | awk -v sub_name="$sub" '$1 == "scripts/dev_session.sh" && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
+        | awk -v sub_name="$sub" '($1 == "scripts/dev_session.sh" || $1 == "<engine-dir>/dev_session.sh") && $2 == sub_name { sub(/^ +/, ""); print "usage: " $0 }'
 }
 
 main() {
@@ -1237,7 +1238,7 @@ main() {
     [[ $# -gt 0 ]] && shift || true
     if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
         case "$sub" in
-            new|list|ls|path|pr-watch|merge|rm|remove|print-contract)
+            new|isolated|list|ls|path|pr-watch|merge|rm|remove|print-contract)
                 _subcommand_usage "$sub"
                 return 0
                 ;;
@@ -1245,6 +1246,7 @@ main() {
     fi
     case "$sub" in
         new) cmd_new "$@" ;;
+        isolated) exec python3 -I "$SCRIPT_DIR/isolated_lane.py" "$@" ;;
         list|ls) cmd_list "$@" ;;
         path) cmd_path "$@" ;;
         pr-watch) cmd_pr_watch "$@" ;;

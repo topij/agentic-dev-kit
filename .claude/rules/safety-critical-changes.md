@@ -6,6 +6,10 @@ paths:
   - "scripts/dev_session.sh"
   - "scripts/devkit/dev_session.sh"
   - "scripts/launch_lane.py"
+  - "scripts/isolated_lane.py"
+  - "scripts/devkit/isolated_lane.py"
+  - "scripts/lib/isolated_guest.py"
+  - "scripts/devkit/lib/isolated_guest.py"
   - "scripts/devkit/launch_lane.py"
   # This is the shipped `parallel.claude_settings_profile`. If that key names a
   # different path, replace this entry with the configured path: rule frontmatter

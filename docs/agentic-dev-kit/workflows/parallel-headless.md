@@ -9,6 +9,51 @@ in [`parallel.md`](parallel.md); this file is only the headless launch mechanics
 the `--headless` flag, its JSON descriptor, the lane-contract preamble every headless
 launch must inject verbatim, and the fan-out recipe.
 
+### Isolated GitHub App lane on Apple silicon
+
+Run this opt-in route from a trusted cockpit checkout on macOS with Lima, Git,
+`gh`, OpenSSL and Python installed. The GitHub.com origin's protected branch
+must contain the kit's Claude headless engines at the cockpit's engine path.
+Install a dedicated App on the target with contents and pull requests write
+and metadata read. Configure an active repository ruleset restricting updates and deletions for
+`vcs.protected_branch` with only the authenticated operator's user ID allowed
+to bypass via pull request. The host uses the operator's `gh` session to check
+that effective rule. Protect other sensitive branches and assess CI triggered
+by lane pushes before granting repository contents write.
+
+Set `parallel.isolated_image_url` to a trusted HTTPS Linux arm64 Lima image and
+`parallel.isolated_image_sha512` to its SHA-512 digest. The guest needs Git,
+`gh`, Python, Bash, Claude Code and the project's build tools. An optional
+`--provision <path>` runs the operator's trusted shell script in the guest
+before the host mints a token. Supply a lane-specific model credential through
+`DEVKIT_LANE_ANTHROPIC_API_KEY` if the guest runtime requires one.
+
+```sh
+<engine-dir>/dev_session.sh isolated <scope> --prompt-file <task> --app-id <id> --app-key <host-pem>
+```
+
+The host boots a fresh plain VM without shared mounts or SSH agent forwarding.
+It signs on the host, scopes the installation token to the origin repository
+and sends the token and prompt over SSH stdin. The guest clones the protected
+base and runs the usual Claude launcher with operator merge class and a fresh
+home. Network access is available to the lane. Keep privileged services off
+guest-reachable network endpoints. Treat its output as untrusted.
+
+On completion the host revokes the installation token, checks the open
+App-authored PR against the guest commit and prints the URL and head for
+independent host review. On failure inspect the reported private `LIMA_HOME`
+and instance `v` for recovery. A stopped failed VM may contain model credentials
+and unpublished work. Retire it after recovery. The host attempts token revocation
+and VM stop on SIGTERM, SIGHUP and keyboard interruption. An uncatchable host
+interruption can leave a VM running and its short-lived token active until expiry.
+
+A rejected or timed-out revocation request is retried once. If revocation still
+cannot be confirmed, the launcher reports the failure and exits unsuccessfully,
+preserving any original launch error. The token may remain usable until expiry.
+Suspend the App installation or revoke the grant through GitHub before recovery.
+An expired token can also cause revocation to be rejected, so inspect the PR
+independently when the launcher stops at that step.
+
 ### Unattended / headless launch — `new --headless`
 
 Interactive `new` is operator-launched by design (it prints launch or activation

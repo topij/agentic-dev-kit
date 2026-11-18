@@ -131,6 +131,10 @@ parallel:
   # carries no session id. The shipped value of 1 is the operator's choice on
   # 2026-10-25 for #514/#564, whose stalls each needed a cockpit re-drive.
   max_resumes: 1
+  # Opt-in macOS arm64 Lima route. Supply a trusted Linux arm64 image URL
+  # and its SHA-512 digest before invoking dev_session.sh isolated.
+  isolated_image_url: ""
+  isolated_image_sha512: ""
 
 doc_budgets:
   # Line-count tripwires (the archival mechanism of Principle #1 for the handoff docs,
@@ -379,6 +383,10 @@ review:
     - "scripts/dev_session.sh"
     - "scripts/devkit/dev_session.sh"
     - "scripts/launch_lane.py"
+    - "scripts/isolated_lane.py"
+    - "scripts/devkit/isolated_lane.py"
+    - "scripts/lib/isolated_guest.py"
+    - "scripts/devkit/lib/isolated_guest.py"
     - "scripts/devkit/launch_lane.py"
     # The shipped `parallel.claude_settings_profile`.
     - "config/claude-lane-settings.json"
