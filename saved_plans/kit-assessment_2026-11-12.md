@@ -455,12 +455,12 @@ operator's own answer.
 
 - **D1. A separate forge identity for lanes and lenses: yes, lanes first.** A second
   account with a fine-grained token scoped to this repository, for contents and pull
-  requests and nothing else was the original proposal. The proposal has
-  `launch_lane.py` pass that token to the child in place
-  of the operator's, and a ruleset on `main` leaves merging to the operator's account.
-  Lenses follow with a read-only token. Not yet probed: how the ruleset and a
-  fine-grained token behave together. That probe is part of step 2c. Until 2c ships,
-  steps 2a and 2b raise the bar and stop short of a boundary.
+  requests and nothing else was the original proposal. The accepted route instead
+  uses a repository-scoped GitHub App installation token inside an unmounted Lima
+  VM; #1467 ships it as an opt-in Claude launcher. Step 2c records its live acceptance
+  and remaining scope. Lenses still need their own credential-isolation route.
+  Ordinary host lanes retain their existing credential exposure; steps 2a and 2b
+  raise the bar and stop short of that boundary.
 
   **The identity alone is not a boundary.** It becomes one only together with
   isolation from the credentials stored for the operator, as *Security* says. The
@@ -570,19 +570,23 @@ operator's own answer.
   and S3.
   **Tickets:** #267, #539.
 - **2c. A lane identity, isolation from the operator's credentials, a narrower
-  environment and narrower grants** `[L · safety-critical · local]`. Per D1: probe a
-  second account's fine-grained token against a ruleset on `main`, then have
-  `launch_lane.py` hand the child that token from a configured environment variable.
-  Pass the child an allowlist of environment variables instead of removing named ones.
-  Isolate the child from the credentials stored for the operator: probe a separate OS
-  user, a container and the runtime's own sandbox, and take the lightest under which
-  code the lane runs cannot read them. Put
-  a lane-side gate in front of `git push` and the `gh` grants, as #615 proposes, and
-  extend it to S6's argument classes. Owes a changelog fragment for the new config key.
-  **Done when** a lane launched with the shipped profile cannot merge its own pull
-  request, its child's environment does not carry the operator's token, and a command
-  the lane runs through `make test` cannot obtain the operator's forge credential.
-  **Tickets:** #615, #617, #618, #1025, #1138.
+  environment and narrower grants** `[L · safety-critical · local]`. D1's probe
+  selected a repository-scoped GitHub App installation token and a Lima VM with no
+  shared mounts or forwarded SSH agent. #1466 records that decision; #1467 ships the
+  opt-in `dev_session.sh isolated` route for Claude. It hands the guest an allowlist
+  of environment variables, checks actor-restricted protection, and revokes the token
+  before validating the returned PR on the host. The guest descriptor is operator-class.
+  This does not migrate ordinary host lanes or fallback reviewers into that boundary.
+  **Acceptance criterion for the isolated route:** a lane launched with the shipped
+  profile cannot merge its own pull request, its child's environment does not carry
+  the operator's token, and a command the lane runs through `make test` cannot obtain
+  the operator's forge credential. The observation below covers the fixture's probes;
+  it does not establish an exhaustive sandbox-escape claim.
+  **Remaining scope:** #615's own-branch push gate and S6's `gh` argument classes;
+  #617's handoff of the validated profile bytes; #618's post-exit origin check;
+  #1025's fallback-reviewer credential isolation; and #1138's private Git administration
+  for writable reviewer copies. These remain separate from the isolated launcher.
+  Step 2c stays open. D2 still requires operator-only lane merges.
 
   **Disposable pilot, 2026-11-17, kit `3088f25e`.** GitHub refused the App's
   merge on the actor-restricted target. The operator exercised the merge control
@@ -598,10 +602,28 @@ operator's own answer.
   `make test` fixture observed a synthetic host file from the host lane and
   reported it absent on fresh and resumed launches inside the VM.
 
-  The pilot supplied the VM and token handoff outside the kit. Exercise the
-  shipped entry point on the disposable target with a host-only canary, a clean
-  child environment, a successful push and PR creation, and a forge refusal
-  when the App attempts to merge. Keep independent review and merge on the host.
+  **Final launcher acceptance, 2026-11-18, kit
+  `7c62d5d6d6ee52c2e6d6a20e184edf36d1b14472`.** `scripts/dev_session.sh isolated
+  final-launcher-20261118` with the dedicated App key and fixture prompt/provision
+  completed from the disposable host clone. It ran the unchanged launcher modules and
+  shipped profile, with a mixed-case host remote and a host branch prefix different
+  from the guest base. The real Claude CLI used scripted loopback model replies.
+  The guest's `make test` fixture reported the host-only canary, operator key and gh
+  config absent, the forbidden inherited environment keys absent, and no shared mount
+  types. It pushed and opened [App PR #7](https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/7).
+  `make test MERGE_PROBE=1` attempted the then-current PR head,
+  `5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0`, with its own installation token;
+  GitHub refused with `Cannot update this protected ref`. The lane then committed
+  that refusal record as `3221857d893076d4464e62e2e1125b3cc97f8e7d`, whose diff adds
+  only `merge_probe` to `acceptance.json`. The host completed token revocation and
+  returned that later App-authored PR head; no merge was attempted at the later head.
+  The canary remained intact, the VM directory was removed, and the dedicated App
+  installation was suspended afterward. Commands, directories, revisions, source
+  hashes and the guest results are in
+  [the acceptance record](step-2c-final-launcher-acceptance_2026-11-18.json).
+  Live failure injection and signal handling were not exercised. Independent review
+  stays on the host; no lane merge was performed.
+
 - **2d. Pin what adopters install** `[S · standard · cloud]`. Per D5: `adopt.md` and
   `upgrade.md` take a ref, clone that ref, and print it before the first copy. Covers
   S5.

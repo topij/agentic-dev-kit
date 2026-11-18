@@ -1,0 +1,98 @@
+{
+  "date": "2026-11-18",
+  "kit_revision": "7c62d5d6d6ee52c2e6d6a20e184edf36d1b14472",
+  "fixture_base": "3e5b38aa7461059536c5caa43c71955c9f66ee88",
+  "host_canary_before": true,
+  "exit_code": 0,
+  "launcher_result": {
+    "url": "https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/7",
+    "head": "3221857d893076d4464e62e2e1125b3cc97f8e7d",
+    "author": "topij-devkit-lane-pilot[bot]"
+  },
+  "host_canary_after": true,
+  "installation_suspended_at": "2026-11-18T11:08:19Z",
+  "host_command": "scripts/dev_session.sh isolated final-launcher-20261118 --app-id 5800813 --app-key <host-only-private-key> --prompt-file <fixture-prompt> --provision <fixture-provision>",
+  "host_directory": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/acceptance-20261118-01a1ee4f/target",
+  "guest_checks": {
+    "kit_revision": "7c62d5d6d6ee52c2e6d6a20e184edf36d1b14472",
+    "date": "2026-11-18",
+    "command": "make test",
+    "directory": "/home/topi.guest/tmpbnvaxrpx/dev-model-sessions/final-launcher-20261118/wt",
+    "fixture_base": "3e5b38aa7461059536c5caa43c71955c9f66ee88",
+    "host_canary": "absent",
+    "host_key_and_gh_config": "absent",
+    "parent_environment_keys_absent": [
+      "PILOT_PARENT_MARKER",
+      "GITHUB_TOKEN",
+      "SSH_AUTH_SOCK",
+      "AWS_ACCESS_KEY_ID",
+      "DEVKIT_LANE_ANTHROPIC_API_KEY"
+    ],
+    "app_repository": "topij/devkit-lane-identity-pilot-20261117",
+    "merge_class": "operator",
+    "branch": "acceptance/final-launcher-20261118",
+    "shared_mount_types": [],
+    "model_transport": "real Claude binary with scripted loopback replies",
+    "merge_probe": {
+      "status": 405,
+      "message": "Repository rule violations found\n\nCannot update this protected ref.\n\n",
+      "pr": 7,
+      "attempted_head": "5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0",
+      "caller": "guest make test using its own GH_TOKEN"
+    }
+  },
+  "target_ruleset": {
+    "id": 27542417,
+    "branch": "pilot-final-20261118",
+    "enforcement": "active",
+    "rules": [
+      "update",
+      "deletion"
+    ],
+    "bypass_actor": {
+      "actor_id": 5101841,
+      "actor_type": "User",
+      "bypass_mode": "pull_request"
+    }
+  },
+  "host_remote": "https://github.com/Topij/devkit-lane-identity-pilot-20261117.git",
+  "host_branch_prefix": "acceptance",
+  "guest_base_branch_prefix": "dev",
+  "vm_directory": "/private/tmp/devkit-vm-mgc7vuwz",
+  "vm_directory_removed": true,
+  "launcher_source_sha256": {
+    "scripts/dev_session.sh": "9199b532f9a961405739d970231ecc8d5b2044318beb2eed98d51f339f260365",
+    "scripts/launch_lane.py": "8438f28ad7a2c9b77e23be99676f7ad8c9fd53acc66c0e65f737ad4c1696b9d8",
+    "scripts/isolated_lane.py": "0bef92719a22aca9fe1591cb7465153128c8fa3b20ad331b54de5db49421c995",
+    "scripts/lib/isolated_guest.py": "c40f6597d07b7eb60ebfe44d6a7e4af84e4642e17d49cc1fd0ab1227dcf442ef",
+    "scripts/lib/kitconfig.py": "2380381789a62458135851796ae4fe3111576274913a8ff993f6d39062d3aefe",
+    "scripts/lib/repo_root.sh": "8c06184ca2a7d7042064de43584ec65abdcfce094893950d4ff0d8645fc2fd03",
+    "config/claude-lane-settings.json": "3dc17014222da3fdb188a8d6d8c8956e00d2c04c77b7a04889d8d0384ecf22f3"
+  },
+  "limitations": [
+    "Real Claude CLI used scripted loopback model replies.",
+    "Host-only canary, credential paths, inherited environment keys and mount types were probed; this is not an exhaustive VM escape test.",
+    "The live run exercised successful completion and the protected merge refusal, not induced network failures or host signals.",
+    "The kit make test suite is separate from the disposable target make test fixture."
+  ],
+  "head_sequence": [
+    {
+      "head": "5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0",
+      "event": "PR created, then make test MERGE_PROBE=1 attempted its current head."
+    },
+    {
+      "head": "3221857d893076d4464e62e2e1125b3cc97f8e7d",
+      "parent": "5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0",
+      "event": "Commit adds only merge_probe to acceptance.json; launcher returns this later head. No merge was attempted at this head."
+    }
+  ],
+  "head_sequence_observation": {
+    "date": "2026-11-18",
+    "revision": "3221857d893076d4464e62e2e1125b3cc97f8e7d",
+    "directory": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/acceptance-20261118-01a1ee4f/target",
+    "commands": [
+      "git log --format=%H%x20%s 3e5b38aa7461059536c5caa43c71955c9f66ee88..3221857d893076d4464e62e2e1125b3cc97f8e7d",
+      "git diff 5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0..3221857d893076d4464e62e2e1125b3cc97f8e7d -- acceptance.json"
+    ]
+  }
+}
