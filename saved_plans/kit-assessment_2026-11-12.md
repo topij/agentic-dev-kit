@@ -584,8 +584,10 @@ operator's own answer.
   it does not establish an exhaustive sandbox-escape claim.
   **Remaining scope:** #615's own-branch push gate and S6's `gh` argument classes;
   #617's handoff of the validated profile bytes; #618's post-exit origin check;
-  #1025's fallback-reviewer credential isolation; and #1138's private Git administration
-  for writable reviewer copies. These remain separate from the isolated launcher.
+  and #1025's fallback-reviewer credential isolation. These remain separate from the
+  isolated launcher. For writable reviewer copies, #1138 supplies the independent-clone
+  recipe in `fallback-review-panel.md` and the Git-administration regression fixture;
+  that recipe does not isolate credentials or inherited Git configuration.
   Step 2c stays open. D2 still requires operator-only lane merges.
 
   **Disposable pilot, 2026-11-17, kit `3088f25e`.** GitHub refused the App's
