@@ -74,5 +74,25 @@
     "Host-only canary, credential paths, inherited environment keys and mount types were probed; this is not an exhaustive VM escape test.",
     "The live run exercised successful completion and the protected merge refusal, not induced network failures or host signals.",
     "The kit make test suite is separate from the disposable target make test fixture."
-  ]
+  ],
+  "head_sequence": [
+    {
+      "head": "5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0",
+      "event": "PR created, then make test MERGE_PROBE=1 attempted its current head."
+    },
+    {
+      "head": "3221857d893076d4464e62e2e1125b3cc97f8e7d",
+      "parent": "5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0",
+      "event": "Commit adds only merge_probe to acceptance.json; launcher returns this later head. No merge was attempted at this head."
+    }
+  ],
+  "head_sequence_observation": {
+    "date": "2026-11-18",
+    "revision": "3221857d893076d4464e62e2e1125b3cc97f8e7d",
+    "directory": "/private/tmp/claude-502/-Users-topi-Coding-agentic-dev-kit/acceptance-20261118-01a1ee4f/target",
+    "commands": [
+      "git log --format=%H%x20%s 3e5b38aa7461059536c5caa43c71955c9f66ee88..3221857d893076d4464e62e2e1125b3cc97f8e7d",
+      "git diff 5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0..3221857d893076d4464e62e2e1125b3cc97f8e7d -- acceptance.json"
+    ]
+  }
 }

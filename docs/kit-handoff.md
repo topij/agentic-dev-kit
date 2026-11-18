@@ -349,7 +349,7 @@ After the disposable GitHub App pilot on 2026-11-17, the operator retained D2.
 Issue operator-class lanes only. The operator reads and merges their pull requests.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
-#1467 shipped the opt-in App/Lima launcher. On 2026-11-18,
+On 2026-11-18,
 `scripts/dev_session.sh isolated final-launcher-20261118` at
 `7c62d5d6d6ee52c2e6d6a20e184edf36d1b14472` completed the disposable-target run:
 [App PR #7](https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/7) records the guest

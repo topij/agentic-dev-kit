@@ -611,9 +611,12 @@ operator's own answer.
   The guest's `make test` fixture reported the host-only canary, operator key and gh
   config absent, the forbidden inherited environment keys absent, and no shared mount
   types. It pushed and opened [App PR #7](https://github.com/topij/devkit-lane-identity-pilot-20261117/pull/7).
-  `make test MERGE_PROBE=1` attempted the PR's exact head with its own installation token;
-  GitHub refused with `Cannot update this protected ref`. The host completed token
-  revocation and returned the App-authored PR at `3221857d893076d4464e62e2e1125b3cc97f8e7d`.
+  `make test MERGE_PROBE=1` attempted the then-current PR head,
+  `5475f6a0375c48b1bc581fcf0a1b53d1cc8907e0`, with its own installation token;
+  GitHub refused with `Cannot update this protected ref`. The lane then committed
+  that refusal record as `3221857d893076d4464e62e2e1125b3cc97f8e7d`, whose diff adds
+  only `merge_probe` to `acceptance.json`. The host completed token revocation and
+  returned that later App-authored PR head; no merge was attempted at the later head.
   The canary remained intact, the VM directory was removed, and the dedicated App
   installation was suspended afterward. Commands, directories, revisions, source
   hashes and the guest results are in
