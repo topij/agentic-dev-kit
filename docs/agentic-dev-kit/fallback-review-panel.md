@@ -746,8 +746,10 @@ name an absolute executable. Missing configuration refuses dispatch. Install thi
 executable as part of the operator's deployment, outside every tree writable by
 a reviewer. The launcher receives the runtime argv as separate arguments and
 the assembled prompt on stdin. It returns the reviewer's stdout and exit status.
-Its initial environment contains only the system PATH. It must arrange the
-approved worker and the worker-side checkout at the absolute path in the prompt.
+Its initial environment contains the system PATH and `DEVKIT_REVIEW_TREE`, the
+validated absolute detached checkout path. Use that path to look up the worker
+the cockpit prepared for this round. Refuse missing staging. Do not interpret
+the prompt as a staging request or copy files named by the model.
 The deployment wrapper must enter the worker before executing Claude. For example,
 a Lima wrapper installed at the absolute configured path can use this final invocation
 after resolving its own trusted deployment values. The guest's `review-control`

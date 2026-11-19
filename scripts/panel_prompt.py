@@ -1503,7 +1503,8 @@ def launch_worker(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="review-control-") as control:
         return subprocess.run(
             [str(launcher), *command], input=prompt.encode(), cwd=control,
-            env={"PATH": os.defpath}, check=False,
+            env={"PATH": os.defpath, "DEVKIT_REVIEW_TREE": str(Path(args.scratch).resolve())},
+            check=False,
         ).returncode
 
 
