@@ -1512,6 +1512,10 @@ def _scrubbed_environment(descriptor: dict[str, Any]) -> dict[str, str]:
         if not key.startswith("DEVKIT_") and not _is_repository_override_key(key)
     }
     environment.update(descriptor["env"])
+    if descriptor["runtime"] == "claude":
+        environment["ADK_LANE_PUSH_HOOK"] = str(SCRIPT_DIR / "hooks" / "lane_push.py")
+        environment["ADK_LANE_BRANCH"] = descriptor["branch"]
+        environment["ADK_LANE_WORKTREE"] = descriptor["worktree"]
     environment["PATH"] = SAFE_EXECUTABLE_PATH
     environment["PWD"] = descriptor["worktree"]
     return environment

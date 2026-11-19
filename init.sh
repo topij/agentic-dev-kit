@@ -1114,14 +1114,8 @@ migrate_parallel_schema() {
 # the same way, `-v` being a modifier (round 12, live); `get-url` is the
 # subcommand token itself and git accepts nothing after it but its own
 # `--push`/`--all` flags and a remote name.
-# The runtime matches a Bash rule on token boundaries, so the push allow
-# cannot name a branch prefix (`lane/:*` matched nothing live); `git push -u
-# origin:*` is the narrowest expressible form. It refuses the flag-first and
-# no-`-u` spellings (`git push origin :x`, `git push -uf …`, `git push --force
-# …`) and bounds nothing after `origin` — a flag, `:x`, or `+HEAD:x` placed there
-# all match — so the profile does not protect branch history; that stays with
-# the forge and the lane contract, and the deny entries catch only the
-# flag-first spellings.
+# The PreToolUse hook grants the standalone push for the issued branch. There is
+# no push prefix grant to fall back on if the hook or its launch binding is absent.
 # `#606` (2026-08-28, Claude Code 2.1.250) added the last three entries, each on a
 # measurement rather than on a reading of this list. `make test` is the AGENTS.md
 # verification command and was refused under the list as it stood, so a lane's
@@ -1177,7 +1171,6 @@ seed_claude_lane_profile() {
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git restore:*)",
-      "Bash(git push -u origin:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr view:*)",
       "Bash(gh pr list:*)",
@@ -1196,6 +1189,19 @@ seed_claude_lane_profile() {
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
       "Bash(git push --force-with-lease:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -I \"${ADK_LANE_PUSH_HOOK:?missing lane launcher}\""
+          }
+        ]
+      }
     ]
   }
 }
