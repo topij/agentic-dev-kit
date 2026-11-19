@@ -126,6 +126,7 @@ RUNTIME_SCALAR_COMPUTE = {"claude": "model", "codex": "effort"}
 # is an untrusted workspace, so the branch's project settings never supply policy
 # and the operator's user settings must not either. `--setting-sources ""` loads
 # neither; the cockpit-owned profile passed with `--settings` is the one source.
+CLAUDE_SETTINGS_FD = 3
 CLAUDE_SETTING_SOURCES_ARGS = ("--setting-sources", "")
 # A `Bash` allow entry is bounded only by the literal command prefix its pattern
 # starts with. The validator refuses an entry with no such prefix by structure
@@ -434,7 +435,9 @@ class RuntimeProfile:
         approval: dict[str, Any],
         compute: dict[str, Any] | None = None,
         max_resumes: int = 0,
+        settings_bytes: bytes | None = None,
     ) -> None:
+        self.settings_bytes = settings_bytes
         self.runtime = runtime
         # How many resume rounds one bound launch may run after a nonterminal stop
         # (`parallel.max_resumes`); part of the request binding.
@@ -446,8 +449,8 @@ class RuntimeProfile:
         # tier was requested, so the argv is exactly the inherit-compute one.
         self.compute = compute or {"tier": None, "model": None, "effort": None, "argv": []}
         # {"declared", "argv", "settings_profile_path", "settings_profile_sha256"}:
-        # the declared policy, the exact argv it produces, and the trust-route
-        # profile the argv names (Claude) — bound into the request by both sides.
+        # the declared policy, its argv, and the source path and digest of the
+        # Claude settings snapshot, bound into the request by both sides.
         self.approval = approval
 
     def child_argv(self, worktree: str, final_message: str) -> list[str]:
@@ -731,8 +734,8 @@ def _require_bound_settings_profile(profile: RuntimeProfile) -> None:
     """Refuse a resume when the settings profile is not the one the launch bound.
 
     The launch round is a process that can write files, the profile among them,
-    and a resume passes the same `--settings <path>`. Re-reading it here keeps a
-    resume round under the policy the request's digest names. The executable
+    so keep the existing refusal if its source changed. The runtime receives a
+    fresh descriptor with the launch-bound bytes on every round. The executable
     path and the worktree are the other launch-time values a resume reuses; they
     are not re-checked (the launch round execs by path too), which
     parallel-headless.md records as a limit.
@@ -782,7 +785,7 @@ def _config_for_launcher(
                 f"{', '.join(RUNTIME_TRANSPORTS[runtime][kind])}"
             )
         transports[kind] = declared
-    approval = _approval_for_runtime(runtime, config, root)
+    approval, settings_bytes = _approval_for_runtime(runtime, config, root)
     compute = _compute_for_runtime(runtime, config, tier)
     max_resumes = _max_resumes(config)
     if not isinstance(timeout, int) or isinstance(timeout, bool) or timeout <= 0:
@@ -840,6 +843,7 @@ def _config_for_launcher(
             approval,
             compute,
             max_resumes,
+            settings_bytes,
         ),
         timeout,
         lifetime,
@@ -915,7 +919,9 @@ def _validate_settings_profile(raw: bytes, path: Path) -> None:
             )
 
 
-def _approval_for_runtime(runtime: str, config: dict[str, Any], root: Path) -> dict[str, Any]:
+def _approval_for_runtime(
+    runtime: str, config: dict[str, Any], root: Path
+) -> tuple[dict[str, Any], bytes | None]:
     key = f"parallel.{runtime}_approval_policy"
     declared = get(config, key, None)
     vocabulary = RUNTIME_APPROVAL_POLICIES[runtime]
@@ -924,6 +930,7 @@ def _approval_for_runtime(runtime: str, config: dict[str, Any], root: Path) -> d
     contribution = list(vocabulary[declared])
     profile_path: str | None = None
     profile_sha256: str | None = None
+    raw: bytes | None = None
     if runtime == "claude":
         profile_key = "parallel.claude_settings_profile"
         configured = get(config, profile_key, None)
@@ -938,25 +945,46 @@ def _approval_for_runtime(runtime: str, config: dict[str, Any], root: Path) -> d
         _validate_settings_profile(raw, candidate)
         profile_path = str(candidate.resolve())
         profile_sha256 = _sha256(raw)
-        contribution = [*CLAUDE_SETTING_SOURCES_ARGS, *contribution, "--settings", profile_path]
+        contribution = [*CLAUDE_SETTING_SOURCES_ARGS, *contribution, "--settings", f"/dev/fd/{CLAUDE_SETTINGS_FD}"]
     return {
         "declared": declared,
         "argv": contribution,
         "settings_profile_path": profile_path,
         "settings_profile_sha256": profile_sha256,
-    }
+    }, raw
 
 
-def _git(cwd: Path, *args: str) -> str:
+def _git(cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
     if TRUSTED_GIT is None:
         raise LaunchError("trusted system Git is unavailable")
     try:
         result = subprocess.run(
-            [TRUSTED_GIT, *args], cwd=cwd, check=True, capture_output=True, text=True
+            [TRUSTED_GIT, *args], cwd=cwd, env=env, check=True, capture_output=True
         )
-    except (OSError, subprocess.CalledProcessError) as exc:
+        return result.stdout.removesuffix(b"\n").decode()
+    except (OSError, subprocess.CalledProcessError, UnicodeDecodeError) as exc:
         raise LaunchError(f"git observation failed for {' '.join(args)}") from exc
-    return result.stdout.strip()
+
+
+def _post_exit_origin_error(descriptor: dict[str, Any]) -> str | None:
+    """Check effective destinations in the lane, using the same clean Git environment."""
+    worktree = Path(descriptor["worktree"])
+    environment = _scrubbed_environment(descriptor)
+    for field, flags in (("origin_url", []), ("origin_push_url", ["--push"])):
+        try:
+            urls = _git(worktree, "remote", "get-url", "--all", *flags, "origin", env=environment)
+        except LaunchError as exc:
+            return f"post-exit {field} could not be observed: {exc}"
+        if "\n" in urls or urls != descriptor[field]:
+            # A replacement URL can carry credentials. Only print ordinary
+            # repository addresses and local paths; fingerprint other inputs.
+            visible = [
+                repr(url) if _lane_gh_repository(url) or re.fullmatch(r"/[A-Za-z0-9_./-]+", url)
+                else f"<redacted sha256={_sha256(url.encode())}>"
+                for url in urls.split("\n")
+            ]
+            return f"post-exit {field} differs from the descriptor: {', '.join(visible)}"
+    return None
 
 
 def _validate_descriptor_contract(descriptor: dict[str, Any], config_root: Path) -> None:
@@ -1488,8 +1516,7 @@ def _child_main(arguments: argparse.Namespace) -> int:
             # Immediately before exec, so nothing the wrapper prints can precede
             # the runtime's own JSON on the evidence file.
             _redirect_stdout_to_reserved_final(final_message)
-        _close_nonstandard_descriptors()
-        os.execvpe(argv[0], argv, os.environ)
+        _exec_runtime(argv, profile.settings_bytes)
     except LaunchError as exc:
         rejected = {
             "schema_version": SCHEMA_VERSION,
@@ -1587,9 +1614,30 @@ def _fork_observer_child(
     return _ForkedChild(pid, os.fdopen(prompt_write, "wb", buffering=0))
 
 
+def _exec_runtime(argv: list[str], settings_bytes: bytes | None) -> None:
+    _close_nonstandard_descriptors()
+    if settings_bytes is None:
+        os.execvpe(argv[0], argv, os.environ)
+    # The runtime opens this process's descriptor. Its argument never resolves
+    # the mutable operator profile, and neither argv nor receipts publish its contents.
+    with tempfile.TemporaryFile() as snapshot:
+        snapshot.write(settings_bytes)
+        snapshot.seek(0)
+        if snapshot.fileno() != CLAUDE_SETTINGS_FD:
+            os.dup2(snapshot.fileno(), CLAUDE_SETTINGS_FD)
+        os.set_inheritable(CLAUDE_SETTINGS_FD, True)
+        # Opening /dev/fd duplicates the descriptor on macOS; stat of its
+        # directory entry describes the device node there, not the open file.
+        with open(f"/dev/fd/{CLAUDE_SETTINGS_FD}", "rb") as reader:
+            if not os.path.sameopenfile(reader.fileno(), snapshot.fileno()):
+                raise LaunchError("cannot bind the validated settings descriptor")
+        os.execvpe(argv[0], argv, os.environ)
+
+
 def _fork_resume_child(
     argv: list[str],
     *,
+    settings_bytes: bytes | None,
     worktree: str,
     environment: dict[str, str],
     final_message: Path,
@@ -1623,8 +1671,7 @@ def _fork_resume_child(
             os.dup2(prompt_read, 0)
             os.close(prompt_read)
             _redirect_stdout_to_reserved_final(final_message)
-            _close_nonstandard_descriptors()
-            os.execvpe(argv[0], argv, os.environ)
+            _exec_runtime(argv, settings_bytes)
         except BaseException as exc:  # child must terminalize without re-entering parent
             print(f"[lane-launcher] resume child failed: {exc}", file=sys.stderr)
         finally:
@@ -2084,6 +2131,8 @@ def launch(
             returncode = _terminate_process_group(process, termination_grace)
             _terminate_launch_lineage(process_nonce, termination_grace)
         assert returncode is not None
+        if returncode == 0 and not caught and error is None:
+            error = _post_exit_origin_error(descriptor)
         final_bytes = b""
         if final_message.is_file() and not final_message.is_symlink():
             final_bytes = _read_stable_regular_file(final_message)
@@ -2204,6 +2253,7 @@ def launch(
             resumes.append(round_entry)
             process = _fork_resume_child(
                 round_argv,
+                settings_bytes=profile.settings_bytes,
                 worktree=descriptor["worktree"],
                 environment=lineage_environment,
                 final_message=round_final,
@@ -2225,6 +2275,8 @@ def launch(
             if caught or round_error:
                 round_returncode = _terminate_process_group(process, termination_grace)
                 _terminate_launch_lineage(process_nonce, termination_grace)
+            if round_returncode == 0 and not caught and round_error is None:
+                round_error = _post_exit_origin_error(descriptor)
             round_bytes = b""
             if round_final.is_file() and not round_final.is_symlink():
                 round_bytes = _read_stable_regular_file(round_final)

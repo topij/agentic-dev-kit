@@ -356,7 +356,7 @@ On 2026-11-18,
 `make test` probes and protected merge refusal. The plan's step 2c links the host/guest
 acceptance record and its limits. The model replies were scripted; lane merges remain operator-only.
 
-▶ Next: choose between #617's validated profile-byte handoff and #618's post-exit origin check for step 2c. For #1025, the kit's worker
+▶ Next: assess step 2c against the isolated-launcher acceptance record and the launcher checks for #617 and #618. For #1025, the kit's worker
 dispatch requires separate provisioning in each trusted deployment. On 2026-11-19
 the operator chose native Bash inside the isolated Claude worker. #1138 covers
 writable-copy Git administration. Lane merges remain operator-only.
