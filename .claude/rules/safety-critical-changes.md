@@ -25,6 +25,11 @@ paths:
   # decision is made, not only the one that acts on it.
   - "scripts/pr_watch.py"
   - "scripts/devkit/pr_watch.py"
+  # These select the local review receipt the watcher reads.
+  - "scripts/lib/state_paths/repo_root.py"
+  - "scripts/lib/state_paths/resolver.py"
+  - "scripts/devkit/lib/state_paths/repo_root.py"
+  - "scripts/devkit/lib/state_paths/resolver.py"
   # The merge gate itself: `dev_session.sh merge` authorizes on its verdict, so a
   # change here weakens every self-merge as directly as one to the wrapper.
   - "scripts/lib/merge_predicate.py"

@@ -104,7 +104,7 @@
     },
     "docs/agentic-dev-kit/workflows/adopt.md": {
       "role": "workflow",
-      "sha256": "fb37ecf0be9f7f4db6f160a2d063795376cfce96aed65555458b59485405692a"
+      "sha256": "25b90820447728fb077527d0f656412fb57cbb80788501bb77fe721e1ce7cc82"
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
@@ -127,7 +127,7 @@
         "docs/agentic-dev-kit/workflows/pr-watch.md"
       ],
       "role": "workflow",
-      "sha256": "46a1becbb700c3bbfda5f11ebee7162f3eb598258fc9e3e96ae5b98724ab3124"
+      "sha256": "c46d107fa9439026fccc978a6e1e9c965131f8e6077219b1f7eaed1268b4b9f0"
     },
     "docs/agentic-dev-kit/workflows/session-start.md": {
       "role": "workflow",
@@ -167,7 +167,7 @@
     },
     "docs/agentic-dev-kit/workflows/upgrade.md": {
       "role": "workflow",
-      "sha256": "4cfc5c79408a39588a1f3b457e76f568faa56ecc5f2fb8592bafb057fa6260f5"
+      "sha256": "544a30e3b68dd321d2cf626de0a5a7bf66ecab1afc9064fd2a12af3034d6bd55"
     },
     "docs/agentic-dev-kit/workflows/wrap-up.md": {
       "role": "workflow",
@@ -179,7 +179,7 @@
     },
     "docs/templates/AGENTS.md.tmpl": {
       "role": "template",
-      "sha256": "f38617f8f9d7ddd726b80ef66c92ab46ff80bab60b3bbd6dce7543ffa98673b0"
+      "sha256": "41d61bf1393aaa153a57a6cb6c8cf66d2ad075fce91979f4ede43f8e7e808aed"
     },
     "docs/templates/CLAUDE.md.tmpl": {
       "role": "template",
@@ -443,20 +443,22 @@
     },
     "scripts/lib/state_paths/repo_root.py": {
       "required_by": [
-        "scripts/lib/state_paths/resolver.py"
+        "scripts/lib/state_paths/resolver.py",
+        "scripts/pr_watch.py"
       ],
       "role": "engine",
-      "sha256": "d9412f1fe395b944a86126bcc39f85d6838382b0fc29d68c8b29b965cd530b5a"
+      "sha256": "9cce5f8742ed0a763b1c7323a71b5df6f7e27472bdf00f2965a4cd0a74bb2f76"
     },
     "scripts/lib/state_paths/resolver.py": {
       "required_by": [
         "scripts/lib/state_paths/__init__.py",
         "scripts/lib/systemize/artifacts.py",
         "scripts/lib/systemize/config.py",
-        "scripts/lib/triage/storage.py"
+        "scripts/lib/triage/storage.py",
+        "scripts/pr_watch.py"
       ],
       "role": "engine",
-      "sha256": "d8a5bc72c465d9750c2dafb7ca4ede604c13e2cb7afa79999d8c606ea663bcff"
+      "sha256": "96a1a1e03b95b8d09c168b9b60f8d67ab5eb975873fdf992764a2de1badb61e5"
     },
     "scripts/lib/state_paths/tests/__init__.py": {
       "role": "test",
@@ -697,7 +699,7 @@
     },
     "scripts/pr_watch.py": {
       "role": "engine",
-      "sha256": "29e2ed7fdc46fabf434a5081724cc86ad8135cd6a6d23f30f352899eb63f56e2"
+      "sha256": "624ff4228ee76fdf15d9f3380f989ecffbcb8c34d4f6291e8dee40b567c3bd47"
     },
     "scripts/reconcile_sessions.sh": {
       "role": "engine",
@@ -737,7 +739,7 @@
     },
     "scripts/tests/conftest.py": {
       "role": "test",
-      "sha256": "d9cfcd18431efdfc196ef3a3457fef41eca15340c50fe3420eb53c373bf1cb11"
+      "sha256": "88fdbffa21ebd096883b067d1c2f6f0432d5462a939d7272876db9eb832c0398"
     },
     "scripts/tests/fixtures/codex_parallel_batch_expected.json": {
       "role": "repo-only",
@@ -749,7 +751,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "4b5c888714de4ac4f98e431ff879ca2d91459023c8b5074a2c5f3a873ece0953"
+      "sha256": "e137104fa7903d279e83e759a208e9084ece6ecd2cafbee44f8b55f7213cda77"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -789,7 +791,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "d93c74b3011e3ac683b85798c841f1fd0aada5b820198e92558d71503ffbc63c"
+      "sha256": "c882cc2eb47993528b13313a3056cc24723621fa66aac39a442098532817eebb"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
@@ -861,7 +863,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "4107f169c6be01be9bff65dd73b39329f55b8efda2e8b0efe7a37e091df13749"
+      "sha256": "f4902eb08d5701a1dc593938eae710e9ba28120fee9df65556ea231d3bfc6181"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",

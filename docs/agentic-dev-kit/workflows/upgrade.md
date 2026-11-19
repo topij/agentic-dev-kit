@@ -1178,7 +1178,7 @@ import rather than per call, so an override has to be in the environment
 before the process starts. The resolution has three branches, not two:
 `$DEVKIT_STATE_ROOT`,
 then a `.devkit_state_root` marker walked up from the engine's own directory,
-then `<repo>/state`. Outside a lane there is no marker, so absent the env var
+then the primary cockpit checkout’s `state/`. Outside a lane there is no marker, so absent the env var
 the third branch is what you get — and running this suite then writes fixture
 data straight into this repo's live `state/pr-watch/`, the merge gate's own
 evidence store, while the run otherwise looks clean. `#428` measured it: an unpatched run overwrote

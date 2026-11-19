@@ -594,7 +594,7 @@ completed Step 3c `init.sh` run. Verify that run from what it printed.**
   **`DEVKIT_STATE_ROOT` is not optional, and the `&&` is what makes it fail
   closed.** `pr_watch.py` computes its persistence root once, at import time,
   resolving `$DEVKIT_STATE_ROOT`, then a `.devkit_state_root` marker, then
-  `<repo>/state`. It is the only engine that reaches `state/` at all, and it
+  the primary cockpit checkout’s `state/`. It is the only engine that reaches `state/` at all, and it
   resolves at import rather than per call — which is why an override has to
   be in the environment before the process starts. A fresh adoption has no marker, so absent the env var the
   third branch is what you get. `state/` may not exist yet at that point, but

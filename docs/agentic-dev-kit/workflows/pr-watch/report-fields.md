@@ -21,7 +21,12 @@ or another of its reference files.
 ## Seen state and comment filtering
 
 - The seen-set lives at `state/pr-watch/<PR#>.json` (gitignored). It's per-PR, so
-  re-running on a different PR starts fresh.
+  re-running on a different PR starts fresh. Linked cockpit worktrees use the
+  primary checkout’s file for the receipt, settle baseline and acknowledgements.
+  Keep one watch loop per PR and serialize its operations across those checkouts,
+  including the poll and its matching `--mark-seen`. An explicit absolute
+  `DEVKIT_STATE_ROOT` or a lane marker selects its own store. Use a distinct
+  state root when directing the same clone to another forge repository.
 - Known auto-noise from your review bots (walkthrough / "no actionable comments"
   summaries) is filtered out by the engine. Reviewer-unavailable notices are
   deliberately *not* noise: they surface as new comments and so block `converged`;

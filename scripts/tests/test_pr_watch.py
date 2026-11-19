@@ -117,7 +117,9 @@ def _pin_engine_backend(module: ModuleType) -> None:
     module._gh_graphql_usable = lambda _gh_path: True
 
 
-def _load_pr_watch(*, pin_defaults: bool = True, use_lane_identity: bool = False) -> ModuleType:
+def _load_pr_watch(
+    *, pin_defaults: bool = True, use_lane_identity: bool = False, engine_dir: Path = ENGINE_DIR,
+) -> ModuleType:
     """Load the engine fresh.
 
     ``pin_defaults=False`` leaves the module bound to whatever
@@ -127,7 +129,7 @@ def _load_pr_watch(*, pin_defaults: bool = True, use_lane_identity: bool = False
     deliberately read ambient config.
     """
     spec = importlib.util.spec_from_file_location(
-        "pr_watch_under_test", ENGINE_DIR / "pr_watch.py"
+        "pr_watch_under_test", engine_dir / "pr_watch.py"
     )
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -1056,51 +1058,65 @@ def test_marker_is_found_from_a_vendored_engine_dir(tmp_path: Path) -> None:
     assert pr_watch._resolve_state_root(vendored, wt, None) == sandbox
 
 
-def test_state_dir_is_the_pr_watch_subdir_of_the_resolved_root(
-    monkeypatch: pytest.MonkeyPatch,
+def test_primary_and_linked_cockpits_share_review_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Pin the wiring: whatever the root resolves to, state lands in pr-watch/.
-
-    #428's suite-wide `_hermetic_state_root` autouse fixture (in this
-    directory's ``conftest.py``) sets ``$DEVKIT_STATE_ROOT`` before every
-    test body runs, including this one — so without the ``delenv`` below,
-    ``pr_watch._STATE_ROOT`` would resolve to that fixture's tmp sandbox
-    rather than this repo's real default, and the two assertions that used
-    to close this test (``STATE_DIR == _STATE_ROOT / "pr-watch"`` and
-    ``is_absolute()``) would keep passing for a reason no longer stated:
-    they would hold no matter what `_resolve_state_root` computed, since a
-    pytest tmp dir is absolute by construction. That is not this test lying,
-    but it is testing less than its name claims.
-
-    ``delenv`` restores this ONE test to what it always was: the module
-    computing its OWN real derivation, with no override in effect — so the
-    root assertion below is a genuine pin of the production rule, not a
-    tautology reachable no matter what the wiring does. Still never touches
-    disk: only `Path` objects are inspected here, `STATE_DIR.mkdir()` is
-    never called.
-
-    That rule is TWO-armed, and asserting only the second arm
-    (``REPO_ROOT / "state"``) would pass here and fail in a headless lane.
-    With the env var gone, `_resolve_state_root` consults the
-    ``.devkit_state_root`` marker BEFORE falling back to the repo default —
-    and `dev_session.sh new --headless` writes exactly that marker into
-    every lane worktree, so a lane running `make test` resolves to its own
-    sandbox and is right to. Pinning one arm would have put this test in the
-    same class as the `state_paths` tests that `upgrade.md`'s "Known gotcha"
-    (kit issue #10) already tells you to run from the main checkout. So the
-    expectation is derived the way production derives it, and holds in both
-    a plain checkout and a lane.
-    """
+    primary = tmp_path / "primary"
+    linked = tmp_path / "linked cockpit"
+    engines = Path("scripts/devkit")
+    subprocess.run(["git", "init", "-q", str(primary)], check=True)
+    (primary / engines).mkdir(parents=True)
+    shutil.copy2(ENGINE_DIR / "pr_watch.py", primary / engines)
+    shutil.copytree(ENGINE_DIR / "lib/state_paths", primary / engines / "lib/state_paths",
+                    ignore=shutil.ignore_patterns("tests", "__pycache__"))
+    shutil.copy2(ENGINE_DIR / "lib/kitconfig.py", primary / engines / "lib")
+    subprocess.run(["git", "-C", str(primary), "add", "."], check=True)
+    subprocess.run(["git", "-C", str(primary), "-c", "user.name=Fixture",
+                    "-c", "user.email=test@example.test", "commit", "-qm", "fixture"], check=True)
+    subprocess.run(["git", "-C", str(primary), "worktree", "add", "-q", "--detach", str(linked)],
+                   check=True)
     monkeypatch.delenv("DEVKIT_STATE_ROOT", raising=False)
-    pr_watch = _load_pr_watch()
+    monkeypatch.chdir(tmp_path)
+    view = _green_view(number=9)
 
-    engine_dir = Path(pr_watch.__file__).resolve().parent
-    marker = pr_watch._marker_state_root(engine_dir)
-    expected_root = marker if marker is not None else pr_watch.REPO_ROOT / "state"
+    def watcher(checkout: Path) -> ModuleType:
+        watch = _load_pr_watch(engine_dir=checkout / engines, use_lane_identity=True)
+        monkeypatch.setattr(watch, "_gh_json", lambda args: view)
+        monkeypatch.setattr(watch, "fetch_pr_view", lambda pr: (view, [], None))
+        monkeypatch.setattr(watch, "fetch_check_details", lambda *a, **kw: watch.CheckDetails([], "ok"))
+        return watch
 
-    assert expected_root == pr_watch._STATE_ROOT
-    assert pr_watch.STATE_DIR == pr_watch._STATE_ROOT / "pr-watch"
-    assert pr_watch.STATE_DIR.is_absolute()
+    def poll(watch: ModuleType) -> dict:
+        assert watch.main(["9", "--no-persist", "--json"]) == 0
+        return json.loads(capsys.readouterr().out)
+
+    main = watcher(primary)
+    established = _settle_state(seen=["handled-comment"])
+    del established["review_receipt"]
+    main.save_state(9, established)
+    assert main.main(["9", "--record-review", "fallback:panel", "--head", "abc123",
+                      "--lenses", "adversarial,correctness", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["recorded_review"]
+    cockpit = watcher(linked)
+    assert cockpit.STATE_DIR == main.STATE_DIR == primary / "state/pr-watch"
+    assert cockpit.load_seen(9) == {"handled-comment"}
+    report = poll(cockpit)
+    assert report["review_evidence"]["valid"] and report["mergeable"]
+    view["headRefOid"] = "updated"
+    moved = poll(cockpit)
+    assert not moved["review_evidence"]["valid"] and not moved["mergeable"]
+    view["headRefOid"] = "abc123"
+
+    marker = linked / ".devkit_state_root"
+    marker.write_text(str(tmp_path / "sandbox"), encoding="utf-8")
+    isolated = watcher(linked)
+    assert tmp_path / "sandbox/pr-watch" == isolated.STATE_DIR
+    assert not poll(isolated)["review_evidence"]["valid"]
+    for invalid in (b"relative", b"", b"\xff"):
+        marker.write_bytes(invalid)
+        assert linked / "state/pr-watch" == watcher(linked).STATE_DIR
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(tmp_path / "explicit"))
+    assert tmp_path / "explicit/pr-watch" == watcher(linked).STATE_DIR
 
 
 # --------------------------------------------------------------------------- #
