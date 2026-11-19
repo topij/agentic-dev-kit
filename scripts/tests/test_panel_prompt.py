@@ -2818,7 +2818,8 @@ def test_private_clone_recipe_is_present_before_the_reviewer_contract(repo, tmp_
 
 @pytest.mark.parametrize("runtime", ["claude", "codex"])
 @pytest.mark.parametrize("verifier", [False, True])
-def test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, runtime, verifier):
+@pytest.mark.parametrize("padded", [False, True])
+def test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, runtime, verifier, padded):
     pp = _load()
     deployment = tmp_path / "deployment"
     (deployment / "config").mkdir(parents=True)
@@ -2843,8 +2844,10 @@ def test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, r
     tree = _detached_tree(repo, repo.parent, head)
     flags = (["--verifier", "--lens-report", f"correctness={_report(tmp_path, 'correctness', 'F1 check')}"]
              if verifier else ["--lens", "correctness", "--branch", "fixture"])
-    assert pp.main(["--launch", "--root", str(repo), "--runtime", runtime, "--head", head,
-                    "--base", base, "--scratch", tree, *flags]) == 17
+    root_arg = f"  {repo}  " if padded else str(repo)
+    scratch_arg = f"  {tree}  " if padded else tree
+    assert pp.main(["--launch", "--root", root_arg, "--runtime", runtime, "--head", head,
+                    "--base", base, "--scratch", scratch_arg, *flags]) == 17
     argv, prompt, cwd, env = json.loads(record.read_text())
     assert argv[0] == runtime and "--model=worker-model" in argv
     if runtime == "claude":

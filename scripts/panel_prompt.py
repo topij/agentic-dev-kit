@@ -1456,9 +1456,10 @@ def launch_worker(args: argparse.Namespace) -> int:
     The candidate supplies review material. It cannot choose the executable,
     runtime permissions, or model passed to the trusted worker launcher.
     """
-    if not args.root:
+    root_arg = _override("--root", args.root)
+    if root_arg is None:
         raise PromptError("--launch needs --root naming a separate checkout under review")
-    target = Path(args.root).resolve(strict=True)
+    target = Path(root_arg).resolve(strict=True)
     trusted = REPO_ROOT.resolve(strict=True)
     if trusted.is_relative_to(target) or target.is_relative_to(trusted):
         raise PromptError("--launch needs a trusted installation outside the checkout under review")
@@ -1470,10 +1471,14 @@ def launch_worker(args: argparse.Namespace) -> int:
     if not isinstance(configured, str) or not Path(configured).is_absolute():
         raise PromptError(f"configure an absolute worker_launcher.{runtime} in the trusted installation")
     launcher = Path(configured).resolve(strict=True)
-    scratch = Path(args.scratch).resolve().parent if args.scratch else target
-    if (launcher.is_relative_to(target) or launcher.is_relative_to(scratch)
+    scratch_arg = _override("--scratch", args.scratch)
+    review_tree = Path(scratch_arg).resolve() if scratch_arg is not None else None
+    if (launcher.is_relative_to(target)
+            or (review_tree is not None and launcher.is_relative_to(review_tree.parent))
             or not launcher.is_file() or not os.access(launcher, os.X_OK)):
         raise PromptError("worker launcher must be executable and outside the candidate checkout and review round")
+    if review_tree is None:
+        raise PromptError("--launch needs --scratch naming the detached review tree")
 
     section = "verifier_compute" if args.verifier else "lens_compute"
     try:
@@ -1523,7 +1528,7 @@ def launch_worker(args: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix="review-control-") as control:
         return subprocess.run(
             [str(launcher), *command], input=prompt.encode(), cwd=control,
-            env={"PATH": os.defpath, "DEVKIT_REVIEW_TREE": str(Path(args.scratch).resolve())},
+            env={"PATH": os.defpath, "DEVKIT_REVIEW_TREE": str(review_tree)},
             check=False,
         ).returncode
 
