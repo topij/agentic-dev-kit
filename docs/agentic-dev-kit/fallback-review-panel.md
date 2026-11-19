@@ -800,7 +800,9 @@ the prompt generator, an agent definition or the kit configuration itself.
   Start the client from a trusted empty directory with user and project integrations
   excluded, no MCP servers, apps, plugins, hooks or delegation, approvals disabled
   and an empty shell-environment inheritance policy. Set the configured model and
-  effort on this launch. Confirm the effective tool inventory before supplying the
+  effort on this launch. The dispatcher sets `agents.enabled=false` and disables
+  the multi-agent features. Check the effective tool inventory and verify that
+  both shell reads and file edits reach a guest-only fixture before supplying the
   candidate. A desktop subagent inheriting the cockpit's connectors is unsuitable.
 - Exercise the actual launch route with a harmless fixture. Read a worker-only
   file, verify the absence of a synthetic host-only environment variable and

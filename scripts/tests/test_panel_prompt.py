@@ -2853,8 +2853,10 @@ def test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, r
         assert {"--bare", "--restricted", "--strict-mcp-config"} <= set(argv)
     else:
         assert {argv[i + 1] for i, arg in enumerate(argv) if arg == "--disable"} >= {
-            "plugins", "apps", "multi_agent", "hooks", "shell_snapshot",
+            "plugins", "apps", "multi_agent", "multi_agent_v2", "hooks", "shell_snapshot",
+            "image_generation", "view_image", "computer_use", "browser_use",
         }
+        assert "agents.enabled=false" in argv
         assert 'shell_environment_policy.inherit="none"' in argv
     assert head in prompt and "worker-model" in prompt
     assert prompt.startswith("# Cockpit worker dispatch") and str(launcher) in prompt

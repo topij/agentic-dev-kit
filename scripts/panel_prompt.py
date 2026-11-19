@@ -1486,10 +1486,17 @@ def launch_worker(args: argparse.Namespace) -> int:
                    "Bash", "--permission-mode", "dontAsk", "--no-session-persistence"]
     else:
         command = ["codex", "exec", "--skip-git-repo-check", "--ignore-user-config",
-                   "--ignore-rules", "--sandbox", "workspace-write", "--disable", "apps", "--disable", "plugins",
-                   "--disable", "hooks", "--disable", "multi_agent", "--disable",
-                   "shell_snapshot", "-c", 'approval_policy="never"', "-c",
-                   'shell_environment_policy.inherit="none"', "-c", 'web_search="disabled"']
+                   "--ignore-rules", "--sandbox", "workspace-write", "-c", "agents.enabled=false",
+                   "-c", 'approval_policy="never"', "-c", 'shell_environment_policy.inherit="none"',
+                   "-c", 'web_search="disabled"']
+        # The agent registry also has its own switch. The legacy feature flag
+        # alone left hosted delegation available on a fresh authenticated run.
+        for feature in ("apps", "plugins", "hooks", "multi_agent", "multi_agent_v2",
+                        "shell_snapshot", "image_generation", "view_image", "goals",
+                        "computer_use", "browser_use", "browser_use_external", "skill_search",
+                        "skill_mcp_dependency_install", "remote_plugin", "workspace_dependencies",
+                        "sleep_tool"):
+            command.extend(["--disable", feature])
     for key in ("model", "effort"):
         value = compute.get(key)
         if value is None:
@@ -1508,7 +1515,9 @@ def launch_worker(args: argparse.Namespace) -> int:
         f"Use the runtime's native {shell} tool directly: the launcher routes "
         "commands to its checked worker. Do not try to invoke the host launcher. "
         "Source access is limited to the cockpit-staged tree identified below; "
-        "copy only paths needed by each check. If the worker identity, staged tree or "
+        "copy only paths needed by each check. Review the supplied diff using static "
+        "inspection and local, offline regression tests. Use harmless fixtures for "
+        "external operations. If the worker identity, staged tree or "
         "tool restrictions differ, stop and report the discrepancy.\n\n" + assembled
     )
     with tempfile.TemporaryDirectory(prefix="review-control-") as control:
