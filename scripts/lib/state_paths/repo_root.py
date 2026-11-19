@@ -10,6 +10,8 @@ checkout, a file in a linked worktree).
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 
@@ -29,3 +31,34 @@ def walk_up_for_marker(start: Path) -> Path | None:
         if has_repo_marker(candidate):
             return candidate
     return None
+
+
+def primary_worktree(repo_root: Path) -> Path:
+    """The primary checkout, or the invoking checkout if Git lists no usable primary.
+
+    Ignore inherited Git repository selectors so discovery stays anchored to
+    the checkout that owns the engine. Bare and separate Git dirs have no
+    usable primary working directory in the porcelain listing.
+    """
+    if not (repo_root / ".git").is_file():
+        return repo_root
+    try:
+        listed = subprocess.run(
+            ["git", "-C", str(repo_root), "worktree", "list", "--porcelain", "-z"],
+            env={key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
+            capture_output=True,
+            timeout=10,
+            check=True,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        listed = b""
+    first: list[bytes] = []
+    for field in listed.split(b"\0"):
+        if not field:
+            break
+        first.append(field)
+    if first and first[0].startswith(b"worktree ") and b"bare" not in first[1:]:
+        candidate = Path(os.fsdecode(first[0][len(b"worktree "):]))
+        if candidate.is_absolute() and candidate.is_dir() and (candidate / ".git").exists():
+            return candidate
+    return repo_root

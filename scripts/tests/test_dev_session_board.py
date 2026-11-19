@@ -259,6 +259,8 @@ def _pr_watch_mark_seen(repo: Repo, checkout: Path, pr: int, **extra: str):
     engine = checkout / "scripts" / "devkit" / "pr_watch.py"
     if not engine.exists():
         shutil.copy2(ENGINE_DIR / "pr_watch.py", engine)
+        shutil.copytree(ENGINE_DIR / "lib/state_paths", engine.parent / "lib/state_paths",
+                        ignore=shutil.ignore_patterns("tests", "__pycache__"))
     return subprocess.run(
         ["python3", str(engine), str(pr), "--mark-seen"],
         cwd=checkout,
@@ -294,6 +296,28 @@ def test_a_cockpit_poll_names_the_lane_that_holds_the_prs_watch_state(
     by_marker = _pr_watch_mark_seen(repo, repo.root, 41)
     assert by_marker.returncode == 0, by_marker.stderr
     assert "lane session" not in by_marker.stderr
+
+
+@pytest.mark.parametrize("descriptor", [False, True])
+def test_unactivated_lane_without_marker_keeps_its_own_watch_state(repo: Repo, descriptor: bool) -> None:
+    lane = _new(repo, "unactivated")
+    if descriptor:
+        (lane.parent / "launch-descriptor.json").write_text("{}", encoding="utf-8")
+        (lane.parent / "branch").unlink()
+    store = repo.root / "state/pr-watch"
+    store.mkdir(parents=True)
+    receipt = store / "41.json"
+    receipt.write_text('{"pending_seen":["cockpit-only"]}', encoding="utf-8")
+    before = receipt.read_bytes()
+    lane_receipt = lane / "state/pr-watch/41.json"
+    lane_receipt.parent.mkdir(parents=True)
+    lane_receipt.write_text('{"pending_seen":["lane-only"]}', encoding="utf-8")
+    ack = _pr_watch_mark_seen(repo, lane, 41)
+    assert ack.returncode == 0, ack.stderr
+    assert receipt.read_bytes() == before
+    updated = json.loads(lane_receipt.read_text(encoding="utf-8"))
+    assert updated["seen"] == ["lane-only"]
+    assert "pending_seen" not in updated
 
 
 def _shell_sessions_dir(repo_root: Path, env: dict[str, str]) -> str:

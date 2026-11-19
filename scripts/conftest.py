@@ -62,9 +62,9 @@ guard resists fraud.
 WHAT IT OBSERVES — the real ``state/`` at TWO INSTANTS: conftest import and
 ``pytest_sessionfinish``. The bracket is deliberate, not a shortcut, because
 ``state/`` is a LIVE store: `pr_watch.py` persists into it on every poll, in
-ordinary cockpit operation, between and even during test sessions. Only a
-change ACROSS THIS SESSION is evidence of a suite defect; any wider window
-reads legitimate operation as a leak. Structurally outside its sight,
+ordinary cockpit operation, between and even during test sessions. A linked-worktree run also observes the primary checkout's pr-watch
+directory. A concurrent real poll can change that directory during the test
+window. Use an independent clone for verification while another cockpit is polling. Structurally outside its sight,
 therefore — the classes, not an enumeration of their members (#457):
 
   - Anything ALREADY PRESENT at import. A previous run's uncleaned leak is in
@@ -145,6 +145,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -282,15 +283,53 @@ def _walk_state(state_dir: Path, excluded: frozenset[str]):
         yield from sorted(top.rglob("*"))
 
 
+def _primary_watch_dir() -> Path | None:
+    """Locate the extra live store independently of the engine under test."""
+    if not (REPO_ROOT / ".git").is_file():
+        return None
+    try:
+        listing = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "worktree", "list", "--porcelain", "-z"],
+            env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
+            capture_output=True, check=True, timeout=10,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    first = listing.partition(b"\0\0")[0].split(b"\0")
+    if not first[0].startswith(b"worktree ") or b"bare" in first:
+        return None
+    primary = Path(os.fsdecode(first[0][len(b"worktree "):]))
+    if primary == REPO_ROOT or not primary.is_absolute() or not (primary / ".git").exists():
+        return None
+    return primary / "state/pr-watch"
+
+
+_PRIMARY_WATCH_DIR = _primary_watch_dir()
+
+
 def _real_state_snapshot() -> dict[str, str]:
-    """``{relpath: recorded kind}`` for every entry under the REAL ``<repo>/state/``.
+    """Watch local state and, in a linked checkout, the shared cockpit receipts."""
+    snapshot = _directory_snapshot(REPO_ROOT / "state", _excluded_state_dirs())
+    if _PRIMARY_WATCH_DIR is not None:
+        # Record a linked-away store without traversing an unrelated tree.
+        for path in (_PRIMARY_WATCH_DIR.parent, _PRIMARY_WATCH_DIR):
+            if path.is_symlink():
+                snapshot[str(path)] = f"symlink -> {os.readlink(path)}"
+                break
+        else:
+            shared = _directory_snapshot(_PRIMARY_WATCH_DIR, frozenset())
+            snapshot.update({str(_PRIMARY_WATCH_DIR / key): value for key, value in shared.items()})
+    return snapshot
+
+
+def _directory_snapshot(state_dir: Path, excluded: frozenset[str]) -> dict[str, str]:
+    """Record each entry under a guarded state directory by relative path.
 
     The recorded kind is a content hash for a regular file, ``<dir>``,
     ``symlink -> <target>``, or ``<special>`` — the branches below.
 
     Deliberately independent of ``$DEVKIT_STATE_ROOT`` and of
-    ``_hermetic_state_root``: this reads straight off disk at ``REPO_ROOT /
-    "state"``, using this file's OWN repo-root resolution — never `pr_watch`'s
+    ``_hermetic_state_root``: this reads straight off disk, using this file's own repo-root resolution — never `pr_watch`'s
     or any other engine's — so a bug in an engine's own root/env resolution
     cannot blind the guard that exists to catch it.
 
@@ -343,7 +382,6 @@ def _real_state_snapshot() -> dict[str, str]:
     observation-window section, a different mechanism with its own blind
     spots.
     """
-    state_dir = REPO_ROOT / "state"
     # A regular file here blocks engines that require a state directory. Hash
     # it at the root entry so creation and content changes cannot look absent.
     # Root symlinks retain the separately documented handling below.
@@ -352,7 +390,6 @@ def _real_state_snapshot() -> dict[str, str]:
     if not state_dir.is_dir():
         return {}
     snapshot: dict[str, str] = {"./": "<dir>"}
-    excluded = _excluded_state_dirs()
     for path in _walk_state(state_dir, excluded):
         relative = str(path.relative_to(state_dir))
         if relative in excluded and not path.is_symlink() and path.is_dir():
@@ -471,7 +508,10 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     # Two lengths on purpose. The banner goes through `write_sep`, which pads to
     # the terminal width, so the changed-path list — unbounded, one entry per
     # leaked file — stays out of it and goes in the section body instead.
-    summary = f"REGRESSION (#428): the suite wrote into the real {REPO_ROOT / 'state'}"
+    location = str(REPO_ROOT / "state")
+    if any(os.path.isabs(path) for path in changed):
+        location += f" or shared {_PRIMARY_WATCH_DIR}"
+    summary = f"REGRESSION (#428): the suite wrote into the real {location}"
     detail = (
         f"{summary} during this run instead of staying inside the per-test "
         "$DEVKIT_STATE_ROOT sandbox that _hermetic_state_root (tests/conftest.py) "

@@ -595,7 +595,9 @@ operator's own answer.
   worker on 2026-11-19. These controls are separate from the PR lane launcher. For writable reviewer copies, #1138 supplies the independent-clone
   recipe in `fallback-review-panel.md` and the Git-administration regression fixture;
   that recipe does not isolate credentials or inherited Git configuration.
-  The operator decides whether the combined evidence meets step 2c. D2 requires operator-only lane merges.
+  On 2026-11-19 the operator accepted step 2c for isolated Claude lanes on the
+  disposable launcher evidence and the controls shipped in #1477 and #1478.
+  Ordinary host lanes remain outside that acceptance. D2 reserves lane merges for the operator.
 
   **Disposable pilot, 2026-11-17, kit `3088f25e`.** GitHub refused the App's
   merge on the actor-restricted target. The operator exercised the merge control

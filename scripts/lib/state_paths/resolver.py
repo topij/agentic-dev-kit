@@ -141,7 +141,7 @@ def repo_state_root() -> Path:
     )
 
 
-def _marker_state_root(start: Path | None = None) -> Path | None:
+def _marker_state_root(start: Path | None = None, *, strict: bool = False) -> Path | None:
     """Sandbox root from a ``.devkit_state_root`` marker, walked up from cwd.
 
     The headless-lane mechanism: a launcher that spins up a headless /
@@ -163,18 +163,25 @@ def _marker_state_root(start: Path | None = None) -> Path | None:
     *relative* path inside the marker — mirroring the env-var rule. A read
     that raises :class:`OSError`, or an empty marker, is logged and treated as
     absent. Malformed UTF-8 propagates :class:`UnicodeDecodeError`; it does not
-    select the default.
+    select the default. With strict=True, any unusable marker raises instead
+    of falling through to a shared store.
     """
     start = (start or Path.cwd()).resolve()
     for candidate in (start, *start.parents):
         marker = candidate / STATE_ROOT_MARKER
+        if strict and os.path.lexists(marker) and not marker.is_file():
+            raise StateRootError(f"unusable sandbox marker at {marker}")
         if marker.is_file():
             try:
                 raw = marker.read_text(encoding="utf-8").strip()
             except OSError as exc:
+                if strict:
+                    raise StateRootError(f"could not read sandbox marker at {marker}") from exc
                 log.warning("state_paths: could not read marker %s (%s); ignoring", marker, exc)
                 return None
             if not raw:
+                if strict:
+                    raise StateRootError(f"empty sandbox marker at {marker}")
                 log.warning("state_paths: marker %s is empty; ignoring", marker)
                 return None
             path = Path(raw)
@@ -200,7 +207,13 @@ def state_root() -> Path:
     if relative) -> :func:`_marker_state_root` (consulted only when the env
     var is unset) -> :func:`repo_state_root`. Never returns a relative path.
     """
-    explicit = os.environ.get(STATE_ROOT_ENV)
+    return sandbox_state_root(os.environ.get(STATE_ROOT_ENV)) or repo_state_root()
+
+
+def sandbox_state_root(
+    explicit: str | None, *, start: Path | None = None, strict_marker: bool = False,
+) -> Path | None:
+    """Select an explicit or marker sandbox before a caller-specific default."""
     if explicit:
         candidate = Path(explicit)
         if not candidate.is_absolute():
@@ -209,10 +222,7 @@ def state_root() -> Path:
                 "(a relative state root resolves against the caller's cwd)."
             )
         return candidate
-    marker = _marker_state_root()
-    if marker is not None:
-        return marker
-    return repo_state_root()
+    return _marker_state_root(start, strict=strict_marker)
 
 
 class UnsandboxedStateWriteError(RuntimeError):

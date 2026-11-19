@@ -88,7 +88,7 @@ def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     #428: `pr_watch.py` computes its persistence root as a MODULE-LEVEL
     constant, evaluated once at import time (``STATE_DIR = _STATE_ROOT /
     "pr-watch"``, resolving ``$DEVKIT_STATE_ROOT``, then a
-    ``.devkit_state_root`` marker, then the real repo root). It is the only
+    ``.devkit_state_root`` marker, then the primary cockpit checkout). It is the only
     engine here that reaches ``state/`` at all, and it resolves at import
     rather than per call — which is why this fixture sets the env var, which
     a fresh module load will read, rather than patching an attribute on a
@@ -111,7 +111,7 @@ def _hermetic_state_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
     body — reaches every one of them, in this module and any other
     collected under ``scripts/tests/``. It also means the module keeps
     doing its OWN real derivation; nothing here shortcuts or replaces it
-    (see ``test_state_dir_is_the_pr_watch_subdir_of_the_resolved_root`` in
+    (see ``test_primary_and_linked_cockpits_share_review_state`` in
     ``test_pr_watch.py``, which pins that derivation directly and opts out
     of this fixture to do it).
 

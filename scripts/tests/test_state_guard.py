@@ -593,6 +593,26 @@ def test_guard_is_silent_when_nothing_writes(tmp_path: Path, shape: str) -> None
     assert _SUMMARY not in combined, f"the guard's summary leaked into a clean run:\n{combined}"
 
 
+def test_linked_suite_detects_a_write_to_the_primary_watch_store(tmp_path: Path) -> None:
+    primary = tmp_path / "primary"
+    linked = tmp_path / "linked"
+    _build_tree(primary, leak_in="tests", git=False)
+    subprocess.run(["git", "init", "-q", str(primary)], check=True)
+    subprocess.run(["git", "-C", str(primary), "add", "scripts"], check=True)
+    subprocess.run(["git", "-C", str(primary), "-c", "user.name=Fixture",
+                    "-c", "user.email=test@example.test", "commit", "-qm", "fixture"], check=True)
+    subprocess.run(["git", "-C", str(primary), "worktree", "add", "-q", "--detach", str(linked)],
+                   check=True)
+    # The planted write names the primary by absolute path even when pytest
+    # loads conftest from the linked worktree. The other test is inert.
+    clean = _run_pytest(linked, _SHAPES["state-paths-only"])
+    assert clean.returncode == 0, clean.stdout + clean.stderr
+    leaked = _run_pytest(linked, _SHAPES["tests-only"])
+    assert leaked.returncode != 0
+    assert _BANNER in leaked.stdout
+    assert str(primary / "state/pr-watch/9999.json") in leaked.stdout
+
+
 def _guards_resolver():
     """The guard's own ``_find_repo_root``, extracted without importing it.
 

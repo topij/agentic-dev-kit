@@ -149,11 +149,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from state_paths.repo_root import primary_worktree, walk_up_for_marker  # noqa: E402
+from state_paths.resolver import StateRootError, sandbox_state_root  # noqa: E402
+
 
 def _find_repo_root(start: Path) -> Path:
     """Nearest ancestor with a ``.git`` marker (so this keeps working when the kit
-    is vendored under a nested dir, e.g. scripts/devkit/). Inlined — pr_watch
-    stays stdlib-only.
+    is vendored under a nested dir, e.g. scripts/devkit/).
 
     The ``.git`` walk handles any depth. The FALLBACK does not, and that is a
     known limitation rather than an oversight: ``parent.parent`` is calibrated
@@ -165,78 +168,33 @@ def _find_repo_root(start: Path) -> Path:
     subprocess and the base for the state root, so a probe that escapes points
     a merge-gate engine at a different repository. Failing loudly inside the
     right tree beats resolving quietly into the wrong one."""
-    for candidate in (start, *start.parents):
-        if (candidate / ".git").exists():
-            return candidate
-    return start.parent.parent
+    return walk_up_for_marker(start) or start.parent.parent
 
 
 REPO_ROOT = _find_repo_root(Path(__file__).resolve())
 
-# Sticky on-disk sandbox marker, written at the worktree root by a headless-lane
-# launcher (see scripts/lib/state_paths/). Same name/semantics as state_paths —
-# the two must agree or a lane's state splits in half (see below).
-STATE_ROOT_MARKER = ".devkit_state_root"
 
-
-def _marker_state_root(start: Path) -> Path | None:
-    """Sandbox root from a ``.devkit_state_root`` marker, walked up from ``start``.
-
-    Mirrors ``state_paths.resolver._marker_state_root``: walk up checking for the
-    marker, ceilinged at the first directory carrying a ``.git`` entry (checked
-    *after* the marker, so a marker sitting beside ``.git`` is still found), and
-    accept only an absolute path from inside it.
-
-    Deliberate divergence: state_paths *raises* on a relative/garbage marker,
-    while this returns ``None`` and lets the caller fall back. pr_watch runs in
-    the hot watch-and-fix loop, where the file's standing rule is "never crash
-    the loop" — the same reason a relative ``DEVKIT_STATE_ROOT`` falls back here
-    instead of raising.
-
-    ``start`` is this engine file's own directory rather than ``Path.cwd()``
-    (which is what state_paths uses): the marker lives at the worktree root and
-    the engine file lives *inside* that worktree, whereas the caller's cwd is
-    arbitrary — ``dev_session.sh`` invokes this engine from wherever the operator
-    happened to be.
-    """
-    for candidate in (start, *start.parents):
-        marker = candidate / STATE_ROOT_MARKER
-        try:
-            if marker.is_file():
-                raw = marker.read_text(encoding="utf-8").strip()
-                # Empty or relative -> ignore (fall back), never a silent redirect.
-                return Path(raw) if raw and os.path.isabs(raw) else None
-        except OSError:
-            return None  # unreadable marker -> fall back rather than crash
-        if (candidate / ".git").exists():
-            break  # worktree root: don't climb into an unintended ancestor
-    return None
+def _issued_checkout(repo_root: Path) -> bool:
+    return repo_root.name == "wt" and os.path.lexists(repo_root.parent / "launch-descriptor.json")
 
 
 def _resolve_state_root(start: Path, repo_root: Path, state_root_env: str | None) -> Path:
-    """Absolute dir this engine's per-PR watch state lives under.
-
-    ``$DEVKIT_STATE_ROOT`` -> ``.devkit_state_root`` marker -> ``<repo>/state``,
-    the same precedence (and the same marker-only-when-the-env-var-is-unset rule)
-    as ``state_paths.resolver.state_root``. Bare lane polls use their sandbox.
-    The scope-aware cockpit wrappers explicitly select the session's separate
-    cockpit store for their polls, acknowledgements and review receipts.
-
-    Inlined rather than importing state_paths on purpose: pr_watch is deliberately
-    stdlib-only (``dependencies = []``) for the hot loop. Own-dir state, so no
-    read-cascade is needed — only the write root.
-    """
-    if state_root_env:
-        # A relative override falls back to the repo-root default rather than
-        # raising (never crash the loop), and does NOT consult the marker — an
-        # explicit env var, even a bad one, means the caller chose the root.
-        return (
-            Path(state_root_env)
-            if os.path.isabs(state_root_env)
-            else repo_root / "state"
-        )
-    marker = _marker_state_root(start)
-    return marker if marker is not None else repo_root / "state"
+    """Prefer the engine checkout's sandbox, then the primary cockpit's store."""
+    try:
+        sandbox = sandbox_state_root(state_root_env, start=start, strict_marker=True)
+    except (StateRootError, UnicodeError, OSError):
+        # Preserve the watcher's checkout-local fallback for an unusable sandbox.
+        return repo_root / "state"
+    if sandbox is not None:
+        return sandbox
+    # Headless lanes retain local state even after losing their marker. An
+    # interactive dev_session lane without its activation exports also keeps
+    # its old local default. Both have branch metadata beside their wt/.
+    if _issued_checkout(repo_root) or (
+        repo_root.name == "wt" and (repo_root.parent / "branch").is_file()
+    ):
+        return repo_root / "state"
+    return primary_worktree(repo_root) / "state"
 
 
 _STATE_ROOT = _resolve_state_root(
@@ -260,26 +218,7 @@ def _default_sessions_dir(repo_root: Path) -> Path:
     explicit = os.environ.get("DEVKIT_SESSIONS_DIR")
     if explicit:
         return Path(os.path.abspath(explicit))
-    primary = repo_root
-    try:
-        listed = subprocess.run(
-            ["git", "-C", str(repo_root), "worktree", "list", "--porcelain", "-z"],
-            capture_output=True,
-            timeout=10,
-            check=True,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
-        listed = b""
-    first: list[bytes] = []
-    for field in listed.split(b"\0"):
-        if not field:
-            break
-        first.append(field)
-    if first and first[0].startswith(b"worktree ") and b"bare" not in first[1:]:
-        candidate = Path(os.fsdecode(first[0][len(b"worktree "):]))
-        if candidate.is_absolute() and candidate.is_dir() and (candidate / ".git").exists():
-            primary = candidate
-    return primary.parent / "dev-model-sessions"
+    return primary_worktree(repo_root).parent / "dev-model-sessions"
 
 
 def _under_lane_descriptor() -> bool:
@@ -288,10 +227,7 @@ def _under_lane_descriptor() -> bool:
     The issuer stores the descriptor outside both directories. Its presence
     suffices for refusal, even after expiry or if its contents are damaged.
     """
-    return (
-        REPO_ROOT.name == "wt"
-        and os.path.lexists(REPO_ROOT.parent / "launch-descriptor.json")
-    ) or (
+    return _issued_checkout(REPO_ROOT) or (
         _STATE_ROOT.name == "state"
         and os.path.lexists(_STATE_ROOT.parent / "launch-descriptor.json")
     )
@@ -301,7 +237,7 @@ def lane_state_hint(pr: int) -> str | None:
     """A warning when this run reads the repo-root store but a lane holds this PR.
 
     A cockpit poll without ``DEVKIT_STATE_ROOT`` and outside any lane marker
-    reads ``<repo>/state``. The cockpit wrapper stores the session's receipt,
+    reads the primary cockpit store. The cockpit wrapper stores the session's receipt,
     seen-set and settle baseline under ``cockpit-state/``. The report then shows the lane's PR as
     unreviewed and unsettled, which reads like a lane that claimed work it did
     not do (#563). This names the lane so the caller can poll through
@@ -313,7 +249,7 @@ def lane_state_hint(pr: int) -> str | None:
     try:
         if os.environ.get("DEVKIT_STATE_ROOT"):
             return None
-        if _STATE_ROOT != REPO_ROOT / "state":
+        if primary_worktree(REPO_ROOT) / "state" != _STATE_ROOT:
             return None
         sessions = _default_sessions_dir(REPO_ROOT)
         if not sessions.is_dir():
@@ -497,12 +433,6 @@ _DEFAULT_REQUIRE_CI = True
 # before the loop stops and the operator decides — see
 # :func:`review_round_summary`. A budget, not a gate: it moves no predicate.
 _DEFAULT_REVIEW_ROUND_BUDGET = 2
-
-# Same pattern as check_doc_budget.py: the reader ships beside the engines, so
-# deriving its directory from THIS file keeps working when the kit is vendored
-# under a nested dir (scripts/devkit/).
-sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
-
 
 class ReviewConfig(NamedTuple):
     """The resolved ``review.*`` knobs.
