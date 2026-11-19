@@ -309,9 +309,15 @@ def test_unactivated_lane_without_marker_keeps_its_own_watch_state(repo: Repo, d
     receipt = store / "41.json"
     receipt.write_text('{"pending_seen":["cockpit-only"]}', encoding="utf-8")
     before = receipt.read_bytes()
+    lane_receipt = lane / "state/pr-watch/41.json"
+    lane_receipt.parent.mkdir(parents=True)
+    lane_receipt.write_text('{"pending_seen":["lane-only"]}', encoding="utf-8")
     ack = _pr_watch_mark_seen(repo, lane, 41)
     assert ack.returncode == 0, ack.stderr
     assert receipt.read_bytes() == before
+    updated = json.loads(lane_receipt.read_text(encoding="utf-8"))
+    assert updated["seen"] == ["lane-only"]
+    assert "pending_seen" not in updated
 
 
 def _shell_sessions_dir(repo_root: Path, env: dict[str, str]) -> str:

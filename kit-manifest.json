@@ -791,7 +791,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "c882cc2eb47993528b13313a3056cc24723621fa66aac39a442098532817eebb"
+      "sha256": "1a1b05aeee53b472d2c4535fe7bd0a604aaca116ad1e4aa306c597d1eba8155f"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
