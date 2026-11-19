@@ -2148,6 +2148,7 @@ def test_agent_definition_carries_the_configured_model_and_effort(repo):
     out = _agent_definition(repo, "--lens", "adversarial")
     assert out.returncode == 0, out.stderr
     front = _frontmatter(out.stdout)
+    assert front["tools"] == "Bash"
     assert front["name"] == "adversarial"
     assert front["model"] == "sonnet"
     assert front["effort"] == "high"
@@ -2806,8 +2807,86 @@ def test_private_clone_recipe_is_present_before_the_reviewer_contract(repo, tmp_
     assert out.returncode == 0, out.stderr
     assert heading in out.stdout
     early = out.stdout.split(heading, 1)[0]
+    assert "credential-free runner selected by the cockpit from a trusted base" in early
+    assert "Report the runner, inputs copied and any command run outside it" in early
     assert "git clone --no-hardlinks --no-local --no-checkout --origin origin" in early
     assert "remove the clone's `origin`, then check out the reviewed SHA" in early
     assert "clear the recipe's Git routing variables" in early
     assert "verification in the recipe's sanitized subshell" in early
     assert "Never copy a linked worktree's `.git` gitfile" in early
+
+
+@pytest.mark.parametrize("runtime", ["claude", "codex"])
+@pytest.mark.parametrize("verifier", [False, True])
+@pytest.mark.parametrize("padded", [False, True])
+def test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, runtime, verifier, padded):
+    pp = _load()
+    deployment = tmp_path / "deployment"
+    (deployment / "config").mkdir(parents=True)
+    launcher = deployment / "launcher"
+    record = deployment / "observed.json"
+    launcher.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        f"with open({str(record)!r}, 'w') as stream:\n"
+        "    json.dump([sys.argv[1:], sys.stdin.read(), os.getcwd(), dict(os.environ)], stream)\n"
+        "sys.exit(17)\n"
+    )
+    launcher.chmod(0o700)
+    config = {"review": {"fallback_panel": {
+        "worker_launcher": {runtime: str(launcher)},
+        "verifier_compute" if verifier else "lens_compute": {runtime: {"model": "worker-model"}},
+    }}}
+    (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
+    monkeypatch.setattr(pp, "REPO_ROOT", deployment)
+    monkeypatch.setenv("REVIEW_HOST_CANARY", "synthetic")
+    base, head = _revs(repo)
+    tree = _detached_tree(repo, repo.parent, head)
+    flags = (["--verifier", "--lens-report", f"correctness={_report(tmp_path, 'correctness', 'F1 check')}"]
+             if verifier else ["--lens", "correctness", "--branch", "fixture"])
+    root_arg = f"  {repo}  " if padded else str(repo)
+    scratch_arg = f"  {tree}  " if padded else tree
+    assert pp.main(["--launch", "--root", root_arg, "--runtime", runtime, "--head", head,
+                    "--base", base, "--scratch", scratch_arg, *flags]) == 17
+    argv, prompt, cwd, env = json.loads(record.read_text())
+    assert argv[0] == runtime and "--model=worker-model" in argv
+    if runtime == "claude":
+        assert argv[argv.index("--tools") + 1] == "Bash"
+        assert argv[argv.index("--mcp-config") + 1] == '{"mcpServers":{}}'
+        assert {"--bare", "--restricted", "--strict-mcp-config"} <= set(argv)
+    else:
+        assert {argv[i + 1] for i, arg in enumerate(argv) if arg == "--disable"} >= {
+            "plugins", "apps", "multi_agent", "multi_agent_v2", "hooks", "shell_snapshot",
+            "image_generation", "view_image", "computer_use", "browser_use",
+        }
+        assert "agents.enabled=false" in argv
+        assert 'shell_environment_policy.inherit="none"' in argv
+    assert head in prompt and "worker-model" in prompt
+    assert prompt.startswith("# Cockpit worker dispatch") and str(launcher) in prompt
+    assert f"native {'Bash' if runtime == 'claude' else 'exec_command'} tool" in prompt
+    assert "REVIEW_HOST_CANARY" not in env and "HOME" not in env
+    assert env["DEVKIT_REVIEW_TREE"] == str(Path(tree).resolve())
+    assert not Path(cwd).exists()
+
+
+def test_launch_refuses_candidate_authority_and_unconfigured_worker(repo, tmp_path, monkeypatch, capsys):
+    pp = _load()
+    monkeypatch.setattr(pp, "REPO_ROOT", repo)
+    argv = ["--launch", "--root", str(repo), "--runtime", "claude", "--lens", "correctness"]
+    assert pp.main(argv) == 2
+    assert "trusted installation outside" in capsys.readouterr().err
+    deployment = tmp_path / "deployment"
+    (deployment / "config").mkdir(parents=True)
+    monkeypatch.setattr(pp, "REPO_ROOT", deployment)
+    config = deployment / "config/dev-model.yaml"
+    config.write_text("review: {}\n")
+    assert pp.main(argv) == 2
+    assert "configure an absolute worker_launcher" in capsys.readouterr().err
+    executable = repo / "run-me"
+    executable.write_text("#!/bin/sh\nexit 0\n")
+    executable.chmod(0o700)
+    config.write_text(yaml.safe_dump({"review": {"fallback_panel": {
+        "worker_launcher": {"claude": str(executable)},
+    }}}))
+    assert pp.main(argv) == 2
+    assert "outside the candidate checkout" in capsys.readouterr().err

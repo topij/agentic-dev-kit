@@ -357,9 +357,10 @@ On 2026-11-18,
 acceptance record and its limits. The model replies were scripted; lane merges remain operator-only.
 
 ▶ Next: choose the remaining step 2c work: #615's push/gh argument gates, #617's validated
-profile-byte handoff, #618's post-exit origin check, or #1025's fallback-reviewer credential
-isolation. The writable-copy recipe and its Git-administration fixture belong to #1138;
-credential isolation remains separate.
+profile-byte handoff, or #618's post-exit origin check. For #1025, the kit's worker
+dispatch requires separate provisioning in each trusted deployment. On 2026-11-19
+the operator chose native Bash inside the isolated Claude worker. #1138 covers
+writable-copy Git administration. Lane merges remain operator-only.
 The operator decides whether #1370, #1371 and #345 are done, now that
 #1440 and #1441 have merged. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on

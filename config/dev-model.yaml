@@ -382,6 +382,8 @@ review:
   safety_critical_paths:
     - "scripts/dev_session.sh"
     - "scripts/devkit/dev_session.sh"
+    - "scripts/panel_prompt.py"
+    - "scripts/devkit/panel_prompt.py"
     - "scripts/launch_lane.py"
     - "scripts/isolated_lane.py"
     - "scripts/devkit/isolated_lane.py"
@@ -454,6 +456,14 @@ review:
   # docs/agentic-dev-kit/fallback-review-panel.md.
   fallback_panel:
     receipt_source: "fallback:panel"   # never the same as a single-lens receipt
+    # Trusted cockpit deployment only. Each absolute executable starts a review
+    # inside its credential-free worker, accepts runtime argv and reads the prompt
+    # on stdin. Set these in the trusted deployment's tracked configuration.
+    worker_launcher:
+      # runtime-status: mechanical
+      claude: ""
+      # runtime-status: mechanical
+      codex: ""
     # Compute for each panel lens, keyed by runtime — the same per-runtime shape
     # `models.runtime_mappings` uses, because the panel runs under whichever
     # runtime the cockpit is.

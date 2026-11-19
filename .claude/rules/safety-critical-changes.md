@@ -5,6 +5,8 @@
 paths:
   - "scripts/dev_session.sh"
   - "scripts/devkit/dev_session.sh"
+  - "scripts/panel_prompt.py"
+  - "scripts/devkit/panel_prompt.py"
   - "scripts/launch_lane.py"
   - "scripts/isolated_lane.py"
   - "scripts/devkit/isolated_lane.py"

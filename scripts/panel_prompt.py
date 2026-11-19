@@ -41,7 +41,8 @@ Four properties, each earned by a real failure:
    (#463). ``--last-reviewed`` names a re-run's delta by its sha, so the delta needs
    no free text at all (#1163).
 
-This assembles the prompt. It does not launch lenses, build worktrees, or parse reports:
+By default this assembles the prompt. With ``--launch``, a separate trusted installation
+delivers it on stdin to its configured worker launcher. It never builds worktrees or parses reports:
 ``--lenses`` staying self-reported is #32, and this is what a real check would build on.
 
 With ``--verifier`` it assembles the verifier's prompt instead (#1155): the lens reports
@@ -92,6 +93,7 @@ import shlex
 import stat
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -145,7 +147,8 @@ COMPUTE_CARRIER: dict[str, str] = {
     "claude": (
         "carried by the kit-owned agent definition `.claude/agents/{lens}.md` — its "
         "frontmatter `model` and `effort` are applied by the runtime when the cockpit "
-        "launches the agent named after this lens"
+        "launches the agent named after this lens; headless worker dispatch applies the "
+        "configured model and effort on the Claude CLI argv"
     ),
     "codex": (
         "carried on the `codex exec` argv — `-m <model>` and "
@@ -619,6 +622,11 @@ def _tree_block(
         else "**in the session scratch directory your runtime names"
     )
     tree += (
+        "- **Reviewer credentials and tools.** Run every command inside the credential-free "
+        "runner selected by the cockpit from a trusted base, including the first read, "
+        "fixture setup, tests and subprocesses. Use only the approved source paths. "
+        "If that runner or its tool restrictions are unavailable, stop before running code. "
+        "Report the runner, inputs copied and any command run outside it.\n"
         "- **If you also make a scratch copy of your own** (for mutation testing, say),"
         f" reach it by a **fresh path**, namespaced by {role} — never by"
         f" removing and recreating one — and make it {where},"
@@ -1229,7 +1237,7 @@ def _preflight_command(root: Path, execution_root: Path, base: str, head: str,
     return shlex.join(command)
 
 
-def build(args: argparse.Namespace) -> str:
+def build(args: argparse.Namespace, *, worker_config: dict | None = None) -> str:
     # The repo under review is a parameter, not a module constant, so the engine can
     # be pointed at a checkout other than its own — and so its own tests can build a
     # fixture repo rather than depending on this one's history. `kit_doctor.py` takes
@@ -1387,7 +1395,7 @@ def build(args: argparse.Namespace) -> str:
             repo_slug=slug,
             reports=reports,
             runtime=o_runtime,
-            compute=verifier_compute(config, o_runtime),
+            compute=verifier_compute(config if worker_config is None else worker_config, o_runtime),
             scratch=o_scratch,
             pr=args.pr,
             base_from_remote=base_from_remote,
@@ -1423,7 +1431,7 @@ def build(args: argparse.Namespace) -> str:
         item_names=names,
         repo_slug=slug,
         branch=branch,
-        compute=lens_compute(config, o_runtime),
+        compute=lens_compute(config if worker_config is None else worker_config, o_runtime),
         runtime=o_runtime,
         scratch=o_scratch,
         pr=args.pr,
@@ -1439,6 +1447,92 @@ def build(args: argparse.Namespace) -> str:
     )
 
 
+_WORKER_COMPUTE_VALUE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+def launch_worker(args: argparse.Namespace) -> int:
+    """Dispatch only through the deployment that owns this running engine.
+
+    The candidate supplies review material. It cannot choose the executable,
+    runtime permissions, or model passed to the trusted worker launcher.
+    """
+    root_arg = _override("--root", args.root)
+    if root_arg is None:
+        raise PromptError("--launch needs --root naming a separate checkout under review")
+    target = Path(root_arg).resolve(strict=True)
+    trusted = REPO_ROOT.resolve(strict=True)
+    if trusted.is_relative_to(target) or target.is_relative_to(trusted):
+        raise PromptError("--launch needs a trusted installation outside the checkout under review")
+    runtime = args.runtime
+    if runtime not in ("claude", "codex"):
+        raise PromptError("--launch supports claude or codex")
+    config = load_config(trusted / "config/dev-model.yaml", overlay=False)
+    configured = get(config, f"review.fallback_panel.worker_launcher.{runtime}", None)
+    if not isinstance(configured, str) or not Path(configured).is_absolute():
+        raise PromptError(f"configure an absolute worker_launcher.{runtime} in the trusted installation")
+    launcher = Path(configured).resolve(strict=True)
+    scratch_arg = _override("--scratch", args.scratch)
+    review_tree = Path(scratch_arg).resolve() if scratch_arg is not None else None
+    if (launcher.is_relative_to(target)
+            or (review_tree is not None and launcher.is_relative_to(review_tree.parent))
+            or not launcher.is_file() or not os.access(launcher, os.X_OK)):
+        raise PromptError("worker launcher must be executable and outside the candidate checkout and review round")
+    if review_tree is None:
+        raise PromptError("--launch needs --scratch naming the detached review tree")
+
+    section = "verifier_compute" if args.verifier else "lens_compute"
+    try:
+        compute = compute_config(config, section, runtime)
+    except ComputeConfigError as exc:
+        raise PromptError(str(exc)) from exc
+    if runtime == "claude":
+        command = ["claude", "-p", "--bare", "--restricted", "--strict-mcp-config",
+                   "--mcp-config", '{"mcpServers":{}}', "--tools", "Bash", "--allowedTools",
+                   "Bash", "--permission-mode", "dontAsk", "--no-session-persistence"]
+    else:
+        command = ["codex", "exec", "--skip-git-repo-check", "--ignore-user-config",
+                   "--ignore-rules", "--sandbox", "workspace-write", "-c", "agents.enabled=false",
+                   "-c", 'approval_policy="never"', "-c", 'shell_environment_policy.inherit="none"',
+                   "-c", 'web_search="disabled"']
+        # The agent registry also has its own switch. The legacy feature flag
+        # alone left hosted delegation available on a fresh authenticated run.
+        for feature in ("apps", "plugins", "hooks", "multi_agent", "multi_agent_v2",
+                        "shell_snapshot", "image_generation", "view_image", "goals",
+                        "computer_use", "browser_use", "browser_use_external", "skill_search",
+                        "skill_mcp_dependency_install", "remote_plugin", "workspace_dependencies",
+                        "sleep_tool"):
+            command.extend(["--disable", feature])
+    for key in ("model", "effort"):
+        value = compute.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, str) or not _WORKER_COMPUTE_VALUE.fullmatch(value):
+            raise PromptError(f"invalid trusted {runtime} {key}")
+        if runtime == "codex" and key == "effort":
+            command.extend(["-c", f"model_reasoning_effort={json.dumps(value)}"])
+        else:
+            command.append(f"--{key}={value}")
+    assembled = build(args, worker_config=config)
+    shell = "Bash" if runtime == "claude" else "exec_command"
+    prompt = (
+        "# Cockpit worker dispatch\n\n"
+        f"Trusted deployment launcher: {json.dumps(str(launcher))}. "
+        f"Use the runtime's native {shell} tool directly: the launcher routes "
+        "commands to its checked worker. Do not try to invoke the host launcher. "
+        "Source access is limited to the cockpit-staged tree identified below; "
+        "copy only paths needed by each check. Review the supplied diff using static "
+        "inspection and local, offline regression tests. Use harmless fixtures for "
+        "external operations. If the worker identity, staged tree or "
+        "tool restrictions differ, stop and report the discrepancy.\n\n" + assembled
+    )
+    with tempfile.TemporaryDirectory(prefix="review-control-") as control:
+        return subprocess.run(
+            [str(launcher), *command], input=prompt.encode(), cwd=control,
+            env={"PATH": os.defpath, "DEVKIT_REVIEW_TREE": str(review_tree)},
+            check=False,
+        ).returncode
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Assemble a fallback-review-panel launch prompt from the doctrine."
@@ -1447,6 +1541,8 @@ def main(argv: list[str] | None = None) -> int:
     # `or REPO_ROOT` fallback silently never fires and the review retargets at cwd.
     # The string is validated first, then converted.
     parser.add_argument("--root", default=None, help="repo under review (default: this one)")
+    parser.add_argument("--launch", action="store_true",
+                        help="send the assembled prompt to the trusted installation's isolated worker")
     # Not argparse-required: a verifier prompt takes no lens. `build` and the
     # agent-definition path each require it where it is needed.
     parser.add_argument("--lens", default=None, help="lens name; must be in the configured roster")
@@ -1561,6 +1657,7 @@ def main(argv: list[str] | None = None) -> int:
                     ("--repair-boundary", args.repair_boundary),
                     ("--last-reviewed", args.last_reviewed),
                     ("--verify-command", args.verify_command),
+                    ("--launch", args.launch or None),
                     ("--verifier", args.verifier or None),
                     ("--lens-report", args.lens_report or None),
                     ("--preflight-rev", args.preflight_rev),
@@ -1577,6 +1674,11 @@ def main(argv: list[str] | None = None) -> int:
             if args.lens is None:
                 raise PromptError("--agent-definition needs --lens")
             sys.stdout.write(agent_definition(root, _override("--lens", args.lens), runtime))
+        elif args.launch:
+            try:
+                return launch_worker(args)
+            except (OSError, ValueError) as exc:
+                raise PromptError(f"worker launch failed: {exc}") from exc
         else:
             sys.stdout.write(build(args))
     except PromptError as exc:

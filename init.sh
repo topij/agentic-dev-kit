@@ -1253,6 +1253,7 @@ seed_claude_lens_agents() {
 ---
 name: adversarial
 description: "Fallback review panel lens adversarial: assume the change is wrong and try to prove it — bypasses, fail-open paths, wedges, and whether the new guard actually guards. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
+tools: Bash
 model: "sonnet"
 effort: high
 ---
@@ -1272,6 +1273,8 @@ You are the **adversarial** lens of the fallback review panel
 (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
 review. Your launch prompt carries the contract, the revision, the diff, and your
 focus; follow it exactly, and report what you reviewed before any finding.
+Use Bash only in the credential-free reviewer worker supplied by the cockpit.
+If the cockpit has not established that boundary, stop before the first command.
 LENS
     echo "seeded .claude/agents/adversarial.md"
   fi
@@ -1281,6 +1284,7 @@ LENS
 ---
 name: correctness
 description: "Fallback review panel lens correctness: assume it works and ask what it says — stale comments, claims that overstate what is verified, tests whose names promise more than their bodies check. Launch it only with a prompt assembled by @@ENGINES@@/panel_prompt.py; it is not a general-purpose agent."
+tools: Bash
 model: "sonnet"
 effort: high
 ---
@@ -1300,6 +1304,8 @@ You are the **correctness** lens of the fallback review panel
 (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
 review. Your launch prompt carries the contract, the revision, the diff, and your
 focus; follow it exactly, and report what you reviewed before any finding.
+Use Bash only in the credential-free reviewer worker supplied by the cockpit.
+If the cockpit has not established that boundary, stop before the first command.
 LENS
     echo "seeded .claude/agents/correctness.md"
   fi
@@ -1442,6 +1448,11 @@ migrate_kit_schema() {
     # MECHANICAL as `-c model_reasoning_effort=<level>` on the `codex exec` argv.
     # The `Run at:` line in a prompt enforces nothing. See
     # docs/agentic-dev-kit/fallback-review-panel.md.
+    worker_launcher:
+      # runtime-status: mechanical
+      claude: ""
+      # runtime-status: mechanical
+      codex: ""
     lens_compute:
       # Mechanical through the agent definition; plain-subagent effort is
       # advisory, as the per-control carrier declaration above explains.

@@ -458,7 +458,7 @@ operator's own answer.
   requests and nothing else was the original proposal. The accepted route instead
   uses a repository-scoped GitHub App installation token inside an unmounted Lima
   VM; #1467 ships it as an opt-in Claude launcher. Step 2c records its live acceptance
-  and remaining scope. Lenses still need their own credential-isolation route.
+  and remaining scope. The fallback-reviewer worker route is in step 2c.
   Ordinary host lanes retain their existing credential exposure; steps 2a and 2b
   raise the bar and stop short of that boundary.
 
@@ -583,9 +583,11 @@ operator's own answer.
   the operator's forge credential. The observation below covers the fixture's probes;
   it does not establish an exhaustive sandbox-escape claim.
   **Remaining scope:** #615's own-branch push gate and S6's `gh` argument classes;
-  #617's handoff of the validated profile bytes; #618's post-exit origin check;
-  and #1025's fallback-reviewer credential isolation. These remain separate from the
-  isolated launcher. For writable reviewer copies, #1138 supplies the independent-clone
+  #617's handoff of the validated profile bytes; and #618's post-exit origin check.
+  For #1025, the trusted deployment dispatches each lens and verifier to a
+  credential-free worker. Each adopter provisions its own launcher and checks
+  its effective tool access. The operator chose native Bash in the isolated Claude
+  worker on 2026-11-19. These controls are separate from the PR lane launcher. For writable reviewer copies, #1138 supplies the independent-clone
   recipe in `fallback-review-panel.md` and the Git-administration regression fixture;
   that recipe does not isolate credentials or inherited Git configuration.
   Step 2c stays open. D2 still requires operator-only lane merges.
