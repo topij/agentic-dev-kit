@@ -7355,6 +7355,20 @@ def test_gh_start_failure_after_backend_selection(
     assert pr_watch._gh_head_sha(5) == ""
 
 
+def test_gh_translates_subprocess_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    pr_watch = _load_pr_watch()
+    failure = subprocess.SubprocessError("child setup failed")
+
+    def fail(*args, **kwargs):
+        raise failure
+
+    monkeypatch.setattr(subprocess, "run", fail)
+    with pytest.raises(RuntimeError) as failed:
+        pr_watch._gh(["pr", "view"])
+    assert str(failed.value) == "gh pr view could not run: child setup failed"
+    assert failed.value.__cause__ is failure
+
+
 def test_gh_present_still_takes_the_gh_path(monkeypatch: pytest.MonkeyPatch) -> None:
     """The default backend is unchanged — REST must be unreachable with `gh` on PATH."""
     pr_watch = _load_pr_watch()

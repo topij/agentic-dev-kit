@@ -870,7 +870,7 @@
     },
     "scripts/tests/test_pr_watch.py": {
       "role": "test",
-      "sha256": "74b2e61cb43c4532da1f61356363a6a2c8e9699db8806163fe13a27e3fd3bffd"
+      "sha256": "12465705a8c3cce141f0c84e5182ae6551d423c58c52797fe7d844c293f94790"
     },
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
