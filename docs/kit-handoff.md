@@ -359,7 +359,7 @@ acceptance record and its limits. The model replies were scripted; lane merges r
 On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
-▶ Next: step 3c (#40), pin the watcher’s built-in review defaults to the shipped config after step 3b (#1145). For #1025, the kit's worker
+▶ Next: step 3d, start migrating the Git and GitHub CLI subprocess runners one engine at a time (whole-kit plan, #414). For #1025, the kit's worker
 dispatch requires separate provisioning in each trusted deployment. On 2026-11-19
 the operator chose native Bash inside the isolated Claude worker. #1138 covers
 writable-copy Git administration. Lane merges remain operator-only.

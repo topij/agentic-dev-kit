@@ -3336,36 +3336,22 @@ def test_every_config_derived_global_is_pinned() -> None:
         assert actual == getattr(expected, field), f"{name} != defaults.{field}"
 
 
-def test_the_default_loader_pins_but_the_opt_out_does_not() -> None:
-    """The pinning must be wired into ``_load_pr_watch``, and
-    ``pin_defaults=False`` must genuinely leave the ambient config in place —
-    otherwise the shipped-config tests below assert about defaults.
+def test_the_default_loader_pins_but_the_opt_out_does_not(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exercise the loader with an adopter setting distinct from the kit default."""
+    _load_pr_watch()
+    import kitconfig
 
-    The discriminator is computed WITHOUT ``_load_pr_watch``, deliberately. An
-    earlier cut derived the skip condition from the very function under test,
-    so "the opt-out is broken" and "this repo's config equals the defaults"
-    were indistinguishable — and it resolved that ambiguity toward *skip*. An
-    adversarial pass then showed two one-line regressions it silently
-    permitted, including the exact one this test exists to prevent. Reading the
-    config independently means a broken opt-out FAILS and only a genuinely
-    indistinguishable config skips.
-    """
-    fresh = _load_pr_watch(pin_defaults=False)
-    ambient_config = fresh._load_review_config()
-    defaults = fresh._load_review_config(ENGINE_DIR / "nope" / "dev-model.yaml")
-    if ambient_config.noise_markers == defaults.noise_markers:
-        pytest.skip(
-            "ambient config's noise_markers equal the engine defaults — no "
-            "discriminator exists in this repo, so pinned and unpinned are "
-            "indistinguishable by construction"
-        )
+    _write_config(tmp_path / "config", 'review:\n  noise_markers: ["adopter summary"]\n')
+    monkeypatch.setattr(kitconfig, "repo_root", lambda: tmp_path)
 
     pinned = _load_pr_watch()
     unpinned = _load_pr_watch(pin_defaults=False)
 
-    assert defaults.noise_markers == pinned._NOISE_MARKERS
-    assert ambient_config.noise_markers == unpinned._NOISE_MARKERS
-    assert defaults.noise_markers != unpinned._NOISE_MARKERS
+    assert pinned._NOISE_MARKERS == pinned._DEFAULT_NOISE_MARKERS
+    assert pinned._NOISE_MARKERS != ("adopter summary",)
+    assert unpinned._NOISE_MARKERS == ("adopter summary",)
 
 
 # --------------------------------------------------------------------------- #
@@ -3502,33 +3488,39 @@ def test_a_review_carrying_findings_is_never_noise(source: str) -> None:
     assert pr_watch.is_noise(REVIEW_WITH_FINDINGS, author="coderabbitai") is False
 
 
-def test_shipped_config_preserves_the_engine_defaults_behavior() -> None:
-    """This repo's own config/dev-model.yaml must classify exactly as the
-    literals it replaced — the behavior-preservation argument for BUG 3.
+@pytest.mark.kit_repo_only("config/dev-model.yaml")
+def test_builtin_review_defaults_match_the_shipped_config(tmp_path: Path) -> None:
+    """Compare standalone fallback values directly to the kit's tracked settings."""
+    require_kit_source()
+    pr_watch = _load_pr_watch()
+    from kitconfig import load_config
 
-    ``pin_defaults=False`` is load-bearing: THIS repo's config is the subject.
-    Loading the pinned module here would assert that the defaults classify like
-    the defaults — a tautology that stays green no matter what the shipped
-    config says. Not hypothetical: the first cut of the pinning change left this
-    test on the pinned loader, and corrupting ``review.noise_markers`` then went
-    from "this test fails" to "the whole suite is green".
+    review = load_config(REPO_ROOT / "config/dev-model.yaml", overlay=False)["review"]
+    defaults = pr_watch._load_review_config(tmp_path / "missing.yaml")
+    assert defaults.require_ci is review["require_ci"]  # bool and int compare equal.
+    # bot_app_slugs is intentionally omitted when the kit trusts no extra apps.
+    assert defaults == pr_watch.ReviewConfig(
+        noise_markers=tuple(review["noise_markers"]),
+        unavailable_markers=tuple(review["unavailable_markers"]),
+        comment_verdict_markers=tuple(review["comment_verdict_markers"]),
+        informational_checks=frozenset(review["informational_checks"]),
+        require_ci=review["require_ci"],
+        bots=tuple(review["bots"]),
+        bot_author_aliases={
+            bot: frozenset(aliases) for bot, aliases in review["bot_author_aliases"].items()
+        },
+        bot_app_slugs={
+            bot: frozenset(slugs) for bot, slugs in review.get("bot_app_slugs", {}).items()
+        },
+        bot_pending_grace_minutes=review["bot_pending_grace_minutes"],
+        settle_grace_minutes=review["settle_grace_minutes"],
+        round_budget=review["round_budget"],
+    )
 
-    It SKIPS for an adopter who has deliberately emptied the marker lists.
-    ``_load_review_config``'s own docstring documents ``noise_markers: []`` as
-    supported ("an adopter with no review bots wants no filtering"), so a repo
-    in that state must not get a red kit suite — that is the same bug this
-    module's loader change exists to remove, one field over. ``adopt.md`` tells
-    adopters to run this suite against their own config, so it has to hold for
-    a legitimately-configured adopter, not just for this repo.
-    """
+
+def test_shipped_config_classifies_walkthroughs_and_outage_notices() -> None:
+    require_kit_source()
     pr_watch = _load_pr_watch(pin_defaults=False)
-
-    if not pr_watch._NOISE_MARKERS or not pr_watch._REVIEW_UNAVAILABLE_MARKERS:
-        pytest.skip(
-            "ambient config empties a marker list — a supported adopter state "
-            "in which this repo's classification claims do not apply"
-        )
-
     walkthrough = (
         "<!-- This is an auto-generated comment: summarize by coderabbit.ai -->\n"
         "<!-- walkthrough_start -->\nSummary only.\n"

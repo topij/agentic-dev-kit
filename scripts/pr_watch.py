@@ -297,11 +297,9 @@ def lane_state_hint(pr: int) -> str | None:
 # is why the clean-verdict sentence "No actionable comments were generated in the
 # recent review." is deliberately absent. `#468`.
 _DEFAULT_NOISE_MARKERS = (
-    "bugbot needs on-demand usage enabled",  # Cursor billing notice
     "<!-- this is an auto-generated comment: summarize by coderabbit",  # walkthrough
     "<!-- this is an auto-generated comment: review in progress",  # CodeRabbit "processing…" placeholder
     "<!-- walkthrough_start -->",
-    "review skipped",  # CodeRabbit draft-detected / skip notices
     "<!-- linear-linkback -->",  # a tracker's auto issue-mirror comment (not a finding)
 )
 
@@ -338,15 +336,15 @@ _DEFAULT_REVIEW_UNAVAILABLE_MARKERS = (
     "bugbot needs on-demand usage enabled",
     "review limit reached",
     "rate limited by coderabbit",
-    "couldn't start this review",
-    "review skipped",
-    "no review credits",
     # The status-check phrasing of the same outage. Same bot, same rate limit, an
     # hour apart on #22 vs #24, but a different wording on a different surface —
     # the comment said "review limit reached", the check description said "Review
     # rate limited". Matching only the comment wording is what made detection
     # depend on which surface the bot happened to use (#23).
     "review rate limited",
+    "couldn't start this review",
+    "review skipped",
+    "no review credits",
 )
 
 # Status contexts that are advisory only — they must NEVER block "done". A
