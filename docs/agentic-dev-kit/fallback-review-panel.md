@@ -771,6 +771,8 @@ The host holds the model login. Supply the guest round as a writable sandbox
 root using `--add-dir`; the handed checkout remains read-only by the review
 contract. Provision worker-local tool dependencies and Git identity for tests.
 Keep the endpoint, executable, settings and staged paths under cockpit control.
+The worker program must refuse delivery until staging and the checks below have
+succeeded. Delivery tells the reviewer to use its native command tool directly.
 The dispatcher cannot validate an adopter program's isolation from its pathname.
 Prove placement on the deployment you use, including after a worker restart. This applies when the pull request changes the runner,
 the prompt generator, an agent definition or the kit configuration itself.

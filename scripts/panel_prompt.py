@@ -147,7 +147,8 @@ COMPUTE_CARRIER: dict[str, str] = {
     "claude": (
         "carried by the kit-owned agent definition `.claude/agents/{lens}.md` — its "
         "frontmatter `model` and `effort` are applied by the runtime when the cockpit "
-        "launches the agent named after this lens"
+        "launches the agent named after this lens; headless worker dispatch applies the "
+        "configured model and effort on the Claude CLI argv"
     ),
     "codex": (
         "carried on the `codex exec` argv — `-m <model>` and "
@@ -1499,7 +1500,17 @@ def launch_worker(args: argparse.Namespace) -> int:
             command.extend(["-c", f"model_reasoning_effort={json.dumps(value)}"])
         else:
             command.append(f"--{key}={value}")
-    prompt = build(args, worker_config=config)
+    assembled = build(args, worker_config=config)
+    shell = "Bash" if runtime == "claude" else "exec_command"
+    prompt = (
+        "# Cockpit worker dispatch\n\n"
+        f"Trusted deployment launcher: {json.dumps(str(launcher))}. "
+        f"Use the runtime's native {shell} tool directly: the launcher routes "
+        "commands to its checked worker. Do not try to invoke the host launcher. "
+        "Source access is limited to the cockpit-staged tree identified below; "
+        "copy only paths needed by each check. If the worker identity, staged tree or "
+        "tool restrictions differ, stop and report the discrepancy.\n\n" + assembled
+    )
     with tempfile.TemporaryDirectory(prefix="review-control-") as control:
         return subprocess.run(
             [str(launcher), *command], input=prompt.encode(), cwd=control,

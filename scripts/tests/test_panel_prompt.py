@@ -2857,6 +2857,8 @@ def test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, r
         }
         assert 'shell_environment_policy.inherit="none"' in argv
     assert head in prompt and "worker-model" in prompt
+    assert prompt.startswith("# Cockpit worker dispatch") and str(launcher) in prompt
+    assert f"native {'Bash' if runtime == 'claude' else 'exec_command'} tool" in prompt
     assert "REVIEW_HOST_CANARY" not in env and "HOME" not in env
     assert env["DEVKIT_REVIEW_TREE"] == str(Path(tree).resolve())
     assert not Path(cwd).exists()

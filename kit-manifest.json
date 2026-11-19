@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "9d017f2ea464abc9b63fd18b7c95bbbf8865cdacd67219fdb9b7fcf13233f96b"
+      "sha256": "4cae35962ea90fc70c82c323cd4351b1c7828990ea493a42338cc18f0b3816cf"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md": {
       "role": "lite",
@@ -685,7 +685,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "fdc6b345a1ad3d76142c2a7bf5f727096517197cf26452da27442c6eba5c48ab"
+      "sha256": "ec3864d83da4b2848caa5419f842f7218e132ab2af78fbcab134deda315e1b2d"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -841,7 +841,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "2f2fc41b37c09ec68652923c33a67889905f9c2e2919fd4b3960495ad27cc35b"
+      "sha256": "5e023630c588d417b9a1b639731f1f90fff781a1395088d393b175c4c9024bfd"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
