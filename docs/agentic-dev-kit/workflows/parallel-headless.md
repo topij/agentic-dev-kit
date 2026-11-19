@@ -276,6 +276,8 @@ by digest. After each otherwise successful runtime exit the parent reads every e
 fetch and push URL of the lane worktree's `origin` with the lane's Git environment.
 Each direction must yield its single issued URL. A changed, additional or unreadable
 destination fails the receipt before another round or a terminal declaration is accepted.
+The reads share the configured observation timeout. An interruption stops the Git
+observer and records an interrupted receipt.
 Safe repository addresses appear in the error; other URL forms are fingerprinted.
 This checks the destinations observed at exit. For Claude, an empty stdout, malformed or partial JSON, more than one JSON
 value, a non-`result` object, an error result, or an empty `result` is a failed

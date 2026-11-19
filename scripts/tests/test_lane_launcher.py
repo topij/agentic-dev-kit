@@ -3488,6 +3488,53 @@ def test_post_exit_origin_check_refuses_a_changed_lane(
 
 
 @pytest.mark.evidence
+@pytest.mark.parametrize("interrupt", [False, True], ids=["timeout", "interrupt"])
+def test_delayed_post_exit_origin_observer_is_reaped(tmp_path: Path, interrupt: bool) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    _rewrite_parallel_key(descriptor, "observation_timeout_seconds", "30" if interrupt else "3")
+    pidfile = tmp_path / "observer.pid"
+    real_git = shutil.which("git", path=os.defpath)
+    assert real_git is not None
+    slow_git = tmp_path / "delayed-git"
+    slow_git.write_text(
+        "#!/usr/bin/env python3\nimport os, sys, time\nfrom pathlib import Path\n"
+        "if sys.argv[1:] == ['remote', 'get-url', '--all', 'origin']:\n"
+        f"    Path({str(pidfile)!r}).write_text(str(os.getpid()))\n"
+        "    time.sleep(15)\n"
+        f"os.execv({real_git!r}, [{real_git!r}, *sys.argv[1:]])\n"
+    )
+    slow_git.chmod(0o755)
+    # Substitute only the executable in the disposable installation; the real
+    # launcher still owns the signal handler, wait, observation and receipt.
+    argv = [
+        sys.executable, "-c",
+        f"import sys; sys.path.insert(0, {str(engine)!r}); import launch_lane as launcher; "
+        f"launcher.TRUSTED_GIT = {str(slow_git)!r}; sys.exit(launcher.main())",
+        "--descriptor", descriptor["descriptor_path"], "--prompt-file", str(prompt),
+    ]
+    with subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+        try:
+            deadline = time.monotonic() + 12
+            while not pidfile.exists() and proc.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            assert pidfile.exists(), "launcher did not start its post-exit Git observer"
+            if interrupt:
+                proc.send_signal(signal.SIGTERM)
+            _, stderr = proc.communicate(timeout=7)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+    receipt = _receipt(sessions, descriptor)
+    assert proc.returncode == (128 + signal.SIGTERM if interrupt else 70), stderr
+    assert receipt["status"] == ("interrupted" if interrupt else "failed")
+    assert receipt["terminal"]["error"] == (
+        "launcher interrupted" if interrupt else "post-exit origin_url observation timed out"
+    )
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidfile.read_text()), 0)
+
+
+@pytest.mark.evidence
 def test_a_profile_rewritten_during_the_launch_round_refuses_the_resume(
     tmp_path: Path,
 ) -> None:

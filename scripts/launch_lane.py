@@ -954,27 +954,54 @@ def _approval_for_runtime(
     }, raw
 
 
-def _git(cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
+def _git(cwd: Path, *args: str) -> str:
     if TRUSTED_GIT is None:
         raise LaunchError("trusted system Git is unavailable")
     try:
         result = subprocess.run(
-            [TRUSTED_GIT, *args], cwd=cwd, env=env, check=True, capture_output=True
+            [TRUSTED_GIT, *args], cwd=cwd, check=True, capture_output=True, text=True
         )
-        return result.stdout.removesuffix(b"\n").decode()
-    except (OSError, subprocess.CalledProcessError, UnicodeDecodeError) as exc:
+    except (OSError, subprocess.CalledProcessError) as exc:
         raise LaunchError(f"git observation failed for {' '.join(args)}") from exc
+    return result.stdout.strip()
 
 
-def _post_exit_origin_error(descriptor: dict[str, Any]) -> str | None:
-    """Check effective destinations in the lane, using the same clean Git environment."""
+def _post_exit_origin_error(
+    descriptor: dict[str, Any], timeout: int, caught: list[int]
+) -> str | None:
+    """Bound both Git reads by one observation window and reap the observer on interruption."""
     worktree = Path(descriptor["worktree"])
     environment = _scrubbed_environment(descriptor)
+    deadline = time.monotonic() + timeout
+    if TRUSTED_GIT is None:
+        return "post-exit origin could not be observed: trusted system Git is unavailable"
     for field, flags in (("origin_url", []), ("origin_push_url", ["--push"])):
         try:
-            urls = _git(worktree, "remote", "get-url", "--all", *flags, "origin", env=environment)
-        except LaunchError as exc:
-            return f"post-exit {field} could not be observed: {exc}"
+            with subprocess.Popen(
+                [TRUSTED_GIT, "remote", "get-url", "--all", *flags, "origin"],
+                cwd=worktree, env=environment, stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            ) as observer:
+                try:
+                    while not caught:
+                        remaining = deadline - time.monotonic()
+                        if remaining <= 0:
+                            return f"post-exit {field} observation timed out"
+                        try:
+                            output, _ = observer.communicate(timeout=min(remaining, 0.1))
+                            break
+                        except subprocess.TimeoutExpired:
+                            continue
+                    else:
+                        return "launcher interrupted"
+                finally:
+                    if observer.returncode is None:
+                        observer.kill()
+                if observer.returncode:
+                    return f"post-exit {field} could not be observed"
+                urls = output.removesuffix(b"\n").decode()
+        except (OSError, UnicodeDecodeError):
+            return f"post-exit {field} could not be observed"
         if "\n" in urls or urls != descriptor[field]:
             # A replacement URL can carry credentials. Only print ordinary
             # repository addresses and local paths; fingerprint other inputs.
@@ -2132,7 +2159,7 @@ def launch(
             _terminate_launch_lineage(process_nonce, termination_grace)
         assert returncode is not None
         if returncode == 0 and not caught and error is None:
-            error = _post_exit_origin_error(descriptor)
+            error = _post_exit_origin_error(descriptor, observation_timeout, caught)
         final_bytes = b""
         if final_message.is_file() and not final_message.is_symlink():
             final_bytes = _read_stable_regular_file(final_message)
@@ -2276,7 +2303,7 @@ def launch(
                 round_returncode = _terminate_process_group(process, termination_grace)
                 _terminate_launch_lineage(process_nonce, termination_grace)
             if round_returncode == 0 and not caught and round_error is None:
-                round_error = _post_exit_origin_error(descriptor)
+                round_error = _post_exit_origin_error(descriptor, observation_timeout, caught)
             round_bytes = b""
             if round_final.is_file() and not round_final.is_symlink():
                 round_bytes = _read_stable_regular_file(round_final)
