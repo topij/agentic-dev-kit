@@ -455,7 +455,7 @@ grant and hook registration to obtain this behavior.
 is measured rather than conceded.** `Edit(**)` bounds file *edits* to the worktree; it
 does not bound a *process*. So a `Bash(<interpreter> <worktree-path>)` entry names a
 file the lane is separately allowed to rewrite, and the two grants compose into
-something neither one says. Under the shipped profile with **nothing added**, a lane
+something neither one says. Under the profile shipped on 2026-08-28, a lane
 asked to rewrite `scripts/pr_watch.py` — already granted
 `Bash(uv run scripts/pr_watch.py:*)` — so that it writes an absolute path outside the
 worktree, and then to run it, did exactly that and returned an empty
@@ -529,10 +529,8 @@ grant reaches:
   not a string prefix. A panel lens falsified the stronger "bounded to the one target"
   claim by running the two-goal form, and a delta-pass lens established the token
   boundary; both were corrected here rather than hedged.
-- **`Bash(uv run scripts/kit_doctor.py:*)`**, and the `scripts/devkit/` spelling beside
-  it as `pr_watch.py` already has — because a lane editing any kit-owned file must
-  refresh the manifest or its PR is deterministically red, which costs the lane its
-  whole result rather than one check. Granted bare rather than scoped to
+- **`Bash(uv run scripts/kit_doctor.py:*)`** and its `scripts/devkit/` equivalent
+  let a lane refresh the manifest after editing kit-owned files. Granted bare rather than scoped to
   `--generate-manifest`, so that checking the manifest before regenerating it does not
   end the run. It admits `#464`'s broken redirect exactly as it admits the correct
   invocation; a prefix rule cannot see a redirect, so that belongs in the lane contract.
