@@ -446,7 +446,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    anchoring the panel exists to escape.
 3. **Not the author.** Say it did not write the code. Cheap, and it measurably
    changes what a lens is willing to call wrong.
-4. **Execute, don't only read.** The highest-value findings came from *running*
+4. **Execute, don't only read.** Use the cockpit's credential-free worker from the
+   first command, following *Credential-free reviewer execution*. Report any
+   command outside it and stop if the worker is unavailable. The highest-value findings came from *running*
    the changed paths against hostile input, not from reading them. A guard was
    dead code for the exact bot it was written for, because that bot reports a
    zero timestamp — no amount of re-reading surfaced it; one live poll did.
@@ -729,6 +731,81 @@ author re-reading their own diff. **Cite them by name, never by number.**
     verifier, when one runs, marks it `unverifiable` (*Verifying findings*,
     `#1155`).
 
+## Credential-free reviewer execution
+
+The cockpit establishes the execution boundary before it hands any candidate text
+to a lens or verifier. Use an adopter-provisioned disposable worker. Select its
+launcher and runtime settings from operator-controlled deployment or from an
+independent checkout of the protected base at its resolved SHA. Use the absolute
+path to that trusted installation from outside the candidate checkout. The worker
+must be unable to change it. For a kit-run review, run the trusted installation's
+`panel_prompt.py --launch --root <review-checkout>` with the usual lens or verifier
+arguments. Prompt-only output remains available for inspection. The trusted
+installation's tracked `review.fallback_panel.worker_launcher.<runtime>` must
+name an absolute executable. Missing configuration refuses dispatch. Install this
+executable as part of the operator's deployment, outside every tree writable by
+a reviewer. The launcher receives the runtime argv as separate arguments and
+the assembled prompt on stdin. It returns the reviewer's stdout and exit status.
+Its initial environment contains only the system PATH. It must arrange the
+approved worker and the worker-side checkout at the absolute path in the prompt.
+The deployment wrapper must enter the worker before executing Claude. For example,
+a Lima wrapper installed at the absolute configured path can use this final invocation
+after resolving its own trusted deployment values. The guest's `review-control`
+directory is outside the candidate, `claude` is provisioned on its system PATH,
+and its model endpoint authenticates outside the command worker.
+
+```sh
+exec /usr/bin/env -i HOME="$transport_home" PATH=/opt/homebrew/bin:/usr/bin:/bin \
+  LIMA_HOME="$private_lima_home" /opt/homebrew/bin/limactl --tty=false shell \
+  --workdir=/review-control "$review_instance" /usr/bin/env -i \
+  HOME=/home/reviewer PATH=/usr/local/bin:/usr/bin:/bin GIT_ALLOW_PROTOCOL=file \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 "$@"
+```
+
+For a host-side Codex client, the wrapper sets up a private tunnel to the worker's
+loopback exec-server, requires its nonempty endpoint, and starts the supplied
+`codex exec` argv from a trusted empty control directory present on both sides.
+The host holds the model login. Supply the guest round as a writable sandbox
+root using `--add-dir`; the handed checkout remains read-only by the review
+contract. Provision worker-local tool dependencies and Git identity for tests.
+Keep the endpoint, executable, settings and staged paths under cockpit control.
+The dispatcher cannot validate an adopter program's isolation from its pathname.
+Prove placement on the deployment you use, including after a worker restart. This applies when the pull request changes the runner,
+the prompt generator, an agent definition or the kit configuration itself.
+
+- Give the worker a fresh home and an allowlist of nonsecret environment values.
+  Keep the operator's home, keychain, dotenv files, SSH agent, credential helpers,
+  service sockets, host caches and model login outside its reach. Supply dependencies
+  in the worker. A local wrapper around a single command leaves other tool calls
+  outside the boundary. An empty home or a Git environment variable alone also
+  leaves the underlying host account accessible.
+- The cockpit selects the source and fixture paths the checks need before staging
+  them. Inspect their contents for credentials and customer data. A clone includes
+  history and objects outside a sparse checkout. Give a worker Git history only if
+  that entire object set is approved for review. If the required history or a fixture
+  cannot be staged, report the missing check. Keep PR writes and review receipts
+  in the cockpit.
+- For Claude, load the base's generated lens definition in the isolated worker.
+  Its `tools: Bash` allowlist excludes inherited connectors and delegation. The
+  headless launch applies the Bash allowlist and configured compute directly on the CLI. Launch
+  a verifier with the same Bash-only tool restriction. Use a trusted control
+  directory and exclude user and candidate settings, plugins, hooks and MCP
+  servers. Model authentication must be inaccessible to Bash and its descendants.
+- For Codex, keep the authenticated client on the cockpit side. Point
+  `CODEX_EXEC_SERVER_URL` at the worker's exec-server through a private transport.
+  Start the client from a trusted empty directory with user and project integrations
+  excluded, no MCP servers, apps, plugins, hooks or delegation, approvals disabled
+  and an empty shell-environment inheritance policy. Set the configured model and
+  effort on this launch. Confirm the effective tool inventory before supplying the
+  candidate. A desktop subagent inheriting the cockpit's connectors is unsuitable.
+- Exercise the actual launch route with a harmless fixture. Read a worker-only
+  file, verify the absence of a synthetic host-only environment variable and
+  confirm that a host-only canary file is inaccessible. Check the available tools
+  without attempting a real send or publish. If a check fails, a connector can
+  write externally or the command route falls back to the host, stop before
+  candidate execution. Record the worker, staged inputs and any command outside
+  the boundary in the report. An uncontained run cannot supply a review receipt.
+
 ## Running it
 
 1. Read the change and resolve the revision you will hand every lens:
@@ -737,10 +814,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    forbids it to a **lens**, whose HEAD was chosen by the runtime rather than by
    anyone who knows the target. Refresh `<base>` while you are at it: a stale base
    here miscalibrates step 3's plausibility check as well as every lens's diff.
-2. Launch **one isolated reviewer per lens** the pull request's class owes
+2. Establish *Credential-free reviewer execution*, then launch **one isolated reviewer per lens** the pull request's class owes
    (*How many lenses*; the `review_class` a poll reports), concurrently when there
-   are two, each with the contract above and its lens focus. Use whatever isolation your runtime has
-   (a subagent, a separate session, a second person). If it has none, see
+   are two, each with the contract above and its lens focus. Use a fresh reviewer context in the credential-free worker. If it has none, see
    *Degraded mode*. State the **repo, branch and head sha under review**
    explicitly — see **Right revision** on why the runtime's own isolation may not
    point at them, and why the sha is the field that lets a lens recover on its
@@ -989,8 +1065,8 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
    is all it promises: the lens reports themselves are quoted verbatim. Nothing checks
    that the files you name are this round's reports, or all of them: naming every
    lens that ran is yours.
-4. Launch it isolated, the same way you launch a lens: a fresh-context subagent on
-   Claude Code, `codex exec` on Codex. It is not a lens, so do not launch it as a lens's
+4. Dispatch the verifier through the same trusted worker launcher as the lenses.
+   Pass `--verifier` with `--launch` to run its fresh Claude or Codex session. It is not a lens, so do not launch it as a lens's
    agent definition: those definitions tell the agent it is that lens.
 5. Read its report against *Report what you reviewed, first* as step 3 does for a lens,
    then post its verdict lines on the pull request verbatim, before any disposition.
@@ -1740,7 +1816,7 @@ the author writes or judges about the change's size.
 
 ## Degraded mode
 
-If the runtime cannot run isolated reviewers, fall back to
+If the runtime lacks independent reviewer context but still satisfies *Credential-free reviewer execution*, fall back to
 `review.fallback_commands.<runtime>` — one lens, in the author's context. It is
 better than nothing and it is **not** a panel:
 

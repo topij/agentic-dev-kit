@@ -3074,7 +3074,9 @@ def render_agent_definition(config: dict, lens: str, runtime: str) -> str:
         f"assembled by {engines}/panel_prompt.py; it is not a general-purpose agent.",
         ensure_ascii=False,
     )
-    front = ["---", f"name: {lens}", f"description: {description}"]
+    # An explicit allowlist prevents inheritance of the cockpit's MCP, agent and
+    # file tools. The command tool runs inside the caller's isolated reviewer.
+    front = ["---", f"name: {lens}", f"description: {description}", "tools: Bash"]
     if model is not None:
         front.append(f"model: {json.dumps(model, ensure_ascii=False)}")
     if effort is not None:
@@ -3103,6 +3105,8 @@ You are the **{lens}** lens of the fallback review panel
 (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
 review. Your launch prompt carries the contract, the revision, the diff, and your
 focus; follow it exactly, and report what you reviewed before any finding.
+Use Bash only in the credential-free reviewer worker supplied by the cockpit.
+If the cockpit has not established that boundary, stop before the first command.
 """
     return "\n".join(front) + "\n" + body
 
