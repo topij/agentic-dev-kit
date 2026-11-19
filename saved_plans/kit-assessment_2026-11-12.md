@@ -587,14 +587,15 @@ operator's own answer.
   assertions through the issued repository, head and base. The hook opens PR bodies
   and commit messages inside the lane. See the standalone commands in
   [the headless lane contract](../docs/agentic-dev-kit/workflows/parallel-headless.md).
-  **Remaining scope:** #617's handoff of the validated profile bytes and #618's post-exit origin check.
+  The launcher supplies the validated Claude profile bytes on an inherited descriptor (#617)
+  and checks the issued fetch and push destinations after each successful runtime exit (#618).
   For #1025, the trusted deployment dispatches each lens and verifier to a
   credential-free worker. Each adopter provisions its own launcher and checks
   its effective tool access. The operator chose native Bash in the isolated Claude
   worker on 2026-11-19. These controls are separate from the PR lane launcher. For writable reviewer copies, #1138 supplies the independent-clone
   recipe in `fallback-review-panel.md` and the Git-administration regression fixture;
   that recipe does not isolate credentials or inherited Git configuration.
-  Step 2c stays open. D2 still requires operator-only lane merges.
+  The operator decides whether the combined evidence meets step 2c. D2 requires operator-only lane merges.
 
   **Disposable pilot, 2026-11-17, kit `3088f25e`.** GitHub refused the App's
   merge on the actor-restricted target. The operator exercised the merge control

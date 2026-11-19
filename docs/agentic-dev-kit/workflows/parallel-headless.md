@@ -272,7 +272,14 @@ relationships, a freshly derived canonical prompt contract, and its own process 
 descriptor/task/combined-prompt bytes plus the runtime and its declared transports,
 and returns success only after the runtime command exits successfully and a durable
 terminal receipt binds the final-message evidence bytes and the extracted final text
-by digest. For Claude, an empty stdout, malformed or partial JSON, more than one JSON
+by digest. After each otherwise successful runtime exit the parent reads every effective
+fetch and push URL of the lane worktree's `origin` with the lane's Git environment.
+Each direction must yield its single issued URL. A changed, additional or unreadable
+destination fails the receipt before another round or a terminal declaration is accepted.
+The reads share the configured observation timeout. An interruption stops the Git
+observer and records an interrupted receipt.
+Safe repository addresses appear in the error; other URL forms are fingerprinted.
+This checks the destinations observed at exit. For Claude, an empty stdout, malformed or partial JSON, more than one JSON
 value, a non-`result` object, an error result, or an empty `result` is a failed
 terminal receipt, never success.
 
@@ -411,11 +418,11 @@ tool without a path pattern relative to the worktree root (`Write`, `Write(//…
 `Edit(../**)`). The guard judges the
 shape of a prefix and never the command it names: `Bash(sh:*)` is a prefix an
 adopter declared. The
-profile is read and digested by the parent and again by the child, and the two
-digests must agree; the bytes the runtime itself loads from the path at `exec` are
-not re-read, so a writer on the same OS account who replaces the file inside the
-child's observe-to-exec window is outside this check, the same boundary the
-descriptor seal declares. Pre-trusting the worktree
+parent and child independently read and validate the profile and bind its digest.
+The observer supplies the validated bytes through an anonymous file descriptor to
+`--settings`. Each resume gets a fresh descriptor containing the original bytes.
+The receipt records the configured path as provenance and the descriptor path in
+the actual argv. Pre-trusting the worktree
 path in the operator's Claude configuration is not a supported route: that trust is
 keyed by a path `sessions/<scope>/wt` reuses, outlives the lane, and makes branch
 content authoritative; neither is `--bare`, which never reads OAuth credentials and

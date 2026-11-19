@@ -173,7 +173,7 @@ def _fake_claude(
     (`sleep`), leave a SIGTERM-ignoring child in its process group
     (`descendant`) or in a new session (`detached`), print a non-JSON line
     (`garbage`), or answer under a fresh session id (`fresh-session`).
-    `rewrite_profile` makes the launch round overwrite the `--settings` file."""
+    `rewrite_profile` makes the launch round overwrite the configured source before consuming settings."""
     sleep_line = "time.sleep(60)" if sleep else ""
     corrupt_line = (
         "[p.write_text('{}\\n', encoding='utf-8') for p in Path.cwd().parent.glob('launch-receipt-*.json')]"
@@ -237,7 +237,7 @@ def _fake_claude(
         "resuming = '--resume' in args\n"
         + (
             "if not resuming:\n"
-            "  Path(args[args.index('--settings') + 1]).write_text("
+            "  (Path(os.environ['DEVKIT_ROOT']) / 'config/claude-lane-settings.json').write_text("
             "'{\"permissions\": {\"allow\": [\"Bash(git status:*)\"]}}\\n', encoding='utf-8')\n"
             if rewrite_profile
             else ""
@@ -256,6 +256,7 @@ def _fake_claude(
         "  'lineage_nonce_present': 'ADK_LAUNCH_PROCESS_NONCE' in os.environ,\n"
         "  'lineage_nonce': os.environ.get('ADK_LAUNCH_PROCESS_NONCE'),\n"
         "  'pid': os.getpid(),\n"
+        "  'settings_digest': hashlib.sha256(Path(args[args.index('--settings') + 1]).read_bytes()).hexdigest(),\n"
         "  'argv': args,\n"
         "}\n"
         "good = {'type': 'result', 'subtype': 'success', 'is_error': False, "
@@ -1518,7 +1519,7 @@ def test_claude_wrapper_replaces_inherited_identity_and_binds_json_final_text(
         "--permission-mode",
         "acceptEdits",
         "--settings",
-        profile_path,
+        "/dev/fd/3",
         "--output-format",
         "json",
     ]
@@ -1978,8 +1979,7 @@ def test_each_declared_policy_reaches_the_child_argv_in_the_fixed_slot(
     if runtime == "claude":
         envelope = json.loads(final_path.read_bytes())
         argv = _lane_json(envelope["result"])["argv"]
-        profile_path = str((repo / "config" / "claude-lane-settings.json").resolve())
-        assert argv[:6] == ["--setting-sources", "", *mode_argv, "--settings", profile_path]
+        assert argv[:6] == ["--setting-sources", "", *mode_argv, "--settings", "/dev/fd/3"]
         assert argv[6:] == ["--output-format", "json"]
     else:
         argv = _lane_json(final_path.read_text(encoding="utf-8"))["argv"]
@@ -2351,9 +2351,7 @@ def test_absolute_profile_path_outside_the_repository_is_accepted_and_bound(
         elsewhere.read_bytes()
     ).hexdigest()
     assert "--settings" in receipt["observed"]["argv"]
-    assert receipt["observed"]["argv"][receipt["observed"]["argv"].index("--settings") + 1] == str(
-        elsewhere.resolve()
-    )
+    assert receipt["observed"]["argv"][receipt["observed"]["argv"].index("--settings") + 1] == "/dev/fd/3"
 
 
 def test_profile_rewritten_after_the_parent_read_is_refused_by_the_child(
@@ -2514,8 +2512,8 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # repaired in test_panel_prompt.py (`12a67be2`), one file over.
     root = REPO_ROOT
     config = launcher.load_config(root / "config" / "dev-model.yaml", overlay=False)
-    codex = launcher._approval_for_runtime("codex", config, root)
-    claude = launcher._approval_for_runtime("claude", config, root)
+    codex, codex_bytes = launcher._approval_for_runtime("codex", config, root)
+    claude, claude_bytes = launcher._approval_for_runtime("claude", config, root)
     assert codex == {
         "declared": "read-only",
         "argv": ["--sandbox", "read-only"],
@@ -2535,8 +2533,10 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         "--permission-mode",
         "dontAsk",
         "--settings",
-        str(profile.resolve()),
+        "/dev/fd/3",
     ]
+    assert codex_bytes is None
+    assert claude_bytes == profile.read_bytes()
     shipped = json.loads(profile.read_text(encoding="utf-8"))
     assert set(shipped) == {"permissions", "hooks"}
     assert set(shipped["permissions"]) == {"allow", "deny"}
@@ -3042,6 +3042,7 @@ def test_a_nonterminal_claude_stop_is_resumed_once_under_the_bound_policy(
     )
     # The same lineage nonce as the launch round, so the launch's lineage
     # cleanup reaches the resume round's descendants.
+    assert seen["settings_digest"] == launch_seen["settings_digest"] == receipt["request"]["approval_policy"]["settings_profile_sha256"]
     assert seen["lineage_nonce"] == launch_seen["lineage_nonce"]
     assert hashlib.sha256(seen["lineage_nonce"].encode()).hexdigest() == (
         receipt["request"]["process_nonce_sha256"]
@@ -3449,6 +3450,91 @@ def test_max_resumes_must_be_a_non_negative_integer(tmp_path: Path, value: str |
 
 
 @pytest.mark.evidence
+@pytest.mark.parametrize(
+    ("during_resume", "git_args", "error"),
+    [
+        (False, ["remote", "set-url", "origin", "/fixture/moved.git"], "origin_url differs"),
+        (True, ["remote", "set-url", "--push", "origin", "/fixture/moved.git"], "origin_push_url differs"),
+        (False, ["remote", "remove", "origin"], "origin_url could not be observed"),
+        (False, ["config", "--add", "remote.origin.url", "/fixture/moved.git"], "origin_url differs"),
+    ],
+)
+def test_post_exit_origin_check_refuses_a_changed_lane(
+    tmp_path: Path, during_resume: bool, git_args: list[str], error: str
+) -> None:
+    # Change only the disposable repository's configuration at runtime exit.
+    # A nonterminal launch would normally resume. A terminal resume would complete.
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(
+        tmp_path, runtime="claude", terminal="after-resume"
+    )
+    fake = tmp_path / "fake-claude"
+    with fake.open("a") as runtime:
+        runtime.write(
+            f"if resuming == {during_resume!r}:\n"
+            f"    subprocess.run({['git', *git_args]!r}, check=True)\n"
+        )
+    result = _run_launcher(engine, descriptor, prompt, env)
+    receipt = _receipt(sessions, descriptor)
+    assert result.returncode == 70, result.stderr
+    assert receipt["status"] == "failed"
+    assert error in receipt["terminal"]["error"]
+    if git_args[-1] == "/fixture/moved.git":
+        assert git_args[-1] in receipt["terminal"]["error"]
+    if during_resume:
+        [resumed] = receipt["terminal"]["resumes"]
+        assert error in resumed["error"]
+    else:
+        assert receipt["terminal"]["resumes"] == []
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("interrupt", [False, True], ids=["timeout", "interrupt"])
+def test_delayed_post_exit_origin_observer_is_reaped(tmp_path: Path, interrupt: bool) -> None:
+    _repo, engine, sessions, descriptor, prompt, env = _install_repo(tmp_path)
+    _rewrite_parallel_key(descriptor, "observation_timeout_seconds", "30" if interrupt else "3")
+    pidfile = tmp_path / "observer.pid"
+    real_git = shutil.which("git", path=os.defpath)
+    assert real_git is not None
+    slow_git = tmp_path / "delayed-git"
+    slow_git.write_text(
+        "#!/usr/bin/env python3\nimport os, sys, time\nfrom pathlib import Path\n"
+        "if sys.argv[1:] == ['remote', 'get-url', '--all', 'origin']:\n"
+        f"    Path({str(pidfile)!r}).write_text(str(os.getpid()))\n"
+        "    time.sleep(15)\n"
+        f"os.execv({real_git!r}, [{real_git!r}, *sys.argv[1:]])\n"
+    )
+    slow_git.chmod(0o755)
+    # Substitute only the executable in the disposable installation; the real
+    # launcher still owns the signal handler, wait, observation and receipt.
+    argv = [
+        sys.executable, "-c",
+        f"import sys; sys.path.insert(0, {str(engine)!r}); import launch_lane as launcher; "
+        f"launcher.TRUSTED_GIT = {str(slow_git)!r}; sys.exit(launcher.main())",
+        "--descriptor", descriptor["descriptor_path"], "--prompt-file", str(prompt),
+    ]
+    with subprocess.Popen(argv, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+        try:
+            deadline = time.monotonic() + 12
+            while not pidfile.exists() and proc.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.05)
+            assert pidfile.exists(), "launcher did not start its post-exit Git observer"
+            if interrupt:
+                proc.send_signal(signal.SIGTERM)
+            _, stderr = proc.communicate(timeout=7)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+    receipt = _receipt(sessions, descriptor)
+    assert proc.returncode == (128 + signal.SIGTERM if interrupt else 70), stderr
+    assert receipt["status"] == ("interrupted" if interrupt else "failed")
+    assert receipt["terminal"]["error"] == (
+        "launcher interrupted" if interrupt else "post-exit origin_url observation timed out"
+    )
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pidfile.read_text()), 0)
+
+
+@pytest.mark.evidence
 def test_a_profile_rewritten_during_the_launch_round_refuses_the_resume(
     tmp_path: Path,
 ) -> None:
@@ -3461,6 +3547,8 @@ def test_a_profile_rewritten_during_the_launch_round_refuses_the_resume(
     assert result.returncode == 70, result.stderr
     receipt = _receipt(sessions, descriptor)
     assert receipt["status"] == "failed"
+    final = json.loads(Path(receipt["terminal"]["final_message_path"]).read_bytes())
+    assert _lane_json(final["result"])["settings_digest"] == receipt["request"]["approval_policy"]["settings_profile_sha256"]
     assert "settings profile changed after launch" in receipt["terminal"]["error"]
     assert receipt["terminal"]["resumes"] == []
     profile = repo / "config" / "claude-lane-settings.json"
