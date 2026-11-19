@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import errno
 import importlib.util
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -1070,6 +1072,7 @@ def test_primary_and_linked_cockpits_share_review_state(
     shutil.copytree(ENGINE_DIR / "lib/state_paths", primary / engines / "lib/state_paths",
                     ignore=shutil.ignore_patterns("tests", "__pycache__"))
     shutil.copy2(ENGINE_DIR / "lib/kitconfig.py", primary / engines / "lib")
+    shutil.copy2(ENGINE_DIR / "lib/subprocess_runner.py", primary / engines / "lib")
     subprocess.run(["git", "-C", str(primary), "add", "."], check=True)
     subprocess.run(["git", "-C", str(primary), "-c", "user.name=Fixture",
                     "-c", "user.email=test@example.test", "commit", "-qm", "fixture"], check=True)
@@ -1840,17 +1843,7 @@ def test_an_ambiguous_check_name_resolves_to_no_identity(
 def test_a_gh_spawn_failure_in_the_identity_read_cannot_crash_the_poll(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """`_gh` translates only TimeoutExpired, so the identity read must catch more.
-
-    `fetch_check_details` is documented as never raising and `main` calls it
-    OUTSIDE its try deliberately. An `OSError` or a non-timeout
-    `SubprocessError` escaping the identity read would therefore crash the poll
-    *before* `persist_poll` — no state written, and every later poll repeating it.
-    A wedge from one failed subprocess spawn.
-
-    Each raiser below escapes `_gh` untranslated today, which is what makes this
-    a real path rather than a defensive nicety.
-    """
+    """The optional identity lookup also tolerates a raw transport error."""
     pr_watch = _load_pr_watch()
 
     for raiser in (
@@ -1880,8 +1873,8 @@ def test_a_gh_spawn_failure_in_the_identity_read_cannot_crash_the_poll(
     assert pr_watch._gh_identity_map("abc") == {"toolkit": "github-actions"}
 
     # The SECOND `_gh` call on this path: resolving the head sha when the caller
-    # supplied none. It goes through `_gh_json`, whose own except clause needs the
-    # same class — reached end-to-end through `fetch_check_details` rather than by
+    # supplied none. It goes through `_gh_head_sha`, which guards the same
+    # error classes — reached end-to-end through `fetch_check_details` rather than by
     # calling the helper, because that is the contract that must not raise.
     class _Result:
         def __init__(self) -> None:
@@ -7322,6 +7315,44 @@ def test_no_gh_and_no_token_is_actionable_not_a_traceback(monkeypatch: pytest.Mo
     message = str(excinfo.value)
     assert "not found on PATH" in message
     assert "GH_TOKEN" in message  # names the way out, not just the problem
+
+
+def test_gh_preserves_command_io_and_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pr_watch = _load_pr_watch()
+    monkeypatch.setattr(pr_watch, "REPO_ROOT", tmp_path)
+    binary = tmp_path / "gh"
+    binary.write_text('#!/bin/sh\npwd\n/bin/cat\nprintf " %s " "$1" >&2\nexit "$2"\n')
+    binary.chmod(0o700)
+    monkeypatch.setenv("PATH", str(tmp_path))
+    body = "message\nwith a trailing space \n"
+    assert pr_watch._gh(["ok", "0"], stdin_text=body) == f"{tmp_path.resolve()}\n{body}"
+
+    with pytest.raises(RuntimeError) as failed:
+        pr_watch._gh(["failure detail", "7"], stdin_text="")
+    assert str(failed.value) == "gh failure detail 7 failed (exit 7): failure detail"
+
+    with pytest.raises(RuntimeError) as timed_out:
+        pr_watch._gh(["ok", "0"], timeout=0, stdin_text="")
+    assert str(timed_out.value) == "gh ok 0 timed out after 0s"
+    assert isinstance(timed_out.value.__cause__, subprocess.TimeoutExpired)
+
+
+@pytest.mark.parametrize("executable_absent", [True, False], ids=["missing", "non-executable"])
+def test_gh_start_failure_after_backend_selection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+    executable_absent: bool,
+) -> None:
+    pr_watch = _load_pr_watch()  # The backend probe has already selected gh.
+    monkeypatch.setenv("PATH", str(tmp_path))
+    if not executable_absent:
+        (tmp_path / "gh").touch(mode=0o600)
+
+    assert pr_watch.main([]) == 2
+    error = capsys.readouterr().err
+    assert error.startswith("error: gh pr view --json number could not run: ")
+    assert os.strerror(errno.ENOENT if executable_absent else errno.EACCES) in error
+    assert pr_watch._gh_api_pages("repos/x/y/statuses") == []
+    assert pr_watch._gh_head_sha(5) == ""
 
 
 def test_gh_present_still_takes_the_gh_path(monkeypatch: pytest.MonkeyPatch) -> None:

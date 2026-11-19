@@ -3002,6 +3002,7 @@ def test_the_shell_source_dependency_is_a_KNOWN_GAP_not_an_oversight():
         # as a command are the unscanned edge this test is named for.
         "scripts/lib/merge_predicate.py",
         "scripts/lib/runtime_adapters.py",
+        "scripts/lib/subprocess_runner.py",
         "scripts/lib/state_paths/paths.py",
         "scripts/lib/state_paths/repo_root.py",
         "scripts/lib/state_paths/resolver.py",

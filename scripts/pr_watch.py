@@ -152,6 +152,7 @@ from typing import Any, NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from state_paths.repo_root import primary_worktree, walk_up_for_marker  # noqa: E402
 from state_paths.resolver import StateRootError, sandbox_state_root  # noqa: E402
+from subprocess_runner import run_stdout  # noqa: E402
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -710,37 +711,8 @@ _REVIEW_ROUND_BUDGET = _REVIEW_CONFIG.round_budget
 
 
 def _gh(args: list[str], *, timeout: int = 60, stdin_text: str | None = None) -> str:
-    """Run one `gh` call, returning stdout. Raises RuntimeError on failure.
-
-    ``stdin_text`` feeds the child's stdin, for the one call that needs it:
-    :func:`_post_disposition_comment`'s ``gh api --input -``. That function's own
-    docstring says why it posts through the REST endpoint rather than
-    ``gh pr comment``. A comment body is arbitrary multi-line
-    Markdown chosen by the caller, and passing it as an ARGV element would put
-    it through the shell-free but still length-bounded argument list, and would
-    put its content in this process's command line. Default ``None`` closes
-    stdin as before, so every existing call site is byte-identical.
-    """
-    cmd = ["gh", *args]
-    try:
-        result = subprocess.run(  # noqa: S603
-            cmd,
-            capture_output=True,
-            text=True,
-            check=False,
-            cwd=str(REPO_ROOT),
-            timeout=timeout,
-            input=stdin_text,
-        )
-    except subprocess.TimeoutExpired as exc:
-        # A hung gh call must not wedge the watch loop — surface it as an error
-        # the caller already handles (main catches RuntimeError → exit 2).
-        raise RuntimeError(f"gh {' '.join(args)} timed out after {timeout}s") from exc
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"gh {' '.join(args)} failed (exit {result.returncode}): {result.stderr.strip()}"
-        )
-    return result.stdout
+    """Run gh in this checkout. Keep caller-supplied bodies on stdin."""
+    return run_stdout(["gh", *args], cwd=REPO_ROOT, timeout=timeout, stdin_text=stdin_text)
 
 
 def _gh_json(args: list[str]):
@@ -1975,19 +1947,8 @@ def _gh_api_pages(path: str) -> list:
     as untrusted. See :func:`summarize_review_bots` for why that direction is
     bounded rather than a wedge.
 
-    **``OSError``/``SubprocessError`` are caught here, not left to ``_gh``.**
-    ``_gh`` translates only ``TimeoutExpired`` into ``RuntimeError``; a missing
-    binary, a spawn failure (ENOMEM, EAGAIN, too many open files) or any other
-    ``SubprocessError`` escapes it raw. :func:`fetch_check_details` is documented
-    as never raising and its caller in ``main`` sits **outside** the try
-    deliberately, so one of those would crash the poll *before* ``persist_poll``
-    — no state written, every later poll repeating it. That is the wedge shape
-    ``_rest_str`` documents, reached from a different direction. ``gh`` existing
-    at backend-resolution time does not settle it: resolution and this call are
-    not the same moment, and fork can fail for reasons unrelated to the binary.
-    The `gh` branch of :func:`fetch_check_details` already catches this exact
-    class around its own ``subprocess.run``; this keeps the new call sites
-    consistent with it rather than a narrower rule three lines away.
+    Keep the process-error guards as a backstop. This identity read runs
+    outside the CLI error handler and must degrade even on a raw spawn error.
     """
     try:
         raw = _gh(["api", "--paginate", "--slurp", path])
@@ -2003,11 +1964,8 @@ def _gh_api_pages(path: str) -> list:
 def _gh_head_sha(pr: int) -> str:
     """The PR's current head sha via ``gh``, or ``""`` when it cannot be read.
 
-    Never raises, for the same reason :func:`_gh_api_pages` does not: it is
-    reached from :func:`fetch_check_details`, which is documented as
-    never-raising and whose caller in ``main`` sits outside the try. ``_gh``
-    translates only ``TimeoutExpired``, so the process-level classes are caught
-    here explicitly.
+    Keep the same backstop for process errors as :func:`_gh_api_pages`.
+    An unreadable identity leaves the check unattributed.
     """
     try:
         data = _gh_json(["pr", "view", str(pr), "--json", "headRefOid"]) or {}

@@ -259,6 +259,7 @@ def _pr_watch_mark_seen(repo: Repo, checkout: Path, pr: int, **extra: str):
     engine = checkout / "scripts" / "devkit" / "pr_watch.py"
     if not engine.exists():
         shutil.copy2(ENGINE_DIR / "pr_watch.py", engine)
+        shutil.copy2(ENGINE_DIR / "lib/subprocess_runner.py", engine.parent / "lib")
         shutil.copytree(ENGINE_DIR / "lib/state_paths", engine.parent / "lib/state_paths",
                         ignore=shutil.ignore_patterns("tests", "__pycache__"))
     return subprocess.run(
