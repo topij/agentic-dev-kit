@@ -11,17 +11,7 @@
       "Bash(git remote get-url:*)",
       "Bash(git fetch:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)",
       "Bash(git restore:*)",
-      "Bash(gh pr create:*)",
-      "Bash(gh pr view:*)",
-      "Bash(gh pr list:*)",
-      "Bash(gh pr checks:*)",
-      "Bash(gh pr ready:*)",
-      "Bash(gh run view:*)",
-      "Bash(gh repo view:*)",
-      "Bash(uv run scripts/pr_watch.py:*)",
-      "Bash(uv run scripts/devkit/pr_watch.py:*)",
       "Bash(uv run scripts/kit_doctor.py:*)",
       "Bash(uv run scripts/devkit/kit_doctor.py:*)",
       "Bash(make test:*)"
@@ -30,7 +20,11 @@
       "Bash(gh pr merge:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
-      "Bash(git push --force-with-lease:*)"
+      "Bash(git push --force-with-lease:*)",
+      "Bash(gh:*)",
+      "Bash(git commit:*)",
+      "Bash(uv run scripts/pr_watch.py:*)",
+      "Bash(uv run scripts/devkit/pr_watch.py:*)"
     ]
   },
   "hooks": {
@@ -41,6 +35,10 @@
           {
             "type": "command",
             "command": "python3 -I \"${ADK_LANE_PUSH_HOOK:?missing lane launcher}\""
+          },
+          {
+            "type": "command",
+            "command": "python3 -I \"${ADK_LANE_PR_HOOK:?missing lane launcher}\""
           }
         ]
       }

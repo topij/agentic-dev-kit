@@ -2579,8 +2579,7 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # the two-goal form live.
     assert "Bash(make test:*)" in shipped["permissions"]["allow"]
     assert "Bash(make:*)" not in shipped["permissions"]["allow"]
-    # `kit_doctor.py` is granted for BOTH engine layouts, exactly as `pr_watch.py`
-    # is: `paths.engines` is the adopter's, and `scripts/devkit/` is the vendored
+    # `kit_doctor.py` is granted for both engine layouts: `paths.engines` is the adopter's, and `scripts/devkit/` is the vendored
     # layout `.claude/rules/safety-critical-changes.md` supports. Without it a lane
     # that edits any kit-owned file cannot refresh the manifest, so its PR is
     # deterministically red and the cockpit must finish the work (`#625`).
@@ -2589,7 +2588,7 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
     # shipped `dont-ask` ends the whole run rather than costing a round trip.
     for engine_dir in ("scripts", "scripts/devkit"):
         assert f"Bash(uv run {engine_dir}/kit_doctor.py:*)" in shipped["permissions"]["allow"]
-        assert f"Bash(uv run {engine_dir}/pr_watch.py:*)" in shipped["permissions"]["allow"]
+        assert f"Bash(uv run {engine_dir}/pr_watch.py:*)" in shipped["permissions"]["deny"]
     assert not any(
         entry.startswith("Bash(uv run") and "--generate-manifest" in entry
         for entry in shipped["permissions"]["allow"]
@@ -2609,8 +2608,6 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         for entry in shipped["permissions"]["allow"]
         if entry.startswith("Bash(uv run")
     ] == [
-        "Bash(uv run scripts/pr_watch.py:*)",
-        "Bash(uv run scripts/devkit/pr_watch.py:*)",
         "Bash(uv run scripts/kit_doctor.py:*)",
         "Bash(uv run scripts/devkit/kit_doctor.py:*)",
     ]
@@ -3686,8 +3683,13 @@ def test_every_command_the_contract_prescribes_is_allowed_by_the_shipped_profile
     ):
         assert any(command.startswith(expected) for command in commands), expected
     for command in commands:
-        assert any(command.startswith(prefix) for prefix in allowed), command
-        assert not any(command.startswith(prefix) for prefix in denied), command
+        # These operations go through the issuer hook. The raw forms have a
+        # deny rule so a missing hook cannot grant an unscoped command.
+        if command.startswith(("gh ", "git commit ", "uv run scripts/pr_watch.py ")):
+            assert any(command.startswith(prefix) for prefix in denied), command
+        else:
+            assert any(command.startswith(prefix) for prefix in allowed), command
+            assert not any(command.startswith(prefix) for prefix in denied), command
     # Neither PR-mutating command is granted: `gh pr edit` can retarget a base, and
     # `gh pr comment` carries --delete-last, --edit-last and --repo.
     assert not any(prefix.startswith(("gh pr edit", "gh pr comment")) for prefix in allowed)
@@ -3745,6 +3747,98 @@ def test_shipped_push_hook_uses_the_issued_branch_and_local_remote(tmp_path: Pat
     assert set(_git(remote, "for-each-ref", "--format=%(refname)").splitlines()) == {
         f"refs/heads/{branch}", "refs/heads/trunk",
     }
+
+
+@pytest.mark.kit_repo_only("config/claude-lane-settings.json")
+def test_scoped_pr_commands_against_disposable_lane(tmp_path: Path) -> None:
+    profile = json.loads((REPO_ROOT / "config/claude-lane-settings.json").read_bytes())
+    repo, engine, _, descriptor, _, _ = _install_repo(tmp_path, runtime="claude", profile=profile)
+    lane = Path(descriptor["worktree"])
+    branch = descriptor["branch"]
+    # The fixture's forge has an issued repository, another open PR and a
+    # namesake fork branch. Its gh records the actual command and stdin.
+    descriptor["origin_url"] = "git@github.com:fixture/issued.git"
+    launcher = _load_launcher(engine)
+    env = launcher._scrubbed_environment(descriptor)
+    directory = tmp_path / "bin"
+    directory.mkdir()
+    fake = directory / "gh"
+    fake.write_text(
+        "#!/usr/bin/env python3\nimport json, os, sys\n"
+        "args = sys.argv[1:]\n"
+        "body = sys.stdin.read() if args[:2] == ['pr','create'] else None\n"
+        "with open(os.environ['CALLS'], 'a') as log:\n"
+        "    print(json.dumps([args, body, os.environ['GH_REPO']]), file=log)\n"
+        "if args[:2] == ['pr','list']: print(os.environ['ROWS'])\n"
+        "if args[:2] == ['pr','view']: print(json.dumps({'isDraft': False}))\n"
+    )
+    fake.chmod(0o755)
+    issued = "github.com/fixture/issued"
+    call_log = tmp_path / "calls.jsonl"
+    row = {"headRefName": branch, "baseRefName": "trunk", "number": 12, "isCrossRepository": False}
+    env.update(PATH=str(directory) + os.pathsep + env["PATH"], GH_REPO="other/foreign",
+               GH_HOST="other.invalid", ROWS=json.dumps([row]), CALLS=str(call_log))
+    hook = profile["hooks"]["PreToolUse"][0]["hooks"][1]["command"]
+
+    def run(command, *, ok=True, cwd=lane, **options):
+        event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "cwd": str(cwd),
+                 "tool_input": {"command": command, **options}}
+        decision = subprocess.run(["/bin/sh", "-c", hook], cwd=cwd, env=env, text=True,
+                                  input=json.dumps(event), capture_output=True, check=True)
+        output = json.loads(decision.stdout).get("hookSpecificOutput")
+        if output is None or output["permissionDecision"] == "deny":
+            assert not ok
+            return
+        assert output["permissionDecision"] == "allow"
+        actual = subprocess.run(["/bin/sh", "-c", output["updatedInput"]["command"]], cwd=cwd,
+                                env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        assert (actual.returncode == 0) == ok, (command, actual.stderr)
+        return actual.stdout
+
+    def calls():
+        return [json.loads(line) for line in call_log.read_text().splitlines()]
+
+    body = lane / "body file.md"
+    body.write_text("Disposable fixture body.\n")
+    (lane / "file").write_text("content")
+    _git(lane, "add", "file")
+    run("git commit -F 'body file.md'")
+    assert _git(lane, "log", "-1", "--format=%s") == "Disposable fixture body."
+    run("gh pr create --draft --title 'Fixture title' --body-file 'body file.md'")
+    assert calls()[-1] == [["pr", "create", "--repo", issued, "--base", "trunk", "--head",
+                            branch, "--body-file", "-", "--title", "Fixture title", "--draft"],
+                           body.read_text(), issued]
+    for action in ("ready", "view", "checks"):
+        run("gh pr " + action + " 12")
+        assert calls()[-1] == [["pr", action, "--repo", issued, "12"], None, issued]
+    assert run("gh pr list").strip() == "12"
+    run("gh repo view --json nameWithOwner")
+    assert calls()[-1][0] == ["repo", "view", issued, "--json", "nameWithOwner"]
+    assert all(call[2] == issued for call in calls())
+    run("uv run scripts/devkit/pr_watch.py 12 --assert-ready")
+    assert calls()[-1] == [["pr", "view", "12", "--json", "isDraft"], None, issued]
+    before = len(calls())
+    for command in ("gh pr checks 13", "gh pr ready 13", "gh pr view https://github.com/o/r/pull/12",
+                    "uv run scripts/pr_watch.py 13 --assert-ready", "gh pr view -R o/r",
+                    "gh pr create --body-file x --head peer", "gh pr create --repo o/r",
+                    "gh repo view o/r", "gh run view 42", "gh pr merge 12"):
+        run(command, ok=False)
+    assert all(call[0][:2] == ["pr", "list"] for call in calls()[before:])
+    outside = tmp_path / "outside"
+    outside.write_text("outside")
+    (lane / "link").symlink_to(outside)
+    (lane / "ancestor").symlink_to(tmp_path, target_is_directory=True)
+    os.link(outside, lane / "many-links")
+    for name in (str(outside), "../../outside", "ancestor/outside", "link", "-", "many-links"):
+        run("gh pr create --body-file " + name, ok=False)
+        run("git commit -F " + name, ok=False)
+    run("gh pr ready 12", ok=False, cwd=repo)
+    run("gh pr ready 12", ok=False, dangerouslyDisableSandbox=True)
+    for rows in ([], [row, row], [{**row, "isCrossRepository": True}],
+                 [{**row, "baseRefName": "other"}], [{**row, "headRefName": "peer"}]):
+        env["ROWS"] = json.dumps(rows)
+        run("gh pr ready 12", ok=False)
+    assert all(call[0][:2] == ["pr", "list"] for call in calls()[before:])
 
 
 def _ticket_repo(

@@ -216,6 +216,20 @@ profile grants no tracker read either; probed at 2.1.310 on 2026-10-25 under the
 own flags, `gh issue view` was denied. A probe that drops `--setting-sources ""` loads
 the operator's own settings and can show it allowed, which says nothing about a lane.
 
+The shipped Claude profile takes standalone PR commands from the issued worktree root.
+Use `gh pr create --title <title> --body-file <path>` with optional `--draft`.
+The launcher supplies the repository, head branch and base. The hook opens the body
+or `git commit -F` message beneath the worktree and passes the open file as stdin.
+Use regular files with a single link and directories without symlinks.
+`gh pr view`, `gh pr checks` and `gh pr ready` take the lane PR number or issued
+branch, or infer the lane PR when called without a selector. View and checks accept
+`--json <fields>`. `gh pr list` prints the matching open PR number. `gh repo view`
+reads the issued repository. Use `gh pr checks` for CI and the launcher's watcher
+for `--assert-draft` and `--assert-ready`. The cockpit handles run logs and review
+polls. Raw GitHub command grants, including repository-wide run lookups, are removed
+from the shipped profile. The hook binds direct commands. Credential isolation for
+code run through the build uses the isolated guest.
+
 **What the allow list bounds is the lane's task, not its reach** — see the profile
 discussion below, where `#606` states the two directions in which "bounds what a lane
 can do" is wrong: a class of write it cannot authorize, and a class of execution it
@@ -441,7 +455,7 @@ grant and hook registration to obtain this behavior.
 is measured rather than conceded.** `Edit(**)` bounds file *edits* to the worktree; it
 does not bound a *process*. So a `Bash(<interpreter> <worktree-path>)` entry names a
 file the lane is separately allowed to rewrite, and the two grants compose into
-something neither one says. Under the shipped profile with **nothing added**, a lane
+something neither one says. Under the profile shipped on 2026-08-28, a lane
 asked to rewrite `scripts/pr_watch.py` — already granted
 `Bash(uv run scripts/pr_watch.py:*)` — so that it writes an absolute path outside the
 worktree, and then to run it, did exactly that and returned an empty
@@ -515,10 +529,8 @@ grant reaches:
   not a string prefix. A panel lens falsified the stronger "bounded to the one target"
   claim by running the two-goal form, and a delta-pass lens established the token
   boundary; both were corrected here rather than hedged.
-- **`Bash(uv run scripts/kit_doctor.py:*)`**, and the `scripts/devkit/` spelling beside
-  it as `pr_watch.py` already has — because a lane editing any kit-owned file must
-  refresh the manifest or its PR is deterministically red, which costs the lane its
-  whole result rather than one check. Granted bare rather than scoped to
+- **`Bash(uv run scripts/kit_doctor.py:*)`** and its `scripts/devkit/` equivalent
+  let a lane refresh the manifest after editing kit-owned files. Granted bare rather than scoped to
   `--generate-manifest`, so that checking the manifest before regenerating it does not
   end the run. It admits `#464`'s broken redirect exactly as it admits the correct
   invocation; a prefix rule cannot see a redirect, so that belongs in the lane contract.

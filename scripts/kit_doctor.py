@@ -476,6 +476,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/lib/state_paths/tests/test_state_paths.py", "test"),
     ("scripts/hooks/pre-push", "hook"),
     ("scripts/hooks/lane_push.py", "hook"),
+    ("scripts/hooks/lane_pr.py", "hook"),
     # Same omission as check_memory_budget.py, and the more consequential half:
     # this hook reads `review.fallback_panel.lens_compute` to render the
     # panel reminder, so an adopter whose copy predates that key gets a

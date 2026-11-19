@@ -1505,6 +1505,27 @@ def _child_main(arguments: argparse.Namespace) -> int:
         return 70
 
 
+def _lane_gh_repository(origin: str) -> str:
+    """Map supported descriptor origins to gh's explicit HOST/OWNER/REPO."""
+    # Accept URL and SCP spellings with their own separators. Local remotes,
+    # credential-bearing URLs and unrecognised forms get no direct forge grant.
+    if origin.startswith("git@"):
+        host, separator, path = origin[4:].partition(":")
+        if not separator:
+            return ""
+    else:
+        match = re.fullmatch(r"(?:https://|ssh://git@)([^/]+)/(.+)", origin)
+        if not match:
+            return ""
+        host, path = match.groups()
+    path = path.removesuffix("/").removesuffix(".git")
+    if (not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9.-]*", host)
+            or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9-]*/[a-zA-Z0-9_.-]+", path)
+            or path.rsplit("/", 1)[1] in {".", ".."}):
+        return ""
+    return f"{host.lower()}/{path}"
+
+
 def _scrubbed_environment(descriptor: dict[str, Any]) -> dict[str, str]:
     environment = {
         key: value
@@ -1514,6 +1535,9 @@ def _scrubbed_environment(descriptor: dict[str, Any]) -> dict[str, str]:
     environment.update(descriptor["env"])
     if descriptor["runtime"] == "claude":
         environment["ADK_LANE_PUSH_HOOK"] = str(SCRIPT_DIR / "hooks" / "lane_push.py")
+        environment["ADK_LANE_PR_HOOK"] = str(SCRIPT_DIR / "hooks" / "lane_pr.py")
+        environment["ADK_LANE_REPO"] = _lane_gh_repository(descriptor["origin_url"])
+        environment["ADK_LANE_BASE"] = descriptor["base"]
         environment["ADK_LANE_BRANCH"] = descriptor["branch"]
         environment["ADK_LANE_WORKTREE"] = descriptor["worktree"]
     environment["PATH"] = SAFE_EXECUTABLE_PATH
