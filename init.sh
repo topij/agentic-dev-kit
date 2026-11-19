@@ -1449,7 +1449,9 @@ migrate_kit_schema() {
     # The `Run at:` line in a prompt enforces nothing. See
     # docs/agentic-dev-kit/fallback-review-panel.md.
     worker_launcher:
+      # runtime-status: mechanical
       claude: ""
+      # runtime-status: mechanical
       codex: ""
     lens_compute:
       # Mechanical through the agent definition; plain-subagent effort is
