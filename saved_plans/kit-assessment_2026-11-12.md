@@ -582,7 +582,8 @@ operator's own answer.
   the operator's token, and a command the lane runs through `make test` cannot obtain
   the operator's forge credential. The observation below covers the fixture's probes;
   it does not establish an exhaustive sandbox-escape claim.
-  **Remaining scope:** #615's own-branch push gate and S6's `gh` argument classes;
+  **The Claude lane profile binds its direct push to the branch issued in the descriptor (#615).**
+  **Remaining scope:** S6's `gh` argument classes;
   #617's handoff of the validated profile bytes; and #618's post-exit origin check.
   For #1025, the trusted deployment dispatches each lens and verifier to a
   credential-free worker. Each adopter provisions its own launcher and checks

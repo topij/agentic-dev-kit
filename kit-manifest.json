@@ -108,7 +108,7 @@
     },
     "docs/agentic-dev-kit/workflows/parallel-headless.md": {
       "role": "workflow",
-      "sha256": "4a67e25fc67f88f6ce3f1671111d47ce20fff4fc7933fa9dd10e168b4ad647fc"
+      "sha256": "6bf920fc26d7fcb5a89d25cf94204cf3d4180788627fe35231001441648afe7b"
     },
     "docs/agentic-dev-kit/workflows/parallel.md": {
       "role": "workflow",
@@ -203,7 +203,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "4ba38d0e010e6d0783242b4676e970c54fba4fe290216c73a8bf204a86607e05"
+      "sha256": "894f36335097c75a45de54164106f0f477d3f68711922e1d58cbb597d95f4cee"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -245,6 +245,10 @@
       "role": "engine",
       "sha256": "1b46432b63f4a50a19651fc2a8015c7ee17d9583c86b9c2acdc2d9462c8bdac2"
     },
+    "scripts/hooks/lane_push.py": {
+      "role": "hook",
+      "sha256": "0e0392d2e3a7cb77b8a4484788c19d998c057c7f8ecde84f1b79d4e4c012d399"
+    },
     "scripts/hooks/pr_followup_hook.py": {
       "role": "hook",
       "sha256": "6c003cb2e82d826cf84ad000cf01a249b0058ddcfadd6e4e88fb82099e869338"
@@ -262,7 +266,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "0b343e35d21c723d952479982c52c631513d40b4435fca5d059bda4928117821"
+      "sha256": "d608cc7f186a301c0151186058801cbcb43c81e5ea318542f8b5f3c19fd8c6bf"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -270,7 +274,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "8438f28ad7a2c9b77e23be99676f7ad8c9fd53acc66c0e65f737ad4c1696b9d8"
+      "sha256": "8c728ea00e4814e9e8e7b98c95e143afc8a65ad5ab310856bdddc60060127d25"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -813,7 +817,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "f01eb841750f9913c8bb55bcc74b1702a01b59e9b8c33812b85fc9237d109ed8"
+      "sha256": "1f5b16e8350bff49e6a48703ce0b45113fecd3f33d1ad0b238ec6313d09a6f3a"
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",

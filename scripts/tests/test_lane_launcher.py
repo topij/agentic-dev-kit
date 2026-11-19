@@ -10,6 +10,7 @@ import json
 import os
 import resource
 import select
+import shlex
 import shutil
 import signal
 import subprocess
@@ -2537,20 +2538,12 @@ def test_shipped_config_declares_a_bounded_policy_and_the_shipped_profile_valida
         str(profile.resolve()),
     ]
     shipped = json.loads(profile.read_text(encoding="utf-8"))
-    assert set(shipped) == {"permissions"}
+    assert set(shipped) == {"permissions", "hooks"}
     assert set(shipped["permissions"]) == {"allow", "deny"}
     assert set(shipped["permissions"]) <= set(launcher.PERMISSION_RULE_LISTS)
-    # Landing is the cockpit's: the merge command and the flag spellings of a
-    # force push are denied. A prefix rule cannot express "contains a forced
-    # update", so `git push origin +HEAD:main` is NOT denied by this profile
-    # (panel round 4, live-reproduced); history protection is the forge's branch
-    # protection and the lane contract, and this test claims no more.
     assert "Bash(gh pr merge:*)" in shipped["permissions"]["deny"]
-    # The push allow is the form the lane contract names and the narrowest a
-    # token-boundary rule can express (panel round 8): the flag-first and no-`-u`
-    # spellings do not match it; a hostile refspec after `origin` still does.
-    assert "Bash(git push -u origin:*)" in shipped["permissions"]["allow"]
-    assert "Bash(git push:*)" not in shipped["permissions"]["allow"]
+    assert not any(rule.startswith("Bash(git push") for rule in shipped["permissions"]["allow"])
+    assert shipped["hooks"]["PreToolUse"][0]["matcher"] == "Bash"
     # `git remote` is granted as `get-url` only: a broad `git remote:*` let a lane
     # retarget `origin` and push elsewhere (panel round 11, live), and
     # `git remote -v:*` admitted `-v set-url` the same way (round 12, live).
@@ -3708,6 +3701,50 @@ def test_init_seeds_the_shipped_lane_profile() -> None:
     assert json.loads(seeded) == json.loads(
         (REPO_ROOT / "config" / "claude-lane-settings.json").read_text(encoding="utf-8")
     )
+
+
+@pytest.mark.kit_repo_only("config/claude-lane-settings.json")
+def test_shipped_push_hook_uses_the_issued_branch_and_local_remote(tmp_path: Path) -> None:
+    profile = json.loads((REPO_ROOT / "config/claude-lane-settings.json").read_bytes())
+    repo, engine, _, descriptor, _, _ = _install_repo(tmp_path, runtime="claude", profile=profile)
+    launcher = _load_launcher(engine)
+    env = launcher._scrubbed_environment(descriptor)
+    branch = descriptor["branch"]
+    lane = Path(descriptor["worktree"])
+    remote = tmp_path / "origin.git"
+    head = _git(lane, "rev-parse", "HEAD")
+    _git(lane, "branch", "peer")
+    _git(lane, "tag", "-a", "fixture-tag", "-m", "fixture")
+    _git(lane, "config", "push.followTags", "true")
+    _git(lane, "config", "remote.origin.push", f"refs/heads/{branch}:refs/heads/peer")
+    hook = profile["hooks"]["PreToolUse"][0]["hooks"][0]["command"]
+
+    def decision(command, *, cwd=lane, environment=env, **options):
+        event = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "cwd": str(cwd),
+            "tool_input": {"command": command, **options},
+        }
+        result = subprocess.run(
+            ["/bin/sh", "-c", hook], input=json.dumps(event), text=True,
+            capture_output=True, check=True, env=environment, cwd=cwd,
+        )
+        return json.loads(result.stdout)
+
+    own_push = f"git push -u origin {branch}"
+    assert decision("git push -u origin peer") == {}
+    assert decision(own_push + " peer") == {}
+    assert decision(own_push, cwd=repo) == {}
+    assert decision(own_push, environment={**env, "ADK_LANE_BRANCH": ""}) == {}
+    assert decision(own_push, dangerouslyDisableSandbox=True) == {}
+    grant = decision(own_push)["hookSpecificOutput"]
+    assert grant["permissionDecision"] == "allow"
+    _git(lane, *shlex.split(grant["updatedInput"]["command"])[1:])
+    assert _git(remote, "rev-parse", f"refs/heads/{branch}") == head
+    assert set(_git(remote, "for-each-ref", "--format=%(refname)").splitlines()) == {
+        f"refs/heads/{branch}", "refs/heads/trunk",
+    }
 
 
 def _ticket_repo(

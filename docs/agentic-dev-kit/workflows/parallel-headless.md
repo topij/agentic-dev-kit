@@ -428,21 +428,14 @@ lane retarget `origin` and push elsewhere through the already-granted push form
 (panel round 11, live against a throwaway remote), and `git remote -v:*` admitted
 `git remote -v set-url` the same way, `-v` being a modifier (round 12, live) —
 `get-url` is the subcommand token itself, and git accepts nothing after it but its
-own `--push`/`--all` flags and a remote name. The
-push allow is `Bash(git push -u origin:*)`, the form the lane contract names
-and the narrowest a rule can express: the runtime matches Bash rules on token
-boundaries, so a branch-prefix allow (`git push -u origin lane/:*`) matched nothing
-live — not even the lane's own push. The narrowed allow bounds only the verb and the remote name: it refuses the
-flag-first and no-`-u` spellings the panel reproduced passing a broad
-`Bash(git push:*)` (`git push origin :x`, `git push -uf …`, `git push --force …`,
-`git push origin +HEAD:main`), and it bounds **nothing after `origin`** — a flag
-(`git push -u origin --force x`, `git push -u origin -f x`), a deletion (`git push -u
-origin :x`), and a forced refspec (`git push -u origin +HEAD:x`) all match it, every
-one observed live against a throwaway remote. The deny entries for the flag
-spellings catch only the flag-first placement. So the profile does not protect a
-remote branch's history; that remains the forge's branch protection and the lane
-contract's own-branch rule, and a deterministic lane-side push gate is follow-up
-work, not a claim this contract makes.
+own `--push`/`--all` flags and a remote name. The shipped Claude profile grants a push through its
+`PreToolUse` hook. From the lane root, run `git push -u origin <branch>` as a standalone
+Bash call with the branch named in the descriptor. The launcher binds that branch,
+the worktree and the issuer's hook path on launch and resume. The hook authorizes
+the explicit source and destination under `refs/heads/` with tag following disabled.
+Other calls go through ordinary permission evaluation. The shipped profile has no
+general push grant. An adopter retaining an older profile must update its push
+grant and hook registration to obtain this behavior.
 
 **The profile scopes a lane's task; it is not a security boundary, and the difference
 is measured rather than conceded.** `Edit(**)` bounds file *edits* to the worktree; it
