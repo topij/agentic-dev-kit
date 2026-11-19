@@ -1125,8 +1125,7 @@ migrate_parallel_schema() {
 # `make test mutation-test` runs BOTH goals — measured, after a panel lens
 # falsified the "bounded to the one target" claim this comment first carried.
 # What it does bound is a `make` invocation that does not start with `test`.
-# `kit_doctor.py` gets both engine spellings exactly as
-# `pr_watch.py` does, because `paths.engines` is the adopter's — without it a lane
+# `kit_doctor.py` gets both engine spellings because `paths.engines` is the adopter's — without it a lane
 # that edits any kit-owned file cannot refresh the manifest, so its PR is
 # deterministically red and the cockpit must finish the work. It is granted bare
 # rather than scoped to `--generate-manifest` so that reading the doctor's report
@@ -1169,17 +1168,7 @@ seed_claude_lane_profile() {
       "Bash(git remote get-url:*)",
       "Bash(git fetch:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)",
       "Bash(git restore:*)",
-      "Bash(gh pr create:*)",
-      "Bash(gh pr view:*)",
-      "Bash(gh pr list:*)",
-      "Bash(gh pr checks:*)",
-      "Bash(gh pr ready:*)",
-      "Bash(gh run view:*)",
-      "Bash(gh repo view:*)",
-      "Bash(uv run scripts/pr_watch.py:*)",
-      "Bash(uv run scripts/devkit/pr_watch.py:*)",
       "Bash(uv run scripts/kit_doctor.py:*)",
       "Bash(uv run scripts/devkit/kit_doctor.py:*)",
       "Bash(make test:*)"
@@ -1188,7 +1177,11 @@ seed_claude_lane_profile() {
       "Bash(gh pr merge:*)",
       "Bash(git push --force:*)",
       "Bash(git push -f:*)",
-      "Bash(git push --force-with-lease:*)"
+      "Bash(git push --force-with-lease:*)",
+      "Bash(gh:*)",
+      "Bash(git commit:*)",
+      "Bash(uv run scripts/pr_watch.py:*)",
+      "Bash(uv run scripts/devkit/pr_watch.py:*)"
     ]
   },
   "hooks": {
@@ -1199,6 +1192,10 @@ seed_claude_lane_profile() {
           {
             "type": "command",
             "command": "python3 -I \"${ADK_LANE_PUSH_HOOK:?missing lane launcher}\""
+          },
+          {
+            "type": "command",
+            "command": "python3 -I \"${ADK_LANE_PR_HOOK:?missing lane launcher}\""
           }
         ]
       }

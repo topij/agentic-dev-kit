@@ -216,6 +216,20 @@ profile grants no tracker read either; probed at 2.1.310 on 2026-10-25 under the
 own flags, `gh issue view` was denied. A probe that drops `--setting-sources ""` loads
 the operator's own settings and can show it allowed, which says nothing about a lane.
 
+The shipped Claude profile takes standalone PR commands from the issued worktree root.
+Use `gh pr create --title <title> --body-file <path>` with optional `--draft`.
+The launcher supplies the repository, head branch and base. The hook opens the body
+or `git commit -F` message beneath the worktree and passes the open file as stdin.
+Use regular files with a single link and directories without symlinks.
+`gh pr view`, `gh pr checks` and `gh pr ready` take the lane PR number or issued
+branch, or infer the lane PR when called without a selector. View and checks accept
+`--json <fields>`. `gh pr list` prints the matching open PR number. `gh repo view`
+reads the issued repository. Use `gh pr checks` for CI and the launcher's watcher
+for `--assert-draft` and `--assert-ready`. The cockpit handles run logs and review
+polls. Raw GitHub command grants, including repository-wide run lookups, are removed
+from the shipped profile. The hook binds direct commands. Credential isolation for
+code run through the build uses the isolated guest.
+
 **What the allow list bounds is the lane's task, not its reach** — see the profile
 discussion below, where `#606` states the two directions in which "bounds what a lane
 can do" is wrong: a class of write it cannot authorize, and a class of execution it
