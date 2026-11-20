@@ -2902,6 +2902,7 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
         "host_sandbox": {"claude_version": "fixture-version", "read_paths": ["/usr"],
                          "control_root": str(tmp_path / "controls"), "max_control_path_bytes": 1024},
     }}}
+    _git(deployment, "init", "-q")
     config["scratch"] = {"roots": [str(tmp_path / "controls")]}
     (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
     monkeypatch.setattr(pp, "REPO_ROOT", deployment)
