@@ -2354,6 +2354,7 @@ def test_committed_lens_comparison_in_relocated_layout(tmp_path, engine_rel, rec
     engines = root / engine_rel
     for relative in (
         "panel_prompt.py", "kit_doctor.py", "sweep_scratch.py", "lib/kitconfig.py",
+        "lib/subprocess_runner.py",
         "tests/_repo_layout.py", "tests/conftest.py", "tests/test_panel_prompt.py",
     ):
         destination = engines / relative

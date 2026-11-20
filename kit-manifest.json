@@ -471,7 +471,8 @@
     "scripts/lib/subprocess_runner.py": {
       "required_by": [
         "scripts/pr_watch.py",
-        "scripts/session_cleanup.py"
+        "scripts/session_cleanup.py",
+        "scripts/sweep_scratch.py"
       ],
       "role": "engine",
       "sha256": "ad2d10cb78e1c9c5e385d5bf4a05b3d18d16e764f499a20db92cdd8c44d8e484"
@@ -727,7 +728,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "712fceb79f928fa913fa283a904aa733e61e3fdcae615ab6a750d3eda25c4cd0"
+      "sha256": "e0f20e04303e43a69dc808adddb4b4a8333142d8a3ee1f468f41d0ff3c26c168"
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
@@ -739,7 +740,7 @@
         "scripts/session_cleanup.py"
       ],
       "role": "engine",
-      "sha256": "1d7da3b6ba0c07cc09054be3ad2177724a996b1d869d30be397c60266daad8f5"
+      "sha256": "b5152f08d30ade7182150065f6a3b6f375945394c4fafe568e531f3ccc5e09c9"
     },
     "scripts/tests/_repo_layout.py": {
       "role": "test",
@@ -859,7 +860,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "338da094f5d1fecce8ca8929b8c05924dcc4e5dcc9fc6f14e22c82bdea47fa6d"
+      "sha256": "4331f2e2d8b26862fc4154ecaf0e75442a287e261aabad302c12f7ac766bc843"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",
@@ -915,7 +916,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "297756b7886cd20088c44ec60361fa5ea93d20e35a033978a781abb4ff95a79d"
+      "sha256": "68285f82cb040faf6530ba469b056eee2e43426318fc9c5441195ac5c19b3c09"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

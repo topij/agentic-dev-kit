@@ -729,6 +729,159 @@ def test_cli_unreadable_worktree_registrations_refuse_everything(root: Path, bas
     assert (root / "old-session").is_dir()
 
 
+# --------------------------------------------------------------------------- #
+# Git through the shared runner: a hung, failing or missing git, and GIT_*
+# --------------------------------------------------------------------------- #
+
+
+def _fake_git(base: Path, monkeypatch, body: str) -> None:
+    """Put a `git` whose whole behaviour is ``body`` first on PATH."""
+    bin_dir = base / "fake-bin"
+    bin_dir.mkdir()
+    script = bin_dir / "git"
+    script.write_text("#!/bin/sh\n" + body + "\n")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+
+
+def _no_git(base: Path, monkeypatch) -> None:
+    empty = base / "empty-bin"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+
+
+def _bare_git_dir(base: Path) -> str:
+    """A git dir whose own config is a regular file, so _is_bare asks Git about it."""
+    git_dir = base / "fixture.git"
+    git_dir.mkdir()
+    (git_dir / "config").write_text("[core]\n\tbare = true\n", encoding="utf-8")
+    return str(git_dir)
+
+
+def test_each_git_call_is_killed_after_the_timeout_and_fails_closed(base: Path, monkeypatch):
+    """A real hung git: the two reads refuse, naming the timeout; _is_bare keeps."""
+    worktree = base / "wt"
+    worktree.mkdir()
+    git_dir = _bare_git_dir(base)
+    _fake_git(base, monkeypatch, "exec sleep 30")
+    monkeypatch.setattr(sweep, "GIT_TIMEOUT", 1)
+    started = time.monotonic()
+    with pytest.raises(sweep.ConfigError, match=r"^git -C .* worktree list --porcelain -z timed out after 1s$"):
+        sweep.registered_worktrees([base])
+    with pytest.raises(sweep.ConfigError, match=r"^git -C .* rev-parse .* timed out after 1s$"):
+        sweep.repository_stores([str(worktree)])
+    assert sweep._is_bare(git_dir) is False
+    # Three calls, each killed at 1s; without the timeout each would sleep 30s.
+    assert time.monotonic() - started < 20
+
+
+def test_is_bare_reads_the_answer_from_git_when_git_answers(base: Path, monkeypatch):
+    """Twin of the hung and missing cases: the same fixture reads bare when Git says so."""
+    git_dir = _bare_git_dir(base)
+    _fake_git(base, monkeypatch, "echo true")
+    assert sweep._is_bare(git_dir) is True
+
+
+def test_is_bare_answers_false_when_git_reports_the_key_unset(base: Path):
+    """A real `git config --get` exits 1 for an unset core.bare: that CommandFailed keeps the git dir."""
+    git_dir = base / "unset.git"
+    git_dir.mkdir()
+    (git_dir / "config").write_text("[core]\n\trepositoryformatversion = 0\n", encoding="utf-8")
+    assert sweep._is_bare(str(git_dir)) is False
+
+
+def test_a_git_that_cannot_start_keeps_the_former_messages(base: Path, monkeypatch):
+    worktree = base / "wt"
+    worktree.mkdir()
+    git_dir = _bare_git_dir(base)
+    _no_git(base, monkeypatch)
+    missing = "[Errno 2] No such file or directory: 'git'"
+    with pytest.raises(sweep.ConfigError) as listed:
+        sweep.registered_worktrees([base])
+    assert str(listed.value) == f"cannot run git for {base}: {missing}"
+    with pytest.raises(sweep.ConfigError) as common:
+        sweep.repository_stores([str(worktree)])
+    assert str(common.value) == f"cannot run git for {worktree}: {missing}"
+    assert sweep._is_bare(git_dir) is False
+
+
+def test_failing_git_keeps_its_messages_and_a_misanswer_reports_0(base: Path, monkeypatch):
+    """A Git that exits non-zero gets the same messages as before the runner.
+
+    One message changed: a Git that exits 0 but prints no absolute path for
+    --git-common-dir now reports 0, even with stderr present, because the runner
+    returns no stderr on success. The base quoted that stderr.
+    """
+    worktree = base / "wt"
+    worktree.mkdir()
+    hint = (" (if its directory or .git was deleted, `git worktree prune` clears the"
+            " registration; if its .git names a moved git dir, `git worktree repair`)")
+    _fake_git(base, monkeypatch, "echo 'fatal: broken' >&2; exit 128")
+    with pytest.raises(sweep.ConfigError) as listed:
+        sweep.registered_worktrees([base])
+    assert str(listed.value) == f"git worktree list failed for {base}: fatal: broken"
+    with pytest.raises(sweep.ConfigError) as common:
+        sweep.repository_stores([str(worktree)])
+    assert str(common.value) == f"cannot read the git dir of {worktree}: fatal: broken{hint}"
+    (base / "fake-bin" / "git").write_text("#!/bin/sh\necho 'warning: noisy' >&2\necho relative/path\n")
+    with pytest.raises(sweep.ConfigError) as relative:
+        sweep.repository_stores([str(worktree)])
+    assert str(relative.value) == f"cannot read the git dir of {worktree}: 0{hint}"
+
+
+@pytest.mark.parametrize("caller", ["repository_stores", "_is_bare"])
+def test_each_git_caller_runs_without_inherited_git_environment(base: Path, monkeypatch, caller):
+    """Every _git call site drops GIT_*: one that bypasses _git returns the leaked answer."""
+    worktree = base / "wt"
+    worktree.mkdir()
+    git_dir = _bare_git_dir(base)
+    clean, leaked = base / "clean.git", base / "leaked.git"
+    # With any GIT_* inherited the fake answers as a leaked GIT_DIR would: another
+    # repository's git dir, and "not bare".
+    _fake_git(base, monkeypatch,
+              f"if env | grep -q '^GIT_'; then printf '%s\\n' '{leaked}' false; "
+              f"else printf '%s\\n' '{clean}' true; fi | "
+              "if [ \"$1\" = config ]; then tail -n 1; else head -n 1; fi")
+    monkeypatch.setenv("GIT_DIR", str(base / "elsewhere.git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(base / "elsewhere"))
+    if caller == "repository_stores":
+        assert sweep.repository_stores([str(worktree)]) == [os.path.realpath(clean)]
+    else:
+        assert sweep._is_bare(git_dir) is True
+
+
+def test_git_runs_without_inherited_git_environment(base: Path, monkeypatch):
+    """_git drops every GIT_* variable and passes the rest through; registered_worktrees uses it.
+
+    repository_stores and _is_bare call the same _git, so this checks the helper and
+    one of its callers, not each call site separately.
+    """
+    _fake_git(base, monkeypatch,
+              "env | grep '^GIT_' || true; printf 'kept:%s\\n' \"${NOT_GIT_KEPT:-unset}\"; printf 'args:%s\\n' \"$*\"")
+    monkeypatch.setenv("GIT_DIR", str(base / "elsewhere.git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(base / "elsewhere"))
+    monkeypatch.setenv("NOT_GIT_KEPT", "1")
+    assert sweep._git("-C", str(base), "rev-parse", "HEAD") == f"kept:1\nargs:-C {base} rev-parse HEAD\n"
+    # A leaked GIT_DIR would print first, and the worktree list would not parse to it.
+    (base / "fake-bin" / "git").write_text(
+        "#!/bin/sh\nenv | grep -q '^GIT_' && printf 'worktree /leaked\\0'\nprintf 'worktree %s\\0' \"$2\"\n"
+    )
+    assert sweep.registered_worktrees([base]) == [os.path.realpath(base)]
+
+
+def test_cli_hung_git_exits_two_and_removes_nothing(root: Path, repo: Path, base: Path, monkeypatch, capsys):
+    """The kill path at the CLI: a hung git ends the run with exit 2, nothing removed."""
+    _tree(root / "old-session")
+    cfg = _config(base / "dev-model.yaml", roots=[str(root)], repos=[str(repo)])
+    _fake_git(base, monkeypatch, "exec sleep 30")
+    monkeypatch.setattr(sweep, "GIT_TIMEOUT", 1)
+    started = time.monotonic()
+    assert sweep.main(["--config", str(cfg), "--apply", "--older-than", "1d"]) == 2
+    assert time.monotonic() - started < 15
+    assert "timed out after 1s" in capsys.readouterr().err
+    assert (root / "old-session").is_dir()
+
+
 @pytest.mark.parametrize(
     "argv",
     [["--apply"], ["--older-than", "7d"], ["--apply", "--older-than", "7"]],
