@@ -25,6 +25,8 @@ paths:
   # decision is made, not only the one that acts on it.
   - "scripts/pr_watch.py"
   - "scripts/devkit/pr_watch.py"
+  - "scripts/lib/subprocess_runner.py"
+  - "scripts/devkit/lib/subprocess_runner.py"
   # These select the local review receipt the watcher reads.
   - "scripts/lib/state_paths/repo_root.py"
   - "scripts/lib/state_paths/resolver.py"

@@ -16506,6 +16506,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
     assert (
         "`scripts/pr_watch.py`, `scripts/dev_session.sh`, "
         "`scripts/panel_prompt.py`, `scripts/launch_lane.py`, `scripts/isolated_lane.py`, `scripts/lib/isolated_guest.py`, "
+        "`scripts/lib/subprocess_runner.py`, "
         "`scripts/lib/state_paths/resolver.py`, `scripts/lib/state_paths/repo_root.py`, "
         "`scripts/sweep_scratch.py`, `scripts/session_cleanup.py`, or the profile named by "
         f"`{profile_key}` (`{configured_profile_path}` in this repository), and to "
@@ -16523,6 +16524,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "path-scoped rule.** Behavioral changes to `{{ENGINE_DIR}}/pr_watch.py`, "
         "`{{ENGINE_DIR}}/dev_session.sh`, `{{ENGINE_DIR}}/panel_prompt.py`, `{{ENGINE_DIR}}/launch_lane.py`, "
         "`{{ENGINE_DIR}}/isolated_lane.py`, `{{ENGINE_DIR}}/lib/isolated_guest.py`, "
+        "`{{ENGINE_DIR}}/lib/subprocess_runner.py`, "
         "`{{ENGINE_DIR}}/lib/state_paths/resolver.py`, `{{ENGINE_DIR}}/lib/state_paths/repo_root.py`, "
         "`{{ENGINE_DIR}}/sweep_scratch.py`, `{{ENGINE_DIR}}/session_cleanup.py`, or the "
         f"profile named by `{profile_key}` (shipped as `{shipped_profile_path}`), "
@@ -16544,6 +16546,7 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         "and behavioral changes to the configured `<engine-dir>/pr_watch.py`, "
         "`<engine-dir>/dev_session.sh`, `<engine-dir>/panel_prompt.py`, `<engine-dir>/launch_lane.py`, "
         "`<engine-dir>/isolated_lane.py`, `<engine-dir>/lib/isolated_guest.py`, "
+        "`<engine-dir>/lib/subprocess_runner.py`, "
         "`<engine-dir>/lib/state_paths/resolver.py`, `<engine-dir>/lib/state_paths/repo_root.py`, "
         "`<engine-dir>/sweep_scratch.py`, `<engine-dir>/session_cleanup.py`, or the profile "
         f"named by `{profile_key}` (shipped as `{shipped_profile_path}`), the CI "
@@ -16600,6 +16603,8 @@ def test_both_runtimes_bind_the_shared_safety_critical_doctrine() -> None:
         configured_profile_path,
         "scripts/pr_watch.py",
         "scripts/devkit/pr_watch.py",
+        "scripts/lib/subprocess_runner.py",
+        "scripts/devkit/lib/subprocess_runner.py",
         "scripts/lib/state_paths/repo_root.py",
         "scripts/lib/state_paths/resolver.py",
         "scripts/devkit/lib/state_paths/repo_root.py",

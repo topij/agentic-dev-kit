@@ -395,6 +395,8 @@
   "    - \"config/claude-lane-settings.json\"\n",
   "    - \"scripts/pr_watch.py\"\n",
   "    - \"scripts/devkit/pr_watch.py\"\n",
+  "    - \"scripts/lib/subprocess_runner.py\"\n",
+  "    - \"scripts/devkit/lib/subprocess_runner.py\"\n",
   "    # These select the local review receipt the watcher reads.\n",
   "    - \"scripts/lib/state_paths/repo_root.py\"\n",
   "    - \"scripts/lib/state_paths/resolver.py\"\n",

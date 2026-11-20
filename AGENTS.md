@@ -140,6 +140,7 @@ settled by the rules above.
   `pr-watch --assert-ready` after ready creation or transition, before review polling.
 - **Behavioral changes to `scripts/pr_watch.py`, `scripts/dev_session.sh`,
   `scripts/panel_prompt.py`, `scripts/launch_lane.py`, `scripts/isolated_lane.py`, `scripts/lib/isolated_guest.py`,
+  `scripts/lib/subprocess_runner.py`,
   `scripts/lib/state_paths/resolver.py`, `scripts/lib/state_paths/repo_root.py`,
   `scripts/sweep_scratch.py`, `scripts/session_cleanup.py`, or the profile named by
   `parallel.claude_settings_profile` (`config/claude-lane-settings.json` in this

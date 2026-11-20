@@ -380,6 +380,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     # an edge `derive_dependencies` cannot see (it does not scan shell), and
     # imported by `lib/triage/model.py`, which it can.
     ("scripts/lib/merge_predicate.py", "engine"),
+    ("scripts/lib/subprocess_runner.py", "engine"),
     ("scripts/lib/repo_root.sh", "engine"),
     ("scripts/lib/state_paths/__init__.py", "engine"),
     ("scripts/lib/state_paths/resolver.py", "engine"),
