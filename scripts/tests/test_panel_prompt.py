@@ -2891,3 +2891,71 @@ def test_launch_refuses_candidate_authority_and_unconfigured_worker(repo, tmp_pa
     }}}))
     assert pp.main(argv) == 2
     assert "outside the candidate checkout" in capsys.readouterr().err
+
+
+def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, tmp_path, monkeypatch):
+    pp = _load()
+    deployment = tmp_path / "deployment"
+    (deployment / "config").mkdir(parents=True)
+    config = {"review": {"fallback_panel": {
+        "worker_launcher": {"claude": ""},
+        "host_sandbox": {"claude_version": "fixture-version", "read_paths": ["/usr"]},
+    }}}
+    (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
+    monkeypatch.setattr(pp, "REPO_ROOT", deployment)
+    monkeypatch.setattr(pp.sys, "platform", "darwin")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-model-key")
+    monkeypatch.setenv("GITHUB_TOKEN", "synthetic-forge-key")
+    base, head = _revs(repo)
+    tree = _detached_tree(repo, repo.parent, head)
+    executable = deployment / "claude"
+    executable.touch()
+    monkeypatch.setattr(pp.shutil, "which", lambda _: str(executable))
+    real_run = pp.subprocess.run
+    observed = []
+
+    def run(command, **kwargs):
+        if command == [str(executable), "--version"]:
+            return subprocess.CompletedProcess(command, 0, "fixture-version (Claude Code)\n")
+        if command == ["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"]:
+            return subprocess.CompletedProcess(command, 0, str(tmp_path / "os-temp") + "\n")
+        if command[0] == str(executable):
+            observed.append((command, kwargs))
+            return subprocess.CompletedProcess(command, 19)
+        return real_run(command, **kwargs)
+
+    monkeypatch.setattr(pp.subprocess, "run", run)
+    argv = ["--launch", "--root", str(repo), "--runtime", "claude", "--head", head,
+            "--base", base, "--scratch", tree, "--lens", "correctness", "--branch", "fixture"]
+    assert pp.main(argv) == 2
+    assert observed == []
+    assert pp.main([*argv, "--trusted-source"]) == 19
+    command, kwargs = observed[0]
+    settings = json.loads(command[command.index("--settings") + 1])
+    sandbox = settings["sandbox"]
+    assert sandbox["enabled"] and sandbox["failIfUnavailable"]
+    assert sandbox["allowUnsandboxedCommands"] is False
+    assert sandbox["excludedCommands"] == []
+    assert sandbox["network"]["deniedDomains"] == ["*"]
+    assert sandbox["filesystem"]["denyRead"] == ["/"]
+    assert sandbox["filesystem"]["allowRead"] == ["/usr", str(Path(tree).parent)]
+    assert sandbox["credentials"]["envVars"] == [{"name": "ANTHROPIC_API_KEY", "mode": "deny"}]
+    assert "GITHUB_TOKEN" not in kwargs["env"]
+    assert kwargs["env"]["ANTHROPIC_API_KEY"] == "synthetic-model-key"
+    assert "--bare" in command and "--restricted" in command
+    assert command[command.index("--tools") + 1] == "Bash"
+    assert kwargs["input"].startswith(b"# Cockpit sandboxed host dispatch")
+    assert not Path(kwargs["cwd"]).exists()
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude"])
+def test_trusted_source_keeps_configured_worker_dispatch(repo, tmp_path, monkeypatch, runtime):
+    # Reuse the executable worker fixture, with the host attestation present.
+    pp = _load()
+    real_main = pp.main
+
+    def main(argv):
+        return real_main([*argv, "--trusted-source"])
+
+    monkeypatch.setattr(pp, "main", main)
+    test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, runtime, False, False)

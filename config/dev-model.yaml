@@ -466,6 +466,23 @@ review:
     # Trusted cockpit deployment only. Each absolute executable starts a review
     # inside its credential-free worker, accepts runtime argv and reads the prompt
     # on stdin. Set these in the trusted deployment's tracked configuration.
+    # Host execution is available only with --trusted-source, on macOS.
+    # Pin changes require repeating the live sandbox acceptance probes.
+    host_sandbox:
+      claude_version: "2.1.329"
+      read_paths:
+        - /System
+        - /usr
+        - /bin
+        - /sbin
+        - /opt/homebrew
+        - /Applications/Xcode.app
+        - /Library/Developer
+        - /private/var/select
+        - /var/select
+        - /private/etc
+        - /etc
+        - /dev
     worker_launcher:
       # runtime-status: mechanical
       claude: ""

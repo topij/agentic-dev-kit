@@ -734,7 +734,34 @@ author re-reading their own diff. **Cite them by name, never by number.**
 ## Credential-free reviewer execution
 
 The cockpit establishes the execution boundary before it hands any candidate text
-to a lens or verifier. Use an adopter-provisioned disposable worker. Select its
+to a lens or verifier. Trusted Claude reviews on macOS may use the strict host
+sandbox through `panel_prompt.py --launch --trusted-source`. The flag is the
+cockpit's attestation that the source is trusted. External contributions and Codex
+reviews use an adopter-provisioned disposable worker. An explicitly configured
+worker launcher takes precedence over the host route.
+
+The host route reads `review.fallback_panel.host_sandbox` from the trusted
+installation's tracked configuration. Its `claude_version` pins the client that
+passed the live acceptance probes. Its `read_paths` allow installed system tools
+and runtimes. The allocated round is also readable. Other host paths are denied.
+Keep secrets out of the configured tool paths and staged round. The launcher
+requires `ANTHROPIC_API_KEY` for the bare client's model transport and denies that
+variable to Bash. It excludes user and candidate settings, hooks, MCP servers and
+other tools, denies network and Unix sockets, and refuses unsandboxed retries or
+unavailable sandboxing. Bare macOS `mktemp -d` is refused. Create temporary files
+with an explicit template under the allocated round. Claude's short fallback
+`TMPDIR` can also be refused, so test commands must use round-local temporary paths.
+Stage dependencies before launch and report checks that need unavailable packages.
+
+Before adopting a different client version or tool-path configuration, repeat the
+live probes through the normal launch path. Require a harmless network request
+and `gh api` to fail, a host-only canary to be unreadable, writes outside the round
+and bare `mktemp -d` to fail, local reads and writes to succeed, and model credentials
+to be absent from Bash and inaccessible through process inspection. Record the
+command, revision, date and observed results on the pull request. A unit-test
+substitute for the runtime does not establish this boundary.
+
+For the disposable-worker route, use an adopter-provisioned worker. Select its
 launcher and runtime settings from operator-controlled deployment or from an
 independent checkout of the protected base at its resolved SHA. Use the absolute
 path to that trusted installation from outside the candidate checkout. The worker
@@ -742,7 +769,8 @@ must be unable to change it. For a kit-run review, run the trusted installation'
 `panel_prompt.py --launch --root <review-checkout>` with the usual lens or verifier
 arguments. Prompt-only output remains available for inspection. The trusted
 installation's tracked `review.fallback_panel.worker_launcher.<runtime>` must
-name an absolute executable. Missing configuration refuses dispatch. Install this
+name an absolute executable. Missing configuration refuses dispatch unless the
+trusted Claude host route above was selected. Install this
 executable as part of the operator's deployment, outside every tree writable by
 a reviewer. The launcher receives the runtime argv as separate arguments and
 the assembled prompt on stdin. It returns the reviewer's stdout and exit status.
@@ -777,7 +805,7 @@ The dispatcher cannot validate an adopter program's isolation from its pathname.
 Prove placement on the deployment you use, including after a worker restart. This applies when the pull request changes the runner,
 the prompt generator, an agent definition or the kit configuration itself.
 
-- Give the worker a fresh home and an allowlist of nonsecret environment values.
+- For a disposable worker, give it a fresh home and an allowlist of nonsecret environment values.
   Keep the operator's home, keychain, dotenv files, SSH agent, credential helpers,
   service sockets, host caches and model login outside its reach. Supply dependencies
   in the worker. A local wrapper around a single command leaves other tool calls
@@ -789,7 +817,7 @@ the prompt generator, an agent definition or the kit configuration itself.
   that entire object set is approved for review. If the required history or a fixture
   cannot be staged, report the missing check. Keep PR writes and review receipts
   in the cockpit.
-- For Claude, load the base's generated lens definition in the isolated worker.
+- For Claude, load the base's generated lens definition through the selected boundary.
   Its `tools: Bash` allowlist excludes inherited connectors and delegation. The
   headless launch applies the Bash allowlist and configured compute directly on the CLI. Launch
   a verifier with the same Bash-only tool restriction. Use a trusted control
