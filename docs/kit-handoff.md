@@ -359,10 +359,14 @@ acceptance record and its limits. The model replies were scripted; lane merges r
 On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
-▶ Next: continue step 3d with the next subprocess caller after the watcher’s `_gh` migration. The whole-kit plan names #1172 and #1219. For #1025, the kit's worker
+▶ Next: continue step 3d with the next subprocess caller. The watcher (`_gh`) and
+`session_cleanup.py`'s `git()` now run through `lib/subprocess_runner.py`, which also
+carries the `GIT_*` policy (`without_git_environment`). #1219's item 1, the per-item
+timeout, holds on the runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
+(unpinned guards, untested helpers), which that move did not take. #1172 is the
+process-group stop half of 3d. For #1025, the kit's worker
 dispatch requires separate provisioning in each trusted deployment. On 2026-11-19
-the operator chose native Bash inside the isolated Claude worker. #1138 covers
-writable-copy Git administration. Lane merges remain operator-only.
+the operator chose native Bash inside the isolated Claude worker. Lane merges remain operator-only.
 The operator decides whether #1370, #1371 and #345 are done, now that
 #1440 and #1441 have merged. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on

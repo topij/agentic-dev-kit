@@ -800,6 +800,7 @@ def test_git_forwards_timeout_to_subprocess(tmp_path, monkeypatch, options, expe
 
 @pytest.mark.parametrize("phase", ["preview", "recheck", "remove"])
 def test_git_timeout_is_per_item_and_retryable(session, monkeypatch, phase):
+    """The shared runner's CommandTimedOut, not subprocess's TimeoutExpired, is what git() raises."""
     registry, record, root = session
     task = task_tree(registry, root)
     registry.track_worktree(record, task, "git")
@@ -813,11 +814,11 @@ def test_git_timeout_is_per_item_and_retryable(session, monkeypatch, phase):
         if Path(repo) == task and args == ("rev-parse", "HEAD"):
             calls += 1
             if (phase == "preview" and calls == 1) or (phase == "recheck" and calls == 2):
-                raise subprocess.TimeoutExpired(["git", *args], 30)
+                raise cleanup.CommandTimedOut(f"git {' '.join(args)} timed out after 30s")
         if args[:2] == ("worktree", "remove"):
             assert kwargs["timeout"] == 300
             if phase == "remove":
-                raise subprocess.TimeoutExpired(["git", *args], kwargs["timeout"])
+                raise cleanup.CommandTimedOut(f"git {' '.join(args)} timed out after 300s")
         return original(repo, *args, **kwargs)
 
     token = registry.preview(record)["approval_token"]
@@ -833,6 +834,95 @@ def test_git_timeout_is_per_item_and_retryable(session, monkeypatch, phase):
     monkeypatch.setattr(cleanup, "git", original)
     assert registry.apply(registry.load(record["id"]), token, True)["complete"]
     assert not task.exists()
+
+
+@pytest.mark.parametrize("phase", ["recheck", "remove"])
+def test_git_that_cannot_start_during_apply_keeps_only_that_item(session, monkeypatch, phase):
+    """A Git that cannot start mid-apply keeps the worktree and still retires the round."""
+    registry, record, root = session
+    task = task_tree(registry, root)
+    registry.track_worktree(record, task, "git")
+    receipt = allocate(registry, record)
+    seal(registry, record, receipt)
+    original = cleanup.git
+    calls = 0
+
+    def unavailable(repo, *args, **kwargs):
+        nonlocal calls
+        if Path(repo) == task and args == ("rev-parse", "HEAD"):
+            calls += 1  # apply's own preview is call 1; its act-time recheck is call 2
+        if (phase == "recheck" and Path(repo) == task and args == ("rev-parse", "HEAD") and calls == 2) or (
+                phase == "remove" and args[:2] == ("worktree", "remove")):
+            raise cleanup.CommandUnavailable(f"git {' '.join(args)} could not run: [Errno 2]")
+        return original(repo, *args, **kwargs)
+
+    token = registry.preview(record)["approval_token"]
+    monkeypatch.setattr(cleanup, "git", unavailable)
+    result = registry.apply(record, token, True)
+    assert not result["complete"]
+    assert result["paths"][0]["action"] == "kept"
+    assert "could not run" in result["paths"][0]["reason"]
+    assert task.is_dir()
+    assert not Path(receipt["path"]).exists()
+    assert registry.load(record["id"])["last_result"] == {k: v for k, v in result.items() if k != "evidence"}
+    registry.verify_evidence(record)
+    monkeypatch.setattr(cleanup, "git", original)
+    assert registry.apply(registry.load(record["id"]), token, True)["complete"]
+    assert not task.exists()
+
+
+def fake_git(tmp_path, monkeypatch, body):
+    """Put a `git` whose whole behaviour is ``body`` first on PATH."""
+    bin_dir = tmp_path / "fake-bin"
+    bin_dir.mkdir()
+    script = bin_dir / "git"
+    script.write_text("#!/bin/sh\n" + body + "\n")
+    script.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
+
+
+def test_git_timeout_kills_a_real_hung_git_and_raises_command_timed_out(tmp_path, monkeypatch):
+    fake_git(tmp_path, monkeypatch, "exec sleep 30")
+    with pytest.raises(cleanup.CommandTimedOut, match="timed out after 1s"):
+        cleanup.git(tmp_path, "status", timeout=1)
+
+
+def test_git_non_zero_exit_is_a_config_error_carrying_its_stderr(tmp_path, monkeypatch):
+    fake_git(tmp_path, monkeypatch, "echo 'fatal: not a git repository' >&2; exit 128")
+    with pytest.raises(cleanup.sweep.ConfigError, match=r"^Git identity unavailable: fatal: not a git repository$"):
+        cleanup.git(tmp_path, "rev-parse", "HEAD")
+
+
+def test_git_that_cannot_start_raises_command_unavailable(tmp_path, monkeypatch):
+    empty = tmp_path / "empty-bin"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+    with pytest.raises(cleanup.CommandUnavailable, match="could not run"):
+        cleanup.git(tmp_path, "rev-parse", "HEAD")
+
+
+def test_git_runs_without_inherited_git_environment(tmp_path, monkeypatch):
+    fake_git(tmp_path, monkeypatch, "env | grep '^GIT_' || true; printf 'args:%s\\n' \"$*\"")
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "elsewhere.git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(tmp_path / "index"))
+    monkeypatch.setenv("NOT_GIT_KEPT", "1")
+    assert cleanup.git(tmp_path, "rev-parse", "HEAD") == f"args:-C {tmp_path} rev-parse HEAD"
+
+
+def test_main_reports_a_git_that_cannot_start_as_an_error_exit(tmp_path, monkeypatch, capsys):
+    root = tmp_path.resolve()
+    repo = root / "repo"
+    repo.mkdir()
+    cleanup.git(repo, "init", "-q")
+    config = repo / "cleanup.yaml"
+    config.write_text(f"scratch:\n  session_registry: cleanup-sessions\n  roots:\n    - {root}/scratch/{{repo_slug}}\n  grace_window: 24h\n  worktree_repos:\n    - .\n")
+    empty = root / "empty-bin"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+    monkeypatch.chdir(repo)
+    code = cleanup.main(["--config", str(config), "list"])
+    assert code == 2
+    assert "could not run" in capsys.readouterr().err
 
 
 def test_unapproved_interrupted_journal_is_not_authority(session):
