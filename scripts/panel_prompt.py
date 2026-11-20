@@ -1496,27 +1496,43 @@ def launch_host_claude(command: list[str], prompt: str, config: dict,
     env = {"PATH": os.defpath + ":/opt/homebrew/bin", "HOME": str(Path.home()),
            "ANTHROPIC_API_KEY": api_key, "GIT_CONFIG_GLOBAL": "/dev/null",
            "GIT_CONFIG_NOSYSTEM": "1", "GIT_ALLOW_PROTOCOL": "file"}
-    with tempfile.TemporaryDirectory(prefix="host-control-", dir=round_path) as control:
-        env.update(TMPDIR=control, CLAUDE_CODE_TMPDIR=control)
-        settings = {
-            "disableAllHooks": True,
-            "sandbox": {
-                "enabled": True, "failIfUnavailable": True,
-                "allowUnsandboxedCommands": False, "excludedCommands": [],
-                "network": {"allowedDomains": [], "deniedDomains": ["*"],
-                            "allowUnixSockets": [], "allowAllUnixSockets": False,
-                            "allowLocalBinding": False},
-                "filesystem": {
-                    "denyRead": ["/"], "allowRead": [*read_paths, str(round_path)],
-                    "denyWrite": [str(user_temp)],
-                },
-                "credentials": {"envVars": [{"name": "ANTHROPIC_API_KEY", "mode": "deny"}]},
+    control_template = policy.get("control_root")
+    roots = get(config, "scratch.roots", [])
+    if not isinstance(control_template, str) or control_template not in roots:
+        raise PromptError("host_sandbox.control_root must name a configured scratch root")
+    control_root = Path(sweep_scratch.expand_root(control_template, root=trusted))
+    control_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    settings = sweep_scratch.Settings(roots=roots, grace_seconds=0, repos=[trusted, target])
+    try:
+        sweep_scratch._round_root(str(control_root), settings, trusted)
+    except sweep_scratch.ConfigError as exc:
+        raise PromptError(str(exc)) from exc
+    control = tempfile.mkdtemp(prefix="h-", dir=control_root)
+    print(f"host sandbox control directory: {control}", file=sys.stderr)
+    limit = policy.get("max_control_path_bytes")
+    if not isinstance(limit, int) or len(os.fsencode(control)) > limit:
+        os.rmdir(control)
+        raise PromptError("host sandbox control path exceeds max_control_path_bytes; shorten control_root")
+    env.update(TMPDIR=control, CLAUDE_CODE_TMPDIR=control)
+    settings = {
+        "disableAllHooks": True,
+        "sandbox": {
+            "enabled": True, "failIfUnavailable": True,
+            "allowUnsandboxedCommands": False, "excludedCommands": [],
+            "network": {"allowedDomains": [], "deniedDomains": ["*"],
+                        "allowUnixSockets": [], "allowAllUnixSockets": False,
+                        "allowLocalBinding": False},
+            "filesystem": {
+                "denyRead": ["/"], "allowRead": [*read_paths, str(round_path), control],
+                "denyWrite": [str(user_temp)],
             },
-        }
-        command = [str(executable), *command[1:], "--settings", json.dumps(settings),
-                   "--add-dir", str(round_path)]
-        return subprocess.run(command, input=prompt.encode(), cwd=control, env=env,
-                              check=False).returncode
+            "credentials": {"envVars": [{"name": "ANTHROPIC_API_KEY", "mode": "deny"}]},
+        },
+    }
+    command = [str(executable), *command[1:], "--settings", json.dumps(settings),
+               "--add-dir", str(round_path)]
+    return subprocess.run(command, input=prompt.encode(), cwd=control, env=env,
+                          check=False).returncode
 
 
 def launch_worker(args: argparse.Namespace) -> int:
@@ -1588,7 +1604,8 @@ def launch_worker(args: argparse.Namespace) -> int:
             "# Cockpit sandboxed host dispatch\n\n"
             "Use only native Bash inside the strict Claude sandbox. The cockpit has "
             "attested that this source is trusted. Network and host-data access are "
-            "denied. Use offline tests and explicit temporary-file templates within "
+            "denied. The runtime control directory is disposable. Keep evidence and "
+            "offline test files in the allocated round. Use explicit temporary-file templates within "
             f"{review_tree.parent}. The default TMPDIR may be refused. "
             "Report unavailable dependencies. Do not retry outside the sandbox.\n\n" + assembled
         )

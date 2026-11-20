@@ -2899,8 +2899,10 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
     (deployment / "config").mkdir(parents=True)
     config = {"review": {"fallback_panel": {
         "worker_launcher": {"claude": ""},
-        "host_sandbox": {"claude_version": "fixture-version", "read_paths": ["/usr"]},
+        "host_sandbox": {"claude_version": "fixture-version", "read_paths": ["/usr"],
+                         "control_root": str(tmp_path / "controls"), "max_control_path_bytes": 1024},
     }}}
+    config["scratch"] = {"roots": [str(tmp_path / "controls")]}
     (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
     monkeypatch.setattr(pp, "REPO_ROOT", deployment)
     monkeypatch.setattr(pp.sys, "platform", "darwin")
@@ -2938,14 +2940,15 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
     assert sandbox["excludedCommands"] == []
     assert sandbox["network"]["deniedDomains"] == ["*"]
     assert sandbox["filesystem"]["denyRead"] == ["/"]
-    assert sandbox["filesystem"]["allowRead"] == ["/usr", str(Path(tree).parent)]
+    assert sandbox["filesystem"]["allowRead"] == ["/usr", str(Path(tree).parent), kwargs["cwd"]]
     assert sandbox["credentials"]["envVars"] == [{"name": "ANTHROPIC_API_KEY", "mode": "deny"}]
     assert "GITHUB_TOKEN" not in kwargs["env"]
     assert kwargs["env"]["ANTHROPIC_API_KEY"] == "synthetic-model-key"
     assert "--bare" in command and "--restricted" in command
     assert command[command.index("--tools") + 1] == "Bash"
     assert kwargs["input"].startswith(b"# Cockpit sandboxed host dispatch")
-    assert not Path(kwargs["cwd"]).exists()
+    assert Path(kwargs["cwd"]).is_dir()
+    Path(kwargs["cwd"]).rmdir()
 
 
 @pytest.mark.parametrize("runtime", ["codex", "claude"])

@@ -743,14 +743,18 @@ worker launcher takes precedence over the host route.
 The host route reads `review.fallback_panel.host_sandbox` from the trusted
 installation's tracked configuration. Its `claude_version` pins the client that
 passed the live acceptance probes. Its `read_paths` allow installed system tools
-and runtimes. The allocated round is also readable. Other host paths are denied.
+and runtimes. The allocated round and the temporary runtime control directory are also readable.
+Other host paths are denied.
 Keep secrets out of the configured tool paths and staged round. The launcher
 requires `ANTHROPIC_API_KEY` for the bare client's model transport and denies that
 variable to Bash. It excludes user and candidate settings, hooks, MCP servers and
 other tools, denies network and Unix sockets, and refuses unsandboxed retries or
 unavailable sandboxing. Bare macOS `mktemp -d` is refused. Create temporary files
-with an explicit template under the allocated round. Claude's short fallback
-`TMPDIR` can also be refused, so test commands must use round-local temporary paths.
+with an explicit template under the allocated round. The configured `control_root` must also appear in `scratch.roots`. Keep it short
+enough for `max_control_path_bytes`, so Claude keeps its cwd-tracking files within
+the disposable control directory. Its exact path is printed to stderr. The cockpit
+records it and retires it under *Clean up what this session created* after the
+reviewer and its descendants finish. Test evidence belongs in round-local paths.
 Stage dependencies before launch and report checks that need unavailable packages.
 
 Before adopting a different client version or tool-path configuration, repeat the

@@ -470,6 +470,8 @@ review:
     # Pin changes require repeating the live sandbox acceptance probes.
     host_sandbox:
       claude_version: "2.1.329"
+      control_root: /private/tmp/dkr-{uid}
+      max_control_path_bytes: 48
       read_paths:
         - /System
         - /usr
@@ -876,6 +878,7 @@ scratch:
   # linked worktree; the engine's docstring lists these limits. Needs git 2.36+ (`git worktree list -z`).
   roots:
     - /private/tmp/claude-{uid}/{repo_slug}
+    - /private/tmp/dkr-{uid}
   # An entry with anything inside it modified within this window is never
   # removed, whatever --older-than says. Units: s, m, h, d.
   grace_window: 24h
