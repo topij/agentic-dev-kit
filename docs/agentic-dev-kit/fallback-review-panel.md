@@ -747,7 +747,11 @@ and runtimes. Its `command_dirs` select executable directories within those path
 including actual developer-tool binaries where macOS shims need denied host state.
 The bare client and Bash use the disposable control directory as their home.
 The allocated round and the temporary runtime control directory are also readable.
-Other host paths are denied.
+Other host paths are denied. Stage each lens and verifier as a self-contained
+clone inside the round, using the recipe under *Running it*. A linked worktree
+whose Git administration lives outside the round cannot read its HEAD or objects
+through this boundary. Do not widen the host read allowlist to expose the source
+repository.
 Keep secrets out of the configured tool paths and staged round. The launcher
 requires `ANTHROPIC_API_KEY` for the bare client's model transport and denies that
 variable to Bash. It excludes user and candidate settings, hooks, MCP servers and
@@ -764,7 +768,11 @@ Before adopting a different client version or tool-path configuration, repeat th
 live probes through the normal launch path. Require a harmless network request
 and `gh api` to fail, a host-only canary to be unreadable, writes outside the round
 and bare `mktemp -d` to fail, local reads and writes to succeed, and model credentials
-to be absent from Bash and inaccessible through process inspection. Record the
+to be absent from Bash and inaccessible through process inspection. From each
+staged clone, require `git rev-parse HEAD` to return the reviewed SHA and
+`git diff --stat <base>...<head>` to show the expected non-empty change, using
+the full SHAs resolved by the cockpit. Keep source Git metadata outside the
+allowlist during these checks. Record the
 command, revision, date and observed results on the pull request. A unit-test
 substitute for the runtime does not establish this boundary.
 
@@ -883,15 +891,21 @@ the prompt generator, an agent definition or the kit configuration itself.
    uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
    ```
 
-   Build each lens's detached review tree at the named sha inside that round,
-   namespaced by lens and revision —
+   Stage each lens as a self-contained clone with detached HEAD inside that
+   round. In the cockpit, bind `REVIEW_SOURCE` to the absolute source checkout,
+   `REVIEW_COPY` to the fresh absolute path `<round>/lens-<name>-<short-sha>`,
+   and `REVIEW_HEAD` to the full reviewed SHA. Run the sanitized independent-clone
+   recipe in **No writes in the tree you were given** above: it copies Git objects
+   without shared administration or alternates, removes the source remote, and
+   checks out the reviewed commit. Use that recipe for worker staging too; the
+   worker must receive the clone's Git metadata along with its working files.
+   Do not use `git worktree add` against a repository outside the round.
 
-   ```sh
-   git worktree add --detach <round>/lens-<name>-<short-sha> <sha>
-   ```
-
-   — and name that absolute, unaliased path with `panel_prompt.py --scratch`.
-   The prompt builder verifies its allocated parent and head. The cockpit is the only party that knows the target;
+   Before launch, verify that the clone contains the resolved base and head,
+   and that `git diff --stat <base>...<head>` shows the expected non-empty change.
+   If an object is missing, stage it in the clone from an approved source before
+   proceeding. Name the clone's absolute, unaliased path with
+   `panel_prompt.py --scratch`. The prompt builder verifies its allocated parent and head. The cockpit is the only party that knows the target;
    runtime-provided isolation routinely lands at the wrong ref (`#75` holds
    the occurrence data; read it there rather than a figure here, and note its
    own tallies say they are **approximate**). A cockpit-built tree turns that
@@ -1088,8 +1102,9 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
 1. Write each lens's terminal report to a file outside `<round>`, as the verifier's
    `--lens-report` input. It is working input for this round, not retained evidence:
    delete it once the round's dispositions are posted.
-2. Build the verifier's own detached tree in the same round:
-   `git worktree add --detach <round>/verifier-<short-sha> <sha>`.
+2. Stage the verifier's own self-contained clone in the same round at
+   `<round>/verifier-<short-sha>`, following *Running it*'s cockpit staging recipe
+   and base/head checks. Do not add a linked worktree of the handed repository.
 3. Render its prompt. `--lens-report` takes `<lens>=<path>`, once per lens that ran:
 
    ```sh
