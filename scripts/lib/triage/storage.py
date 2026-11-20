@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import stat
 import subprocess
@@ -103,11 +104,18 @@ def _open_parent_chain(path: Path) -> tuple[list[int], list[tuple[int, int]], li
     components = list(absolute.parts[1:])
     try:
         for component in components:
-            descriptor = os.open(
-                component,
-                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                dir_fd=descriptors[-1],
-            )
+            try:
+                descriptor = os.open(
+                    component,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=descriptors[-1],
+                )
+            except OSError as exc:
+                if exc.errno in (errno.ENOTDIR, errno.ELOOP) and stat.S_ISLNK(
+                    os.lstat(component, dir_fd=descriptors[-1]).st_mode
+                ):
+                    raise TriageError(f"symlinked parent is refused: {component}", outcome="operator-held") from exc
+                raise
             descriptors.append(descriptor)
             info = os.fstat(descriptor)
             identities.append((info.st_dev, info.st_ino))
