@@ -28,7 +28,7 @@
     },
     "docs/agentic-dev-kit/fallback-review-panel.md": {
       "role": "doctrine",
-      "sha256": "4eb0a030a4e65fd3eb4719263bad0d30d5d57e05af1c3bd5fc25e4944c732791"
+      "sha256": "4588b79da79889ec1e3501daf8eafe3d27bafdf49ce7cfc6b9b99e875bf3bd05"
     },
     "docs/agentic-dev-kit/lite/adapters/claude/review/SKILL.md": {
       "role": "lite",
@@ -120,7 +120,7 @@
     },
     "docs/agentic-dev-kit/workflows/pr-watch.md": {
       "role": "workflow",
-      "sha256": "461a44627d5a70b9d915bb5aff7b40e60b34d3faf45707e0bc0ff7080f0a21dd"
+      "sha256": "c4084f3d3ad72831b910d7ccd533a8f6f252d9b5e1ebfe137b61464eb607f47f"
     },
     "docs/agentic-dev-kit/workflows/pr-watch/report-fields.md": {
       "required_by": [
@@ -203,7 +203,7 @@
     },
     "init.sh": {
       "role": "installer",
-      "sha256": "daeb14006298646d001e0d98707c6347cf58c5db75ec6f2358bc9337300eef6f"
+      "sha256": "25cc3551455083403cc455a803c7edb3263dbd5f538de03496281d2fa41c289a"
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
@@ -270,7 +270,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "d8262fee845be83cd44453d0a0aa9fb49563c5c8b44febefaca15cda16474d9f"
+      "sha256": "9286cb5dd8610ee49bad1f5bda538a23e97ad737fef7c989fc42bd6d0cc6c41e"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -704,7 +704,7 @@
     },
     "scripts/panel_prompt.py": {
       "role": "engine",
-      "sha256": "3e064be13c962ec9a7e949df463209fdf20d3e31b318f6c5480a9230dafc4dca"
+      "sha256": "40d2ecf27cc778fa115dd14d5532faa8e499b56dc113619f454b4a75a1626313"
     },
     "scripts/pr_watch.py": {
       "role": "engine",
@@ -760,7 +760,7 @@
     },
     "scripts/tests/fixtures/init-config.json": {
       "role": "test",
-      "sha256": "1e9d0fb278679362499833fcd701b14a9ff9db05f384efab34c2c75e0a839e47"
+      "sha256": "9c049551648299626c9e2404e01d44b098c5657a11cdd9cc2875a4538b76d9ac"
     },
     "scripts/tests/fixtures/shipped-registrations/claude-settings.json": {
       "role": "test",
@@ -860,7 +860,7 @@
     },
     "scripts/tests/test_panel_prompt.py": {
       "role": "test",
-      "sha256": "4331f2e2d8b26862fc4154ecaf0e75442a287e261aabad302c12f7ac766bc843"
+      "sha256": "4af20739c4af3a22d8ab16921604db891c2dd6d399fb5a8b1553cc8c41fccd38"
     },
     "scripts/tests/test_portability.py": {
       "role": "test",

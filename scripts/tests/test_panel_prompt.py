@@ -2893,7 +2893,9 @@ def test_launch_refuses_candidate_authority_and_unconfigured_worker(repo, tmp_pa
     assert "outside the candidate checkout" in capsys.readouterr().err
 
 
-def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, tmp_path, monkeypatch):
+@pytest.mark.parametrize("refusal", [None, "version", "platform", "api-key", "broad-reads",
+                                    "unmanaged-control", "long-control", "malformed-roots"])
+def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, tmp_path, monkeypatch, refusal):
     pp = _load()
     deployment = tmp_path / "deployment"
     (deployment / "config").mkdir(parents=True)
@@ -2932,6 +2934,26 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
             "--base", base, "--scratch", tree, "--lens", "correctness", "--branch", "fixture"]
     assert pp.main(argv) == 2
     assert observed == []
+    if refusal is not None:
+        policy = config["review"]["fallback_panel"]["host_sandbox"]
+        if refusal == "version":
+            policy["claude_version"] = "unprobed-version"
+        elif refusal == "platform":
+            monkeypatch.setattr(pp.sys, "platform", "linux")
+        elif refusal == "api-key":
+            monkeypatch.delenv("ANTHROPIC_API_KEY")
+        elif refusal == "broad-reads":
+            policy["read_paths"] = ["/"]
+        elif refusal == "unmanaged-control":
+            config["scratch"]["roots"] = []
+        elif refusal == "long-control":
+            policy["max_control_path_bytes"] = 1
+        else:
+            config["scratch"]["roots"] = None
+        (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
+        assert pp.main([*argv, "--trusted-source"]) == 2
+        assert observed == []
+        return
     assert pp.main([*argv, "--trusted-source"]) == 19
     command, kwargs = observed[0]
     settings = json.loads(command[command.index("--settings") + 1])

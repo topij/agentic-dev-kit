@@ -446,9 +446,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    anchoring the panel exists to escape.
 3. **Not the author.** Say it did not write the code. Cheap, and it measurably
    changes what a lens is willing to call wrong.
-4. **Execute, don't only read.** Use the cockpit's credential-free worker from the
+4. **Execute, don't only read.** Use the cockpit's established execution boundary from the
    first command, following *Credential-free reviewer execution*. Report any
-   command outside it and stop if the worker is unavailable. The highest-value findings came from *running*
+   command outside it and stop if the boundary is unavailable. The highest-value findings came from *running*
    the changed paths against hostile input, not from reading them. A guard was
    dead code for the exact bot it was written for, because that bot reports a
    zero timestamp — no amount of re-reading surfaced it; one live poll did.
@@ -854,7 +854,7 @@ the prompt generator, an agent definition or the kit configuration itself.
    here miscalibrates step 3's plausibility check as well as every lens's diff.
 2. Establish *Credential-free reviewer execution*, then launch **one isolated reviewer per lens** the pull request's class owes
    (*How many lenses*; the `review_class` a poll reports), concurrently when there
-   are two, each with the contract above and its lens focus. Use a fresh reviewer context in the credential-free worker. If it has none, see
+   are two, each with the contract above and its lens focus. Use a fresh reviewer context inside the selected execution boundary. If it has none, see
    *Degraded mode*. State the **repo, branch and head sha under review**
    explicitly — see **Right revision** on why the runtime's own isolation may not
    point at them, and why the sha is the field that lets a lens recover on its
@@ -1103,7 +1103,7 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
    is all it promises: the lens reports themselves are quoted verbatim. Nothing checks
    that the files you name are this round's reports, or all of them: naming every
    lens that ran is yours.
-4. Dispatch the verifier through the same trusted worker launcher as the lenses.
+4. Dispatch the verifier through the same trusted execution boundary as the lenses.
    Pass `--verifier` with `--launch` to run its fresh Claude or Codex session. It is not a lens, so do not launch it as a lens's
    agent definition: those definitions tell the agent it is that lens.
 5. Read its report against *Report what you reviewed, first* as step 3 does for a lens,

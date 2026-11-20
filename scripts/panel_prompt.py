@@ -1498,9 +1498,12 @@ def launch_host_claude(command: list[str], prompt: str, config: dict,
            "GIT_CONFIG_NOSYSTEM": "1", "GIT_ALLOW_PROTOCOL": "file"}
     control_template = policy.get("control_root")
     roots = get(config, "scratch.roots", [])
-    if not isinstance(control_template, str) or control_template not in roots:
+    if (not isinstance(roots, list) or not all(isinstance(root, str) for root in roots)
+            or not isinstance(control_template, str) or control_template not in roots):
         raise PromptError("host_sandbox.control_root must name a configured scratch root")
     control_root = Path(sweep_scratch.expand_root(control_template, root=trusted))
+    if not control_root.is_absolute():
+        raise PromptError("host sandbox control_root must be absolute")
     control_root.mkdir(mode=0o700, parents=True, exist_ok=True)
     settings = sweep_scratch.Settings(roots=roots, grace_seconds=0, repos=[trusted, target])
     try:
@@ -1510,7 +1513,7 @@ def launch_host_claude(command: list[str], prompt: str, config: dict,
     control = tempfile.mkdtemp(prefix="h-", dir=control_root)
     print(f"host sandbox control directory: {control}", file=sys.stderr)
     limit = policy.get("max_control_path_bytes")
-    if not isinstance(limit, int) or len(os.fsencode(control)) > limit:
+    if type(limit) is not int or limit <= 0 or len(os.fsencode(control)) > limit:
         os.rmdir(control)
         raise PromptError("host sandbox control path exceeds max_control_path_bytes; shorten control_root")
     env.update(TMPDIR=control, CLAUDE_CODE_TMPDIR=control)
@@ -1606,7 +1609,7 @@ def launch_worker(args: argparse.Namespace) -> int:
             "attested that this source is trusted. Network and host-data access are "
             "denied. The runtime control directory is disposable. Keep evidence and "
             "offline test files in the allocated round. Use explicit temporary-file templates within "
-            f"{review_tree.parent}. The default TMPDIR may be refused. "
+            f"{review_tree.parent}. Bare macOS mktemp is refused. "
             "Report unavailable dependencies. Do not retry outside the sandbox.\n\n" + assembled
         )
         return launch_host_claude(command, prompt, config, review_tree, trusted, target)
