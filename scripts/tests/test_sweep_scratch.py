@@ -782,6 +782,14 @@ def test_is_bare_reads_the_answer_from_git_when_git_answers(base: Path, monkeypa
     assert sweep._is_bare(git_dir) is True
 
 
+def test_is_bare_answers_false_when_git_reports_the_key_unset(base: Path):
+    """A real `git config --get` exits 1 for an unset core.bare: that CommandFailed keeps the git dir."""
+    git_dir = base / "unset.git"
+    git_dir.mkdir()
+    (git_dir / "config").write_text("[core]\n\trepositoryformatversion = 0\n", encoding="utf-8")
+    assert sweep._is_bare(str(git_dir)) is False
+
+
 def test_a_git_that_cannot_start_keeps_the_former_messages(base: Path, monkeypatch):
     worktree = base / "wt"
     worktree.mkdir()
@@ -816,12 +824,17 @@ def test_a_failing_or_misanswering_git_keeps_the_former_messages(base: Path, mon
 
 
 def test_git_runs_without_inherited_git_environment(base: Path, monkeypatch):
-    """Each call site goes through _git, which drops GIT_* and keeps the rest."""
-    _fake_git(base, monkeypatch, "env | grep '^GIT_' || true; printf 'args:%s\\n' \"$*\"")
+    """_git drops every GIT_* variable and passes the rest through; registered_worktrees uses it.
+
+    repository_stores and _is_bare call the same _git, so this checks the helper and
+    one of its callers, not each call site separately.
+    """
+    _fake_git(base, monkeypatch,
+              "env | grep '^GIT_' || true; printf 'kept:%s\\n' \"${NOT_GIT_KEPT:-unset}\"; printf 'args:%s\\n' \"$*\"")
     monkeypatch.setenv("GIT_DIR", str(base / "elsewhere.git"))
     monkeypatch.setenv("GIT_WORK_TREE", str(base / "elsewhere"))
     monkeypatch.setenv("NOT_GIT_KEPT", "1")
-    assert sweep._git("-C", str(base), "rev-parse", "HEAD") == f"args:-C {base} rev-parse HEAD\n"
+    assert sweep._git("-C", str(base), "rev-parse", "HEAD") == f"kept:1\nargs:-C {base} rev-parse HEAD\n"
     # A leaked GIT_DIR would print first, and the worktree list would not parse to it.
     (base / "fake-bin" / "git").write_text(
         "#!/bin/sh\nenv | grep -q '^GIT_' && printf 'worktree /leaked\\0'\nprintf 'worktree %s\\0' \"$2\"\n"
