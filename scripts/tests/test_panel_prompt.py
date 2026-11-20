@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -2909,7 +2910,9 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
     config["scratch"] = {"roots": [str(tmp_path / "controls")]}
     (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
     monkeypatch.setattr(pp, "REPO_ROOT", deployment)
-    monkeypatch.setattr(pp.sys, "platform", "darwin")
+    # Limit the pretend OS to the launcher; scratch identities use the real host.
+    monkeypatch.setattr(pp, "sys", SimpleNamespace(
+        platform="darwin", stderr=sys.stderr, stdout=sys.stdout))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-model-key")
     monkeypatch.setenv("GITHUB_TOKEN", "synthetic-forge-key")
     base, head = _revs(repo)
