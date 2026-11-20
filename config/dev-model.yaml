@@ -472,6 +472,15 @@ review:
       claude_version: "2.1.329"
       control_root: /private/tmp/dkr-{uid}
       max_control_path_bytes: 48
+      # Use the actual developer tools, avoiding Apple's xcode-select shims.
+      command_dirs:
+        - /Applications/Xcode.app/Contents/Developer/usr/bin
+        - /Library/Developer/CommandLineTools/usr/bin
+        - /opt/homebrew/bin
+        - /usr/bin
+        - /bin
+        - /usr/sbin
+        - /sbin
       read_paths:
         - /System
         - /usr

@@ -1470,6 +1470,12 @@ def launch_host_claude(command: list[str], prompt: str, config: dict,
         if any(boundary.is_relative_to(tool_path)
                for boundary in (Path.home(), trusted, target, review_tree.parent)):
             raise PromptError("host sandbox tool paths must exclude home, source and review ancestors")
+    command_dirs = policy.get("command_dirs")
+    if (not isinstance(command_dirs, list) or not command_dirs
+            or any(not isinstance(path, str) or not Path(path).is_absolute()
+                   or not any(Path(path).resolve().is_relative_to(Path(tool).resolve())
+                              for tool in read_paths) for path in command_dirs)):
+        raise PromptError("host sandbox command_dirs must be absolute directories under read_paths")
     executable = shutil.which(command[0])
     if executable is None:
         raise PromptError("Claude executable is unavailable")
@@ -1493,7 +1499,7 @@ def launch_host_claude(command: list[str], prompt: str, config: dict,
     if not api_key:
         raise PromptError("host sandbox needs ANTHROPIC_API_KEY for the bare Claude client")
     # Only the model transport receives a secret. Bash loses it before execution.
-    env = {"PATH": os.defpath + ":/opt/homebrew/bin", "HOME": str(Path.home()),
+    env = {"PATH": os.pathsep.join(command_dirs),
            "ANTHROPIC_API_KEY": api_key, "GIT_CONFIG_GLOBAL": "/dev/null",
            "GIT_CONFIG_NOSYSTEM": "1", "GIT_ALLOW_PROTOCOL": "file"}
     control_template = policy.get("control_root")
@@ -1516,7 +1522,7 @@ def launch_host_claude(command: list[str], prompt: str, config: dict,
     if type(limit) is not int or limit <= 0 or len(os.fsencode(control)) > limit:
         os.rmdir(control)
         raise PromptError("host sandbox control path exceeds max_control_path_bytes; shorten control_root")
-    env.update(TMPDIR=control, CLAUDE_CODE_TMPDIR=control)
+    env.update(HOME=control, TMPDIR=control, CLAUDE_CODE_TMPDIR=control)
     settings = {
         "disableAllHooks": True,
         "sandbox": {

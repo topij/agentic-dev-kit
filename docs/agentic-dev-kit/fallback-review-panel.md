@@ -743,7 +743,10 @@ worker launcher takes precedence over the host route.
 The host route reads `review.fallback_panel.host_sandbox` from the trusted
 installation's tracked configuration. Its `claude_version` pins the client that
 passed the live acceptance probes. Its `read_paths` allow installed system tools
-and runtimes. The allocated round and the temporary runtime control directory are also readable.
+and runtimes. Its `command_dirs` select executable directories within those paths,
+including actual developer-tool binaries where macOS shims need denied host state.
+The bare client and Bash use the disposable control directory as their home.
+The allocated round and the temporary runtime control directory are also readable.
 Other host paths are denied.
 Keep secrets out of the configured tool paths and staged round. The launcher
 requires `ANTHROPIC_API_KEY` for the bare client's model transport and denies that

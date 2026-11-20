@@ -2894,7 +2894,7 @@ def test_launch_refuses_candidate_authority_and_unconfigured_worker(repo, tmp_pa
 
 
 @pytest.mark.parametrize("refusal", [None, "version", "platform", "api-key", "broad-reads",
-                                    "unmanaged-control", "long-control", "malformed-roots"])
+                                    "unmanaged-control", "long-control", "command-dirs", "malformed-roots"])
 def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, tmp_path, monkeypatch, refusal):
     pp = _load()
     deployment = tmp_path / "deployment"
@@ -2902,6 +2902,7 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
     config = {"review": {"fallback_panel": {
         "worker_launcher": {"claude": ""},
         "host_sandbox": {"claude_version": "fixture-version", "read_paths": ["/usr"],
+                         "command_dirs": ["/usr/bin"],
                          "control_root": str(tmp_path / "controls"), "max_control_path_bytes": 1024},
     }}}
     _git(deployment, "init", "-q")
@@ -2946,6 +2947,8 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
             policy["read_paths"] = ["/"]
         elif refusal == "unmanaged-control":
             config["scratch"]["roots"] = []
+        elif refusal == "command-dirs":
+            policy["command_dirs"] = ["."]
         elif refusal == "long-control":
             policy["max_control_path_bytes"] = 1
         else:
@@ -2970,6 +2973,8 @@ def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, 
     assert "--bare" in command and "--restricted" in command
     assert command[command.index("--tools") + 1] == "Bash"
     assert kwargs["input"].startswith(b"# Cockpit sandboxed host dispatch")
+    assert kwargs["env"]["HOME"] == kwargs["cwd"]
+    assert kwargs["env"]["PATH"] == "/usr/bin"
     assert Path(kwargs["cwd"]).is_dir()
     Path(kwargs["cwd"]).rmdir()
 
