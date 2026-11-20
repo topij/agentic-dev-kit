@@ -359,9 +359,9 @@ acceptance record and its limits. The model replies were scripted; lane merges r
 On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
-▶ Next: continue step 3d with the next subprocess caller. The watcher (`_gh`) and
-`session_cleanup.py`'s `git()` now run through `lib/subprocess_runner.py`, which also
-carries the `GIT_*` policy (`without_git_environment`). #1219's item 1, the per-item
+▶ Next: continue step 3d with the next subprocess caller. The watcher (`_gh`),
+`session_cleanup.py`'s `git()` and `sweep_scratch.py`'s Git calls now run through
+`lib/subprocess_runner.py`, which also carries the `GIT_*` policy (`without_git_environment`). #1219's item 1, the per-item
 timeout, holds on the runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 (unpinned guards, untested helpers), which that move did not take. #1172 is the
 process-group stop half of 3d. For #1025, the kit's worker

@@ -69,8 +69,19 @@ def git(repo: Path, *args: str, timeout: int = 30) -> str:
     """Run Git on ``repo`` through the shared runner, without inherited ``GIT_*``.
 
     A non-zero exit is a ``sweep.ConfigError``. A timeout stays a
-    ``CommandTimedOut`` and a Git that cannot start a ``CommandUnavailable``, so
-    preview and apply can keep the one item and continue (#1219).
+    ``CommandTimedOut`` and a Git that cannot start a ``CommandUnavailable``, and
+    the callers treat the two differently (#1219, #1485):
+
+    - preview keeps a worktree when a call here times out during its inspection
+      and continues, but a Git that cannot start there ends the whole preview as
+      an error, and so ends apply too, which begins with a preview;
+    - apply's per-item recheck and removal keep the one worktree on either error
+      and continue with the rest.
+
+    The inspection's registration and store reads run Git through
+    ``sweep_scratch`` instead, which reports any failure there, a timeout
+    included, as a ``sweep.ConfigError``: it ends preview as an error and keeps
+    the one worktree in apply's recheck.
     """
     try:
         output = run_stdout(["git", "-C", str(repo), *args], cwd=None, timeout=timeout,

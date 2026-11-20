@@ -160,7 +160,6 @@ import re
 import shutil
 import stat
 import string
-import subprocess
 import sys
 import time
 import uuid
@@ -169,6 +168,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
+from subprocess_runner import (  # noqa: E402
+    CommandError,
+    CommandFailed,
+    CommandTimedOut,
+    CommandUnavailable,
+    run_stdout,
+    without_git_environment,
+)
 
 LIVE = "live-worktree"
 GRACE = "in-grace"
@@ -184,6 +191,10 @@ _AGE_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
 # Read cap for a `.git` file. A real one is a single `gitdir:` line; anything
 # larger is not one, and is treated as unparseable rather than read whole.
 _GIT_FILE_MAX = 4096
+# Seconds each Git call may run before it is killed. Every call here reads local
+# metadata, so a Git still running after this is hung, and the sweep fails closed
+# instead of waiting on it. The same value as session_cleanup.git()'s default.
+GIT_TIMEOUT = 30
 
 
 class ConfigError(Exception):
@@ -429,29 +440,30 @@ def validate_root(path: str, guarded: list[str] | None = None) -> tuple[str, str
 # --------------------------------------------------------------------------- #
 
 
+def _git(*args: str) -> str:
+    """Git's stdout through the shared runner, killed after ``GIT_TIMEOUT``.
+
+    Run from a git hook, an inherited GIT_DIR or GIT_WORK_TREE would point
+    `git -C` at another repository, so Git runs without any ``GIT_*`` variable.
+    Raises the runner's ``CommandError`` family; each caller translates it.
+    """
+    return run_stdout(["git", *args], cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment())
+
+
 def registered_worktrees(repos: list[Path]) -> list[str]:
     """Real paths of every worktree each repo registers. Any failure raises ConfigError."""
     found: list[str] = []
-    # Run from a git hook, an inherited GIT_DIR or GIT_WORK_TREE would point
-    # `git -C` at another repository's registrations.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     for repo in repos:
         try:
-            result = subprocess.run(
-                ["git", "-C", str(repo), "worktree", "list", "--porcelain", "-z"],
-                capture_output=True,
-                text=True,
-                check=False,
-                env=env,
-            )
-        except OSError as exc:
-            raise ConfigError(f"cannot run git for {repo}: {exc}") from exc
-        if result.returncode != 0:
-            raise ConfigError(
-                f"git worktree list failed for {repo}: {result.stderr.strip() or result.returncode}"
-            )
+            output = _git("-C", str(repo), "worktree", "list", "--porcelain", "-z")
+        except CommandUnavailable as exc:
+            raise ConfigError(f"cannot run git for {repo}: {exc.__cause__}") from exc
+        except CommandFailed as exc:
+            raise ConfigError(f"git worktree list failed for {repo}: {exc.stderr or exc.returncode}") from exc
+        except CommandTimedOut as exc:
+            raise ConfigError(str(exc)) from exc
         # -z: NUL-terminated fields, so a path holding a newline stays whole.
-        for line in result.stdout.split("\0"):
+        for line in output.split("\0"):
             if line.startswith("worktree "):
                 found.append(os.path.realpath(line[len("worktree "):]))
     if not found:
@@ -463,21 +475,21 @@ def registered_worktrees(repos: list[Path]) -> list[str]:
 _ALTERNATES_MAX = 16
 
 
-def _git_common_dir(worktree: str, env: dict[str, str]) -> str:
+def _git_common_dir(worktree: str) -> str:
     try:
-        result = subprocess.run(
-            ["git", "-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir"],
-            capture_output=True,
-            text=True,
-            check=False,
-            env=env,
-        )
-    except OSError as exc:
-        raise ConfigError(f"cannot run git for {worktree}: {exc}") from exc
-    path = result.stdout.strip()
-    if result.returncode != 0 or not os.path.isabs(path):
+        path = _git("-C", worktree, "rev-parse", "--path-format=absolute", "--git-common-dir").strip()
+    except CommandUnavailable as exc:
+        raise ConfigError(f"cannot run git for {worktree}: {exc.__cause__}") from exc
+    except CommandTimedOut as exc:
+        raise ConfigError(str(exc)) from exc
+    except CommandFailed as exc:
+        path, detail = "", exc.stderr or exc.returncode
+    else:
+        # Git exited 0; the runner returns no stderr then, so there is none to quote.
+        detail = 0
+    if not os.path.isabs(path):
         raise ConfigError(
-            f"cannot read the git dir of {worktree}: {result.stderr.strip() or result.returncode}"
+            f"cannot read the git dir of {worktree}: {detail}"
             " (if its directory or .git was deleted, `git worktree prune` clears the"
             " registration; if its .git names a moved git dir, `git worktree repair`)"
         )
@@ -527,7 +539,6 @@ def repository_stores(worktrees: list[str]) -> list[str]:
     repository. A repository the config does not name is not read (see the limits
     in the module docstring). Any failure raises ConfigError.
     """
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     stores: list[str] = []
     pending: list[tuple[str, int]] = []
     for worktree in worktrees:
@@ -542,7 +553,7 @@ def repository_stores(worktrees: list[str]) -> list[str]:
             continue
         if state == "unknown":
             raise ConfigError(f"cannot stat the registered worktree {worktree}")
-        common = _git_common_dir(worktree, env)
+        common = _git_common_dir(worktree)
         if common not in stores:
             stores.append(common)
             pending.append((os.path.join(common, "objects"), 0))
@@ -714,24 +725,19 @@ def _is_bare(git_dir: str) -> bool:
     """True only when git reads ``core.bare = true`` from the git dir's own config.
 
     A bare repository has no main work tree, so nothing outside can point at it
-    as one. Any failure answers False, which keeps the git dir. ``--file`` does not
-    follow ``include.path`` and ignores GIT_CONFIG_* overrides; stripping GIT_* is
-    defensive, as in the other git calls here.
+    as one. Any failure answers False, which keeps the git dir: a Git that exits
+    non-zero (``--get`` exits 1 for an unset key), cannot start, or runs past
+    ``GIT_TIMEOUT``. ``--file`` does not follow ``include.path`` and ignores
+    GIT_CONFIG_* overrides; stripping GIT_* is defensive, as in the other git calls here.
     """
     config = os.path.join(git_dir, "config")
     try:
         if not stat.S_ISREG(os.lstat(config).st_mode):
             return False  # never read a FIFO or follow a link
-        result = subprocess.run(
-            ["git", "config", "--file", config, "--type=bool", "--get", "core.bare"],
-            capture_output=True,
-            text=True,
-            check=False,
-            env={k: v for k, v in os.environ.items() if not k.startswith("GIT_")},
-        )
-    except OSError:
+        output = _git("config", "--file", config, "--type=bool", "--get", "core.bare")
+    except (OSError, CommandError):
         return False
-    return result.returncode == 0 and result.stdout.strip() == "true"
+    return output.strip() == "true"
 
 
 def _detached_reason(git_dir: str, entry: str, inner: set[str]) -> str | None:
