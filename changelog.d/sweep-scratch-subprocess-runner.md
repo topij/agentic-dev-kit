@@ -13,5 +13,6 @@ git dir exits 2, an act-time re-read keeps the entry, and a git dir that only it
 `core.bare` setting could clear is kept. The error names the command and the bound
 (`git -C <repo> worktree list --porcelain -z timed out after 30s`). The messages for
 a Git that fails or cannot start are unchanged. One message changed: when Git exits 0
-but prints no absolute path for `--git-common-dir`, the error now ends in `0` where it
-used to quote Git's stderr, which the runner does not return on success.
+but prints no absolute path for `--git-common-dir`, the error now ends in `0` even if
+Git wrote to stderr, which it used to quote. The runner does not return stderr on
+success. With no stderr, the message is as before.
