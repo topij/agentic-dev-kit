@@ -916,7 +916,7 @@
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
-      "sha256": "b769178994eb955742edce4d9080e7db924b13ca7bc17088d8a461a216e0b741"
+      "sha256": "68285f82cb040faf6530ba469b056eee2e43426318fc9c5441195ac5c19b3c09"
     },
     "scripts/tests/test_systemize_artifacts.py": {
       "role": "test",

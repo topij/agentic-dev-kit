@@ -805,7 +805,13 @@ def test_a_git_that_cannot_start_keeps_the_former_messages(base: Path, monkeypat
     assert sweep._is_bare(git_dir) is False
 
 
-def test_a_failing_or_misanswering_git_keeps_the_former_messages(base: Path, monkeypatch):
+def test_failing_git_keeps_its_messages_and_a_misanswer_reports_0(base: Path, monkeypatch):
+    """A Git that exits non-zero gets the same messages as before the runner.
+
+    One message changed: a Git that exits 0 but prints no absolute path for
+    --git-common-dir now reports 0, even with stderr present, because the runner
+    returns no stderr on success. The base quoted that stderr.
+    """
     worktree = base / "wt"
     worktree.mkdir()
     hint = (" (if its directory or .git was deleted, `git worktree prune` clears the"
@@ -817,10 +823,31 @@ def test_a_failing_or_misanswering_git_keeps_the_former_messages(base: Path, mon
     with pytest.raises(sweep.ConfigError) as common:
         sweep.repository_stores([str(worktree)])
     assert str(common.value) == f"cannot read the git dir of {worktree}: fatal: broken{hint}"
-    (base / "fake-bin" / "git").write_text("#!/bin/sh\necho relative/path\n")
+    (base / "fake-bin" / "git").write_text("#!/bin/sh\necho 'warning: noisy' >&2\necho relative/path\n")
     with pytest.raises(sweep.ConfigError) as relative:
         sweep.repository_stores([str(worktree)])
     assert str(relative.value) == f"cannot read the git dir of {worktree}: 0{hint}"
+
+
+@pytest.mark.parametrize("caller", ["repository_stores", "_is_bare"])
+def test_each_git_caller_runs_without_inherited_git_environment(base: Path, monkeypatch, caller):
+    """Every _git call site drops GIT_*: one that bypasses _git returns the leaked answer."""
+    worktree = base / "wt"
+    worktree.mkdir()
+    git_dir = _bare_git_dir(base)
+    clean, leaked = base / "clean.git", base / "leaked.git"
+    # With any GIT_* inherited the fake answers as a leaked GIT_DIR would: another
+    # repository's git dir, and "not bare".
+    _fake_git(base, monkeypatch,
+              f"if env | grep -q '^GIT_'; then printf '%s\\n' '{leaked}' false; "
+              f"else printf '%s\\n' '{clean}' true; fi | "
+              "if [ \"$1\" = config ]; then tail -n 1; else head -n 1; fi")
+    monkeypatch.setenv("GIT_DIR", str(base / "elsewhere.git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(base / "elsewhere"))
+    if caller == "repository_stores":
+        assert sweep.repository_stores([str(worktree)]) == [os.path.realpath(clean)]
+    else:
+        assert sweep._is_bare(git_dir) is True
 
 
 def test_git_runs_without_inherited_git_environment(base: Path, monkeypatch):
