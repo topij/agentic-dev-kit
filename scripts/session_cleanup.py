@@ -37,6 +37,14 @@ import sweep_scratch as sweep
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
+from subprocess_runner import (  # noqa: E402
+    CommandError,
+    CommandFailed,
+    CommandTimedOut,
+    CommandUnavailable,
+    run_stdout,
+    without_git_environment,
+)
 
 SCHEMA = "devkit-cleanup-session/2"
 # Schema 1 bound (st_dev, st_ino), which macOS renumbers across reboots (#1253).
@@ -58,12 +66,18 @@ def canonical(path: Path) -> Path:
 
 
 def git(repo: Path, *args: str, timeout: int = 30) -> str:
-    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
-    result = subprocess.run(["git", "-C", str(repo), *args], env=env,
-                            capture_output=True, text=True, timeout=timeout)
-    if result.returncode:
-        raise sweep.ConfigError(f"Git identity unavailable: {result.stderr.strip()}")
-    return result.stdout.removesuffix("\n")
+    """Run Git on ``repo`` through the shared runner, without inherited ``GIT_*``.
+
+    A non-zero exit is a ``sweep.ConfigError``. A timeout stays a
+    ``CommandTimedOut`` and a Git that cannot start a ``CommandUnavailable``, so
+    preview and apply can keep the one item and continue (#1219).
+    """
+    try:
+        output = run_stdout(["git", "-C", str(repo), *args], cwd=None, timeout=timeout,
+                            env=without_git_environment())
+    except CommandFailed as exc:
+        raise sweep.ConfigError(f"Git identity unavailable: {exc.stderr}") from exc
+    return output.removesuffix("\n")
 
 
 def read_bytes(path: Path, limit: int = LIMIT) -> bytes:
@@ -970,7 +984,7 @@ class Registry:
             else:
                 try:
                     reason = self.worktree_reason(worktree)
-                except subprocess.TimeoutExpired as exc:
+                except CommandTimedOut as exc:
                     reason = f"worktree inspection timed out: {exc}"
                 if reason:
                     action = "kept"
@@ -1186,7 +1200,7 @@ class Registry:
                     if active_users([worktree["path"]], record["pids"]):
                         raise sweep.ConfigError("worktree acquired an active user")
                     git(self.repo, "worktree", "remove", worktree["path"], timeout=300)
-                except (OSError, sweep.ConfigError, subprocess.TimeoutExpired) as exc:
+                except (OSError, sweep.ConfigError, CommandTimedOut, CommandUnavailable) as exc:
                     result.update(action="kept", reason=str(exc))
                 else:
                     result.update(action="removed", reason=None)
@@ -1398,7 +1412,8 @@ def main(argv: list[str] | None = None) -> int:
                     result = registry.apply(record, args.approve, args.processes_finished)
         print(json.dumps(result, indent=2))
         return 1 if isinstance(result, dict) and args.action == "apply" and not result["complete"] else 0
-    except (OSError, ValueError, KeyError, TypeError, sweep.ConfigError, sweep.Refused, subprocess.TimeoutExpired) as exc:
+    except (OSError, ValueError, KeyError, TypeError, sweep.ConfigError, sweep.Refused, subprocess.TimeoutExpired,
+            CommandError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 

@@ -470,10 +470,11 @@
     },
     "scripts/lib/subprocess_runner.py": {
       "required_by": [
-        "scripts/pr_watch.py"
+        "scripts/pr_watch.py",
+        "scripts/session_cleanup.py"
       ],
       "role": "engine",
-      "sha256": "41c651ed24a3a9724b8e281c1653267627688285b3a3b1067bfab7a42452d1ea"
+      "sha256": "ad2d10cb78e1c9c5e385d5bf4a05b3d18d16e764f499a20db92cdd8c44d8e484"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -726,7 +727,7 @@
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
-      "sha256": "5ff3a905ec6a51fe85837bb0e5e9c13efe41999a8ba7aa267ad8c7877b72cbbb"
+      "sha256": "712fceb79f928fa913fa283a904aa733e61e3fdcae615ab6a750d3eda25c4cd0"
     },
     "scripts/skill_routing_eval.py": {
       "role": "repo-only",
@@ -902,7 +903,7 @@
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
-      "sha256": "b295b571015f330f545376664a48cb8b70ff4428938a2a989cfa334b2768dd5d"
+      "sha256": "ddd33ed476851a5a666654f3988614c92a2c282a0c03b9d29fc7df1b6c224e34"
     },
     "scripts/tests/test_skill_routing_eval.py": {
       "role": "repo-only",
