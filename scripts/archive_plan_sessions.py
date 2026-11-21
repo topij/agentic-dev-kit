@@ -576,8 +576,9 @@ def _recovery_hint(target: Path) -> str:
         "Inspect the named documents and any saved copies before restoring content."
     )
     # Each Git read is bounded by GIT_TIMEOUT and runs without inherited ``GIT_*``
-    # variables: a hook's GIT_DIR or GIT_INDEX_FILE would otherwise answer for
-    # another repository than the one holding ``target``. Any failure, a timeout
+    # variables: an inherited GIT_DIR, GIT_WORK_TREE or GIT_OBJECT_DIRECTORY
+    # would otherwise answer for another repository or tree than the one
+    # holding ``target``. Any failure, a timeout
     # included, gives the fallback, which offers no command.
     env = without_git_environment() | {"GIT_NO_LAZY_FETCH": "1"}
     try:
@@ -603,9 +604,10 @@ def _recovery_hint(target: Path) -> str:
         )
         if kind.strip() != "blob":
             return fallback
-    # The runner reads text: a path whose bytes do not decode raises ValueError,
-    # and one holding a carriage return no longer compares equal, so both give
-    # the fallback too.
+    # The runner reads text in the locale's encoding. A path whose bytes that
+    # encoding cannot decode raises ValueError; one it decodes to other text than
+    # the filesystem path (a carriage return, or a non-UTF-8 locale) no longer
+    # compares equal. Both give the fallback.
     except (OSError, ValueError, CommandError, KeyboardInterrupt):
         return fallback
     command = shlex.join(["git", "-C", str(root), "show", object_name])

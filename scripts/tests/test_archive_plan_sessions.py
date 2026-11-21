@@ -53,15 +53,19 @@ def _printed_command(hint: str) -> str:
     return commands[0]
 
 
-@pytest.mark.parametrize("variable", ["GIT_DIR", "GIT_INDEX_FILE"])
+# Each of these, inherited, made the base's reads answer for the other repository
+# or tree, so the hint fell back for a committed handoff. GIT_INDEX_FILE is not
+# here: none of the three reads consults the index.
+@pytest.mark.parametrize("variable", ["GIT_DIR", "GIT_WORK_TREE", "GIT_OBJECT_DIRECTORY"])
 def test_an_inherited_git_variable_does_not_redirect_the_hint(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, variable: str,
 ) -> None:
     archive = _load_archive()
     document = _committed_repo(tmp_path / "target", "docs/handoff.md", "Committed handoff.\n")
     other = _committed_repo(tmp_path / "other", "unrelated.md", "Unrelated.\n")
-    value = str(other / ".git") if variable == "GIT_DIR" else str(other / ".git" / "index")
-    monkeypatch.setenv(variable, value)
+    value = {"GIT_DIR": other / ".git", "GIT_WORK_TREE": other,
+             "GIT_OBJECT_DIRECTORY": other / ".git" / "objects"}[variable]
+    monkeypatch.setenv(variable, str(value))
 
     hint = archive._recovery_hint(document)
 
@@ -133,3 +137,17 @@ def test_each_read_uses_the_module_timeout(
         assert env is not None and env.get("GIT_NO_LAZY_FETCH") == "1"
         assert not {k for k in env if k.startswith("GIT_")} - {"GIT_NO_LAZY_FETCH"}
 
+
+def test_a_path_holding_a_carriage_return_gives_the_fallback(tmp_path: Path) -> None:
+    """Text-mode reads translate the carriage return, so the paths no longer match."""
+    archive = _load_archive()
+    document = _committed_repo(tmp_path / "target", "docs/hand\roff.md", "Committed handoff.\n")
+
+    hint = archive._recovery_hint(document)
+
+    assert FALLBACK in hint
+    assert not any(line.startswith("    git ") for line in hint.splitlines())
+
+
+def test_the_recovery_hint_bound_is_five_seconds() -> None:
+    assert _load_archive().GIT_TIMEOUT == 5

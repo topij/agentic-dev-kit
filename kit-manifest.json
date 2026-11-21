@@ -207,7 +207,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "b670f05ecef6d5a498e6392d54298ae1360da5bfd77cea9c8a94ee98cbf643f6"
+      "sha256": "9f80cd35ff4e18a86fdc7e93735443d851683d269ba665e0437b40eba8f1407f"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -793,7 +793,7 @@
     },
     "scripts/tests/test_archive_plan_sessions.py": {
       "role": "test",
-      "sha256": "9cfb4f93fe90707609d9b62d781a39df66d44a2f79a7899d964979e1c16386b6"
+      "sha256": "526722f49ac307e58f49488a4d19d163c02a959262a718b0f975885f7952826b"
     },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
