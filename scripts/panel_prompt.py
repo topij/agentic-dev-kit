@@ -42,7 +42,7 @@ Four properties, each earned by a real failure:
    no free text at all (#1163).
 
 By default this assembles the prompt. With ``--launch``, a separate trusted installation
-delivers it on stdin to its configured worker launcher. It never builds worktrees or parses reports:
+delivers it on stdin through the trusted host sandbox or configured worker launcher. It never builds worktrees or parses reports:
 ``--lenses`` staying self-reported is #32, and this is what a real check would build on.
 
 With ``--verifier`` it assembles the verifier's prompt instead (#1155): the lens reports
@@ -90,6 +90,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import stat
 import subprocess
 import sys
@@ -1450,6 +1451,99 @@ def build(args: argparse.Namespace, *, worker_config: dict | None = None) -> str
 _WORKER_COMPUTE_VALUE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
+def launch_host_claude(command: list[str], prompt: str, config: dict,
+                       review_tree: Path, trusted: Path, target: Path) -> int:
+    """Run the pinned Claude Bash sandbox with cockpit-owned settings."""
+    policy = get(config, "review.fallback_panel.host_sandbox", {})
+    if not isinstance(policy, dict):
+        raise PromptError("host_sandbox must be a mapping")
+    version = policy.get("claude_version")
+    read_paths = policy.get("read_paths")
+    if sys.platform != "darwin" or not isinstance(version, str) or not version:
+        raise PromptError("host sandbox needs macOS and a configured claude_version")
+    if not isinstance(read_paths, list) or not read_paths or any(
+        not isinstance(path, str) or not Path(path).is_absolute() for path in read_paths
+    ):
+        raise PromptError("host sandbox needs absolute read_paths in the trusted configuration")
+    for path in read_paths:
+        tool_path = Path(path).resolve()
+        if any(boundary.is_relative_to(tool_path)
+               for boundary in (Path.home(), trusted, target, review_tree.parent)):
+            raise PromptError("host sandbox tool paths must exclude home, source and review ancestors")
+    command_dirs = policy.get("command_dirs")
+    if (not isinstance(command_dirs, list) or not command_dirs
+            or any(not isinstance(path, str) or not Path(path).is_absolute()
+                   or not any(Path(path).resolve().is_relative_to(Path(tool).resolve())
+                              for tool in read_paths) for path in command_dirs)):
+        raise PromptError("host sandbox command_dirs must be absolute directories under read_paths")
+    executable = shutil.which(command[0])
+    if executable is None:
+        raise PromptError("Claude executable is unavailable")
+    executable = Path(executable).resolve(strict=True)
+    round_path = review_tree.parent
+    if (trusted.is_relative_to(round_path) or target.is_relative_to(round_path)
+            or executable.is_relative_to(round_path) or executable.is_relative_to(target)):
+        raise PromptError("host sandbox round must exclude the trusted installation, target and runtime")
+    observed = subprocess.run([str(executable), "--version"], capture_output=True,
+                              text=True, timeout=30, check=True)
+    if observed.stdout.strip() != f"{version} (Claude Code)":
+        raise PromptError("Claude version differs from host_sandbox.claude_version; repeat acceptance probes")
+    user_temp = subprocess.run(["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"],
+                               capture_output=True, text=True, timeout=30, check=True).stdout.strip()
+    if not user_temp or not Path(user_temp).is_absolute():
+        raise PromptError("macOS user temporary directory is unavailable")
+    user_temp = Path(user_temp).resolve()
+    if round_path.is_relative_to(user_temp):
+        raise PromptError("host sandbox round must be outside the macOS user temporary directory")
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise PromptError("host sandbox needs ANTHROPIC_API_KEY for the bare Claude client")
+    # Only the model transport receives a secret. Bash loses it before execution.
+    env = {"PATH": os.pathsep.join(command_dirs),
+           "ANTHROPIC_API_KEY": api_key, "GIT_CONFIG_GLOBAL": "/dev/null",
+           "GIT_CONFIG_NOSYSTEM": "1", "GIT_ALLOW_PROTOCOL": "file"}
+    control_template = policy.get("control_root")
+    roots = get(config, "scratch.roots", [])
+    if (not isinstance(roots, list) or not all(isinstance(root, str) for root in roots)
+            or not isinstance(control_template, str) or control_template not in roots):
+        raise PromptError("host_sandbox.control_root must name a configured scratch root")
+    control_root = Path(sweep_scratch.expand_root(control_template, root=trusted))
+    if not control_root.is_absolute():
+        raise PromptError("host sandbox control_root must be absolute")
+    control_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    settings = sweep_scratch.Settings(roots=roots, grace_seconds=0, repos=[trusted, target])
+    try:
+        sweep_scratch._round_root(str(control_root), settings, trusted)
+    except sweep_scratch.ConfigError as exc:
+        raise PromptError(str(exc)) from exc
+    control = tempfile.mkdtemp(prefix="h-", dir=control_root)
+    print(f"host sandbox control directory: {control}", file=sys.stderr)
+    limit = policy.get("max_control_path_bytes")
+    if type(limit) is not int or limit <= 0 or len(os.fsencode(control)) > limit:
+        os.rmdir(control)
+        raise PromptError("host sandbox control path exceeds max_control_path_bytes; shorten control_root")
+    env.update(HOME=control, TMPDIR=control, CLAUDE_CODE_TMPDIR=control)
+    settings = {
+        "disableAllHooks": True,
+        "sandbox": {
+            "enabled": True, "failIfUnavailable": True,
+            "allowUnsandboxedCommands": False, "excludedCommands": [],
+            "network": {"allowedDomains": [], "deniedDomains": ["*"],
+                        "allowUnixSockets": [], "allowAllUnixSockets": False,
+                        "allowLocalBinding": False},
+            "filesystem": {
+                "denyRead": ["/"], "allowRead": [*read_paths, str(round_path), control],
+                "denyWrite": [str(user_temp)],
+            },
+            "credentials": {"envVars": [{"name": "ANTHROPIC_API_KEY", "mode": "deny"}]},
+        },
+    }
+    command = [str(executable), *command[1:], "--settings", json.dumps(settings),
+               "--add-dir", str(round_path)]
+    return subprocess.run(command, input=prompt.encode(), cwd=control, env=env,
+                          check=False).returncode
+
+
 def launch_worker(args: argparse.Namespace) -> int:
     """Dispatch only through the deployment that owns this running engine.
 
@@ -1468,12 +1562,13 @@ def launch_worker(args: argparse.Namespace) -> int:
         raise PromptError("--launch supports claude or codex")
     config = load_config(trusted / "config/dev-model.yaml", overlay=False)
     configured = get(config, f"review.fallback_panel.worker_launcher.{runtime}", None)
-    if not isinstance(configured, str) or not Path(configured).is_absolute():
+    host_sandbox = runtime == "claude" and configured == "" and args.trusted_source
+    if not host_sandbox and (not isinstance(configured, str) or not Path(configured).is_absolute()):
         raise PromptError(f"configure an absolute worker_launcher.{runtime} in the trusted installation")
-    launcher = Path(configured).resolve(strict=True)
+    launcher = None if host_sandbox else Path(configured).resolve(strict=True)
     scratch_arg = _override("--scratch", args.scratch)
     review_tree = Path(scratch_arg).resolve() if scratch_arg is not None else None
-    if (launcher.is_relative_to(target)
+    if launcher is not None and (launcher.is_relative_to(target)
             or (review_tree is not None and launcher.is_relative_to(review_tree.parent))
             or not launcher.is_file() or not os.access(launcher, os.X_OK)):
         raise PromptError("worker launcher must be executable and outside the candidate checkout and review round")
@@ -1513,6 +1608,17 @@ def launch_worker(args: argparse.Namespace) -> int:
         else:
             command.append(f"--{key}={value}")
     assembled = build(args, worker_config=config)
+    if host_sandbox:
+        prompt = (
+            "# Cockpit sandboxed host dispatch\n\n"
+            "Use only native Bash inside the strict Claude sandbox. The cockpit has "
+            "attested that this source is trusted. Network and host-data access are "
+            "denied. The runtime control directory is disposable. Keep evidence and "
+            "offline test files in the allocated round. Use explicit temporary-file templates within "
+            f"{review_tree.parent}. Bare macOS mktemp is refused. "
+            "Report unavailable dependencies. Do not retry outside the sandbox.\n\n" + assembled
+        )
+        return launch_host_claude(command, prompt, config, review_tree, trusted, target)
     shell = "Bash" if runtime == "claude" else "exec_command"
     prompt = (
         "# Cockpit worker dispatch\n\n"
@@ -1541,8 +1647,10 @@ def main(argv: list[str] | None = None) -> int:
     # `or REPO_ROOT` fallback silently never fires and the review retargets at cwd.
     # The string is validated first, then converted.
     parser.add_argument("--root", default=None, help="repo under review (default: this one)")
+    parser.add_argument("--trusted-source", action="store_true",
+                        help="cockpit attestation of trusted source; allows the configured Claude host sandbox")
     parser.add_argument("--launch", action="store_true",
-                        help="send the assembled prompt to the trusted installation's isolated worker")
+                        help="dispatch through the trusted installation's configured review boundary")
     # Not argparse-required: a verifier prompt takes no lens. `build` and the
     # agent-definition path each require it where it is needed.
     parser.add_argument("--lens", default=None, help="lens name; must be in the configured roster")
@@ -1658,6 +1766,7 @@ def main(argv: list[str] | None = None) -> int:
                     ("--last-reviewed", args.last_reviewed),
                     ("--verify-command", args.verify_command),
                     ("--launch", args.launch or None),
+                    ("--trusted-source", args.trusted_source or None),
                     ("--verifier", args.verifier or None),
                     ("--lens-report", args.lens_report or None),
                     ("--preflight-rev", args.preflight_rev),
@@ -1677,8 +1786,8 @@ def main(argv: list[str] | None = None) -> int:
         elif args.launch:
             try:
                 return launch_worker(args)
-            except (OSError, ValueError) as exc:
-                raise PromptError(f"worker launch failed: {exc}") from exc
+            except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                raise PromptError(f"review launch failed: {exc}") from exc
         else:
             sys.stdout.write(build(args))
     except PromptError as exc:

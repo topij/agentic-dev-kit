@@ -3108,7 +3108,7 @@ You are the **{lens}** lens of the fallback review panel
 (`docs/agentic-dev-kit/fallback-review-panel.md`). You did NOT write the change under
 review. Your launch prompt carries the contract, the revision, the diff, and your
 focus; follow it exactly, and report what you reviewed before any finding.
-Use Bash only in the credential-free reviewer worker supplied by the cockpit.
+Use Bash only in the strict host sandbox or credential-free worker established by the cockpit.
 If the cockpit has not established that boundary, stop before the first command.
 """
     return "\n".join(front) + "\n" + body

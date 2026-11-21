@@ -53,8 +53,8 @@ configured and unavailable, the same pass substitutes for it. The
 **panel** is `review.fallback_panel` — read
 [`../fallback-review-panel.md`](../fallback-review-panel.md) before running it.
 Dispatch lenses and verifiers with the trusted deployment's `panel_prompt.py --launch`
-and its credential-free worker. An unavailable worker or a failed isolation check
-leaves review pending.
+and the execution boundary established under *Credential-free reviewer execution*.
+An unavailable boundary or a failed isolation check leaves review pending.
 `review.fallback_commands` is the degraded one-lens mode for a runtime that
 cannot isolate a reviewer.
 

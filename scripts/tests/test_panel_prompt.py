@@ -34,6 +34,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -2891,3 +2892,104 @@ def test_launch_refuses_candidate_authority_and_unconfigured_worker(repo, tmp_pa
     }}}))
     assert pp.main(argv) == 2
     assert "outside the candidate checkout" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("refusal", [None, "version", "platform", "api-key", "broad-reads",
+                                    "unmanaged-control", "long-control", "command-dirs", "malformed-roots"])
+def test_host_launch_requires_trusted_source_and_scrubs_shell_credentials(repo, tmp_path, monkeypatch, refusal):
+    pp = _load()
+    deployment = tmp_path / "deployment"
+    (deployment / "config").mkdir(parents=True)
+    config = {"review": {"fallback_panel": {
+        "worker_launcher": {"claude": ""},
+        "host_sandbox": {"claude_version": "fixture-version", "read_paths": ["/usr"],
+                         "command_dirs": ["/usr/bin"],
+                         "control_root": str(tmp_path / "controls"), "max_control_path_bytes": 1024},
+    }}}
+    _git(deployment, "init", "-q")
+    config["scratch"] = {"roots": [str(tmp_path / "controls")]}
+    (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
+    monkeypatch.setattr(pp, "REPO_ROOT", deployment)
+    # Limit the pretend OS to the launcher; scratch identities use the real host.
+    monkeypatch.setattr(pp, "sys", SimpleNamespace(
+        platform="darwin", stderr=sys.stderr, stdout=sys.stdout))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-model-key")
+    monkeypatch.setenv("GITHUB_TOKEN", "synthetic-forge-key")
+    base, head = _revs(repo)
+    tree = _detached_tree(repo, repo.parent, head)
+    executable = deployment / "claude"
+    executable.touch()
+    monkeypatch.setattr(pp.shutil, "which", lambda _: str(executable))
+    real_run = pp.subprocess.run
+    observed = []
+
+    def run(command, **kwargs):
+        if command == [str(executable), "--version"]:
+            return subprocess.CompletedProcess(command, 0, "fixture-version (Claude Code)\n")
+        if command == ["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"]:
+            return subprocess.CompletedProcess(command, 0, str(tmp_path / "os-temp") + "\n")
+        if command[0] == str(executable):
+            observed.append((command, kwargs))
+            return subprocess.CompletedProcess(command, 19)
+        return real_run(command, **kwargs)
+
+    monkeypatch.setattr(pp.subprocess, "run", run)
+    argv = ["--launch", "--root", str(repo), "--runtime", "claude", "--head", head,
+            "--base", base, "--scratch", tree, "--lens", "correctness", "--branch", "fixture"]
+    assert pp.main(argv) == 2
+    assert observed == []
+    if refusal is not None:
+        policy = config["review"]["fallback_panel"]["host_sandbox"]
+        if refusal == "version":
+            policy["claude_version"] = "unprobed-version"
+        elif refusal == "platform":
+            monkeypatch.setattr(pp.sys, "platform", "linux")
+        elif refusal == "api-key":
+            monkeypatch.delenv("ANTHROPIC_API_KEY")
+        elif refusal == "broad-reads":
+            policy["read_paths"] = ["/"]
+        elif refusal == "unmanaged-control":
+            config["scratch"]["roots"] = []
+        elif refusal == "command-dirs":
+            policy["command_dirs"] = ["."]
+        elif refusal == "long-control":
+            policy["max_control_path_bytes"] = 1
+        else:
+            config["scratch"]["roots"] = None
+        (deployment / "config/dev-model.yaml").write_text(yaml.safe_dump(config))
+        assert pp.main([*argv, "--trusted-source"]) == 2
+        assert observed == []
+        return
+    assert pp.main([*argv, "--trusted-source"]) == 19
+    command, kwargs = observed[0]
+    settings = json.loads(command[command.index("--settings") + 1])
+    sandbox = settings["sandbox"]
+    assert sandbox["enabled"] and sandbox["failIfUnavailable"]
+    assert sandbox["allowUnsandboxedCommands"] is False
+    assert sandbox["excludedCommands"] == []
+    assert sandbox["network"]["deniedDomains"] == ["*"]
+    assert sandbox["filesystem"]["denyRead"] == ["/"]
+    assert sandbox["filesystem"]["allowRead"] == ["/usr", str(Path(tree).parent), kwargs["cwd"]]
+    assert sandbox["credentials"]["envVars"] == [{"name": "ANTHROPIC_API_KEY", "mode": "deny"}]
+    assert "GITHUB_TOKEN" not in kwargs["env"]
+    assert kwargs["env"]["ANTHROPIC_API_KEY"] == "synthetic-model-key"
+    assert "--bare" in command and "--restricted" in command
+    assert command[command.index("--tools") + 1] == "Bash"
+    assert kwargs["input"].startswith(b"# Cockpit sandboxed host dispatch")
+    assert kwargs["env"]["HOME"] == kwargs["cwd"]
+    assert kwargs["env"]["PATH"] == "/usr/bin"
+    assert Path(kwargs["cwd"]).is_dir()
+    Path(kwargs["cwd"]).rmdir()
+
+
+@pytest.mark.parametrize("runtime", ["codex", "claude"])
+def test_trusted_source_keeps_configured_worker_dispatch(repo, tmp_path, monkeypatch, runtime):
+    # Reuse the executable worker fixture, with the host attestation present.
+    pp = _load()
+    real_main = pp.main
+
+    def main(argv):
+        return real_main([*argv, "--trusted-source"])
+
+    monkeypatch.setattr(pp, "main", main)
+    test_launch_delivers_prompt_to_trusted_worker(repo, tmp_path, monkeypatch, runtime, False, False)

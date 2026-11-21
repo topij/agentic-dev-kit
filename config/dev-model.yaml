@@ -466,6 +466,34 @@ review:
     # Trusted cockpit deployment only. Each absolute executable starts a review
     # inside its credential-free worker, accepts runtime argv and reads the prompt
     # on stdin. Set these in the trusted deployment's tracked configuration.
+    # Host execution is available only with --trusted-source, on macOS.
+    # Pin changes require repeating the live sandbox acceptance probes.
+    host_sandbox:
+      claude_version: "2.1.329"
+      control_root: /private/tmp/dkr-{uid}
+      max_control_path_bytes: 48
+      # Use the actual developer tools, avoiding Apple's xcode-select shims.
+      command_dirs:
+        - /Applications/Xcode.app/Contents/Developer/usr/bin
+        - /Library/Developer/CommandLineTools/usr/bin
+        - /opt/homebrew/bin
+        - /usr/bin
+        - /bin
+        - /usr/sbin
+        - /sbin
+      read_paths:
+        - /System
+        - /usr
+        - /bin
+        - /sbin
+        - /opt/homebrew
+        - /Applications/Xcode.app
+        - /Library/Developer
+        - /private/var/select
+        - /var/select
+        - /private/etc
+        - /etc
+        - /dev
     worker_launcher:
       # runtime-status: mechanical
       claude: ""
@@ -859,6 +887,7 @@ scratch:
   # linked worktree; the engine's docstring lists these limits. Needs git 2.36+ (`git worktree list -z`).
   roots:
     - /private/tmp/claude-{uid}/{repo_slug}
+    - /private/tmp/dkr-{uid}
   # An entry with anything inside it modified within this window is never
   # removed, whatever --older-than says. Units: s, m, h, d.
   grace_window: 24h

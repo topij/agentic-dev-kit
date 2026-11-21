@@ -446,9 +446,9 @@ author re-reading their own diff. **Cite them by name, never by number.**
    anchoring the panel exists to escape.
 3. **Not the author.** Say it did not write the code. Cheap, and it measurably
    changes what a lens is willing to call wrong.
-4. **Execute, don't only read.** Use the cockpit's credential-free worker from the
+4. **Execute, don't only read.** Use the cockpit's established execution boundary from the
    first command, following *Credential-free reviewer execution*. Report any
-   command outside it and stop if the worker is unavailable. The highest-value findings came from *running*
+   command outside it and stop if the boundary is unavailable. The highest-value findings came from *running*
    the changed paths against hostile input, not from reading them. A guard was
    dead code for the exact bot it was written for, because that bot reports a
    zero timestamp — no amount of re-reading surfaced it; one live poll did.
@@ -734,7 +734,49 @@ author re-reading their own diff. **Cite them by name, never by number.**
 ## Credential-free reviewer execution
 
 The cockpit establishes the execution boundary before it hands any candidate text
-to a lens or verifier. Use an adopter-provisioned disposable worker. Select its
+to a lens or verifier. Trusted Claude reviews on macOS may use the strict host
+sandbox through `panel_prompt.py --launch --trusted-source`. The flag is the
+cockpit's attestation that the source is trusted. External contributions and Codex
+reviews use an adopter-provisioned disposable worker. An explicitly configured
+worker launcher takes precedence over the host route.
+
+The host route reads `review.fallback_panel.host_sandbox` from the trusted
+installation's tracked configuration. Its `claude_version` pins the client that
+passed the live acceptance probes. Its `read_paths` allow installed system tools
+and runtimes. Its `command_dirs` select executable directories within those paths,
+including actual developer-tool binaries where macOS shims need denied host state.
+The bare client and Bash use the disposable control directory as their home.
+The allocated round and the temporary runtime control directory are also readable.
+Other host paths are denied. Stage each lens and verifier as a self-contained
+clone inside the round, using the recipe under *Running it*. A linked worktree
+whose Git administration lives outside the round cannot read its HEAD or objects
+through this boundary. Do not widen the host read allowlist to expose the source
+repository.
+Keep secrets out of the configured tool paths and staged round. The launcher
+requires `ANTHROPIC_API_KEY` for the bare client's model transport and denies that
+variable to Bash. It excludes user and candidate settings, hooks, MCP servers and
+other tools, denies network and Unix sockets, and refuses unsandboxed retries or
+unavailable sandboxing. Bare macOS `mktemp -d` is refused. Create temporary files
+with an explicit template under the allocated round. The configured `control_root` must also appear in `scratch.roots`. Keep it short
+enough for `max_control_path_bytes`, so Claude keeps its cwd-tracking files within
+the disposable control directory. Its exact path is printed to stderr. The cockpit
+records it and retires it under *Clean up what this session created* after the
+reviewer and its descendants finish. Test evidence belongs in round-local paths.
+Stage dependencies before launch and report checks that need unavailable packages.
+
+Before adopting a different client version or tool-path configuration, repeat the
+live probes through the normal launch path. Require a harmless network request
+and `gh api` to fail, a host-only canary to be unreadable, writes outside the round
+and bare `mktemp -d` to fail, local reads and writes to succeed, and model credentials
+to be absent from Bash and inaccessible through process inspection. From each
+staged clone, require `git rev-parse HEAD` to return the reviewed SHA and
+`git diff --stat <base>...<head>` to show the expected non-empty change, using
+the full SHAs resolved by the cockpit. Keep source Git metadata outside the
+allowlist during these checks. Record the
+command, revision, date and observed results on the pull request. A unit-test
+substitute for the runtime does not establish this boundary.
+
+For the disposable-worker route, use an adopter-provisioned worker. Select its
 launcher and runtime settings from operator-controlled deployment or from an
 independent checkout of the protected base at its resolved SHA. Use the absolute
 path to that trusted installation from outside the candidate checkout. The worker
@@ -742,7 +784,8 @@ must be unable to change it. For a kit-run review, run the trusted installation'
 `panel_prompt.py --launch --root <review-checkout>` with the usual lens or verifier
 arguments. Prompt-only output remains available for inspection. The trusted
 installation's tracked `review.fallback_panel.worker_launcher.<runtime>` must
-name an absolute executable. Missing configuration refuses dispatch. Install this
+name an absolute executable. Missing configuration refuses dispatch unless the
+trusted Claude host route above was selected. Install this
 executable as part of the operator's deployment, outside every tree writable by
 a reviewer. The launcher receives the runtime argv as separate arguments and
 the assembled prompt on stdin. It returns the reviewer's stdout and exit status.
@@ -777,7 +820,7 @@ The dispatcher cannot validate an adopter program's isolation from its pathname.
 Prove placement on the deployment you use, including after a worker restart. This applies when the pull request changes the runner,
 the prompt generator, an agent definition or the kit configuration itself.
 
-- Give the worker a fresh home and an allowlist of nonsecret environment values.
+- For a disposable worker, give it a fresh home and an allowlist of nonsecret environment values.
   Keep the operator's home, keychain, dotenv files, SSH agent, credential helpers,
   service sockets, host caches and model login outside its reach. Supply dependencies
   in the worker. A local wrapper around a single command leaves other tool calls
@@ -789,7 +832,7 @@ the prompt generator, an agent definition or the kit configuration itself.
   that entire object set is approved for review. If the required history or a fixture
   cannot be staged, report the missing check. Keep PR writes and review receipts
   in the cockpit.
-- For Claude, load the base's generated lens definition in the isolated worker.
+- For Claude, load the base's generated lens definition through the selected boundary.
   Its `tools: Bash` allowlist excludes inherited connectors and delegation. The
   headless launch applies the Bash allowlist and configured compute directly on the CLI. Launch
   a verifier with the same Bash-only tool restriction. Use a trusted control
@@ -822,7 +865,7 @@ the prompt generator, an agent definition or the kit configuration itself.
    here miscalibrates step 3's plausibility check as well as every lens's diff.
 2. Establish *Credential-free reviewer execution*, then launch **one isolated reviewer per lens** the pull request's class owes
    (*How many lenses*; the `review_class` a poll reports), concurrently when there
-   are two, each with the contract above and its lens focus. Use a fresh reviewer context in the credential-free worker. If it has none, see
+   are two, each with the contract above and its lens focus. Use a fresh reviewer context inside the selected execution boundary. If it has none, see
    *Degraded mode*. State the **repo, branch and head sha under review**
    explicitly — see **Right revision** on why the runtime's own isolation may not
    point at them, and why the sha is the field that lets a lens recover on its
@@ -848,15 +891,21 @@ the prompt generator, an agent definition or the kit configuration itself.
    uv run <engine-dir>/sweep_scratch.py --create-review-round <expanded-root> --head <sha> > <receipt-outside-round>
    ```
 
-   Build each lens's detached review tree at the named sha inside that round,
-   namespaced by lens and revision —
+   Stage each lens as a self-contained clone with detached HEAD inside that
+   round. In the cockpit, bind `REVIEW_SOURCE` to the absolute source checkout,
+   `REVIEW_COPY` to the fresh absolute path `<round>/lens-<name>-<short-sha>`,
+   and `REVIEW_HEAD` to the full reviewed SHA. Run the sanitized independent-clone
+   recipe in **No writes in the tree you were given** above: it copies Git objects
+   without shared administration or alternates, removes the source remote, and
+   checks out the reviewed commit. Use that recipe for worker staging too; the
+   worker must receive the clone's Git metadata along with its working files.
+   Do not use `git worktree add` against a repository outside the round.
 
-   ```sh
-   git worktree add --detach <round>/lens-<name>-<short-sha> <sha>
-   ```
-
-   — and name that absolute, unaliased path with `panel_prompt.py --scratch`.
-   The prompt builder verifies its allocated parent and head. The cockpit is the only party that knows the target;
+   Before launch, verify that the clone contains the resolved base and head,
+   and that `git diff --stat <base>...<head>` shows the expected non-empty change.
+   If an object is missing, stage it in the clone from an approved source before
+   proceeding. Name the clone's absolute, unaliased path with
+   `panel_prompt.py --scratch`. The prompt builder verifies its allocated parent and head. The cockpit is the only party that knows the target;
    runtime-provided isolation routinely lands at the wrong ref (`#75` holds
    the occurrence data; read it there rather than a figure here, and note its
    own tallies say they are **approximate**). A cockpit-built tree turns that
@@ -1053,8 +1102,9 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
 1. Write each lens's terminal report to a file outside `<round>`, as the verifier's
    `--lens-report` input. It is working input for this round, not retained evidence:
    delete it once the round's dispositions are posted.
-2. Build the verifier's own detached tree in the same round:
-   `git worktree add --detach <round>/verifier-<short-sha> <sha>`.
+2. Stage the verifier's own self-contained clone in the same round at
+   `<round>/verifier-<short-sha>`, following *Running it*'s cockpit staging recipe
+   and base/head checks. Do not add a linked worktree of the handed repository.
 3. Render its prompt. `--lens-report` takes `<lens>=<path>`, once per lens that ran:
 
    ```sh
@@ -1071,7 +1121,7 @@ How to run it, after step 3 has confirmed each lens reviewed the right code:
    is all it promises: the lens reports themselves are quoted verbatim. Nothing checks
    that the files you name are this round's reports, or all of them: naming every
    lens that ran is yours.
-4. Dispatch the verifier through the same trusted worker launcher as the lenses.
+4. Dispatch the verifier through the same trusted execution boundary as the lenses.
    Pass `--verifier` with `--launch` to run its fresh Claude or Codex session. It is not a lens, so do not launch it as a lens's
    agent definition: those definitions tell the agent it is that lens.
 5. Read its report against *Report what you reviewed, first* as step 3 does for a lens,
