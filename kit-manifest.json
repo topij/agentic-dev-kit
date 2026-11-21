@@ -207,7 +207,7 @@
     },
     "scripts/archive_plan_sessions.py": {
       "role": "engine",
-      "sha256": "cdd7185baa9422e02e2681dbfed7486f048c6a38b5264b5f0b06a4916992e04f"
+      "sha256": "b670f05ecef6d5a498e6392d54298ae1360da5bfd77cea9c8a94ee98cbf643f6"
     },
     "scripts/check_doc_budget.py": {
       "role": "engine",
@@ -270,7 +270,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "9286cb5dd8610ee49bad1f5bda538a23e97ad737fef7c989fc42bd6d0cc6c41e"
+      "sha256": "76223da0d4b44e756e5ac19b128d8630aa35e9a9e0e00a82575061dbf4f6d3e1"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -470,6 +470,7 @@
     },
     "scripts/lib/subprocess_runner.py": {
       "required_by": [
+        "scripts/archive_plan_sessions.py",
         "scripts/pr_watch.py",
         "scripts/session_cleanup.py",
         "scripts/sweep_scratch.py"
@@ -790,6 +791,10 @@
       "role": "repo-only",
       "sha256": "2e1a1296b1079f06b25bb11870016883a4f9873c98d575b4e8b7d64af2bf29ec"
     },
+    "scripts/tests/test_archive_plan_sessions.py": {
+      "role": "test",
+      "sha256": "9cfb4f93fe90707609d9b62d781a39df66d44a2f79a7899d964979e1c16386b6"
+    },
     "scripts/tests/test_check_memory_budget.py": {
       "role": "test",
       "sha256": "10508e167776cefdd7e602f6165c87cdd18731555aa41459f74c03c571f342bc"
@@ -828,7 +833,7 @@
     },
     "scripts/tests/test_kitconfig.py": {
       "role": "test",
-      "sha256": "efa2f4d321a1c7be1d2dd026538c0771f975414cb2f262c8d75c6cfd62d770c2"
+      "sha256": "b1ccde09e724a4f473c301bcf8c79cfaadc9907bf3f604f1d7c5ef6e946a6010"
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",

@@ -173,13 +173,13 @@ import os
 import re
 import shlex
 import stat
-import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from atomic_write import AtomicWriteRefused, stage_text  # noqa: E402
 from kitconfig import load_config, repo_root, resolve_path  # noqa: E402
+from subprocess_runner import CommandError, run_stdout, without_git_environment  # noqa: E402
 
 REPO_ROOT = repo_root()
 
@@ -565,39 +565,48 @@ def _recovery_matches(target: Path, expected: str) -> bool:
         os.close(fd)
 
 
+# Seconds each recovery-hint Git read may take before it is killed.
+GIT_TIMEOUT = 5
+
+
 def _recovery_hint(target: Path) -> str:
     """Offer a read-only command only for a confirmed committed document."""
     fallback = (
         "No committed Git version could be confirmed for the staged handoff. "
         "Inspect the named documents and any saved copies before restoring content."
     )
+    # Each Git read is bounded by GIT_TIMEOUT and runs without inherited ``GIT_*``
+    # variables: a hook's GIT_DIR or GIT_INDEX_FILE would otherwise answer for
+    # another repository than the one holding ``target``. Any failure, a timeout
+    # included, gives the fallback, which offers no command.
+    env = without_git_environment() | {"GIT_NO_LAZY_FETCH": "1"}
     try:
-        root_result = subprocess.run(
+        root = Path(run_stdout(
             ["git", "-C", str(target.parent), "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, check=True, timeout=5,
-        )
-        root = Path(root_result.stdout.rstrip("\n")).resolve()
+            cwd=None, timeout=GIT_TIMEOUT, env=env,
+        ).rstrip("\n")).resolve()
         relative = target.relative_to(root).as_posix()
         object_name = f"HEAD:{relative}"
-        entry = subprocess.run(
+        entry = run_stdout(
             ["git", "--literal-pathspecs", "-C", str(root), "ls-tree", "-z",
              "HEAD", "--", relative],
-            capture_output=True, check=True, timeout=5,
-            env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+            cwd=None, timeout=GIT_TIMEOUT, env=env,
         )
-        metadata, path = entry.stdout.rstrip(b"\0").split(b"\t", 1)
+        metadata, path = entry.rstrip("\0").split("\t", 1)
         # Git stores symlink targets as blobs too. Only a regular-file tree
         # entry establishes that `git show` reads document bytes here.
-        if metadata.split()[0] not in (b"100644", b"100755") or path != os.fsencode(relative):
+        if metadata.split()[0] not in ("100644", "100755") or path != relative:
             return fallback
-        kind = subprocess.run(
+        kind = run_stdout(
             ["git", "-C", str(root), "cat-file", "-t", object_name],
-            capture_output=True, text=True, check=True, timeout=5,
-            env={**os.environ, "GIT_NO_LAZY_FETCH": "1"},
+            cwd=None, timeout=GIT_TIMEOUT, env=env,
         )
-        if kind.stdout.strip() != "blob":
+        if kind.strip() != "blob":
             return fallback
-    except (OSError, ValueError, subprocess.SubprocessError, KeyboardInterrupt):
+    # The runner reads text: a path whose bytes do not decode raises ValueError,
+    # and one holding a carriage return no longer compares equal, so both give
+    # the fallback too.
+    except (OSError, ValueError, CommandError, KeyboardInterrupt):
         return fallback
     command = shlex.join(["git", "-C", str(root), "show", object_name])
     return (
