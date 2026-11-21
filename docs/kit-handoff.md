@@ -360,9 +360,13 @@ On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
 ▶ Next: continue step 3d with the next subprocess caller. The watcher (`_gh`),
-`session_cleanup.py`'s `git()` and `sweep_scratch.py`'s Git calls now run through
+`session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls and
+`archive_plan_sessions.py`'s recovery-hint reads now run through
 `lib/subprocess_runner.py`, which also carries the `GIT_*` policy
-(`without_git_environment`). #1219's item 1, the per-item timeout, holds on the
+(`without_git_environment`). `kit_doctor.py`'s `_git_run` does not fit
+`run_stdout` as it stands: its callers read the exit code as the answer
+(`merge-base --is-ancestor`) and keep the `GIT_SSH_COMMAND`-style variables
+`fetch` needs, so moving it first means a runner change, which is safety-critical. #1219's item 1, the per-item timeout, holds on the
 runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 (unpinned guards, untested helpers), which that move did not take. #1172 is the
 process-group stop half of 3d. #1486 records the operator's scoped host-sandbox
