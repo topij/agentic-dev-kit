@@ -23,8 +23,11 @@ ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 
 def _git(cwd: Path, *args: str) -> str:
+    # Fixture setup must build the repositories it names even when pytest itself runs
+    # under an inherited GIT_DIR (a hook), so it drops every GIT_* variable (#1495).
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env=env
     ).stdout.strip()
 
 

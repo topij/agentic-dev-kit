@@ -806,7 +806,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "4498575fd23d833998183fa4b10c6ef22a7e33e67d4cdbc0f5715d30faf22506"
+      "sha256": "1681d89d50f21d08c1fe89ad58b9a89327a7204333021e93e929e8cb0b91007f"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
