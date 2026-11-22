@@ -434,6 +434,7 @@ KIT_OWNED: tuple[tuple[str, str], ...] = (
     ("scripts/tests/test_state_guard.py", "test"),
     ("scripts/tests/test_sweep_scratch.py", "test"),
     ("scripts/tests/test_session_cleanup.py", "test"),
+    ("scripts/tests/test_subprocess_runner.py", "test"),
     ("scripts/tests/test_live_validation_bundle.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_make_lint.py", REPO_ONLY_ROLE),
     ("scripts/tests/test_runtime_parity_matrix.py", REPO_ONLY_ROLE),

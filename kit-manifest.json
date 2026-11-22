@@ -270,7 +270,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "76223da0d4b44e756e5ac19b128d8630aa35e9a9e0e00a82575061dbf4f6d3e1"
+      "sha256": "27d4a5a0a2617eb270613150bfe0cb57f88c5c94a7dcfaa7be7de544041a2194"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -477,7 +477,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "ad2d10cb78e1c9c5e385d5bf4a05b3d18d16e764f499a20db92cdd8c44d8e484"
+      "sha256": "585fd64e11eaf16108f31cc8cf088afb2b75a80e79eb21b5af53c1f86c07fac3"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -919,6 +919,10 @@
     "scripts/tests/test_state_guard.py": {
       "role": "test",
       "sha256": "90e2930342f8ecca331d01f9d7aca38f7b841cf95d054288c730b634f262b186"
+    },
+    "scripts/tests/test_subprocess_runner.py": {
+      "role": "test",
+      "sha256": "d90b7aac795975bf6c21b7892cd27890d4aebe05cb30355a282763f594a659b1"
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",
