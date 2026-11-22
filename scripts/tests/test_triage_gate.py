@@ -203,3 +203,12 @@ def test_a_ps_that_cannot_answer_leaves_the_start_unknown(monkeypatch: pytest.Mo
 
     monkeypatch.setattr(gate, "run_result", ps)
     assert gate._process_start(pid) is None
+
+
+def test_a_ps_that_exits_non_zero_with_output_leaves_the_start_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    from subprocess_runner import Completed
+    from triage import gate
+
+    pid = _ps_only(monkeypatch)
+    monkeypatch.setattr(gate, "run_result", lambda *a, **k: Completed(1, "Sun Nov 22 10:00:00 2026\n", ""))
+    assert gate._process_start(pid) is None

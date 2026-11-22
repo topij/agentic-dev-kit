@@ -78,9 +78,10 @@ def preflight_artifacts(
             if not artifact.is_relative_to(checkout):
                 continue
             relative = str(artifact.relative_to(checkout))
-            # The exit code is the answer (0: tracked). Without inherited `GIT_*`
-            # variables, so an inherited `GIT_DIR` cannot answer for another
-            # repository. A Git that cannot answer refuses the target rather than
+            # The exit code is the answer: 0 is tracked, 1 is not. Without inherited
+            # `GIT_*` variables, so an inherited `GIT_DIR` cannot answer for another
+            # repository. Any other answer (a corrupt index's 128, a signal, a
+            # timeout, a Git that cannot start) refuses the target rather than
             # reading as "not tracked".
             try:
                 tracked = run_result(
@@ -92,6 +93,10 @@ def preflight_artifacts(
                                   outcome="hard-stop") from exc
             if tracked.returncode == 0:
                 raise TriageError("artifact target is tracked by the repository", outcome="hard-stop")
+            if tracked.returncode != 1:
+                raise TriageError(
+                    "could not check whether the artifact target is tracked: git ls-files exited "
+                    f"{tracked.returncode}: {tracked.stderr.strip()}", outcome="hard-stop")
 
 
 def fsync_dir(path: Path) -> None:

@@ -901,3 +901,26 @@ def test_a_blob_copy_git_cannot_answer_is_a_run_error(tmp_path: Path, monkeypatc
     with pytest.raises(review_eval.RunError, match=r"^git cat-file timed out after 30s$"):
         review_eval._isolated_tree(tmp_path, tree, {"base": "b" * 40, "head": "c" * 40}, "d" * 40)
     assert seen == [review_eval.GIT_TIMEOUT]
+
+
+@pytest.mark.parametrize("failing", ["cat-file", "hash-object"])
+def test_a_blob_copy_git_refuses_is_a_run_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing: str
+) -> None:
+    from subprocess_runner import Completed
+
+    def git_answer(argv, *, cwd, timeout, **_kwargs):
+        if argv[1] == failing:
+            return Completed(128, b"", "fatal: refused")
+        return Completed(0, b"blob bytes", "")
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "dev-model.yaml").write_text("paths:\n  engines: scripts\n", encoding="utf-8")
+    tree = tmp_path / "tree"
+    monkeypatch.setattr(review_eval, "_git", lambda where, *args, **_k: str(tree / ".git")
+                        if args[:2] == ("rev-parse", "--absolute-git-dir") else "")
+    monkeypatch.setattr(review_eval, "run_bytes", git_answer)
+    expected = {"cat-file": r"^scripts/lib/kitconfig\.py at d{12}: fatal: refused$",
+                "hash-object": r"^could not store scripts/lib/kitconfig\.py in the case tree: fatal: refused$"}[failing]
+    with pytest.raises(review_eval.RunError, match=expected):
+        review_eval._isolated_tree(tmp_path, tree, {"base": "b" * 40, "head": "c" * 40}, "d" * 40)

@@ -16,7 +16,8 @@ start, so a partial copy that leaves it out stops the doctor too.
 - The triage engine's sweep reads (`merge-base --is-ancestor`, `git show`) and its
   tracked-artifact check (`ls-files --error-unmatch`) are bounded at 30 seconds and drop
   every inherited `GIT_*` variable. A sweep read that cannot answer keeps the state
-  held, as a failed read did. A tracked-artifact check that times out or cannot start
-  now hard-stops the run, where a Git that could not start raised an uncaught
-  `OSError`. A non-zero exit still reads as "not tracked", as before. The `ps`
-  start-time fallback is bounded at 10 seconds.
+  held, as a failed read did. The tracked-artifact check now reads exit 0 as
+  tracked and exit 1 as not tracked. Any other exit (a corrupt index's 128, a
+  signal), a timeout or a Git that cannot start hard-stops the run. Before, every
+  non-zero exit read as "not tracked", and a Git that could not start raised an
+  uncaught `OSError`. The `ps` start-time fallback is bounded at 10 seconds.

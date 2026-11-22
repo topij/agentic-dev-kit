@@ -338,3 +338,42 @@ def test_preflight_refuses_a_target_git_cannot_check(tmp_path: Path, monkeypatch
         preflight_artifacts([repo / "report.md"], controls=[], repo=repo)
     assert caught.value.outcome == "hard-stop"
     assert seen == {"timeout": storage.GIT_TIMEOUT}
+
+
+def test_preflight_refuses_a_target_when_git_reports_a_corrupt_index(tmp_path: Path) -> None:
+    """`ls-files` exits 128 on a corrupt index. That is not "not tracked": before, a
+    tracked target passed the guard this way."""
+    clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True, capture_output=True, env=clean)
+    tracked = repo / "tracked-report.md"
+    tracked.write_text("tracked", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", "tracked-report.md"], check=True, env=clean)
+    index = repo / ".git" / "index"
+    index.write_bytes(index.read_bytes()[:20])
+    with pytest.raises(TriageError, match=r"could not check whether the artifact target is tracked: git ls-files exited 128") as caught:
+        preflight_artifacts([tracked], controls=[], repo=repo)
+    assert caught.value.outcome == "hard-stop"
+
+
+@pytest.mark.parametrize("code", [-9, 2])
+def test_preflight_refuses_a_target_on_any_exit_but_zero_or_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, code: int
+) -> None:
+    from subprocess_runner import Completed
+    from triage import storage
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    monkeypatch.setattr(storage, "run_result", lambda *a, **k: Completed(code, "", "boom"))
+    with pytest.raises(TriageError, match=rf"git ls-files exited {code}: boom$"):
+        preflight_artifacts([repo / "report.md"], controls=[], repo=repo)
+
+
+def test_preflight_passes_a_target_git_reports_untracked(tmp_path: Path) -> None:
+    clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "-C", str(repo), "init", "-q"], check=True, capture_output=True, env=clean)
+    preflight_artifacts([repo / "untracked-report.md"], controls=[], repo=repo)
