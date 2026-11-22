@@ -73,6 +73,12 @@ sys.path.insert(0, str(ENGINE_DIR))
 
 import sweep_scratch  # noqa: E402
 from kitconfig import load_config  # noqa: E402
+from subprocess_runner import (  # noqa: E402
+    CommandError,
+    CommandFailed,
+    run_stdout,
+    without_git_environment,
+)
 
 CASES = Path("docs/agentic-dev-kit/review-eval/cases.yaml")
 CASES_SCHEMA = "review-eval-cases-v1"
@@ -141,13 +147,28 @@ class LensEscaped(Exception):
 
 # How long the runner waits for the lens's output to close once its group is killed.
 DRAIN_SECONDS = 10
+# How long one Git call may run before it is killed. A fetch into the isolated tree
+# copies the case's history, so it gets longer than a read.
+GIT_TIMEOUT = 30
+FETCH_TIMEOUT = 300
+# How long `panel_prompt.py` may take to render one lens's prompt.
+ENGINE_TIMEOUT = 120
 
 
-def _git(root: Path, *args: str) -> str:
-    proc = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
-        raise RunError(f"git {' '.join(args)} failed: {proc.stderr.strip()}")
-    return proc.stdout.strip()
+def _git(root: Path, *args: str, timeout: int = GIT_TIMEOUT) -> str:
+    """Git's stripped stdout in ``root`` through the shared runner, or ``RunError``.
+
+    Git runs without any inherited ``GIT_*`` variable, so a ``GIT_DIR`` from a hook
+    cannot answer for another repository than ``root``.
+    """
+    command = f"git {' '.join(args)}"
+    try:
+        out = run_stdout(["git", *args], cwd=root, timeout=timeout, env=without_git_environment())
+    except CommandFailed as exc:
+        raise RunError(f"{command} failed: {exc.stderr}") from exc
+    except CommandError as exc:
+        raise RunError(str(exc)) from exc
+    return out.strip()
 
 
 def _commit_exists(root: Path, sha: str) -> bool:
@@ -352,11 +373,13 @@ def apply_verdicts(entry: dict[str, Any], found: dict[tuple[str, int], str]) -> 
 
 
 def _run_engine(name: str, args: list[str], root: Path) -> str:
-    proc = subprocess.run([sys.executable, str(ENGINE_DIR / name), *args],
-                          cwd=root, capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
-        raise RunError(f"{name} {' '.join(args[:2])} failed: {proc.stderr.strip()[:500]}")
-    return proc.stdout
+    try:
+        return run_stdout([sys.executable, str(ENGINE_DIR / name), *args], cwd=root,
+                          timeout=ENGINE_TIMEOUT)
+    except CommandFailed as exc:
+        raise RunError(f"{name} {' '.join(args[:2])} failed: {exc.stderr[:500]}") from exc
+    except CommandError as exc:
+        raise RunError(f"{name} {' '.join(args[:2])}: {exc}") from exc
 
 
 def _isolated_tree(root: Path, tree: Path, case: dict[str, Any], kit_rev: str) -> None:
@@ -371,7 +394,8 @@ def _isolated_tree(root: Path, tree: Path, case: dict[str, Any], kit_rev: str) -
     tree.mkdir()
     _git(tree, "init", "-q")
     _git(tree, "fetch", "-q", "--no-tags", "--upload-pack",
-         "git -c uploadpack.allowAnySHA1InWant=true upload-pack", str(root), case["base"], case["head"])
+         "git -c uploadpack.allowAnySHA1InWant=true upload-pack", str(root), case["base"], case["head"],
+         timeout=FETCH_TIMEOUT)
     (Path(_git(tree, "rev-parse", "--absolute-git-dir")) / "FETCH_HEAD").unlink(missing_ok=True)
     _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", case["head"])
     engines = ((load_config(root / "config" / "dev-model.yaml").get("paths") or {}).get("engines")

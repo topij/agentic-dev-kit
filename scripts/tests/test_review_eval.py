@@ -715,3 +715,45 @@ def test_the_shipped_case_set_names_the_issues_the_ticket_requires() -> None:
         assert issue in sources and sources[issue]["confirmed"].strip(), issue
         for finding in sources[issue]["findings"]:
             assert finding["path"] and finding["lines"][0] <= finding["lines"][1]
+
+
+def test_git_reads_the_named_repository_despite_an_inherited_git_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_git` runs through the shared runner without inherited `GIT_*` variables."""
+    clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    repos = {}
+    for name in ("named", "other"):
+        root = tmp_path / name
+        root.mkdir()
+        for args in (["init", "-q"], ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-q",
+                                      "--allow-empty", "-m", name]):
+            subprocess.run(["git", *args], cwd=root, env=clean, check=True, capture_output=True)
+        repos[name] = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, env=clean, check=True,
+                                     capture_output=True, text=True).stdout.strip()
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "other" / ".git"))
+    assert review_eval._git(tmp_path / "named", "rev-parse", "HEAD") == repos["named"]
+
+
+def test_a_git_call_that_overruns_its_timeout_is_a_run_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shim = tmp_path / "bin"
+    shim.mkdir()
+    (shim / "git").write_text("#!/bin/sh\nexec sleep 30\n", encoding="utf-8")
+    (shim / "git").chmod(0o755)
+    monkeypatch.setenv("PATH", f"{shim}{os.pathsep}{os.environ['PATH']}")
+    with pytest.raises(review_eval.RunError, match=r"git status timed out after 1s"):
+        review_eval._git(tmp_path, "status", timeout=1)
+
+
+def test_a_failed_git_call_keeps_its_message(tmp_path: Path) -> None:
+    with pytest.raises(review_eval.RunError, match=r"^git rev-parse --verify absent failed: .+"):
+        review_eval._git(tmp_path, "rev-parse", "--verify", "absent")
+
+
+def test_a_failed_engine_keeps_its_message(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(review_eval, "ENGINE_DIR", tmp_path)
+    (tmp_path / "broken.py").write_text("import sys\nsys.exit('rendering failed')\n", encoding="utf-8")
+    with pytest.raises(review_eval.RunError, match=r"^broken\.py --a b failed: rendering failed$"):
+        review_eval._run_engine("broken.py", ["--a", "b", "--c"], tmp_path)
