@@ -415,7 +415,7 @@
     },
     "scripts/lib/repo_root.sh": {
       "role": "engine",
-      "sha256": "8c06184ca2a7d7042064de43584ec65abdcfce094893950d4ff0d8645fc2fd03"
+      "sha256": "bc4f38fec8fd93769ca5927f3c8501b3dd58c6fbff6cb423480194824c2b40e5"
     },
     "scripts/lib/runtime_adapters.py": {
       "required_by": [
@@ -806,7 +806,7 @@
     },
     "scripts/tests/test_dev_session_board.py": {
       "role": "test",
-      "sha256": "eac40aa63fd783ddc1c05c232b43f7408711b78b58043cfce39d2d0bf7051b77"
+      "sha256": "4498575fd23d833998183fa4b10c6ef22a7e33e67d4cdbc0f5715d30faf22506"
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
