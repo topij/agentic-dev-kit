@@ -477,7 +477,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "5799659fb9d2ed0a7c8131e0844585ef60f78888d5ab8ced6b0f6054af481a79"
+      "sha256": "585fd64e11eaf16108f31cc8cf088afb2b75a80e79eb21b5af53c1f86c07fac3"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -922,7 +922,7 @@
     },
     "scripts/tests/test_subprocess_runner.py": {
       "role": "test",
-      "sha256": "5f2c84033f8ccf930c3970413a0d954c996fb27314fe69b89b07c3483c06e4ab"
+      "sha256": "d90b7aac795975bf6c21b7892cd27890d4aebe05cb30355a282763f594a659b1"
     },
     "scripts/tests/test_sweep_scratch.py": {
       "role": "test",

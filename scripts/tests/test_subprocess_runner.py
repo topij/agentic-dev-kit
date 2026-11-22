@@ -8,6 +8,7 @@ kill test below exercises the timeout with a real child process rather than a st
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -19,6 +20,7 @@ from _repo_layout import engine_dir  # noqa: E402
 
 sys.path.insert(0, str(engine_dir(Path(__file__)) / "lib"))
 
+import subprocess_runner  # noqa: E402
 from subprocess_runner import (  # noqa: E402
     CommandError,
     CommandFailed,
@@ -58,20 +60,28 @@ def test_run_result_honours_cwd_and_env(tmp_path: Path) -> None:
     assert done.stdout == f"{tmp_path.resolve()}\nset"
 
 
-def test_run_result_keeps_the_exit_code_when_stderr_is_not_utf8() -> None:
-    done = run_result([SH, "-c", "printf 'bad \\377' >&2; exit 1"], cwd=None, timeout=10)
-    assert done == Completed(returncode=1, stdout="", stderr="bad \ufffd")
+def test_run_result_keeps_the_exit_code_when_output_is_not_utf8() -> None:
+    done = run_result([SH, "-c", "printf 'out \\377'; printf 'bad \\377' >&2; exit 1"], cwd=None, timeout=10)
+    assert done == Completed(returncode=1, stdout="out \ufffd", stderr="bad \ufffd")
 
 
-@pytest.mark.parametrize("entry", [run_stdout, run_result], ids=["stdout", "result"])
-def test_text_stdout_that_is_not_utf8_is_a_command_error(entry) -> None:
-    with pytest.raises(CommandError, match=r"wrote stdout that is not UTF-8 \(exit 0\); read it with run_bytes$"):
-        entry([SH, "-c", "printf '\\377'"], cwd=None, timeout=10)
+def test_run_result_passes_text_through_as_utf8() -> None:
+    done = run_result([SH, "-c", "cat; printf '\\303\\251' >&2"], cwd=None, timeout=10, stdin_text="caf\u00e9")
+    assert (done.returncode, done.stdout, done.stderr) == (0, "caf\u00e9", "\u00e9")
 
 
-def test_a_failed_run_stdout_is_reported_before_its_stdout_is_read() -> None:
-    with pytest.raises(CommandFailed, match=r"\(exit 2\): oops$"):
-        run_stdout([SH, "-c", "printf '\\377'; echo oops >&2; exit 2"], cwd=None, timeout=10)
+def test_run_stdout_keeps_the_base_decoding_of_its_output(monkeypatch) -> None:
+    """run_stdout makes the base's call: text mode, no encoding or errors named."""
+    seen = {}
+
+    def run(argv, **kwargs):
+        seen.update(kwargs)
+        return subprocess.CompletedProcess(argv, 0, stdout="ok", stderr="")
+
+    monkeypatch.setattr(subprocess_runner.subprocess, "run", run)
+    assert run_stdout(["x"], cwd=None, timeout=5) == "ok"
+    assert seen["text"] is True
+    assert "encoding" not in seen and "errors" not in seen
 
 
 def test_text_output_translates_newlines_as_text_mode_did() -> None:

@@ -8,8 +8,9 @@ Every failure is a ``CommandError`` (a ``RuntimeError``), so a caller that only
 needs "it did not work" catches one type. A caller that must treat the cases
 differently catches the subclass: ``CommandTimedOut``, ``CommandUnavailable``
 (the process could not start) or ``CommandFailed`` (it ran and exited non-zero;
-raised by ``run_stdout`` only). Text is UTF-8: stderr is decoded with replacement, and
-text-mode stdout that is not UTF-8 raises the base ``CommandError``.
+raised by ``run_stdout`` only). A caller's own argument errors (a NUL byte in argv,
+an empty argv, the wrong stdin type) are not translated, and ``run_stdout`` decodes as
+it always has, so output in another encoding raises ``UnicodeDecodeError`` there.
 """
 
 from __future__ import annotations
@@ -70,19 +71,24 @@ class Completed:
     stderr: str
 
 
-def _run(argv: list[str], *, cwd: Path | None, timeout: int, stdin: bytes | None,
-         env: Mapping[str, str] | None) -> subprocess.CompletedProcess:
-    """One bytes-mode ``subprocess.run`` call; a timeout or a failure to start becomes a CommandError.
+def _run(argv: list[str], *, cwd: Path | None, timeout: int, stdin: str | bytes | None,
+         env: Mapping[str, str] | None, text: bool,
+         encoding: str | None = None, errors: str | None = None) -> subprocess.CompletedProcess:
+    """One ``subprocess.run`` call; a timeout or a failure to start becomes a CommandError.
 
     On a timeout ``subprocess.run`` kills the direct child and waits for it, as
     before. A process that child started keeps running, in the same process group
     or another; this runner does not reach it.
     """
     command = " ".join(argv)
+    # Only a caller that names an encoding passes one, so run_stdout's call stays the
+    # base's exactly (callers' tests stub subprocess.run with its keyword arguments).
+    decoding = {} if encoding is None else {"encoding": encoding, "errors": errors}
     try:
         return subprocess.run(  # noqa: S603
             argv, cwd=None if cwd is None else str(cwd), timeout=timeout, input=stdin,
-            env=None if env is None else dict(env), capture_output=True, check=False,
+            env=None if env is None else dict(env), capture_output=True, text=text,
+            check=False, **decoding,
         )
     except subprocess.TimeoutExpired as exc:
         raise CommandTimedOut(f"{command} timed out after {timeout}s") from exc
@@ -90,34 +96,20 @@ def _run(argv: list[str], *, cwd: Path | None, timeout: int, stdin: bytes | None
         raise CommandUnavailable(f"{command} could not run: {exc}") from exc
 
 
-def _text(data: bytes, errors: str) -> str:
-    # The same decoding and newline translation ``subprocess.run(text=True)`` applies
-    # (``Popen._translate_newlines``), with UTF-8 named instead of the locale's.
-    return data.decode("utf-8", errors).replace("\r\n", "\n").replace("\r", "\n")
-
-
-def _stdout_text(argv: list[str], result: subprocess.CompletedProcess) -> str:
-    try:
-        return _text(result.stdout, "strict")
-    except UnicodeDecodeError as exc:
-        raise CommandError(f"{' '.join(argv)} wrote stdout that is not UTF-8 (exit {result.returncode}); "
-                           "read it with run_bytes") from exc
-
-
 def run_result(argv: list[str], *, cwd: Path | None, timeout: int, stdin_text: str | None = None,
                env: Mapping[str, str] | None = None) -> Completed:
     """Run a command with text in and out, and return its exit code, stdout and stderr.
 
     For a caller whose answer is the exit code (``git merge-base --is-ancestor``,
-    ``git ls-files --error-unmatch``). A non-zero exit is returned, not raised. Only a
-    timeout (``CommandTimedOut``), a command that cannot start (``CommandUnavailable``)
-    or stdout that is not UTF-8 (``CommandError``) raises; stderr that is not UTF-8 is
-    decoded with replacement, so it never costs the exit code. ``cwd`` and ``env`` are
-    as for ``run_stdout``.
+    ``git ls-files --error-unmatch``). A non-zero exit is returned, not raised. Both
+    streams are UTF-8, and bytes that do not decode are replaced, so the exit code is
+    always returned. A caller that needs the exact bytes uses ``run_bytes``. A timeout
+    raises ``CommandTimedOut`` and a command that cannot start raises
+    ``CommandUnavailable``. ``cwd`` and ``env`` are as for ``run_stdout``.
     """
-    result = _run(argv, cwd=cwd, timeout=timeout,
-                  stdin=None if stdin_text is None else stdin_text.encode("utf-8"), env=env)
-    return Completed(result.returncode, _stdout_text(argv, result), _text(result.stderr, "replace"))
+    result = _run(argv, cwd=cwd, timeout=timeout, stdin=stdin_text, env=env, text=True,
+                  encoding="utf-8", errors="replace")
+    return Completed(result.returncode, result.stdout, result.stderr)
 
 
 def run_bytes(argv: list[str], *, cwd: Path | None, timeout: int, stdin_bytes: bytes | None = None,
@@ -129,22 +121,24 @@ def run_bytes(argv: list[str], *, cwd: Path | None, timeout: int, stdin_bytes: b
     for ``run_result``; ``stdout`` is the raw bytes and ``stderr`` is decoded as UTF-8
     with replacement, for messages only.
     """
-    result = _run(argv, cwd=cwd, timeout=timeout, stdin=stdin_bytes, env=env)
-    return Completed(result.returncode, result.stdout, _text(result.stderr, "replace"))
+    result = _run(argv, cwd=cwd, timeout=timeout, stdin=stdin_bytes, env=env, text=False)
+    return Completed(result.returncode, result.stdout, result.stderr.decode("utf-8", "replace"))
 
 
 def run_stdout(argv: list[str], *, cwd: Path | None, timeout: int, stdin_text: str | None = None,
                env: Mapping[str, str] | None = None) -> str:
     """Return stdout verbatim, or raise a CommandError naming the command and cause.
 
-    A non-zero exit, including one a signal caused, raises ``CommandFailed`` before
-    stdout is read. ``cwd=None`` runs in the current directory; ``env=None`` inherits
-    this process's environment.
+    The call is the one this function has always made: text mode in the locale's
+    encoding, strict, so output that does not decode raises ``UnicodeDecodeError`` (a
+    ``ValueError``) as before, and a caller expecting such output uses ``run_bytes``.
+    A non-zero exit, including one a signal caused, raises ``CommandFailed``.
+    ``cwd=None`` runs in the current directory; ``env=None`` inherits this process's
+    environment.
     """
-    result = _run(argv, cwd=cwd, timeout=timeout,
-                  stdin=None if stdin_text is None else stdin_text.encode("utf-8"), env=env)
+    result = _run(argv, cwd=cwd, timeout=timeout, stdin=stdin_text, env=env, text=True)
     if result.returncode != 0:
-        stderr = _text(result.stderr, "replace").strip()
+        stderr = result.stderr.strip()
         raise CommandFailed(f"{' '.join(argv)} failed (exit {result.returncode}): {stderr}",
                             returncode=result.returncode, stderr=stderr)
-    return _stdout_text(argv, result)
+    return result.stdout
