@@ -337,3 +337,101 @@ def test_git_output_names_the_failed_command_and_its_stderr(tmp_path: Path) -> N
     _repo_with_a_sweep(repo)
     with pytest.raises(TriageError, match=r"^git rev-parse --verify refs/remotes/origin/absent failed: .+"):
         git_output(repo, "rev-parse", "--verify", "refs/remotes/origin/absent")
+
+
+@pytest.mark.parametrize("answer", ["no", "exit-128", "timeout", "cannot-start"])
+def test_only_an_ancestor_exit_of_zero_answers_yes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    """`merge-base --is-ancestor`'s exit 1, any other exit, a timeout and a Git that
+    cannot start all keep the state held."""
+    from subprocess_runner import CommandTimedOut, CommandUnavailable, Completed
+    from triage import recovery
+
+    seen = {}
+
+    def merge_base(argv, *, cwd, timeout, **_kwargs):
+        seen["timeout"] = timeout
+        if answer == "timeout":
+            raise CommandTimedOut("git merge-base timed out after 30s")
+        if answer == "cannot-start":
+            raise CommandUnavailable("git could not run")
+        return Completed({"no": 1, "exit-128": 128}[answer], "", "")
+
+    monkeypatch.setattr(recovery, "run_result", merge_base)
+    assert recovery._is_ancestor(str(tmp_path), "a" * 40, "refs/remotes/origin/main") is False
+    assert seen == {"timeout": recovery.GIT_TIMEOUT}
+
+
+def test_an_ancestor_exit_of_zero_answers_yes(tmp_path: Path) -> None:
+    from triage import recovery
+
+    repo = tmp_path / "repo"
+    since, sweep = _repo_with_a_sweep(repo)
+    assert recovery._is_ancestor(str(repo), since, "refs/remotes/origin/main") is True
+    assert recovery._is_ancestor(str(repo), sweep, since) is False
+
+
+@pytest.mark.parametrize("answer", ["timeout", "not-utf8"])
+def test_a_show_git_cannot_give_as_text_reads_as_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, answer: str
+) -> None:
+    from types import SimpleNamespace
+
+    from subprocess_runner import CommandTimedOut, Completed
+    from triage import recovery
+
+    seen = {}
+
+    def show(argv, *, cwd, timeout, **_kwargs):
+        seen["timeout"] = timeout
+        if answer == "timeout":
+            raise CommandTimedOut("git show timed out after 30s")
+        return Completed(0, b"\xff\xfe", "")
+
+    monkeypatch.setattr(recovery, "run_bytes", show)
+    settings = SimpleNamespace(paths=SimpleNamespace(repo=tmp_path))
+    assert recovery._git_show(settings, "HEAD", tmp_path / "friction.md") is None
+    assert seen == {"timeout": recovery.GIT_TIMEOUT}
+
+
+def test_the_sweep_commit_rev_list_is_bounded_by_git_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    from triage import recovery
+
+    repo = tmp_path / "repo"
+    since, _ = _repo_with_a_sweep(repo)
+    seen = {}
+
+    def rev_list(argv, *, cwd, timeout, **_kwargs):
+        seen["timeout"] = timeout
+        return ""
+
+    monkeypatch.setattr(recovery, "run_stdout", rev_list)
+    settings = SimpleNamespace(
+        paths=SimpleNamespace(repo=repo, friction_log=repo / "friction.md", archive=repo / "archive.md"),
+        protected_branch="main",
+    )
+    parsed = {
+        "run_identity": {"protected_branch_head": since},
+        "frozen_snapshot": {"content": {"blocks": [{"candidate_id": "a", "source_block": "BLOCK-A\n"}]}},
+        "decisions": [{"candidate_id": "a", "decision": "archive"}],
+    }
+    assert recovery._find_sweep_commit(settings, parsed) is None
+    assert seen == {"timeout": recovery.GIT_TIMEOUT}
+    assert recovery.GIT_TIMEOUT == 30
+
+
+def test_git_output_is_bounded_by_git_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from triage import model
+
+    seen = {}
+
+    def recording(argv, *, cwd, timeout, **_kwargs):
+        seen["timeout"] = timeout
+        return "x\n"
+
+    monkeypatch.setattr(model, "run_stdout", recording)
+    assert model.git_output(tmp_path, "rev-parse", "HEAD") == "x"
+    assert seen == {"timeout": model.GIT_TIMEOUT}

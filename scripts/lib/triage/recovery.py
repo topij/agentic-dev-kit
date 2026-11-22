@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Any
 
-from subprocess_runner import CommandError, run_stdout, without_git_environment
+from subprocess_runner import (
+    CommandError,
+    run_bytes,
+    run_result,
+    run_stdout,
+    without_git_environment,
+)
 
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
@@ -592,17 +597,37 @@ def _swept_blocks(parsed: dict[str, Any]) -> dict[str, str] | None:
 
 
 def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
+    """The file's text at `revision`, or None when Git cannot give it as UTF-8.
+
+    None keeps the state held, so a read that fails, times out or cannot start is
+    treated like a missing file.
+    """
     rel = path.relative_to(settings.paths.repo).as_posix()
-    result = subprocess.run(
-        ["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
-        check=False, capture_output=True, env=without_git_environment(),
-    )
+    try:
+        result = run_bytes(["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
+                           cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment())
+    except CommandError:
+        return None
     if result.returncode:
         return None
     try:
         return result.stdout.decode("utf-8")
     except UnicodeDecodeError:
         return None
+
+
+def _is_ancestor(repo: str, commit: str, ref: str) -> bool:
+    """Whether `commit` is an ancestor of `ref`: `merge-base --is-ancestor`'s exit code.
+
+    Only exit 0 is yes. Exit 1 (not an ancestor), any other exit, a timeout and a Git
+    that cannot start all answer no, which keeps the state held.
+    """
+    try:
+        done = run_result(["git", "-C", repo, "merge-base", "--is-ancestor", commit, ref],
+                          cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment())
+    except CommandError:
+        return False
+    return done.returncode == 0
 
 
 def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any) -> str | None:
@@ -621,11 +646,7 @@ def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any)
     if swept is None or not isinstance(merge_commit, str) or not OID_RE.fullmatch(merge_commit):
         return None
     ref = f"refs/remotes/origin/{settings.protected_branch}"
-    reachable = subprocess.run(
-        ["git", "-C", str(settings.paths.repo), "merge-base", "--is-ancestor", merge_commit, ref],
-        check=False, capture_output=True, env=without_git_environment(),
-    )
-    if reachable.returncode:
+    if not _is_ancestor(str(settings.paths.repo), merge_commit, ref):
         return None
     log, archive = settings.paths.friction_log, settings.paths.archive
     before = _git_show(settings, f"{merge_commit}^", log)
@@ -658,11 +679,7 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
     repo = str(settings.paths.repo)
     ref = f"refs/remotes/origin/{settings.protected_branch}"
     log, archive = settings.paths.friction_log, settings.paths.archive
-    # The exit code is the answer here, and `_git_show` reads bytes, so neither fits
-    # `run_stdout`; they share its environment so every read names the same repository.
-    ancestor = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", since, ref], check=False,
-                              capture_output=True, env=without_git_environment())
-    if ancestor.returncode:
+    if not _is_ancestor(repo, since, ref):
         return None
     try:
         listed = run_stdout(

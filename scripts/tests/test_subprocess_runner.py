@@ -137,3 +137,22 @@ def test_a_command_past_its_timeout_is_killed_and_reaped(entry, tmp_path: Path) 
 def test_without_git_environment_drops_every_git_variable_only() -> None:
     source = {"GIT_DIR": "x", "GIT_CONFIG_COUNT": "1", "GITHUB_TOKEN": "t", "PATH": "/bin"}
     assert without_git_environment(source) == {"GITHUB_TOKEN": "t", "PATH": "/bin"}
+
+
+def test_run_stdout_honours_cwd_env_and_stdin(tmp_path: Path) -> None:
+    out = run_stdout([SH, "-c", 'pwd -P; printf %s "$PROBE"; cat'], cwd=tmp_path, timeout=10,
+                     env={"PATH": os.environ["PATH"], "PROBE": "set"}, stdin_text="|in")
+    assert out == f"{tmp_path.resolve()}\nset|in"
+
+
+def test_run_bytes_honours_cwd_and_env(tmp_path: Path) -> None:
+    done = run_bytes([SH, "-c", 'pwd -P; printf %s "$PROBE"'], cwd=tmp_path, timeout=10,
+                     env={"PATH": os.environ["PATH"], "PROBE": "set"})
+    assert done.stdout == f"{tmp_path.resolve()}\nset".encode()
+
+
+def test_run_result_replaces_stdin_text_it_cannot_encode() -> None:
+    """`errors="replace"` applies when the input is encoded too: a lone surrogate
+    goes in as `?`. Content that must round-trip goes through `run_bytes`."""
+    done = run_result([SH, "-c", "cat"], cwd=None, timeout=10, stdin_text="a\udc80b")
+    assert done.stdout == "a?b"

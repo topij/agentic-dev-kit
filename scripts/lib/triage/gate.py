@@ -6,17 +6,21 @@ import ctypes
 import os
 import platform
 import socket
-import subprocess
 import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from subprocess_runner import CommandError, run_result
+
 from .canonical import CanonicalError, digest, digest_bytes, dumps, loads_exact
 from .model import TOKEN_RE, TriageError, recorded_gate_fingerprints, repository_identity_matches
 from .storage import ArtifactStore, exclusive_create, observe, unlink_inode
 
+# How long `ps` may take to report a process's start time before that start is
+# treated as unknown.
+PS_TIMEOUT = 10
 GATE_CORE_KEYS = {
     "repository_identity", "config_fingerprint", "owner_token",
     "owner_run_identity", "host", "process_id", "process_start", "created_at_ns",
@@ -98,13 +102,8 @@ def _process_start(pid: int) -> str | None:
         if read == ctypes.sizeof(info) and info.start_tvsec:
             return f"darwin-bsd-time:{info.start_tvsec}:{info.start_tvusec}"
     try:
-        result = subprocess.run(
-            ["ps", "-o", "lstart=", "-p", str(pid)],
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-    except OSError:
+        result = run_result(["ps", "-o", "lstart=", "-p", str(pid)], cwd=None, timeout=PS_TIMEOUT)
+    except CommandError:
         return None
     observed = result.stdout.strip()
     return f"ps-lstart:{observed}" if result.returncode == 0 and observed else None
