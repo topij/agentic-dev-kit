@@ -668,6 +668,7 @@ def test_archive_plan_sessions_reports_a_missing_config_instead_of_crashing(tmp_
         "archive_plan_sessions.py",
         "lib/kitconfig.py",
         "lib/atomic_write.py",
+        "lib/subprocess_runner.py",
     ):
         (tmp_path / "scripts" / rel).write_bytes((ENGINE_DIR / rel).read_bytes())
 
