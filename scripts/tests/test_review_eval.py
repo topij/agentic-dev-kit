@@ -757,3 +757,50 @@ def test_a_failed_engine_keeps_its_message(tmp_path: Path, monkeypatch: pytest.M
     (tmp_path / "broken.py").write_text("import sys\nsys.exit('rendering failed')\n", encoding="utf-8")
     with pytest.raises(review_eval.RunError, match=r"^broken\.py --a b failed: rendering failed$"):
         review_eval._run_engine("broken.py", ["--a", "b", "--c"], tmp_path)
+
+
+def test_commit_exists_reads_the_named_repository_despite_an_inherited_git_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`_commit_exists` stays off the runner (its answer is the exit code) but takes `_git`'s environment."""
+    clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    heads = {}
+    for name in ("named", "other"):
+        root = tmp_path / name
+        root.mkdir()
+        for args in (["init", "-q"], ["-c", "user.name=t", "-c", "user.email=t@e", "commit", "-q",
+                                      "--allow-empty", "-m", name]):
+            subprocess.run(["git", *args], cwd=root, env=clean, check=True, capture_output=True)
+        heads[name] = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, env=clean, check=True,
+                                     capture_output=True, text=True).stdout.strip()
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "other" / ".git"))
+    assert review_eval._commit_exists(tmp_path / "named", heads["named"])
+    assert not review_eval._commit_exists(tmp_path / "named", heads["other"])
+
+
+def test_the_isolated_tree_fetch_is_bounded_by_fetch_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def recording_git(root, *args, timeout=review_eval.GIT_TIMEOUT):
+        calls.append((args[0], timeout))
+        if args[0] == "fetch":
+            raise review_eval.RunError("stop after the fetch")
+        return ""
+
+    monkeypatch.setattr(review_eval, "_git", recording_git)
+    with pytest.raises(review_eval.RunError, match="stop after the fetch"):
+        review_eval._isolated_tree(tmp_path, tmp_path / "tree", {"base": "b" * 40, "head": "c" * 40}, "d" * 40)
+    assert calls == [("init", review_eval.GIT_TIMEOUT), ("fetch", review_eval.FETCH_TIMEOUT)]
+    assert review_eval.FETCH_TIMEOUT > review_eval.GIT_TIMEOUT
+
+
+def test_an_engine_render_is_bounded_by_engine_timeout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = {}
+
+    def recording_run_stdout(argv, *, cwd, timeout, **_kwargs):
+        seen["timeout"] = timeout
+        return "rendered"
+
+    monkeypatch.setattr(review_eval, "run_stdout", recording_run_stdout)
+    assert review_eval._run_engine("panel_prompt.py", ["--lens", "x"], tmp_path) == "rendered"
+    assert seen == {"timeout": review_eval.ENGINE_TIMEOUT}

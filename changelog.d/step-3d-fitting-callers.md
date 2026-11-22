@@ -10,9 +10,12 @@ tree after 300, and a `panel_prompt.py` render after 120. Before, none had a bou
 timeout is a run error like any other failure there. The messages for a Git or engine
 call that fails are unchanged.
 
-`review_eval.py`'s Git calls, the triage engine's protected-ref read (`git_output`),
-and the reads that look for a recovered run's sweep commit no longer inherit `GIT_*`
-variables. An inherited `GIT_DIR` from a hook used to send them to another
-repository. In recovery, the sweep was then never found and the state stayed held. The
-triage engine's repository-identity reads keep their own narrower filter, which keeps
-`GIT_CONFIG_*`, and are unchanged.
+Every Git call in `review_eval.py`, the triage engine's protected-ref read
+(`git_output`), and the reads that look for a recovered run's sweep commit no longer
+inherit any `GIT_*` variable. An inherited `GIT_DIR` from a hook used to send them to
+another repository. In recovery, the sweep was then never found and the state stayed
+held. Because every `GIT_*` name is dropped, configuration passed through the
+environment (`GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_*`, `GIT_CONFIG_GLOBAL`,
+`GIT_SSH_COMMAND` and the like) no longer reaches these calls either; set it in a Git
+config file instead. The triage engine's repository-identity reads keep their own
+narrower filter, which keeps `GIT_CONFIG_*`, and are unchanged.

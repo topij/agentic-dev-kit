@@ -374,7 +374,8 @@ the runner. What it does not fit reads Git's exit code as the answer or reads by
 `lib/triage/recovery.py`'s `merge-base --is-ancestor` and `_git_show`,
 `lib/triage/storage.py`'s `ls-files --error-unmatch` and `lib/triage/gate.py`'s `ps`.
 `lib/triage/providers.py`'s injected `subprocess_runner` returns a `CompletedProcess`
-on purpose. `lib/triage/model.py`'s `_identity_git` keeps `GIT_CONFIG_*`, and the
+on purpose, and the same file runs its own `read-tree`, `cat-file` and `diff --cached`
+calls with their own environment. `lib/triage/model.py`'s `_identity_git` keeps `GIT_CONFIG_*`, and the
 operator chose on 2026-11-22 to leave it off the runner. #1219's item 1, the per-item timeout, holds on the
 runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 (unpinned guards, untested helpers), which that move did not take. #1172 is the

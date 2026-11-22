@@ -172,8 +172,11 @@ def _git(root: Path, *args: str, timeout: int = GIT_TIMEOUT) -> str:
 
 
 def _commit_exists(root: Path, sha: str) -> bool:
+    # The exit code is the answer, so this stays off `run_stdout`; it takes `_git`'s
+    # environment so every Git call here names the same repository.
     return subprocess.run(
-        ["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=root, capture_output=True, check=False
+        ["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=root, capture_output=True, check=False,
+        env=without_git_environment(),
     ).returncode == 0
 
 
@@ -401,12 +404,15 @@ def _isolated_tree(root: Path, tree: Path, case: dict[str, Any], kit_rev: str) -
     engines = ((load_config(root / "config" / "dev-model.yaml").get("paths") or {}).get("engines")
                or "scripts").rstrip("/")
     for path in (f"{engines}/lib/kitconfig.py", f"{engines}/check_record_prose.py"):
+        # Bytes in and out, so these stay off `run_stdout`; they take `_git`'s
+        # environment, or an inherited `GIT_DIR` would write the blob into another
+        # repository while the fetch and checkout above went to `tree`.
         blob = subprocess.run(["git", "cat-file", "blob", f"{kit_rev}:{path}"], cwd=root,
-                              capture_output=True, check=False)
+                              capture_output=True, check=False, env=without_git_environment())
         if blob.returncode != 0:
             raise RunError(f"{path} at {kit_rev[:12]}: {blob.stderr.decode().strip()}")
         subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=tree, input=blob.stdout,
-                       capture_output=True, check=True)
+                       capture_output=True, check=True, env=without_git_environment())
 
 
 def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subprocess.CompletedProcess:
