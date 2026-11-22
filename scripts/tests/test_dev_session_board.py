@@ -23,8 +23,11 @@ ENGINE_DIR = Path(__file__).resolve().parent.parent
 
 
 def _git(cwd: Path, *args: str) -> str:
+    # Fixture setup must build the repositories it names even when pytest itself runs
+    # under an inherited GIT_DIR (a hook), so it drops every GIT_* variable (#1495).
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     return subprocess.run(
-        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env=env
     ).stdout.strip()
 
 
@@ -404,6 +407,28 @@ def test_a_primary_that_is_not_a_directory_falls_back(tmp_path: Path, _sessions_
     checkout.mkdir(parents=True)
     env = {**os.environ, "PATH": f"{shim}{os.pathsep}{os.environ['PATH']}"}
     assert _sessions_dir_from(checkout, env) == str(tmp_path / "here" / "dev-model-sessions")
+
+
+@SESSIONS_DIR_RESOLVERS
+@pytest.mark.parametrize("variable", ["GIT_DIR", "GIT_COMMON_DIR"])
+def test_an_inherited_git_variable_does_not_choose_another_repository(
+    tmp_path: Path, _sessions_dir_from, variable: str
+) -> None:
+    """`git -C` does not override these, so they used to list the other repository (#1495)."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("DEVKIT_", "GIT_"))}
+    seeded = ("-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "s")
+    primary = tmp_path / "a" / "primary"
+    primary.mkdir(parents=True)
+    _git(primary, "init", "-q", "-b", "trunk")
+    _git(primary, *seeded)
+    linked = tmp_path / "b" / "linked"
+    _git(primary, "worktree", "add", "-q", "-b", "side", str(linked), "trunk")
+    other = tmp_path / "c" / "other"
+    other.mkdir(parents=True)
+    _git(other, "init", "-q", "-b", "trunk")
+    _git(other, *seeded)
+    resolved = _sessions_dir_from(linked, {**clean, variable: str(other / ".git")})
+    assert resolved == str(tmp_path / "a" / "dev-model-sessions")
 
 
 def test_untracked_files_alone_make_two_lanes_overlap(repo: Repo) -> None:
