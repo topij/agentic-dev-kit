@@ -369,8 +369,9 @@ Callers not yet moved and outside `review.safety_critical_paths` include
 `review_eval.py` and `lib/triage/`. `kit_doctor.py`'s `_git_run` is one too, but it does not fit
 `run_stdout`: its callers read Git's exit code as the answer
 (`merge-base --is-ancestor`), and it keeps the `GIT_SSH_COMMAND`-style variables
-`fetch` needs. Moving it needs a runner that returns the exit code, and
-`lib/subprocess_runner.py` is safety-critical, so that is a two-lens pull request. #1219's item 1, the per-item timeout, holds on the
+`fetch` needs. The runner now has `run_result` (text, exit code returned) and
+`run_bytes` (bytes in and out) beside `run_stdout`, so the next step is a standard
+pull request moving `_git_run` and the other exit-code and bytes callers onto them. #1219's item 1, the per-item timeout, holds on the
 runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 (unpinned guards, untested helpers), which that move did not take. #1172 is the
 process-group stop half of 3d. #1486 records the operator's scoped host-sandbox
