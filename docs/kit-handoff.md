@@ -381,8 +381,8 @@ runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 process-group stop half of 3d. #1486 records the operator's scoped host-sandbox
 default for trusted Claude reviews. #1025 retains worker provisioning for external
 contributions and Codex. Lane merges remain operator-only.
-The operator decides whether #1370, #1371 and #345 are done, now that
-#1440 and #1441 have merged. The primary
+On 2026-11-22 the operator closed #1370 (delivered by #1440) and #345 (delivered by
+#1441), and narrowed #1371 to its messages-and-prose remainder at P3. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on
 2026-11-14), so the D3 trial runs from that checkout; the tracked value stays `[]`. Time-bound: the D3 trial's systemize runs on 2026-11-27,
 2026-12-11 and 2026-12-13, and its judgement on 2026-12-13 after the last run (shift these dates if step 1a merges
