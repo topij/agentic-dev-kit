@@ -23,11 +23,18 @@ devkit_find_repo_root() {
 # identically. A bare primary (no working tree), a primary that is not an
 # existing absolute directory holding a `.git` entry (a separate git dir or a
 # submodule lists its git directory there), or a git that cannot list
-# worktrees, keeps the old answer: the sibling of the checkout passed in. scripts/pr_watch.py
-# mirrors this in `_default_sessions_dir`; change both together.
+# worktrees, keeps the old answer: the sibling of the checkout passed in.
+# Git runs without any inherited `GIT_*` variable: `-C` does not override
+# `GIT_DIR` or `GIT_COMMON_DIR`, so one of those would list another repository's
+# worktrees (#1495). Every such name is cleared, not a chosen few, because a list
+# of names can miss one. The Python side resolves the same primary through
+# `state_paths.repo_root.primary_worktree`, which `pr_watch.py`'s
+# `_default_sessions_dir` and `lane_usage.py` both call; change it and this together.
 devkit_default_sessions_dir() {
     local repo_root="$1" primary
-    primary="$(git -C "$repo_root" worktree list --porcelain -z 2>/dev/null | python3 -c '
+    primary="$(
+        while IFS= read -r name; do unset "$name"; done < <(compgen -e | grep '^GIT_')
+        git -C "$repo_root" worktree list --porcelain -z 2>/dev/null | python3 -c '
 import sys
 fields = sys.stdin.buffer.read().split(b"\0")
 first = []
@@ -38,7 +45,8 @@ for field in fields:
 if not first or not first[0].startswith(b"worktree ") or b"bare" in first[1:]:
     raise SystemExit(1)
 sys.stdout.buffer.write(first[0][len(b"worktree "):])
-' 2>/dev/null)" || primary=""
+' 2>/dev/null
+    )" || primary=""
     # A separate git dir or a submodule lists its git directory, not a checkout,
     # as the first worktree: accept only a directory that holds a `.git` entry.
     [[ -n "$primary" && "$primary" == /* && -d "$primary" && -e "$primary/.git" ]] \

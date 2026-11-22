@@ -406,6 +406,28 @@ def test_a_primary_that_is_not_a_directory_falls_back(tmp_path: Path, _sessions_
     assert _sessions_dir_from(checkout, env) == str(tmp_path / "here" / "dev-model-sessions")
 
 
+@SESSIONS_DIR_RESOLVERS
+@pytest.mark.parametrize("variable", ["GIT_DIR", "GIT_COMMON_DIR"])
+def test_an_inherited_git_variable_does_not_choose_another_repository(
+    tmp_path: Path, _sessions_dir_from, variable: str
+) -> None:
+    """`git -C` does not override these, so they used to list the other repository (#1495)."""
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(("DEVKIT_", "GIT_"))}
+    seeded = ("-c", "user.email=t@e", "-c", "user.name=T", "commit", "-q", "--allow-empty", "-m", "s")
+    primary = tmp_path / "a" / "primary"
+    primary.mkdir(parents=True)
+    _git(primary, "init", "-q", "-b", "trunk")
+    _git(primary, *seeded)
+    linked = tmp_path / "b" / "linked"
+    _git(primary, "worktree", "add", "-q", "-b", "side", str(linked), "trunk")
+    other = tmp_path / "c" / "other"
+    other.mkdir(parents=True)
+    _git(other, "init", "-q", "-b", "trunk")
+    _git(other, *seeded)
+    resolved = _sessions_dir_from(linked, {**clean, variable: str(other / ".git")})
+    assert resolved == str(tmp_path / "a" / "dev-model-sessions")
+
+
 def test_untracked_files_alone_make_two_lanes_overlap(repo: Repo) -> None:
     alpha, beta = (_new(repo, s) for s in ("alpha", "beta"))
     (alpha / "new.txt").write_text("a\n", encoding="utf-8")
