@@ -359,8 +359,7 @@ acceptance record and its limits. The model replies were scripted; lane merges r
 On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
-▶ Next: step 3d's runner extension, a two-lens pull request because
-`lib/subprocess_runner.py` is safety-critical. The watcher (`_gh`),
+▶ Next: step 3d's caller-moving follow-up, a standard pull request. The watcher (`_gh`),
 `session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls,
 `archive_plan_sessions.py`'s recovery-hint reads, `review_eval.py`'s `_git` and
 `_run_engine`, and `lib/triage/`'s `git_output` and sweep-commit `rev-list` run through
@@ -368,11 +367,19 @@ the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lan
 (`without_git_environment`). `lane_usage.py` no longer runs Git itself: it
 finds the primary checkout through `state_paths.repo_root.primary_worktree`.
 On 2026-11-22 the operator chose to move only the callers `run_stdout` fits, then extend
-the runner. What it does not fit reads Git's exit code as the answer or reads bytes:
+the runner. The runner now has `run_result` (text as UTF-8 with replacement, exit code
+returned) and `run_bytes` (bytes in and out) beside `run_stdout`. The follow-up moves
+the callers that read Git's exit code as the answer or read bytes onto them:
 `kit_doctor.py`'s `_git_run` (which also keeps the `GIT_SSH_COMMAND`-style variables
 `fetch` needs), `review_eval.py`'s `_commit_exists` and `_isolated_tree` blob copy,
 `lib/triage/recovery.py`'s `merge-base --is-ancestor` and `_git_show`,
 `lib/triage/storage.py`'s `ls-files --error-unmatch` and `lib/triage/gate.py`'s `ps`.
+For `_git_run` it decides two differences that remain: `_git_run` passes
+`stdin=DEVNULL` where the runner passes no stdin, and it returns a timeout or a Git that
+cannot start as exit code 1 where the runner raises. It also takes the LOW findings
+recorded on #1497 and #1498: test pins for the blob copy's environment and the triage
+timeouts, the changelog's 30-second claim, which names `review_eval.py`'s `_git` only,
+and `run_result`'s lossy stdin.
 `lib/triage/providers.py`'s injected `subprocess_runner` returns a `CompletedProcess`
 on purpose, and the same file runs its own `read-tree`, `cat-file` and `diff --cached`
 calls with their own environment. `lib/triage/model.py`'s `_identity_git` keeps `GIT_CONFIG_*`, and the
