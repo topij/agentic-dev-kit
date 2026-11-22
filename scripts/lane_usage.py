@@ -46,11 +46,13 @@ import json
 import math
 import os
 import stat
-import subprocess
 import sys
 import uuid
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
+from state_paths.repo_root import primary_worktree, walk_up_for_marker  # noqa: E402
 
 TOKEN_FIELDS = (
     "input_tokens",
@@ -601,39 +603,20 @@ def build_report(
 def _default_sessions_dir(cwd: Path) -> Path | None:
     """`$DEVKIT_SESSIONS_DIR`, else the sibling `dev-model-sessions` of the primary
     checkout — the same default `dev_session.sh` resolves (`scripts/lib/repo_root.sh`).
+
+    The primary comes from the shared `state_paths.repo_root.primary_worktree`, the
+    resolver `pr_watch.py` uses, rather than a copy of it here. It runs Git without any
+    inherited `GIT_*` variable, since one such as `GIT_DIR` would otherwise answer for
+    another repository, and, as the shell does, it keeps the invoking checkout when the
+    primary is bare or is not a checkout. `None` means `cwd` is in no checkout.
     """
     override = os.environ.get("DEVKIT_SESSIONS_DIR")
     if override:
         return Path(override).expanduser().resolve()
-    try:
-        listing = subprocess.run(
-            ["git", "-C", str(cwd), "worktree", "list", "--porcelain", "-z"],
-            capture_output=True,
-            check=True,
-            timeout=30,
-        ).stdout
-    except (OSError, subprocess.SubprocessError):
+    checkout = walk_up_for_marker(cwd)
+    if checkout is None:
         return None
-    first = listing.split(b"\0", 1)[0]
-    primary: Path | None = None
-    if first.startswith(b"worktree "):
-        primary = Path(os.fsdecode(first[len(b"worktree "):]))
-    # As repo_root.sh: a separate git dir or a submodule lists its git directory,
-    # not a checkout, first; fall back to the invoking checkout's root then.
-    if primary is None or not primary.is_absolute() or not (primary / ".git").exists():
-        try:
-            top = subprocess.run(
-                ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
-                capture_output=True,
-                check=True,
-                timeout=30,
-            ).stdout.strip()
-        except (OSError, subprocess.SubprocessError):
-            return None
-        if not top:
-            return None
-        primary = Path(os.fsdecode(top))
-    return primary.parent / "dev-model-sessions"
+    return primary_worktree(checkout).parent / "dev-model-sessions"
 
 
 def _format_tokens(source: dict[str, Any]) -> str:

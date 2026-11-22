@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -276,12 +277,13 @@ def test_ranking_window_and_unreadable_receipts(tmp_path: Path) -> None:
     assert [r["scope"] for r in windowed["lanes"]] == ["big", "small", "broken"]
 
 
-def _run(*args: str, env: dict | None = None) -> subprocess.CompletedProcess:
+def _run(*args: str, env: dict | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(
         [sys.executable, str(ENGINE), *args],
         capture_output=True,
         text=True,
         env=env,
+        cwd=cwd,
         check=False,
     )
 
@@ -304,8 +306,6 @@ def test_cli_json_text_and_strict_exit(tmp_path: Path) -> None:
 
 
 def test_cli_honours_devkit_sessions_dir(tmp_path: Path) -> None:
-    import os
-
     sessions, projects = tmp_path / "sessions", tmp_path / "projects"
     _lane(sessions, "lane-a", usage=_usage(2, 3))
     env = {**os.environ, "DEVKIT_SESSIONS_DIR": str(sessions)}
@@ -596,3 +596,76 @@ def test_nested_role_identifies_untyped_records_without_usage(tmp_path, role, co
         handle.write(json.dumps({"message": {"role": role, "content": []}}) + "\n")
     source = lane_usage.subagent_usage(tmp_path, [SID_A])
     assert source["complete"] is complete and source["total_tokens"] == 4
+
+
+def _git(*args: str, cwd: Path) -> None:
+    subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        cwd=cwd, env=_no_git_env(), capture_output=True, check=True,
+    )
+
+
+def _no_git_env(**extra: str) -> dict:
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    env.pop("DEVKIT_SESSIONS_DIR", None)
+    return {**env, **extra}
+
+
+def _primary_with_linked(tmp_path: Path) -> tuple[Path, Path]:
+    primary, linked = tmp_path / "a" / "primary", tmp_path / "b" / "linked"
+    primary.mkdir(parents=True)
+    _git("init", "-q", str(primary), cwd=tmp_path)
+    _git("commit", "-q", "--allow-empty", "-m", "c", cwd=primary)
+    _git("worktree", "add", "-q", str(linked), cwd=primary)
+    return primary, linked
+
+
+def _resolved_sessions_dir(cwd: Path, env: dict) -> subprocess.CompletedProcess:
+    return _run("--projects-root", str(cwd / "no-projects"), "--json", env=env, cwd=cwd)
+
+
+def test_default_sessions_dir_is_beside_the_primary_from_a_linked_worktree(tmp_path: Path) -> None:
+    primary, linked = _primary_with_linked(tmp_path)
+    (primary.parent / "dev-model-sessions").mkdir()
+    result = _resolved_sessions_dir(linked, _no_git_env())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sessions_dir"] == str((primary.parent / "dev-model-sessions").resolve())
+
+
+@pytest.mark.parametrize("variable", ["GIT_DIR", "GIT_COMMON_DIR"])
+def test_an_inherited_git_variable_does_not_choose_another_repository(tmp_path: Path, variable: str) -> None:
+    """Before, `git worktree list` honoured the variable and listed the other repository."""
+    primary, linked = _primary_with_linked(tmp_path)
+    (primary.parent / "dev-model-sessions").mkdir()
+    other = tmp_path / "c" / "other"
+    other.mkdir(parents=True)
+    _git("init", "-q", str(other), cwd=tmp_path)
+    _git("commit", "-q", "--allow-empty", "-m", "c", cwd=other)
+    (other.parent / "dev-model-sessions").mkdir()
+    result = _resolved_sessions_dir(linked, _no_git_env(**{variable: str(other / ".git")}))
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sessions_dir"] == str((primary.parent / "dev-model-sessions").resolve())
+
+
+def test_a_bare_primary_keeps_the_invoking_checkout(tmp_path: Path) -> None:
+    """As `devkit_default_sessions_dir` does: a bare repository has no checkout to sit beside."""
+    source, bare, linked = tmp_path / "src", tmp_path / "a" / "bare.git", tmp_path / "b" / "linked"
+    source.mkdir()
+    _git("init", "-q", str(source), cwd=tmp_path)
+    _git("commit", "-q", "--allow-empty", "-m", "c", cwd=source)
+    _git("clone", "-q", "--bare", str(source), str(bare), cwd=tmp_path)
+    _git("worktree", "add", "-q", str(linked), cwd=bare)
+    (linked.parent / "dev-model-sessions").mkdir()
+    result = _resolved_sessions_dir(linked, _no_git_env())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sessions_dir"] == str((linked.parent / "dev-model-sessions").resolve())
+
+
+def test_outside_any_checkout_the_default_is_refused(tmp_path: Path) -> None:
+    outside = tmp_path / "plain"
+    outside.mkdir()
+    if any((d / ".git").exists() for d in (outside, *outside.parents)):
+        pytest.skip("the test's temporary directory sits inside a checkout")
+    result = _resolved_sessions_dir(outside, _no_git_env())
+    assert result.returncode == 2
+    assert "cannot resolve the sessions directory" in result.stderr
