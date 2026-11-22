@@ -359,29 +359,38 @@ acceptance record and its limits. The model replies were scripted; lane merges r
 On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
-▶ Next: continue step 3d with the next subprocess caller. The watcher (`_gh`),
-`session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls and
-`archive_plan_sessions.py`'s recovery-hint reads now run through
+▶ Next: step 3d's caller-moving follow-up, a standard pull request. The watcher (`_gh`),
+`session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls,
+`archive_plan_sessions.py`'s recovery-hint reads, `review_eval.py`'s `_git` and
+`_run_engine`, and `lib/triage/`'s `git_output` and sweep-commit `rev-list` run through
 `lib/subprocess_runner.py`, which also carries the `GIT_*` policy
 (`without_git_environment`). `lane_usage.py` no longer runs Git itself: it
 finds the primary checkout through `state_paths.repo_root.primary_worktree`.
-Callers not yet moved and outside `review.safety_critical_paths` include
-`review_eval.py` and `lib/triage/`. `kit_doctor.py`'s `_git_run` is one too, but it does not fit
-`run_stdout`: its callers read Git's exit code as the answer
-(`merge-base --is-ancestor`), and it keeps the `GIT_SSH_COMMAND`-style variables
-`fetch` needs. The runner now has `run_result` (text as UTF-8 with replacement, exit
-code returned) and `run_bytes` (bytes in and out) beside `run_stdout`. The next step is
-a standard pull request moving `_git_run` and the other exit-code and bytes callers onto
-them. For `_git_run` it decides two differences that remain: `_git_run` passes
+On 2026-11-22 the operator chose to move only the callers `run_stdout` fits, then extend
+the runner. The runner now has `run_result` (text as UTF-8 with replacement, exit code
+returned) and `run_bytes` (bytes in and out) beside `run_stdout`. The follow-up moves
+the callers that read Git's exit code as the answer or read bytes onto them:
+`kit_doctor.py`'s `_git_run` (which also keeps the `GIT_SSH_COMMAND`-style variables
+`fetch` needs), `review_eval.py`'s `_commit_exists` and `_isolated_tree` blob copy,
+`lib/triage/recovery.py`'s `merge-base --is-ancestor` and `_git_show`,
+`lib/triage/storage.py`'s `ls-files --error-unmatch` and `lib/triage/gate.py`'s `ps`.
+For `_git_run` it decides two differences that remain: `_git_run` passes
 `stdin=DEVNULL` where the runner passes no stdin, and it returns a timeout or a Git that
-cannot start as exit code 1 where the runner raises. #1219's item 1, the per-item timeout, holds on the
+cannot start as exit code 1 where the runner raises. It also takes the LOW findings
+recorded on #1497 and #1498: test pins for the blob copy's environment and the triage
+timeouts, the changelog's 30-second claim, which names `review_eval.py`'s `_git` only,
+and `run_result`'s lossy stdin.
+`lib/triage/providers.py`'s injected `subprocess_runner` returns a `CompletedProcess`
+on purpose, and the same file runs its own `read-tree`, `cat-file` and `diff --cached`
+calls with their own environment. `lib/triage/model.py`'s `_identity_git` keeps `GIT_CONFIG_*`, and the
+operator chose on 2026-11-22 to leave it off the runner. #1219's item 1, the per-item timeout, holds on the
 runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 (unpinned guards, untested helpers), which that move did not take. #1172 is the
 process-group stop half of 3d. #1486 records the operator's scoped host-sandbox
 default for trusted Claude reviews. #1025 retains worker provisioning for external
 contributions and Codex. Lane merges remain operator-only.
-The operator decides whether #1370, #1371 and #345 are done, now that
-#1440 and #1441 have merged. The primary
+On 2026-11-22 the operator closed #1370 (delivered by #1440) and #345 (delivered by
+#1441), and narrowed #1371 to its messages-and-prose remainder at P3. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on
 2026-11-14), so the D3 trial runs from that checkout; the tracked value stays `[]`. Time-bound: the D3 trial's systemize runs on 2026-11-27,
 2026-12-11 and 2026-12-13, and its judgement on 2026-12-13 after the last run (shift these dates if step 1a merges

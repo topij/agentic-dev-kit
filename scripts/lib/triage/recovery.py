@@ -6,10 +6,13 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from subprocess_runner import CommandError, run_stdout, without_git_environment
+
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
 from .model import (
     BASE_KEYS,
+    GIT_TIMEOUT,
     OID_RE,
     Settings,
     TriageError,
@@ -592,7 +595,7 @@ def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
     rel = path.relative_to(settings.paths.repo).as_posix()
     result = subprocess.run(
         ["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
-        check=False, capture_output=True,
+        check=False, capture_output=True, env=without_git_environment(),
     )
     if result.returncode:
         return None
@@ -620,7 +623,7 @@ def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any)
     ref = f"refs/remotes/origin/{settings.protected_branch}"
     reachable = subprocess.run(
         ["git", "-C", str(settings.paths.repo), "merge-base", "--is-ancestor", merge_commit, ref],
-        check=False, capture_output=True,
+        check=False, capture_output=True, env=without_git_environment(),
     )
     if reachable.returncode:
         return None
@@ -655,17 +658,22 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
     repo = str(settings.paths.repo)
     ref = f"refs/remotes/origin/{settings.protected_branch}"
     log, archive = settings.paths.friction_log, settings.paths.archive
-    ancestor = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", since, ref], check=False, capture_output=True)
+    # The exit code is the answer here, and `_git_show` reads bytes, so neither fits
+    # `run_stdout`; they share its environment so every read names the same repository.
+    ancestor = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", since, ref], check=False,
+                              capture_output=True, env=without_git_environment())
     if ancestor.returncode:
         return None
-    listed = subprocess.run(
-        ["git", "-C", repo, "rev-list", "--first-parent", f"{since}..{ref}", "--", log.relative_to(settings.paths.repo).as_posix()],
-        check=False, capture_output=True, text=True,
-    )
-    if listed.returncode:
+    try:
+        listed = run_stdout(
+            ["git", "-C", repo, "rev-list", "--first-parent", f"{since}..{ref}", "--",
+             log.relative_to(settings.paths.repo).as_posix()],
+            cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment(),
+        )
+    except CommandError:
         return None
     found: list[str] = []
-    for commit in listed.stdout.split():
+    for commit in listed.split():
         before = _git_show(settings, f"{commit}^", log)
         after = _git_show(settings, commit, log)
         archived = _git_show(settings, commit, archive)

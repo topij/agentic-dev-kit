@@ -472,6 +472,8 @@
     "scripts/lib/subprocess_runner.py": {
       "required_by": [
         "scripts/archive_plan_sessions.py",
+        "scripts/lib/triage/model.py",
+        "scripts/lib/triage/recovery.py",
         "scripts/pr_watch.py",
         "scripts/session_cleanup.py",
         "scripts/sweep_scratch.py"
@@ -666,7 +668,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "84cda4b73605fcd0bcdbd64278ed39d0411a13cc05562a59eab35197ca1f27f5"
+      "sha256": "00481650ac7146e997c5b2b597b8e0a1be444509ea1083ff6584bb539abc30a8"
     },
     "scripts/lib/triage/outcome.py": {
       "required_by": [
@@ -690,7 +692,7 @@
         "scripts/lib/triage/engine.py"
       ],
       "role": "engine",
-      "sha256": "72f46a0ee21a3a50dec203db1810a7dbe9a8984dbeafc7fb0d4d86ce58340e76"
+      "sha256": "d1aff5e958e8bf3c8d16f9eb04ae81af54e3ee52ef679de938bc9495417a7d26"
     },
     "scripts/lib/triage/storage.py": {
       "required_by": [
@@ -718,7 +720,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "a7e715a56f70cc5cc6c900aef3e0f349ee5cd79db61274c24dd2650367232934"
+      "sha256": "a0bc99d38afa36df4de4db99a1375cef34fecc4a3965bf7bcf49f9296b7955f2"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -898,7 +900,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "20401d07aef8818b039f00a955c97df629b80cc631c5107c281ff1a4ccb57275"
+      "sha256": "f7f3c68455f39aab642345a5be8ada44abf3af7381d9dafcfe0e77370da3754e"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",
@@ -1002,7 +1004,7 @@
     },
     "scripts/tests/test_triage_recovery.py": {
       "role": "test",
-      "sha256": "b72aff11099d564baf6cf59730f05bc647833b4168cb752ab730e35512af232c"
+      "sha256": "a8f19c50659908028f553bf385363e33453221e2c8b9df892a064957be8839c4"
     },
     "scripts/tests/test_triage_state.py": {
       "role": "test",

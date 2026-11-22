@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 
 import merge_predicate
 from kitconfig import get, load_config, repo_root
+from subprocess_runner import CommandError, CommandFailed, run_stdout, without_git_environment
 
 from .canonical import CanonicalError, decode_bytes, digest, digest_bytes, loads_exact
 
@@ -407,11 +408,25 @@ def load_settings(start: Path | None = None) -> Settings:
     )
 
 
+# How long one Git read may run before it is killed.
+GIT_TIMEOUT = 30
+
+
 def git_output(repo: Path, *args: str) -> str:
-    result = subprocess.run(["git", "-C", str(repo), *args], check=False, capture_output=True, text=True)
-    if result.returncode:
-        raise TriageError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
-    return result.stdout.strip()
+    """Git's stripped stdout for the repository at ``repo``, or ``TriageError``.
+
+    Runs through the shared runner without any inherited ``GIT_*`` variable, so a
+    hook's ``GIT_DIR`` cannot answer for another repository. ``_identity_git`` below
+    keeps its own narrower filter on purpose and does not use this.
+    """
+    try:
+        out = run_stdout(["git", "-C", str(repo), *args], cwd=None, timeout=GIT_TIMEOUT,
+                         env=without_git_environment())
+    except CommandFailed as exc:
+        raise TriageError(f"git {' '.join(args)} failed: {exc.stderr}") from exc
+    except CommandError as exc:
+        raise TriageError(str(exc)) from exc
+    return out.strip()
 
 
 # Variables that make git read a repository other than the one at `-C <path>`.

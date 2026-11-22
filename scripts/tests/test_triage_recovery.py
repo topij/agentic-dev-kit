@@ -230,3 +230,110 @@ def test_gate_only_recovery_refuses_uncertain_live_owner_without_persisted_chang
     }
     assert after == before
     lease.release()
+
+
+def _plain_git(cwd: Path, *args: str) -> str:
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    return subprocess.run(
+        ["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *args],
+        cwd=cwd, env=env, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+
+
+def _repo_with_a_sweep(root: Path) -> tuple[str, str]:
+    """A repository whose `origin/main` holds one commit moving BLOCK-A to the archive."""
+    root.mkdir(parents=True)
+    _plain_git(root, "init", "-q", "-b", "main")
+    (root / "friction.md").write_text("BLOCK-A\n", encoding="utf-8")
+    (root / "archive.md").write_text("", encoding="utf-8")
+    _plain_git(root, "add", "-A")
+    _plain_git(root, "commit", "-qm", "seed")
+    since = _plain_git(root, "rev-parse", "HEAD")
+    (root / "friction.md").write_text("", encoding="utf-8")
+    (root / "archive.md").write_text("BLOCK-A\n", encoding="utf-8")
+    _plain_git(root, "commit", "-qam", "sweep")
+    sweep = _plain_git(root, "rev-parse", "HEAD")
+    _plain_git(root, "update-ref", "refs/remotes/origin/main", sweep)
+    return since, sweep
+
+
+@pytest.mark.parametrize("variable", [None, "GIT_DIR", "GIT_COMMON_DIR"])
+def test_the_sweep_commit_is_found_in_the_named_repository_whatever_git_inherits(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, variable: str | None
+) -> None:
+    """Every Git read in `_find_sweep_commit` drops inherited `GIT_*` variables.
+
+    Before, an inherited `GIT_DIR` sent them to another repository, where the
+    run's commits do not exist, and the sweep was never found.
+    """
+    from types import SimpleNamespace
+
+    from triage import recovery
+
+    repo = tmp_path / "repo"
+    since, sweep = _repo_with_a_sweep(repo)
+    other = tmp_path / "other"
+    other.mkdir()
+    _plain_git(other, "init", "-q")
+    if variable:
+        monkeypatch.setenv(variable, str(other / ".git"))
+    settings = SimpleNamespace(
+        paths=SimpleNamespace(repo=repo, friction_log=repo / "friction.md", archive=repo / "archive.md"),
+        protected_branch="main",
+    )
+    parsed = {
+        "run_identity": {"protected_branch_head": since},
+        "frozen_snapshot": {"content": {"blocks": [{"candidate_id": "a", "source_block": "BLOCK-A\n"}]}},
+        "decisions": [{"candidate_id": "a", "decision": "archive"}],
+    }
+    assert recovery._find_sweep_commit(settings, parsed) == sweep
+    assert recovery._sweep_landed(settings, parsed, sweep) == "refs/remotes/origin/main"
+
+
+def test_a_rev_list_that_cannot_answer_finds_no_sweep(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A timed-out or failed `rev-list` through the shared runner leaves the state held."""
+    from types import SimpleNamespace
+
+    from subprocess_runner import CommandTimedOut
+    from triage import recovery
+
+    repo = tmp_path / "repo"
+    since, _ = _repo_with_a_sweep(repo)
+
+    def timed_out(*_args, **_kwargs):
+        raise CommandTimedOut("git rev-list timed out after 30s")
+
+    monkeypatch.setattr(recovery, "run_stdout", timed_out)
+    settings = SimpleNamespace(
+        paths=SimpleNamespace(repo=repo, friction_log=repo / "friction.md", archive=repo / "archive.md"),
+        protected_branch="main",
+    )
+    parsed = {
+        "run_identity": {"protected_branch_head": since},
+        "frozen_snapshot": {"content": {"blocks": [{"candidate_id": "a", "source_block": "BLOCK-A\n"}]}},
+        "decisions": [{"candidate_id": "a", "decision": "archive"}],
+    }
+    assert recovery._find_sweep_commit(settings, parsed) is None
+
+
+def test_git_output_reads_the_named_repository_despite_an_inherited_git_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from triage.model import git_output
+
+    repo = tmp_path / "repo"
+    _, sweep = _repo_with_a_sweep(repo)
+    other = tmp_path / "other"
+    other.mkdir()
+    _plain_git(other, "init", "-q")
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    assert git_output(repo, "rev-parse", "refs/remotes/origin/main") == sweep
+
+
+def test_git_output_names_the_failed_command_and_its_stderr(tmp_path: Path) -> None:
+    from triage.model import git_output
+
+    repo = tmp_path / "repo"
+    _repo_with_a_sweep(repo)
+    with pytest.raises(TriageError, match=r"^git rev-parse --verify refs/remotes/origin/absent failed: .+"):
+        git_output(repo, "rev-parse", "--verify", "refs/remotes/origin/absent")
