@@ -632,6 +632,17 @@ def test_default_sessions_dir_is_beside_the_primary_from_a_linked_worktree(tmp_p
     assert json.loads(result.stdout)["sessions_dir"] == str((primary.parent / "dev-model-sessions").resolve())
 
 
+def test_default_sessions_dir_from_a_subdirectory_walks_up_to_the_checkout(tmp_path: Path) -> None:
+    """The old `git -C <cwd>` read answered from any depth; the walk-up must too."""
+    primary, linked = _primary_with_linked(tmp_path)
+    (primary.parent / "dev-model-sessions").mkdir()
+    deep = linked / "sub" / "deep"
+    deep.mkdir(parents=True)
+    result = _resolved_sessions_dir(deep, _no_git_env())
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sessions_dir"] == str((primary.parent / "dev-model-sessions").resolve())
+
+
 @pytest.mark.parametrize("variable", ["GIT_DIR", "GIT_COMMON_DIR"])
 def test_an_inherited_git_variable_does_not_choose_another_repository(tmp_path: Path, variable: str) -> None:
     """Before, `git worktree list` honoured the variable and listed the other repository."""

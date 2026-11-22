@@ -842,7 +842,7 @@
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",
-      "sha256": "b71a92ea78c8474b9e123d16f0a477a42c0c3b537ce1af88520f361dadaf253e"
+      "sha256": "38dfd6750a7ca660103ea0e300e8576a50c6deb88af3595383b2bb44da8e6645"
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
