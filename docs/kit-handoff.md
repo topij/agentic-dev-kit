@@ -363,9 +363,10 @@ the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lan
 `session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls and
 `archive_plan_sessions.py`'s recovery-hint reads now run through
 `lib/subprocess_runner.py`, which also carries the `GIT_*` policy
-(`without_git_environment`). Callers not yet moved and outside
-`review.safety_critical_paths` include `lane_usage.py`, `review_eval.py` and
-`lib/triage/`. `kit_doctor.py`'s `_git_run` is one too, but it does not fit
+(`without_git_environment`). `lane_usage.py` no longer runs Git itself: it
+finds the primary checkout through `state_paths.repo_root.primary_worktree`.
+Callers not yet moved and outside `review.safety_critical_paths` include
+`review_eval.py` and `lib/triage/`. `kit_doctor.py`'s `_git_run` is one too, but it does not fit
 `run_stdout`: its callers read Git's exit code as the answer
 (`merge-base --is-ancestor`), and it keeps the `GIT_SSH_COMMAND`-style variables
 `fetch` needs. Moving it needs a runner that returns the exit code, and

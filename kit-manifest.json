@@ -274,7 +274,7 @@
     },
     "scripts/lane_usage.py": {
       "role": "engine",
-      "sha256": "e9528503106e37ee24aae7a6cd7454901d2527661890bdb849a3f27af1613fc3"
+      "sha256": "609737e52ee52256f1bbf8204061db2cdb88d76be639392102ed91fa12836a8b"
     },
     "scripts/launch_lane.py": {
       "role": "engine",
@@ -443,6 +443,7 @@
     },
     "scripts/lib/state_paths/repo_root.py": {
       "required_by": [
+        "scripts/lane_usage.py",
         "scripts/lib/state_paths/resolver.py",
         "scripts/pr_watch.py"
       ],
@@ -841,7 +842,7 @@
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",
-      "sha256": "db787e567e4c77adb9ab181697bb92292ea49025b77a5f2c67a0af90eee0a86d"
+      "sha256": "38dfd6750a7ca660103ea0e300e8576a50c6deb88af3595383b2bb44da8e6645"
     },
     "scripts/tests/test_lite_profile_docs.py": {
       "role": "repo-only",
