@@ -142,7 +142,7 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "58f6f515ada9f5023cebe703956ec53cc3a75d5e682042ba05b2d54b992a119c"
+      "sha256": "de2b927be80334e1b1bb9268ffee14f0e0d123b580774a200fbf16886e15b90a"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md": {
       "required_by": [
@@ -156,7 +156,7 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "15d93819411ce78ea2fe7c48b38dd3ba22e543ad63c23675861856948744890e"
+      "sha256": "a910f25935501099136d84e5cf2712520d1dc567b5669f0fa40b0fbbdd33af85"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md": {
       "required_by": [
@@ -630,7 +630,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "78b74686e8c5875d36877d83845dddb533a70a8ed156608311b0e55aed7fbaad"
+      "sha256": "14191049a358970cc4fe1fce1293c0fb81c3e78024f8a085e257da98f37c437d"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
@@ -688,14 +688,14 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "a9367fe1bcbc3708a457b817c3e6b8973abd1a1f99dba34b7b294ace8927565f"
+      "sha256": "d6cd8e3cc5802e30cb822eeeb39cfa101e818ff10cdfe84e77b70a7274debf18"
     },
     "scripts/lib/triage/recovery.py": {
       "required_by": [
         "scripts/lib/triage/engine.py"
       ],
       "role": "engine",
-      "sha256": "066a6cb667c9be705e00678d12ac8e1eb9df9312fe91fda23edb2fb6d0d11fd1"
+      "sha256": "66649de7dd3c510ba3d4c230c97766365ec073c098bc97dbcb5b3590df684ef9"
     },
     "scripts/lib/triage/storage.py": {
       "required_by": [
@@ -815,7 +815,7 @@
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
-      "sha256": "a5ca59e32a8319b234bd17e1388cabe08607cf2b4c9c31e00665102762d06c36"
+      "sha256": "c9153d76b24da7c7e6aa8e4db4eb61c7405a4036b3bed819f89857208993f3cb"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",

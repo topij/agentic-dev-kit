@@ -1997,3 +1997,299 @@ def test_recover_holds_when_the_runs_draft_head_is_not_on_the_protected_ref(
     held = run("recover", context="interactive", request={}, start=root)
     assert held["detail"] == "external-attempt-absence-unproven"
     assert state_path.read_bytes() == raw
+
+
+# #1474: a sweep PR that needed a fix commit. The engine's `pr-watch` reads the
+# moved head back `ambiguous`, so `resume` holds for good; `recover` with the forge
+# enabled retires the state once the forge reads the PR back merged and git proves
+# the sweep landed.
+_MERGED_PLAN_CHILD = r'''
+import json, sys
+from pathlib import Path
+from triage.canonical import dumps
+from triage.engine import run
+from triage.providers import FakeForge
+forge = None
+if sys.argv[2] != "null":
+    forge = FakeForge([])
+    forge.pull_request_read_back = json.loads(sys.argv[2])
+print(dumps(run("recover", context="interactive", request={}, start=Path(sys.argv[1]), forge=forge)).decode(), flush=True)
+'''
+
+
+def _plan_merged_in_own_process(root: Path, read_back: dict | None) -> dict:
+    """Plan `recover` in its own process, as the CLI does, so a later approval can
+    prove the planning gate's owner dead (#863)."""
+    import json
+
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(ENGINE_DIR / "lib") + os.pathsep + str(ENGINE_DIR)
+    completed = subprocess.run(
+        [sys.executable, "-c", _MERGED_PLAN_CHILD, str(root), json.dumps(read_back) if read_back is not None else "null"],
+        check=True, capture_output=True, text=True, env=environment,
+    )
+    return loads_exact(completed.stdout.strip().encode())
+
+
+def _stuck_sweep(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
+    """Finalize to a pull request whose head then moved: the state `resume` cannot leave."""
+    root = repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    draft_request, candidate_id = proposal_request(root)
+    run("new", context="interactive", request=draft_request, start=root)
+    state_path = state_root / "triage/triage-pipeline-state_live.json"
+    presented = loads_exact(state_path.read_bytes())
+    request, context = approval(presented, f"archive {candidate_id}")
+    worktree = tmp_path / "isolated-finalize"
+    shutil.copytree(root, worktree)
+    branch = finalize_branch(presented)
+    base = git(root, "rev-parse", "HEAD")
+    tree, commit, fixed = "1" * 40, "2" * 40, "3" * 40
+    pr_url = "https://github.com/topij/agentic-dev-kit/pull/999"
+    paths = ["docs/kit-friction-log-archive.md", "docs/kit-friction-log.md"]
+    pr_read_back = {"url": pr_url, "baseRefName": "main", "headRefName": branch, "isDraft": False, "files": paths}
+    forge = FakeForge([
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "head": base, "tree": "0" * 40}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "commit": commit, "tree": tree, "subject": "docs(triage): graduate friction-log entries", "paths": paths}),
+        verified({"repository": "topij/agentic-dev-kit", "base": base, "branch": branch, "worktree": str(worktree), "remote_head": commit, "tree": tree}),
+        verified({**pr_read_back, "headRefOid": commit}),
+        # What `GitHubForge` returns when the head moved under the watch.
+        ProviderObservation("ambiguous", native_watch_receipt(pr_url, fixed), {**pr_read_back, "headRefOid": fixed}),
+    ])
+    held = run(
+        "resume", context="interactive", request={**request, "finalize": True, "worktree": str(worktree)},
+        start=root, approval_context=context, forge=forge,
+    )
+    assert held["outcome"] == "operator-held"
+    raw = state_path.read_bytes()
+    state = loads_exact(raw)
+    assert state["phase"] == "forge-finalize"
+    assert [(item["kind"], item["status"]) for item in state["finalization_operations"]][-1] == ("pr-watch", "ambiguous")
+    return {
+        "root": root, "worktree": worktree, "state_path": state_path, "raw": raw, "commit": commit,
+        "fixed": fixed, "merged": {**pr_read_back, "headRefOid": fixed, "mergedAt": "2026-11-18T10:00:00Z", "merged": True},
+    }
+
+
+def _land_fixed_sweep(stuck: dict) -> str:
+    """Merge the (fixed) sweep into the protected branch as one commit."""
+    root, worktree = stuck["root"], stuck["worktree"]
+    for name in ("docs/kit-friction-log.md", "docs/kit-friction-log-archive.md"):
+        (root / name).write_bytes((worktree / name).read_bytes())
+    git(root, "add", "-A")
+    git(root, "commit", "-q", "-m", "docs(triage): graduate friction-log entries (#999)")
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    return git(root, "rev-parse", "HEAD")
+
+
+@pytest.mark.evidence
+def test_recover_retires_a_stuck_sweep_whose_fixed_pull_request_merged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    root, state_path, raw = stuck["root"], stuck["state_path"], stuck["raw"]
+    # `resume` has no way out: the moved head reads back ambiguous every time.
+    resumed = run("resume", context="interactive", request={"finalize": True}, start=root, forge=FakeForge([]))
+    assert resumed["outcome"] == "operator-held"
+    raw = state_path.read_bytes()
+    assert [(item["kind"], item["status"]) for item in loads_exact(raw)["finalization_operations"]][-1] == ("pr-watch", "ambiguous")
+    # Without the forge, `recover` cannot prove the merge and names the flag.
+    unforged = run("recover", context="interactive", request={}, start=root)
+    assert unforged["detail"] == "sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused"
+    assert "--enable-github-forge" in unforged["resume_action"]
+    assert state_path.read_bytes() == raw
+    # The forge says merged, but git has no sweep commit yet.
+    unlanded = _plan_merged_in_own_process(root, stuck["merged"])
+    assert unlanded["detail"] == "sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused"
+    assert state_path.read_bytes() == raw
+    sweep = _land_fixed_sweep(stuck)
+    planned = _plan_merged_in_own_process(root, stuck["merged"])
+    assert (planned["outcome"], planned["waiting_on"]) == ("operator-held", "recovery-approval")
+    assert planned["detail"] == "merged sweep state captured for retirement"
+    plan = planned["recovery_plan"]
+    assert plan["action_core"]["action"] == "retire-merged-sweep-state"
+    evidence = plan["action_core"]["merged_sweep_evidence"]
+    assert evidence["merge_commit"] == sweep
+    assert evidence["merge_commit_source"] == "found-in-git"
+    assert evidence["merge_commit_reachable_from"] == "refs/remotes/origin/main"
+    assert (evidence["engine_head"], evidence["merged_head"]) == (stuck["commit"], stuck["fixed"])
+    assert evidence["swept_candidates"] == ["TRI-01"]
+    assert state_path.read_bytes() == raw
+    core_digest = plan["action_core_digest"]
+    supplied = {"decision": "approve", "source": "current-session", "approver_identity": "operator", "core_digest": core_digest}
+    context = ApprovalContext("current-session", "operator", {"decision": "approve", "approver_identity": "operator", "core_digest": core_digest})
+    # The approving rerun must read the same merged pull request to rebuild the digest.
+    unforged_approval = run("recover", context="interactive", request={"recovery_approval": supplied}, start=root, approval_context=context)
+    assert unforged_approval["outcome"] == "operator-held"
+    assert state_path.read_bytes() == raw
+    forge = FakeForge([])
+    forge.pull_request_read_back = stuck["merged"]
+    recovered = run("recover", context="interactive", request={"recovery_approval": supplied}, start=root, approval_context=context, forge=forge)
+    assert recovered["outcome"] == "operator-held"
+    assert loads_exact(state_path.read_bytes())["kind"] == "recovered-safe-to-restart"
+    retained = Path(plan["action_core"]["quarantine_path"])
+    assert retained.read_bytes() == raw
+    restarted = run("new", context="interactive", request={}, start=root)
+    assert restarted["detail"] == "verified recovery receipt replaced by reserved new state"
+    assert loads_exact(state_path.read_bytes())["phase"] == "reserved"
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("change", ["unmerged", "merged-without-time", "other-pull-request", "other-base", "other-branch"])
+def test_recover_refuses_a_stuck_sweep_the_forge_does_not_show_merged_elsewhere(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """Only a merge into the protected branch of this run's own pull request
+    retires the state; anything else leaves it."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    _land_fixed_sweep(stuck)
+    read_back = dict(stuck["merged"])
+    if change == "unmerged":
+        read_back.update(merged=False, mergedAt=None)
+    elif change == "merged-without-time":
+        read_back["mergedAt"] = None
+    elif change == "other-pull-request":
+        read_back["url"] = "https://github.com/topij/agentic-dev-kit/pull/1000"
+    elif change == "other-base":
+        read_back["baseRefName"] = "release"
+    else:
+        read_back["headRefName"] = "chore/someone-else"
+    refused = _plan_merged_in_own_process(stuck["root"], read_back)
+    assert refused["detail"] == "sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused"
+    assert "recovery_plan" not in refused or refused["recovery_plan"] is None
+    assert stuck["state_path"].read_bytes() == stuck["raw"]
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("change", [
+    "phase", "tracker-unverified", "notification-unverified", "attempt-unsettled", "push-unverified",
+    "branch-create-attempt-unsettled", "commit-attempt-unsettled", "push-attempt-unsettled",
+    "pull-request-attempt-unsettled", "no-tail", "watch-verified", "watch-unsettled", "tail-out-of-order",
+    "engine-head-not-a-sha",
+])
+def test_merged_sweep_shape_reads_only_a_stuck_sweep_with_every_write_verified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    """The state alone decides whether `recover` reads the forge at all: every
+    tracker, notification and writing forge operation verified, and after them
+    only `pr-watch`/`merge-read-back`, the last never verified."""
+    from triage.recovery import merged_sweep_shape
+
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    state = loads_exact(stuck["raw"])
+    assert merged_sweep_shape(state) == {
+        "pull_request": stuck["merged"]["url"], "branch": stuck["merged"]["headRefName"], "engine_head": stuck["commit"],
+    }
+    operations = state["finalization_operations"]
+    if change == "phase":
+        state["phase"] = "archive-sweep"
+    elif change == "tracker-unverified":
+        state["operations"] = [{"status": "ambiguous"}]
+    elif change == "notification-unverified":
+        state["notification_operations"] = [{"status": "ambiguous"}]
+    elif change.endswith("-attempt-unsettled"):
+        index = ["branch-create", "commit", "push", "pull-request"].index(change.removesuffix("-attempt-unsettled"))
+        operations[index]["attempts"] = [*operations[index]["attempts"], {"status": "attempting", "intent_digest": "x"}]
+    elif change == "watch-unsettled":
+        operations[-1]["status"] = "unsettled"
+    elif change == "attempt-unsettled":
+        state["attempts"] = [*state["attempts"], {"status": "attempting", "intent_digest": "x"}]
+    elif change == "push-unverified":
+        operations[2]["status"] = "ambiguous"
+    elif change == "no-tail":
+        del operations[4:]
+    elif change == "watch-verified":
+        operations[-1]["status"] = "verified"
+    elif change == "tail-out-of-order":
+        operations[-1]["kind"] = "merge-read-back"
+    else:
+        operations[3]["read_back"]["headRefOid"] = "not-a-sha"
+    assert merged_sweep_shape(state) is None
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("failure", [OSError("gh not found"), RuntimeError("client failed")], ids=["oserror", "runtime"])
+def test_a_forge_read_that_fails_any_way_refuses_and_releases_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    """A forge read that raises is a held refusal, and the gate is released, so the
+    next `recover` plans normally (#1505 review round 2, F2)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    _land_fixed_sweep(stuck)
+
+    class Failing(FakeForge):
+        def authority(self, action: str, request: dict) -> dict:
+            if action == "pull-request-read-back":
+                raise failure
+            return super().authority(action, request)
+
+    refused = run("recover", context="interactive", request={}, start=stuck["root"], forge=Failing([]))
+    assert refused["outcome"] == "operator-held"
+    assert "pull-request read-back failed" in refused["detail"]
+    assert stuck["state_path"].read_bytes() == stuck["raw"]
+    planned = _plan_merged_in_own_process(stuck["root"], stuck["merged"])
+    assert planned["detail"] == "merged sweep state captured for retirement"
+
+
+@pytest.mark.evidence
+def test_the_captured_plan_decides_the_recover_wording(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If the forge's answer changes between the decision read and the captured
+    plan, the result is worded from the captured plan (#1505 review round 2, F1)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    _land_fixed_sweep(stuck)
+
+    class Flipping(FakeForge):
+        reads = 0
+
+        def authority(self, action: str, request: dict) -> dict:
+            if action == "pull-request-read-back":
+                Flipping.reads += 1
+                if Flipping.reads > 1:
+                    return {**stuck["merged"], "merged": False, "mergedAt": None}
+            return super().authority(action, request)
+
+    forge = Flipping([])
+    forge.pull_request_read_back = stuck["merged"]
+    result = run("recover", context="interactive", request={}, start=stuck["root"], forge=forge)
+    assert result["recovery_plan"]["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
+    assert result["detail"] != "merged sweep state captured for retirement"
+
+
+@pytest.mark.evidence
+def test_recover_still_names_resume_for_a_watch_waiting_on_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An `unsettled` watch is the ordinary wait for checks, which `resume` retries,
+    so `recover` refuses it as valid and names `resume` (#1505 review F1)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    state = loads_exact(stuck["raw"])
+    state["finalization_operations"][-1]["status"] = "unsettled"
+    for attempt in state["finalization_operations"][-1]["attempts"][1:]:
+        attempt["status"] = "unsettled"
+    stuck["state_path"].write_bytes(dumps(state))
+    forge = FakeForge([])
+    forge.pull_request_read_back = {**stuck["merged"], "merged": False, "mergedAt": None, "headRefOid": stuck["commit"]}
+    refused = run("recover", context="interactive", request={}, start=stuck["root"], forge=forge)
+    assert (refused["detail"], refused["resume_action"]) == ("captured state is valid; recovery refused", "resume")
+    assert forge.calls == []
+
+
+@pytest.mark.evidence
+def test_recover_retires_a_stuck_sweep_merged_at_the_engines_own_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A watch that never verified, merged at the engine's own head with no fix
+    commit, is as stuck as a moved head: `resume` holds, so `recover` retires it
+    once git proves the sweep (#1505 review round 4, F1)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    _land_fixed_sweep(stuck)
+    at_engine_head = {**stuck["merged"], "headRefOid": stuck["commit"]}
+    resumed = run("resume", context="interactive", request={"finalize": True}, start=stuck["root"], forge=FakeForge([]))
+    assert resumed["outcome"] == "operator-held"
+    planned = _plan_merged_in_own_process(stuck["root"], at_engine_head)
+    assert planned["detail"] == "merged sweep state captured for retirement"
+    evidence = planned["recovery_plan"]["action_core"]["merged_sweep_evidence"]
+    assert evidence["engine_head"] == evidence["merged_head"] == stuck["commit"]

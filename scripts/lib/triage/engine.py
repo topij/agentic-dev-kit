@@ -67,9 +67,11 @@ from .providers import (
     TrackerProvider,
 )
 from .recovery import (
+    MERGED_SWEEP_ACTION,
     capture_state_present,
     completed_phase,
     gate_only_plan,
+    merged_sweep_shape,
     persist_test_gate_held,
     prepare_gate_only,
     prepare_state_action,
@@ -374,9 +376,15 @@ def _blocking_recovery(
     store: ArtifactStore,
     request: dict[str, Any],
     context: ApprovalContext | None,
+    forge: ForgeProvider | None = None,
 ) -> tuple[str, str, dict[str, Any] | None, str | None]:
     """Returns the outcome, detail, recovery plan and what the result waits on;
-    None for that last element makes the result a refusal (held evidence)."""
+    None for that last element makes the result a refusal (held evidence).
+
+    `forge` is the one a `recover` run with the forge enabled supplies. The
+    state-action plan reads it only for a valid state stuck on a merged sweep
+    pull request (#1474), so the approving rerun rebuilds the digest the first
+    `recover` showed."""
     gate_observation, gate_raw = observe(store.gate_path, allow_links=True)
     if gate_raw is None:
         raise TriageError("blocking gate disappeared", outcome="operator-held")
@@ -409,14 +417,14 @@ def _blocking_recovery(
             receipt = resume_gate_only(store, settings, bundle)
             return "operator-held", receipt["kind"], None, None
         if kind == "state-present-capture":
-            plan = state_action_plan(store, settings, bundle)
+            plan = state_action_plan(store, settings, bundle, forge=forge)
             if plan.get("held") is not None:
                 held = prepare_state_action(store, settings, bundle, approval={}, operator="")
                 return "operator-held", held["terminal_classification"], plan, None
             approval = _recovery_approval(request, context, plan["action_core_digest"])
             if approval is None:
                 return "operator-held", "state-present recovery action awaits exact approval", plan, "recovery-approval"
-            prepared = prepare_state_action(store, settings, bundle, approval=approval, operator=context.operator_identity)
+            prepared = prepare_state_action(store, settings, bundle, approval=approval, operator=context.operator_identity, forge=forge)
             result = resume_state_action(store, prepared)
             return "operator-held", str(result.get("result", result.get("kind"))), None, "rerun"
         if kind == "state-present-prepared":
@@ -439,14 +447,14 @@ def _blocking_recovery(
         held = persist_test_gate_held(store, settings, plan, approval=approval, operator=context.operator_identity)
         return "operator-held", held["terminal_classification"], None, None
     bundle = capture_state_present(store, settings)
-    plan = state_action_plan(store, settings, bundle)
+    plan = state_action_plan(store, settings, bundle, forge=forge)
     if plan.get("held") is not None:
         held = prepare_state_action(store, settings, bundle, approval={}, operator="")
         return "operator-held", held["terminal_classification"], plan, None
     approval = _recovery_approval(request, context, plan["action_core_digest"])
     if approval is None:
         return "operator-held", "state-present recovery action awaits exact approval", plan, "recovery-approval"
-    prepared = prepare_state_action(store, settings, bundle, approval=approval, operator=context.operator_identity)
+    prepared = prepare_state_action(store, settings, bundle, approval=approval, operator=context.operator_identity, forge=forge)
     result = resume_state_action(store, prepared)
     return "operator-held", str(result.get("result", result.get("kind"))), None, "rerun"
 
@@ -1638,6 +1646,13 @@ def validate_session_state(
     return state, frozen_path
 
 
+def _loads_or_none(raw: bytes) -> Any:
+    try:
+        return loads_exact(raw)
+    except Exception:
+        return None
+
+
 def _parses(state_raw: bytes, settings: Settings, mode: str) -> bool:
     try:
         canonical_state(state_raw, settings=settings, mode=mode, retiring=True)
@@ -2196,7 +2211,7 @@ def run(
         except TriageError as gate_error:
             capabilities["single-writer-state-gate"] = {"status": "operator-held", "mechanism": str(gate_error)}
             if context == "interactive" and entry in {"recover", "test"}:
-                outcome, detail, plan, waiting_on = _blocking_recovery(settings, store, request, approval_context)
+                outcome, detail, plan, waiting_on = _blocking_recovery(settings, store, request, approval_context, forge)
                 return _result(capabilities, outcome, mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="review or resume the exact recorded recovery transition", detail=detail, recovery_plan=plan, waiting_on=waiting_on)
             gate_code = gate_error.code if gate_error.code in {"repository-identity", "configuration-identity"} else "single-writer-gate"
             return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=_refusal_resume_action(gate_error) if gate_code == "repository-identity" else "use interactive recover for a proven-dead owner", detail=str(gate_error), refusal_code=gate_code)
@@ -2241,6 +2256,12 @@ def run(
                 return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="rerun with the exact pending approval or provider action", detail="verified recovery receipt replaced by reserved new state", identifiers=state.get("verified_tracker_identifiers"), waiting_on=session_waiting_on(state))
             if entry == "recover":
                 captured = capture_state_present(store, settings, require_terminated=False, publish=False)
+                # A valid state stuck on a sweep pull request whose watch can no
+                # longer verify, as when a fix commit moved its head (#1474):
+                # `merged_sweep_shape` reads the state alone, and only
+                # a `recover` run with the forge enabled can prove the merge.
+                stuck = merged_sweep_shape(_loads_or_none(state_raw))
+                retire_merged = False
                 try:
                     # A completed state that is valid but for a later config
                     # change is one a session-starting entry retires; treating
@@ -2260,26 +2281,44 @@ def run(
                         if action != "retire-terminal-invalid-state":
                             lease.release()
                             return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=_unproven_retirement_action(invalid, retry="retry"), detail="state fails the session-starting checks and no retirement is proven; recovery refused")
-                    captured = capture_state_present(store, settings, require_terminated=False, publish=True)
-                    plan = state_action_plan(store, settings, captured)
-                    if plan.get("held") is not None:
-                        held = prepare_state_action(store, settings, captured, approval={}, operator="")
-                        lease.held = False
-                        return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="inspect retained state-present held evidence", detail=held["terminal_classification"], recovery_plan=plan)
-                    approval = _recovery_approval(request, approval_context, plan["action_core_digest"])
-                    if approval is None:
-                        lease.held = False
-                        return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="approve the exact recorded recovery action", detail="invalid state captured before parse", recovery_plan=plan, waiting_on="recovery-approval")
-                    prepared = prepare_state_action(store, settings, captured, approval=approval, operator=approval_context.operator_identity)
-                    receipt = resume_state_action(store, prepared)
+                else:
+                    if stuck is not None and forge is not None:
+                        proposed = state_action_plan(store, settings, captured, forge=forge)
+                        retire_merged = (proposed.get("action_core") or {}).get("action") == MERGED_SWEEP_ACTION
+                    if not retire_merged:
+                        lease.release()
+                        if stuck is not None:
+                            # `resume` holds on this state (its last watch is
+                            # neither verified nor unsettled), so it is not named.
+                            next_entry = (
+                                "rerun recover with the forge enabled (--enable-github-forge)"
+                                if forge is None
+                                else "merge the sweep pull request if it is still open, fetch the protected branch, then rerun recover"
+                            )
+                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused")
+                        # A completed state is retired by a session-starting entry, never
+                        # by `resume`, which refuses one written under an earlier
+                        # configuration (#1272).
+                        next_entry = "start a new session (no entry, or new); it retires the completed state" if completed_phase(state_raw) else "resume"
+                        return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="captured state is valid; recovery refused")
+                captured = capture_state_present(store, settings, require_terminated=False, publish=True)
+                plan = state_action_plan(store, settings, captured, forge=forge)
+                # The forge is read again for the captured plan; word the result
+                # from the action that plan offers, not the earlier read (#1505
+                # review round 2, F1).
+                retire_merged = (plan.get("action_core") or {}).get("action") == MERGED_SWEEP_ACTION
+                if plan.get("held") is not None:
+                    held = prepare_state_action(store, settings, captured, approval={}, operator="")
                     lease.held = False
-                    return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restart only from the exact recovery receipt", detail=str(receipt.get("kind")), waiting_on="rerun")
-                lease.release()
-                # A completed state is retired by a session-starting entry, never
-                # by `resume`, which refuses one written under an earlier
-                # configuration (#1272).
-                next_entry = "start a new session (no entry, or new); it retires the completed state" if completed_phase(state_raw) else "resume"
-                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="captured state is valid; recovery refused")
+                    return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="inspect retained state-present held evidence", detail=held["terminal_classification"], recovery_plan=plan)
+                approval = _recovery_approval(request, approval_context, plan["action_core_digest"])
+                if approval is None:
+                    lease.held = False
+                    return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="approve the exact recorded recovery action", detail="merged sweep state captured for retirement" if retire_merged else "invalid state captured before parse", recovery_plan=plan, waiting_on="recovery-approval")
+                prepared = prepare_state_action(store, settings, captured, approval=approval, operator=approval_context.operator_identity, forge=forge)
+                receipt = resume_state_action(store, prepared)
+                lease.held = False
+                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="restart only from the exact recovery receipt", detail=str(receipt.get("kind")), waiting_on="rerun")
             if entry == "test":
                 try:
                     # `recover`'s predicate (#1002): a completed test state the
