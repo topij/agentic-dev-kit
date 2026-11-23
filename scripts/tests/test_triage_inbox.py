@@ -612,6 +612,24 @@ def test_normalize_seams_counts_a_whitespace_only_line_as_blank(separator: bytes
     assert normalize_seams(b"# L\n\n## A\n- x\n" + separator + b"## B\n") == b"# L\n\n## A\n- x\n\n## B\n"
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (b"# L\n\n## A\n- x", b"# L\n\n## A\n- x\n"),
+        (b"# L\r\n\r\n## A\r\n- x", b"# L\r\n\r\n## A\r\n- x\r\n"),
+        (b"# L\n\n## A\n- x\n## B", b"# L\n\n## A\n- x\n\n## B\n"),
+        (b"# L\r\n\r\n## A\r\n- x\r\n## B", b"# L\r\n\r\n## A\r\n- x\r\n\r\n## B\r\n"),
+    ],
+    ids=["lf-content", "crlf-content", "lf-heading", "crlf-heading"],
+)
+def test_normalize_seams_ends_a_file_without_a_final_newline_in_one_pass(raw: bytes, expected: bytes) -> None:
+    """A last line with no ending gets the ending of the line above it, and a last
+    line that is a heading also gets its blank line in the same pass (#1504
+    review round 2, F1 and F2)."""
+    assert normalize_seams(raw) == expected
+    assert normalize_seams(expected) == expected
+
+
 def test_normalize_seams_closes_every_seam_in_one_pass() -> None:
     """Several headings missing their blank line in one inbox: each gets exactly
     one, and no other line moves."""

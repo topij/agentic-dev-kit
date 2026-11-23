@@ -304,6 +304,12 @@ def normalize_seams(active: bytes) -> bytes:
     A file that ends inside an unclosed fence loses its trailing blank lines too,
     as `end-of-file-fixer` would make it.
     """
+    if active and not active.endswith(b"\n"):
+        # End the last line first, so a final `## ` line with no newline is a
+        # heading to `SECTION_RE` and gets its blank line in this pass (#1504
+        # review round 2, F1). It takes the line ending of the line above it.
+        above = active.rfind(b"\n")
+        active += b"\r\n" if above > 0 and active[above - 1:above] == b"\r" else b"\n"
     headings = {match.start() for match in SECTION_RE.finditer(_markdown_mask(active))}
     lines = re.findall(rb"[^\n]*\n|[^\n]+$", active)
     out: list[bytes] = []
@@ -324,8 +330,6 @@ def normalize_seams(active: bytes) -> bytes:
         out.append(line)
         offset += len(line)
     del out[content_end():]
-    if out and not out[-1].endswith(b"\n"):
-        out.append(b"\r\n" if len(out) > 1 and out[-2].endswith(b"\r\n") else b"\n")
     return b"".join(out)
 
 
