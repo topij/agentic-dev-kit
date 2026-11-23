@@ -2255,8 +2255,9 @@ def run(
                 return _result(capabilities, terminal or "operator-held", mode=mode, engine_mode=settings.engine_mode, report=str(report_path), frozen=str(frozen_path), resume_action="rerun with the exact pending approval or provider action", detail="verified recovery receipt replaced by reserved new state", identifiers=state.get("verified_tracker_identifiers"), waiting_on=session_waiting_on(state))
             if entry == "recover":
                 captured = capture_state_present(store, settings, require_terminated=False, publish=False)
-                # A valid state stuck on a sweep pull request whose head moved
-                # (#1474): `merged_sweep_shape` reads the state alone, and only
+                # A valid state stuck on a sweep pull request whose watch can no
+                # longer verify, as when a fix commit moved its head (#1474):
+                # `merged_sweep_shape` reads the state alone, and only
                 # a `recover` run with the forge enabled can prove the merge.
                 stuck = merged_sweep_shape(_loads_or_none(state_raw))
                 retire_merged = False
@@ -2286,13 +2287,14 @@ def run(
                     if not retire_merged:
                         lease.release()
                         if stuck is not None:
-                            # `resume` would hold on this state, so it is not named.
+                            # `resume` holds on this state (its last watch is
+                            # neither verified nor unsettled), so it is not named.
                             next_entry = (
                                 "rerun recover with the forge enabled (--enable-github-forge)"
                                 if forge is None
                                 else "merge the sweep pull request and fetch the protected branch, then rerun recover"
                             )
-                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="sweep pull request head moved and its merged sweep is not proven; recovery refused")
+                            return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused")
                         # A completed state is retired by a session-starting entry, never
                         # by `resume`, which refuses one written under an earlier
                         # configuration (#1272).

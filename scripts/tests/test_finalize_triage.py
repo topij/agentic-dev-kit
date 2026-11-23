@@ -2087,12 +2087,12 @@ def test_recover_retires_a_stuck_sweep_whose_fixed_pull_request_merged(
     assert [(item["kind"], item["status"]) for item in loads_exact(raw)["finalization_operations"]][-1] == ("pr-watch", "ambiguous")
     # Without the forge, `recover` cannot prove the merge and names the flag.
     unforged = run("recover", context="interactive", request={}, start=root)
-    assert unforged["detail"] == "sweep pull request head moved and its merged sweep is not proven; recovery refused"
+    assert unforged["detail"] == "sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused"
     assert "--enable-github-forge" in unforged["resume_action"]
     assert state_path.read_bytes() == raw
     # The forge says merged, but git has no sweep commit yet.
     unlanded = _plan_merged_in_own_process(root, stuck["merged"])
-    assert unlanded["detail"] == "sweep pull request head moved and its merged sweep is not proven; recovery refused"
+    assert unlanded["detail"] == "sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused"
     assert state_path.read_bytes() == raw
     sweep = _land_fixed_sweep(stuck)
     planned = _plan_merged_in_own_process(root, stuck["merged"])
@@ -2147,15 +2147,16 @@ def test_recover_refuses_a_stuck_sweep_the_forge_does_not_show_merged_elsewhere(
     else:
         read_back["headRefName"] = "chore/someone-else"
     refused = _plan_merged_in_own_process(stuck["root"], read_back)
-    assert refused["detail"] == "sweep pull request head moved and its merged sweep is not proven; recovery refused"
+    assert refused["detail"] == "sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused"
     assert "recovery_plan" not in refused or refused["recovery_plan"] is None
     assert stuck["state_path"].read_bytes() == stuck["raw"]
 
 
 @pytest.mark.evidence
 @pytest.mark.parametrize("change", [
-    "phase", "tracker-unverified", "attempt-unsettled", "push-unverified", "no-tail",
-    "watch-verified", "tail-out-of-order", "engine-head-not-a-sha",
+    "phase", "tracker-unverified", "notification-unverified", "attempt-unsettled", "push-unverified",
+    "push-attempt-unsettled", "no-tail", "watch-verified", "watch-unsettled", "tail-out-of-order",
+    "engine-head-not-a-sha",
 ])
 def test_merged_sweep_shape_reads_only_a_stuck_sweep_with_every_write_verified(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
@@ -2175,6 +2176,12 @@ def test_merged_sweep_shape_reads_only_a_stuck_sweep_with_every_write_verified(
         state["phase"] = "archive-sweep"
     elif change == "tracker-unverified":
         state["operations"] = [{"status": "ambiguous"}]
+    elif change == "notification-unverified":
+        state["notification_operations"] = [{"status": "ambiguous"}]
+    elif change == "push-attempt-unsettled":
+        operations[2]["attempts"] = [*operations[2]["attempts"], {"status": "attempting", "intent_digest": "x"}]
+    elif change == "watch-unsettled":
+        operations[-1]["status"] = "unsettled"
     elif change == "attempt-unsettled":
         state["attempts"] = [*state["attempts"], {"status": "attempting", "intent_digest": "x"}]
     elif change == "push-unverified":
@@ -2188,3 +2195,22 @@ def test_merged_sweep_shape_reads_only_a_stuck_sweep_with_every_write_verified(
     else:
         operations[3]["read_back"]["headRefOid"] = "not-a-sha"
     assert merged_sweep_shape(state) is None
+
+
+@pytest.mark.evidence
+def test_recover_still_names_resume_for_a_watch_waiting_on_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An `unsettled` watch is the ordinary wait for checks, which `resume` retries,
+    so `recover` refuses it as valid and names `resume` (#1505 review F1)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    state = loads_exact(stuck["raw"])
+    state["finalization_operations"][-1]["status"] = "unsettled"
+    for attempt in state["finalization_operations"][-1]["attempts"][1:]:
+        attempt["status"] = "unsettled"
+    stuck["state_path"].write_bytes(dumps(state))
+    forge = FakeForge([])
+    forge.pull_request_read_back = {**stuck["merged"], "merged": False, "mergedAt": None, "headRefOid": stuck["commit"]}
+    refused = run("recover", context="interactive", request={}, start=stuck["root"], forge=forge)
+    assert (refused["detail"], refused["resume_action"]) == ("captured state is valid; recovery refused", "resume")
+    assert forge.calls == []

@@ -398,7 +398,9 @@ committed, the only way forward is a fix commit on the sweep branch. The engine'
 phase `forge-finalize`, every tracker and notification operation `verified` with settled
 attempt logs, `branch-create`, `commit`, `push` and `pull-request` `verified` with settled
 attempt logs, and after them only `pr-watch`, or `pr-watch` then `merge-read-back`, the
-last of which is not `verified`. Both of those only read. For such a state `recover`
+last of which is neither `verified` nor `unsettled`. Both of those only read. An
+`unsettled` one is the ordinary wait for checks, which `resume` retries, so `recover`
+still refuses that state as valid and names `resume`. For such a state `recover`
 needs the forge (`--enable-github-forge`); without it, it refuses and says so. With it,
 the forge must read the state's own pull request (the `pull-request` read-back's URL and
 branch) back as merged into the protected branch, with a `mergedAt`, at a head other
@@ -408,7 +410,11 @@ history. Git must then prove the sweep the way it does for a finished run in the
 engine's layout: exactly one first-parent commit since `protected_branch_head` moves
 every decided block out of `<friction-log>` and into `<friction-log-archive>`, and the
 protected ref still lacks them. If any check fails, `recover` writes nothing and refuses
-(`sweep pull request head moved and its merged sweep is not proven; recovery refused`).
+(`sweep pull request watch cannot complete and its merged sweep is not proven; recovery
+refused`). The forge half and the git half are proven independently: nothing ties the
+sweep commit git finds to the pull request the forge reads as merged, because the
+read-back carries no merge commit. What retirement relies on is that the run's blocks
+left the inbox, which the git half proves.
 If all pass, it captures the state and offers `retire-merged-sweep-state` under the same
 quarantine, receipt and approval sequence as the other retirements. Its action core
 binds a `merged_sweep_evidence` summary: the session, verified tracker identifiers, pull
@@ -417,7 +423,9 @@ ref it was found on, and the swept candidate ids. That summary holds only fields
 pull request no longer changes, so the approving `recover` must also enable the forge,
 and it rebuilds the digest the operator approved. Without the forge, the approval does not
 bind and nothing moves. The bytes are retained at the quarantine path, and the next
-session starts from the receipt.
+session starts from the receipt. Retirement does not run the post-merge sweep cleanup
+that completing a run does, so remove the run's finalize worktree (`git worktree
+remove`), its local branch and its remote branch yourself once nothing needs them.
 The action core binds the capture-core digest, exact engine-derived quarantine target,
 exact `recovered-safe-to-restart` receipt core, old-gate capture, repository identity,
 and gate disposition. An owned disposition binds the current recovery invocation's

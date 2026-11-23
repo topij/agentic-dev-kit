@@ -742,7 +742,9 @@ def merged_sweep_shape(parsed: Any) -> dict[str, Any] | None:
     state never reaches the forge: phase `forge-finalize`, every tracker and
     notification operation and every writing forge operation verified with a
     settled attempt log, and after them only read-only operations, the last of
-    which never verified. Returns the pull request's URL, branch and engine
+    which is neither `verified` nor `unsettled`. An `unsettled` watch is the
+    ordinary wait for checks, which `resume` retries, so it is not stuck
+    (#1505 review F1). Returns the pull request's URL, branch and engine
     head from the verified `pull-request` read-back.
     """
     if not isinstance(parsed, dict) or parsed.get("phase") != "forge-finalize":
@@ -765,7 +767,7 @@ def merged_sweep_shape(parsed: Any) -> dict[str, Any] | None:
         not tail
         or len(tail) > len(_READ_ONLY_FORGE_TAIL)
         or [entry.get("kind") for entry in tail] != ["pr-watch", "merge-read-back"][: len(tail)]
-        or tail[-1].get("status") == "verified"
+        or tail[-1].get("status") in {"verified", "unsettled"}
     ):
         return None
     read_back = prefix[-1].get("read_back")
@@ -791,6 +793,12 @@ def _merged_sweep_evidence(settings: Settings, parsed: dict[str, Any], forge: An
     the archive, and the protected ref still lacks them. The evidence names
     only fields a merged pull request does not change, so a second `recover`
     rebuilds the same action digest the operator approved.
+
+    The two halves are proven independently: nothing ties the sweep commit git
+    finds to the pull request the forge reads as merged (the read-back carries
+    no merge commit). Retirement needs only that the run's blocks left the
+    inbox, which the git half proves; the forge half shows the run's own pull
+    request is no longer open.
     """
     shape = merged_sweep_shape(parsed)
     if shape is None or forge is None:
