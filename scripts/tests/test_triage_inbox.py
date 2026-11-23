@@ -15,6 +15,7 @@ from triage.finalize import _entry_lead, _issue_link, _record_lines, render_swee
 from triage.inbox import (  # noqa: E402
     append_archive_sections,
     exact_sweep,
+    normalize_seams,
     parse,
     take_migration_markers,
 )
@@ -525,6 +526,132 @@ def test_render_sweep_adds_a_blank_line_before_the_appended_archive_heading() ->
     marker = "## 2026-09-26 — Backlog migrated by triage session abc123\n\n".encode()
     _active, archive = render_sweep(raw, b"# Archive\n\nprior content\n", candidates, state, marker)
     assert archive == b"# Archive\n\nprior content\n\n## 2026-09-20\n\n- **Archived one.** body\n"
+
+
+def _passes_whitespace_hooks(raw: bytes) -> bool:
+    """What `end-of-file-fixer` and `trailing-whitespace` would leave unchanged."""
+    lines = raw.split(b"\n")
+    return raw.endswith(b"\n") and not raw.endswith(b"\n\n") and all(line == line.rstrip() for line in lines)
+
+
+def _headings_without_a_blank_line(raw: bytes) -> list[bytes]:
+    lines = raw.split(b"\n")
+    return [line for index, line in enumerate(lines) if index and line.startswith(b"## ") and lines[index - 1] != b""]
+
+
+def test_render_sweep_keeps_one_final_newline_when_the_swept_last_entry_leaves_an_earlier_one() -> None:
+    """#1474: sweeping the file's last entry while its section keeps an earlier one
+    left that entry's separating blank line at EOF, which `end-of-file-fixer`
+    rejects. `pre-1474` is the old rendering, kept so a sweep it committed still
+    validates."""
+    raw = b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n\n- **Swept.** goes\n"
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-02"])
+    active, archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n"
+    assert _passes_whitespace_hooks(active) and _passes_whitespace_hooks(archive)
+    old_active, old_archive = render_sweep(raw, b"# Archive\n", candidates, state, b"", rendering="pre-1474")
+    assert old_active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n\n"
+    assert old_archive == archive
+
+
+def test_render_sweep_keeps_the_blank_line_before_a_heading_after_a_partly_swept_section() -> None:
+    """#1396: when a section's entries are contiguous and the sweep removes the last
+    one, the removed block carried the only blank line before the next heading. The
+    next heading now keeps exactly one blank line above it, with a marker record or
+    without one."""
+    raw = (
+        b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n- **Swept.** goes\n\n"
+        b"## 2026-11-10\n\n- **Older.** stays\n"
+    )
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-02"], approval=("archive TRI-02", "topi"))
+    active, _archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n\n## 2026-11-10\n\n- **Older.** stays\n"
+    marker = "## 2026-11-23 — Backlog migrated by triage session abc123\n\n".encode()
+    marked, _archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
+    assert _headings_without_a_blank_line(marked) == [] and _passes_whitespace_hooks(marked)
+    old_active, _old_archive = render_sweep(raw, b"# Archive\n", candidates, state, b"", rendering="pre-1474")
+    assert b"- **Kept.** stays\n## 2026-11-10" in old_active
+
+
+def test_render_sweep_seam_normalization_leaves_headings_inside_code_alone() -> None:
+    """A `## ` line inside a fenced block is not a heading, so its spacing is the
+    entry's own text and the normalization does not touch it."""
+    raw = (
+        b"# Log\n\n## 2026-11-12\n\n- **Kept.** an example:\n\n  ```\n  x\n## not a heading\n  ```\n"
+        b"- **Swept.** goes\n"
+    )
+    candidates = parse(raw)
+    assert [candidate.candidate_id for candidate in candidates] == ["TRI-01", "TRI-02"]
+    state = _render_sweep_state(archived=["TRI-02"])
+    active, _archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** an example:\n\n  ```\n  x\n## not a heading\n  ```\n"
+
+
+def test_render_sweep_seam_normalization_keeps_a_crlf_inbox_crlf() -> None:
+    """A CRLF inbox keeps CRLF at every seam it closes, and its EOF loses the blank
+    line as an LF inbox does (#1504's review F1)."""
+    raw = (
+        b"# Log\r\n\r\n## 2026-11-12\r\n\r\n- **Kept.** stays\r\n- **Swept.** goes\r\n\r\n"
+        b"## 2026-11-10\r\n\r\n- **Older.** stays\r\n\r\n- **Last.** goes\r\n"
+    )
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-02", "TRI-04"])
+    active, _archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == (
+        b"# Log\r\n\r\n## 2026-11-12\r\n\r\n- **Kept.** stays\r\n\r\n"
+        b"## 2026-11-10\r\n\r\n- **Older.** stays\r\n"
+    )
+
+
+@pytest.mark.parametrize("separator", [b" \n", b"\t\n\n", b"\n \n"])
+def test_normalize_seams_counts_a_whitespace_only_line_as_blank(separator: bytes) -> None:
+    """A whitespace-only separator line already separates the heading; it is one
+    blank line, not a reason to add another."""
+    assert normalize_seams(b"# L\n\n## A\n- x\n" + separator + b"## B\n") == b"# L\n\n## A\n- x\n\n## B\n"
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        (b"# L\n\n## A\n- x", b"# L\n\n## A\n- x\n"),
+        (b"# L\r\n\r\n## A\r\n- x", b"# L\r\n\r\n## A\r\n- x\r\n"),
+        (b"# L\n\n## A\n- x\n## B", b"# L\n\n## A\n- x\n\n## B\n"),
+        (b"# L\r\n\r\n## A\r\n- x\r\n## B", b"# L\r\n\r\n## A\r\n- x\r\n\r\n## B\r\n"),
+    ],
+    ids=["lf-content", "crlf-content", "lf-heading", "crlf-heading"],
+)
+def test_normalize_seams_ends_a_file_without_a_final_newline_in_one_pass(raw: bytes, expected: bytes) -> None:
+    """A last line with no ending gets the ending of the line above it, and a last
+    line that is a heading also gets its blank line in the same pass (#1504
+    review round 2, F1 and F2)."""
+    assert normalize_seams(raw) == expected
+    assert normalize_seams(expected) == expected
+
+
+def test_normalize_seams_closes_every_seam_in_one_pass() -> None:
+    """Several headings missing their blank line in one inbox: each gets exactly
+    one, and no other line moves."""
+    raw = b"# L\n\n## A\n- x\n## B\n- y\n\n\n## C\n- z\n\n"
+    assert normalize_seams(raw) == b"# L\n\n## A\n- x\n\n## B\n- y\n\n## C\n- z\n"
+
+
+def test_render_sweep_pre_1474_keeps_every_other_current_behaviour() -> None:
+    """`pre-1474` differs from `current` only in the seams: it still carries an
+    emptied section's intro to the archive and moves earlier markers out of the inbox."""
+    raw = (
+        "# Log\n\n## 2026-10-04 — Backlog migrated by triage session older\n\nEngine mode: `engine-backed`.\n\n"
+        "## 2026-10-03\n\nThe intro.\n\n- **One.** body\n\n"
+        "## 2026-10-01\n\n- **Kept.** stays\n"
+    ).encode()
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-01"])
+    current = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    old = render_sweep(raw, b"# Archive\n", candidates, state, b"", rendering="pre-1474")
+    assert old == current
+    assert b"The intro." in old[1] and b"Backlog migrated by triage session older" in old[1]
+    assert b"Backlog migrated" not in old[0]
 
 
 def test_render_sweep_legacy_reproduces_the_pre_812_bytes() -> None:
