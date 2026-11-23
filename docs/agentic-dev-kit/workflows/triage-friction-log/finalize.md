@@ -69,10 +69,12 @@ and the section leaves the inbox; a section that keeps an entry keeps its prose.
 removing a dated section that genuinely is empty, also remove the blank line that separated it from whatever precedes it if nothing
 follows: otherwise an emptied trailing section leaves a blank line at EOF. Then, in the
 new inbox, give each `## ` heading outside code exactly one blank line above it (a heading
-that starts the file needs none) and end the file in exactly one newline. Removing a
-section's last entry while it keeps an earlier one takes the blank line before the next
-heading with it, and removing the file's last entry leaves its separator at EOF. Only those
-newline runs change. In the archive,
+with only blank lines above it needs none) and end the file in exactly one line ending.
+Removing a section's last entry while it keeps an earlier one takes the blank line before
+the next heading with it, and removing the file's last entry leaves its separator at EOF.
+A blank line is one holding only whitespace. Each run of them directly above a heading
+becomes one empty line with the line ending of the line above it, and the run at EOF is
+removed; no other line changes. In the archive,
 swept blocks whose date heading the archive already has join the last section with that
 exact heading (outside fenced code) instead of repeating it; others go in a new section
 appended at the end, with a blank line before its heading. Either way the archive ends in

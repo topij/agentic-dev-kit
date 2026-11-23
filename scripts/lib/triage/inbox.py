@@ -289,27 +289,44 @@ def sweep_groups(
 def normalize_seams(active: bytes) -> bytes:
     """Give `active` exactly one blank line before each `## ` heading and one final newline.
 
-    A heading counts only outside code, as `parse` reads it, and the first byte of
-    the file needs no separator. Removing a section's last entry takes the blank
-    line that preceded the next heading with it (#1396), and removing the file's
-    last entry while its section keeps an earlier one leaves that entry's
-    separating blank line at EOF (#1474). Both are seams a sweep opens, and
-    `end-of-file-fixer`-style hooks reject the second. Only newline runs are
-    touched: a run ending at a heading becomes one blank line and the run at EOF
-    becomes one newline, so no other byte moves. A whitespace-only line is not a
-    newline run and is left as it is.
+    A heading counts only outside code, as `parse` reads it, and a heading with
+    nothing but blank lines above it starts the content and is left alone. Removing
+    a section's last entry takes the blank line that preceded the next heading with
+    it (#1396), and removing the file's last entry while its section keeps an
+    earlier one leaves that entry's separating blank line at EOF (#1474). Both are
+    seams a sweep opens, and `end-of-file-fixer`-style hooks reject the second.
+
+    The rule is line by line. A blank line is one with nothing but whitespace
+    before its line ending. The run of blank lines directly above a heading becomes
+    one empty line, and the run at EOF is removed. The empty line takes the line
+    ending of the content line above it, so a CRLF file stays CRLF. No other line
+    changes, but a whitespace-only line in one of those runs loses its whitespace.
+    A file that ends inside an unclosed fence loses its trailing blank lines too,
+    as `end-of-file-fixer` would make it.
     """
-    headings = [match.start() for match in SECTION_RE.finditer(_markdown_mask(active)) if match.start() > 0]
-    for start in reversed(headings):
-        run_start = start
-        while run_start > 0 and active[run_start - 1:run_start] == b"\n":
-            run_start -= 1
-        if run_start > 0:
-            # A run reaching offset 0 means only newlines precede the heading, so
-            # it starts the file's content and is left alone.
-            active = active[:run_start] + b"\n\n" + active[start:]
-    stripped = active.rstrip(b"\n")
-    return stripped + b"\n" if stripped else b""
+    headings = {match.start() for match in SECTION_RE.finditer(_markdown_mask(active))}
+    lines = re.findall(rb"[^\n]*\n|[^\n]+$", active)
+    out: list[bytes] = []
+    offset = 0
+
+    def content_end() -> int:
+        index = len(out)
+        while index and not out[index - 1].strip():
+            index -= 1
+        return index
+
+    for line in lines:
+        if offset in headings:
+            kept = content_end()
+            if kept:
+                ending = b"\r\n" if out[kept - 1].endswith(b"\r\n") else b"\n"
+                out[kept:] = [ending]
+        out.append(line)
+        offset += len(line)
+    del out[content_end():]
+    if out and not out[-1].endswith(b"\n"):
+        out.append(b"\r\n" if len(out) > 1 and out[-2].endswith(b"\r\n") else b"\n")
+    return b"".join(out)
 
 
 def take_migration_markers(active: bytes) -> tuple[bytes, list[bytes]]:
