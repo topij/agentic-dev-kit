@@ -762,7 +762,7 @@ def test_a_failed_engine_keeps_its_message(tmp_path: Path, monkeypatch: pytest.M
 def test_commit_exists_reads_the_named_repository_despite_an_inherited_git_dir(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`_commit_exists` stays off the runner (its answer is the exit code) but takes `_git`'s environment."""
+    """`_commit_exists` reads the exit code through `run_result`, with `_git`'s environment."""
     clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     heads = {}
     for name in ("named", "other"):
@@ -804,3 +804,131 @@ def test_an_engine_render_is_bounded_by_engine_timeout(tmp_path: Path, monkeypat
     monkeypatch.setattr(review_eval, "run_stdout", recording_run_stdout)
     assert review_eval._run_engine("panel_prompt.py", ["--lens", "x"], tmp_path) == "rendered"
     assert seen == {"timeout": review_eval.ENGINE_TIMEOUT}
+
+
+def test_a_commit_check_git_cannot_answer_is_a_case_file_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A timed-out `cat-file -e` is not read as a missing commit, and it is bounded by `GIT_TIMEOUT`."""
+    from subprocess_runner import CommandTimedOut
+
+    seen = {}
+
+    def timed_out(argv, *, cwd, timeout, **_kwargs):
+        seen["timeout"] = timeout
+        raise CommandTimedOut("git cat-file timed out after 30s")
+
+    monkeypatch.setattr(review_eval, "run_result", timed_out)
+    with pytest.raises(review_eval.EvalError, match=r"^could not check a+ in .*: git cat-file timed out after 30s$"):
+        review_eval._commit_exists(tmp_path, "a" * 40)
+    assert seen == {"timeout": review_eval.GIT_TIMEOUT}
+
+
+def test_an_engine_that_times_out_is_a_run_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from subprocess_runner import CommandTimedOut
+
+    def timed_out(*_args, **_kwargs):
+        raise CommandTimedOut("panel_prompt.py timed out after 120s")
+
+    monkeypatch.setattr(review_eval, "run_stdout", timed_out)
+    with pytest.raises(review_eval.RunError, match=r"timed out after 120s"):
+        review_eval._run_engine("panel_prompt.py", ["--lens", "x"], tmp_path)
+
+
+def test_the_isolated_tree_blobs_land_in_the_tree_despite_an_inherited_git_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The preflight checker's blobs are read from `root` and written into `tree`.
+
+    Under an inherited `GIT_DIR` naming another repository, the old calls read and
+    wrote there instead, so the case tree lacked the blobs its prompt pins.
+    """
+    clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+
+    def git(cwd: Path, *args: str, data: bytes | None = None) -> str:
+        return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@e", *args], cwd=cwd, env=clean,
+                              input=data, check=True, capture_output=True).stdout.decode().strip()
+
+    root = tmp_path / "root"
+    engines = root / "scripts"
+    (engines / "lib").mkdir(parents=True)
+    (root / "config").mkdir()
+    (root / "config" / "dev-model.yaml").write_text("paths:\n  engines: scripts\n", encoding="utf-8")
+    (engines / "lib" / "kitconfig.py").write_text("# kitconfig at the kit revision\n", encoding="utf-8")
+    (engines / "check_record_prose.py").write_text("# checker at the kit revision\n", encoding="utf-8")
+    git(root, "init", "-q")
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "kit")
+    kit_rev = git(root, "rev-parse", "HEAD")
+    want = {name: git(root, "rev-parse", f"{kit_rev}:{name}")
+            for name in ("scripts/lib/kitconfig.py", "scripts/check_record_prose.py")}
+    other = tmp_path / "other"
+    other.mkdir()
+    git(other, "init", "-q")
+    tree = tmp_path / "tree"
+
+    def fake_git(where, *args, timeout=review_eval.GIT_TIMEOUT):
+        # The real init, so `tree` is a repository; the fetch and checkout are
+        # another test's subject.
+        if args[0] == "init":
+            git(where, "init", "-q")
+        return str(where / ".git") if args[:2] == ("rev-parse", "--absolute-git-dir") else ""
+
+    monkeypatch.setattr(review_eval, "_git", fake_git)
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    review_eval._isolated_tree(root, tree, {"base": "b" * 40, "head": "c" * 40}, kit_rev)
+    for oid in want.values():
+        assert git(tree, "cat-file", "-t", oid) == "blob"
+        assert subprocess.run(["git", "cat-file", "-e", oid], cwd=other, env=clean,
+                              capture_output=True).returncode != 0
+
+
+@pytest.mark.parametrize("failing", ["cat-file", "hash-object"])
+def test_a_blob_copy_git_cannot_answer_is_a_run_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing: str
+) -> None:
+    """Both blob-copy calls are bounded by GIT_TIMEOUT, and a timeout in either is a
+    run error."""
+    from subprocess_runner import CommandTimedOut, Completed
+
+    seen = []
+
+    def timed_out(argv, *, cwd, timeout, **_kwargs):
+        seen.append((argv[1], timeout))
+        if argv[1] == failing:
+            raise CommandTimedOut(f"git {failing} timed out after 30s")
+        return Completed(0, b"blob bytes", "")
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "dev-model.yaml").write_text("paths:\n  engines: scripts\n", encoding="utf-8")
+    tree = tmp_path / "tree"
+    monkeypatch.setattr(review_eval, "_git", lambda where, *args, **_k: str(tree / ".git")
+                        if args[:2] == ("rev-parse", "--absolute-git-dir") else "")
+    monkeypatch.setattr(review_eval, "run_bytes", timed_out)
+    with pytest.raises(review_eval.RunError, match=rf"^git {failing} timed out after 30s$"):
+        review_eval._isolated_tree(tmp_path, tree, {"base": "b" * 40, "head": "c" * 40}, "d" * 40)
+    calls = ["cat-file"] if failing == "cat-file" else ["cat-file", "hash-object"]
+    assert seen == [(name, review_eval.GIT_TIMEOUT) for name in calls]
+
+
+@pytest.mark.parametrize("failing", ["cat-file", "hash-object"])
+def test_a_blob_copy_git_refuses_is_a_run_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing: str
+) -> None:
+    from subprocess_runner import Completed
+
+    def git_answer(argv, *, cwd, timeout, **_kwargs):
+        if argv[1] == failing:
+            return Completed(128, b"", "fatal: refused")
+        return Completed(0, b"blob bytes", "")
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "dev-model.yaml").write_text("paths:\n  engines: scripts\n", encoding="utf-8")
+    tree = tmp_path / "tree"
+    monkeypatch.setattr(review_eval, "_git", lambda where, *args, **_k: str(tree / ".git")
+                        if args[:2] == ("rev-parse", "--absolute-git-dir") else "")
+    monkeypatch.setattr(review_eval, "run_bytes", git_answer)
+    expected = {"cat-file": r"^scripts/lib/kitconfig\.py at d{12}: fatal: refused$",
+                "hash-object": r"^could not store scripts/lib/kitconfig\.py in the case tree: fatal: refused$"}[failing]
+    with pytest.raises(review_eval.RunError, match=expected):
+        review_eval._isolated_tree(tmp_path, tree, {"base": "b" * 40, "head": "c" * 40}, "d" * 40)

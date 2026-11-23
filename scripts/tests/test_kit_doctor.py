@@ -9741,3 +9741,36 @@ def test_lite_scoping_on_an_untrusted_baseline_is_said(tmp_path, capsys, baselin
     )
     assert (line in out) == (baseline != "recorded"), out
     assert "outside the lite profile" in out
+
+
+def test_git_run_returns_the_exit_code_and_output(tmp_path, monkeypatch):
+    """`_git_run` keeps its `CompletedProcess` contract through the shared runner."""
+    clean = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, env=clean)
+    done = kit_doctor._git_run(tmp_path, "rev-parse", "--is-inside-work-tree")
+    assert (done.returncode, done.stdout) == (0, "true\n")
+    assert done.args == ["git", "-C", str(tmp_path), "rev-parse", "--is-inside-work-tree"]
+    missing = kit_doctor._git_run(tmp_path, "rev-parse", "--verify", "-q", "refs/heads/absent")
+    assert missing.returncode == 1
+
+
+def test_a_git_that_cannot_start_reads_as_exit_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(kit_doctor, "_git_env", lambda: {"PATH": str(tmp_path / "no-bin")})
+    done = kit_doctor._git_run(tmp_path, "status")
+    assert done.returncode == 1
+    assert "could not run" in done.stderr
+
+
+def test_a_git_that_times_out_reads_as_exit_one(tmp_path, monkeypatch):
+    from subprocess_runner import CommandTimedOut
+
+    seen = {}
+
+    def timed_out(argv, *, cwd, timeout, **kwargs):
+        seen.update(timeout=timeout, **kwargs)
+        raise CommandTimedOut("git ls-remote origin HEAD timed out after 120s")
+
+    monkeypatch.setattr(kit_doctor, "run_result", timed_out)
+    done = kit_doctor._git_run(tmp_path, "ls-remote", "origin", "HEAD", timeout=120)
+    assert (done.returncode, done.stdout, done.stderr) == (1, "", "git ls-remote origin HEAD timed out after 120s")
+    assert seen["timeout"] == 120 and seen["stdin_text"] == "" and seen["env"] is kit_doctor._git_env()

@@ -1055,7 +1055,12 @@ def test_a_working_tree_baseline_that_is_not_utf8_is_ignored_not_a_traceback(
 
 def test_every_lite_git_call_closes_stdin_and_turns_off_the_terminal_prompt(monkeypatch: pytest.MonkeyPatch) -> None:
     """An https origin that asks for credentials fails instead of waiting for a
-    terminal an agent does not have."""
+    terminal an agent does not have.
+
+    `_git_run` goes through the shared runner, which pipes `stdin_text` in; an
+    empty one is read as end-of-input at once, as `DEVNULL` was. The stub replaces
+    `subprocess.run` beneath the runner, so it sees the runner's keyword arguments.
+    """
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("kit_doctor_probe", REPO_ROOT / "scripts/kit_doctor.py")
@@ -1072,7 +1077,7 @@ def test_every_lite_git_call_closes_stdin_and_turns_off_the_terminal_prompt(monk
     module._git_clean_env = None
     monkeypatch.setattr(module.subprocess, "run", fake_run)
     module._git_run(Path("."), "ls-remote", "origin", "HEAD")
-    assert seen["stdin"] is subprocess.DEVNULL
+    assert seen["input"] == "" and "stdin" not in seen
     assert seen["env"]["GIT_TERMINAL_PROMPT"] == "0"
     assert "GIT_DIR" not in seen["env"]
 

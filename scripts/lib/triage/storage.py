@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import stat
-import subprocess
 import uuid
 from contextlib import suppress
 from dataclasses import dataclass
@@ -13,9 +12,10 @@ from typing import Any
 
 from state_paths import resolve_write_path
 from state_paths.resolver import STATE_DIRNAME
+from subprocess_runner import CommandError, run_result, without_git_environment
 
 from .canonical import digest_bytes, dumps
-from .model import Settings, TriageError
+from .model import GIT_TIMEOUT, Settings, TriageError
 
 
 @dataclass(frozen=True)
@@ -78,14 +78,25 @@ def preflight_artifacts(
             if not artifact.is_relative_to(checkout):
                 continue
             relative = str(artifact.relative_to(checkout))
-            tracked = subprocess.run(
-                ["git", "-C", str(checkout), "ls-files", "--error-unmatch", "--", relative],
-                check=False,
-                capture_output=True,
-                text=True,
-            )
+            # The exit code is the answer: 0 is tracked, 1 is not. Without inherited
+            # `GIT_*` variables, so an inherited `GIT_DIR` cannot answer for another
+            # repository. Any other answer (a corrupt index's 128, a signal, a
+            # timeout, a Git that cannot start) refuses the target rather than
+            # reading as "not tracked".
+            try:
+                tracked = run_result(
+                    ["git", "-C", str(checkout), "ls-files", "--error-unmatch", "--", relative],
+                    cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment(),
+                )
+            except CommandError as exc:
+                raise TriageError(f"could not check whether the artifact target is tracked: {exc}",
+                                  outcome="hard-stop") from exc
             if tracked.returncode == 0:
                 raise TriageError("artifact target is tracked by the repository", outcome="hard-stop")
+            if tracked.returncode != 1:
+                raise TriageError(
+                    "could not check whether the artifact target is tracked: git ls-files exited "
+                    f"{tracked.returncode}: {tracked.stderr.strip()}", outcome="hard-stop")
 
 
 def fsync_dir(path: Path) -> None:

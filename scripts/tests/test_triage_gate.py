@@ -162,3 +162,53 @@ acquire(store,repository_identity={'root':str(root),'remote':'https://github.com
         prepared = prepare_gate_only(store, configured, approval=approval, operator="operator")
         resume_gate_only(store, configured, prepared)
         assert not gate.exists() and not temporaries[0].exists()
+
+
+def _ps_only(monkeypatch: pytest.MonkeyPatch) -> int:
+    """A pid with no /proc entry, on a platform that is neither Linux nor macOS, so
+    `_process_start` reaches its `ps` fallback."""
+    from triage import gate
+
+    monkeypatch.setattr(gate.platform, "system", lambda: "Plan9")
+    return 2**22 + 4321
+
+
+def test_the_ps_fallback_is_bounded_and_reads_the_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    from subprocess_runner import Completed
+    from triage import gate
+
+    pid = _ps_only(monkeypatch)
+    seen = {}
+
+    def ps(argv, *, cwd, timeout, **_kwargs):
+        seen.update(argv=argv, timeout=timeout)
+        return Completed(0, "Sun Nov 22 10:00:00 2026\n", "")
+
+    monkeypatch.setattr(gate, "run_result", ps)
+    assert gate._process_start(pid) == "ps-lstart:Sun Nov 22 10:00:00 2026"
+    assert seen == {"argv": ["ps", "-o", "lstart=", "-p", str(pid)], "timeout": gate.PS_TIMEOUT}
+
+
+@pytest.mark.parametrize("outcome", ["timeout", "exit"])
+def test_a_ps_that_cannot_answer_leaves_the_start_unknown(monkeypatch: pytest.MonkeyPatch, outcome: str) -> None:
+    from subprocess_runner import CommandTimedOut, Completed
+    from triage import gate
+
+    pid = _ps_only(monkeypatch)
+
+    def ps(*_args, **_kwargs):
+        if outcome == "timeout":
+            raise CommandTimedOut("ps timed out after 10s")
+        return Completed(1, "", "no such process")
+
+    monkeypatch.setattr(gate, "run_result", ps)
+    assert gate._process_start(pid) is None
+
+
+def test_a_ps_that_exits_non_zero_with_output_leaves_the_start_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    from subprocess_runner import Completed
+    from triage import gate
+
+    pid = _ps_only(monkeypatch)
+    monkeypatch.setattr(gate, "run_result", lambda *a, **k: Completed(1, "Sun Nov 22 10:00:00 2026\n", ""))
+    assert gate._process_start(pid) is None

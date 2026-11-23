@@ -236,6 +236,7 @@ _REGISTRATION_PARSE_ERRORS = (
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "lib"))
 from kitconfig import get, load_config, repo_root  # noqa: E402
+from subprocess_runner import CommandError, run_result  # noqa: E402
 
 MANIFEST_NAME = "kit-manifest.json"
 REPO_ONLY_ROLE = "repo-only"
@@ -4442,22 +4443,21 @@ def _git_env() -> dict[str, str]:
 def _git_run(cwd: Path, *args: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
     """`git -C <cwd> <args>`, captured, with no inherited repository-local variable.
 
-    A git that cannot start reads as a failure.
+    Runs through the shared runner's `run_result`, which decodes as UTF-8 with
+    replacement as this did. It keeps two things of its own. Git gets an empty
+    stdin (`stdin_text=""`), so it reads end-of-input at once, as it did from
+    `DEVNULL`. A git that cannot start or that times out still reads as a failure,
+    exit code 1, with the runner's message as stderr, because callers here read the
+    exit code as the answer and none of them expects an exception. The environment
+    is `_git_env()`, not `without_git_environment()`: it keeps the
+    `GIT_SSH_COMMAND`-style variables a `fetch` or `ls-remote` needs.
     """
+    argv = ["git", "-C", str(cwd), *args]
     try:
-        return subprocess.run(
-            ["git", "-C", str(cwd), *args],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            check=False,
-            env=_git_env(),
-            stdin=subprocess.DEVNULL,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
+        done = run_result(argv, cwd=None, timeout=timeout, stdin_text="", env=_git_env())
+    except CommandError as exc:
         return subprocess.CompletedProcess(["git", *args], 1, "", str(exc))
+    return subprocess.CompletedProcess(argv, done.returncode, done.stdout, done.stderr)
 
 
 def _lite_head(checkout: Path) -> str | None:

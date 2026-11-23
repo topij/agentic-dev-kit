@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from typing import Any
 
-from subprocess_runner import CommandError, run_stdout, without_git_environment
+from subprocess_runner import (
+    CommandError,
+    run_bytes,
+    run_result,
+    run_stdout,
+    without_git_environment,
+)
 
 from .canonical import decode_bytes, digest, digest_bytes, dumps, encode_bytes, loads_exact
 from .gate import acquire, owner_status, validate_record
@@ -591,18 +596,55 @@ def _swept_blocks(parsed: dict[str, Any]) -> dict[str, str] | None:
     return swept or None
 
 
-def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
+class _GitUnanswered(Exception):
+    """Git timed out or could not start, so it said nothing about the file."""
+
+
+def _git_read(settings: Settings, revision: str, path: Path) -> str | None:
+    """The file's text at `revision`, or None when Git gives no UTF-8 text for it.
+
+    A non-zero exit, which is how `git show` reports a path missing at that
+    revision, and output that is not UTF-8 both answer None. A timeout or a Git
+    that cannot start raises `_GitUnanswered`, because Git gave no answer at all.
+    """
     rel = path.relative_to(settings.paths.repo).as_posix()
-    result = subprocess.run(
-        ["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
-        check=False, capture_output=True, env=without_git_environment(),
-    )
+    try:
+        result = run_bytes(["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
+                           cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment())
+    except CommandError as exc:
+        raise _GitUnanswered(str(exc)) from exc
     if result.returncode:
         return None
     try:
         return result.stdout.decode("utf-8")
     except UnicodeDecodeError:
         return None
+
+
+def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
+    """`_git_read`, with a read Git gave no answer to also returning None.
+
+    None keeps the state held, so a read that fails, times out or cannot start is
+    treated like a missing file.
+    """
+    try:
+        return _git_read(settings, revision, path)
+    except _GitUnanswered:
+        return None
+
+
+def _is_ancestor(repo: str, commit: str, ref: str) -> bool:
+    """Whether `commit` is an ancestor of `ref`: `merge-base --is-ancestor`'s exit code.
+
+    Only exit 0 is yes. Exit 1 (not an ancestor), any other exit, a timeout and a Git
+    that cannot start all answer no, which keeps the state held.
+    """
+    try:
+        done = run_result(["git", "-C", repo, "merge-base", "--is-ancestor", commit, ref],
+                          cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment())
+    except CommandError:
+        return False
+    return done.returncode == 0
 
 
 def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any) -> str | None:
@@ -621,11 +663,7 @@ def _sweep_landed(settings: Settings, parsed: dict[str, Any], merge_commit: Any)
     if swept is None or not isinstance(merge_commit, str) or not OID_RE.fullmatch(merge_commit):
         return None
     ref = f"refs/remotes/origin/{settings.protected_branch}"
-    reachable = subprocess.run(
-        ["git", "-C", str(settings.paths.repo), "merge-base", "--is-ancestor", merge_commit, ref],
-        check=False, capture_output=True, env=without_git_environment(),
-    )
-    if reachable.returncode:
+    if not _is_ancestor(str(settings.paths.repo), merge_commit, ref):
         return None
     log, archive = settings.paths.friction_log, settings.paths.archive
     before = _git_show(settings, f"{merge_commit}^", log)
@@ -647,8 +685,10 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
     and only commits that change the friction log. A candidate is a commit that
     takes every block the run filed or archived out of the inbox and has each in
     its archive. Exactly one candidate is the sweep; none, or more than one,
-    returns None and the state stays held. `_sweep_landed` then re-checks the
-    commit it returns exactly as it checks a recorded one.
+    returns None and the state stays held. A read Git gives no answer to also
+    returns None: skipping that commit could leave a single candidate standing
+    when the unread one would have been a second. `_sweep_landed` then re-checks
+    the commit it returns exactly as it checks a recorded one.
     """
     swept = _swept_blocks(parsed)
     identity = parsed.get("run_identity")
@@ -658,11 +698,7 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
     repo = str(settings.paths.repo)
     ref = f"refs/remotes/origin/{settings.protected_branch}"
     log, archive = settings.paths.friction_log, settings.paths.archive
-    # The exit code is the answer here, and `_git_show` reads bytes, so neither fits
-    # `run_stdout`; they share its environment so every read names the same repository.
-    ancestor = subprocess.run(["git", "-C", repo, "merge-base", "--is-ancestor", since, ref], check=False,
-                              capture_output=True, env=without_git_environment())
-    if ancestor.returncode:
+    if not _is_ancestor(repo, since, ref):
         return None
     try:
         listed = run_stdout(
@@ -674,9 +710,12 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
         return None
     found: list[str] = []
     for commit in listed.split():
-        before = _git_show(settings, f"{commit}^", log)
-        after = _git_show(settings, commit, log)
-        archived = _git_show(settings, commit, archive)
+        try:
+            before = _git_read(settings, f"{commit}^", log)
+            after = _git_read(settings, commit, log)
+            archived = _git_read(settings, commit, archive)
+        except _GitUnanswered:
+            return None
         if None in (before, after, archived):
             continue
         if all(text in before and text not in after and text in archived for text in swept.values()):

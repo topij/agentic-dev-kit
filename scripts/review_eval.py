@@ -76,6 +76,8 @@ from kitconfig import load_config  # noqa: E402
 from subprocess_runner import (  # noqa: E402
     CommandError,
     CommandFailed,
+    run_bytes,
+    run_result,
     run_stdout,
     without_git_environment,
 )
@@ -172,12 +174,15 @@ def _git(root: Path, *args: str, timeout: int = GIT_TIMEOUT) -> str:
 
 
 def _commit_exists(root: Path, sha: str) -> bool:
-    # The exit code is the answer, so this stays off `run_stdout`; it takes `_git`'s
-    # environment so every Git call here names the same repository.
-    return subprocess.run(
-        ["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=root, capture_output=True, check=False,
-        env=without_git_environment(),
-    ).returncode == 0
+    # The exit code is the answer, so this runs through `run_result`, with `_git`'s
+    # environment and bound so every Git call here names the same repository. A Git
+    # that cannot answer is a case-file error, not a missing commit.
+    try:
+        done = run_result(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=root,
+                          timeout=GIT_TIMEOUT, env=without_git_environment())
+    except CommandError as exc:
+        raise EvalError(f"could not check {sha} in {root}: {exc}") from exc
+    return done.returncode == 0
 
 
 def _lines(value: Any, where: str) -> tuple[int, int]:
@@ -404,15 +409,20 @@ def _isolated_tree(root: Path, tree: Path, case: dict[str, Any], kit_rev: str) -
     engines = ((load_config(root / "config" / "dev-model.yaml").get("paths") or {}).get("engines")
                or "scripts").rstrip("/")
     for path in (f"{engines}/lib/kitconfig.py", f"{engines}/check_record_prose.py"):
-        # Bytes in and out, so these stay off `run_stdout`; they take `_git`'s
-        # environment, or an inherited `GIT_DIR` would write the blob into another
+        # Bytes in and out, through `run_bytes`, with `_git`'s environment and bound:
+        # an inherited `GIT_DIR` would otherwise write the blob into another
         # repository while the fetch and checkout above went to `tree`.
-        blob = subprocess.run(["git", "cat-file", "blob", f"{kit_rev}:{path}"], cwd=root,
-                              capture_output=True, check=False, env=without_git_environment())
-        if blob.returncode != 0:
-            raise RunError(f"{path} at {kit_rev[:12]}: {blob.stderr.decode().strip()}")
-        subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=tree, input=blob.stdout,
-                       capture_output=True, check=True, env=without_git_environment())
+        try:
+            blob = run_bytes(["git", "cat-file", "blob", f"{kit_rev}:{path}"], cwd=root,
+                             timeout=GIT_TIMEOUT, env=without_git_environment())
+            if blob.returncode != 0:
+                raise RunError(f"{path} at {kit_rev[:12]}: {blob.stderr.strip()}")
+            stored = run_bytes(["git", "hash-object", "-w", "--stdin"], cwd=tree, timeout=GIT_TIMEOUT,
+                               stdin_bytes=blob.stdout, env=without_git_environment())
+        except CommandError as exc:
+            raise RunError(str(exc)) from exc
+        if stored.returncode != 0:
+            raise RunError(f"could not store {path} in the case tree: {stored.stderr.strip()}")
 
 
 def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subprocess.CompletedProcess:
