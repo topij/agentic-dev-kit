@@ -286,6 +286,53 @@ def sweep_groups(
     return active, [(title, intro_by_title.get(title, b""), blocks) for title, blocks in archived_by_title.items()]
 
 
+def normalize_seams(active: bytes) -> bytes:
+    """Give `active` exactly one blank line before each `## ` heading and one final newline.
+
+    A heading counts only outside code, as `parse` reads it, and a heading with
+    nothing but blank lines above it starts the content and is left alone. Removing
+    a section's last entry takes the blank line that preceded the next heading with
+    it (#1396), and removing the file's last entry while its section keeps an
+    earlier one leaves that entry's separating blank line at EOF (#1474). Both are
+    seams a sweep opens, and `end-of-file-fixer`-style hooks reject the second.
+
+    The rule is line by line. A blank line is one with nothing but whitespace
+    before its line ending. The run of blank lines directly above a heading becomes
+    one empty line, and the run at EOF is removed. The empty line takes the line
+    ending of the content line above it, so a CRLF file stays CRLF. No other line
+    changes, but a whitespace-only line in one of those runs loses its whitespace.
+    A file that ends inside an unclosed fence loses its trailing blank lines too,
+    as `end-of-file-fixer` would make it.
+    """
+    if active and not active.endswith(b"\n"):
+        # End the last line first, so a final `## ` line with no newline is a
+        # heading to `SECTION_RE` and gets its blank line in this pass (#1504
+        # review round 2, F1). It takes the line ending of the line above it.
+        above = active.rfind(b"\n")
+        active += b"\r\n" if above > 0 and active[above - 1:above] == b"\r" else b"\n"
+    headings = {match.start() for match in SECTION_RE.finditer(_markdown_mask(active))}
+    lines = re.findall(rb"[^\n]*\n|[^\n]+$", active)
+    out: list[bytes] = []
+    offset = 0
+
+    def content_end() -> int:
+        index = len(out)
+        while index and not out[index - 1].strip():
+            index -= 1
+        return index
+
+    for line in lines:
+        if offset in headings:
+            kept = content_end()
+            if kept:
+                ending = b"\r\n" if out[kept - 1].endswith(b"\r\n") else b"\n"
+                out[kept:] = [ending]
+        out.append(line)
+        offset += len(line)
+    del out[content_end():]
+    return b"".join(out)
+
+
 def take_migration_markers(active: bytes) -> tuple[bytes, list[bytes]]:
     """Remove every graduation-marker section from `active`; return (active, sections).
 

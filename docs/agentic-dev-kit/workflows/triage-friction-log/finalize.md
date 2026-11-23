@@ -67,14 +67,22 @@ section, the prose between its heading and its first entry goes to the archive w
 them, directly under the same heading and ahead of any entry already archived there,
 and the section leaves the inbox; a section that keeps an entry keeps its prose. When
 removing a dated section that genuinely is empty, also remove the blank line that separated it from whatever precedes it if nothing
-follows: otherwise an emptied trailing section leaves a blank line at EOF. In the archive,
+follows: otherwise an emptied trailing section leaves a blank line at EOF. Then, in the
+new inbox, give each `## ` heading outside code exactly one blank line above it (a heading
+with only blank lines above it needs none) and end the file in exactly one line ending.
+Removing a section's last entry while it keeps an earlier one takes the blank line before
+the next heading with it, and removing the file's last entry leaves its separator at EOF.
+A blank line is one holding only whitespace. Each run of them directly above a heading
+becomes one empty line with the line ending of the line above it, and the run at EOF is
+removed; no other line changes. In the archive,
 swept blocks whose date heading the archive already has join the last section with that
 exact heading (outside fenced code) instead of repeating it; others go in a new section
 appended at the end, with a blank line before its heading. Either way the archive ends in
 exactly one newline.
 
 Commit validation, which re-renders a retained sweep commit from state, also accepts the
-four renderings older engines committed: the one that left an emptied section's intro in
+five renderings older engines committed: the one that left the blank lines around a removed
+entry as they fell, the one that also left an emptied section's intro in
 the inbox, the one that also left earlier markers in the inbox,
 the one before source entries (lists of issue
 links and candidate ids, each swept date group appended under its own heading, the last

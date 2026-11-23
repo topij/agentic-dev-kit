@@ -149,7 +149,7 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "aa419d6ec8d316239242140afac7a7802445a235a23d94d07508868521240839"
+      "sha256": "387b7c39e37ec977f437e92b0f84ac9945bcc95d3b7cb8398ef0408de27a611f"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/recovery.md": {
       "required_by": [
@@ -630,14 +630,14 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "e644f520d4427c6f148f2651e191a7d6ba2a47b9abbfea868365d29363f5016e"
+      "sha256": "78b74686e8c5875d36877d83845dddb533a70a8ed156608311b0e55aed7fbaad"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
         "scripts/lib/triage/engine.py"
       ],
       "role": "engine",
-      "sha256": "3def7be19d95762e43bb85e1e739ca9a15396d342daa4d68adbad3aba45f9aca"
+      "sha256": "c273559e067ab045f081f6a867cd864c160bf5d869191cb0d8173aa297189109"
     },
     "scripts/lib/triage/gate.py": {
       "required_by": [
@@ -654,7 +654,7 @@
         "scripts/lib/triage/model.py"
       ],
       "role": "engine",
-      "sha256": "5b406ac521f149bd1a63eab53f3faca562e71b403f1617dde079f41cd2348815"
+      "sha256": "96c84d6909356a0fa31194441970aa7c9ef0204325003edc0ab841504e0f7975"
     },
     "scripts/lib/triage/model.py": {
       "required_by": [
@@ -815,7 +815,7 @@
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
-      "sha256": "78683775d1d151f36d5a1485f624bfbd88896b315e6198520ea63f7f96de6dfd"
+      "sha256": "a5ca59e32a8319b234bd17e1388cabe08607cf2b4c9c31e00665102762d06c36"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
@@ -991,7 +991,7 @@
     },
     "scripts/tests/test_triage_inbox.py": {
       "role": "test",
-      "sha256": "c0eff0c93ecc63f1e1c9c4f29e9734c35033f18baffaf3c63d3aec3c301e0600"
+      "sha256": "a4e0be543c4b1992f7a3ce913b6fdd7dc8b6a20fc1b84294b05437e1e785eb89"
     },
     "scripts/tests/test_triage_inputs.py": {
       "role": "test",
