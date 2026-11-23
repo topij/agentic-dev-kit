@@ -527,6 +527,67 @@ def test_render_sweep_adds_a_blank_line_before_the_appended_archive_heading() ->
     assert archive == b"# Archive\n\nprior content\n\n## 2026-09-20\n\n- **Archived one.** body\n"
 
 
+def _passes_whitespace_hooks(raw: bytes) -> bool:
+    """What `end-of-file-fixer` and `trailing-whitespace` would leave unchanged."""
+    lines = raw.split(b"\n")
+    return raw.endswith(b"\n") and not raw.endswith(b"\n\n") and all(line == line.rstrip() for line in lines)
+
+
+def _headings_without_a_blank_line(raw: bytes) -> list[bytes]:
+    lines = raw.split(b"\n")
+    return [line for index, line in enumerate(lines) if index and line.startswith(b"## ") and lines[index - 1] != b""]
+
+
+def test_render_sweep_keeps_one_final_newline_when_the_swept_last_entry_leaves_an_earlier_one() -> None:
+    """#1474: sweeping the file's last entry while its section keeps an earlier one
+    left that entry's separating blank line at EOF, which `end-of-file-fixer`
+    rejects. `pre-1474` is the old rendering, kept so a sweep it committed still
+    validates."""
+    raw = b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n\n- **Swept.** goes\n"
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-02"])
+    active, archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n"
+    assert _passes_whitespace_hooks(active) and _passes_whitespace_hooks(archive)
+    old_active, old_archive = render_sweep(raw, b"# Archive\n", candidates, state, b"", rendering="pre-1474")
+    assert old_active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n\n"
+    assert old_archive == archive
+
+
+def test_render_sweep_keeps_the_blank_line_before_a_heading_after_a_partly_swept_section() -> None:
+    """#1396: when a section's entries are contiguous and the sweep removes the last
+    one, the removed block carried the only blank line before the next heading. The
+    next heading now keeps exactly one blank line above it, with a marker record or
+    without one."""
+    raw = (
+        b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n- **Swept.** goes\n\n"
+        b"## 2026-11-10\n\n- **Older.** stays\n"
+    )
+    candidates = parse(raw)
+    state = _render_sweep_state(archived=["TRI-02"], approval=("archive TRI-02", "topi"))
+    active, _archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** stays\n\n## 2026-11-10\n\n- **Older.** stays\n"
+    marker = "## 2026-11-23 — Backlog migrated by triage session abc123\n\n".encode()
+    marked, _archive = render_sweep(raw, b"# Archive\n", candidates, state, marker)
+    assert _headings_without_a_blank_line(marked) == [] and _passes_whitespace_hooks(marked)
+    old_active, _old_archive = render_sweep(raw, b"# Archive\n", candidates, state, b"", rendering="pre-1474")
+    assert b"- **Kept.** stays\n## 2026-11-10" in old_active
+
+
+def test_render_sweep_seam_normalization_leaves_headings_inside_code_alone() -> None:
+    """A `## ` line inside a fenced block is not a heading, so its spacing is the
+    entry's own text and the normalization does not touch it."""
+    raw = (
+        b"# Log\n\n## 2026-11-12\n\n- **Kept.** an example:\n\n  ```\n  x\n## not a heading\n  ```\n"
+        b"- **Swept.** goes\n"
+    )
+    candidates = parse(raw)
+    assert [candidate.candidate_id for candidate in candidates] == ["TRI-01", "TRI-02"]
+    state = _render_sweep_state(archived=["TRI-02"])
+    active, _archive = render_sweep(raw, b"# Archive\n", candidates, state, b"")
+    assert active == b"# Log\n\n## 2026-11-12\n\n- **Kept.** an example:\n\n  ```\n  x\n## not a heading\n  ```\n"
+
+
 def test_render_sweep_legacy_reproduces_the_pre_812_bytes() -> None:
     """`rendering="pre-812"` exists so a sweep an engine before #812 committed still
     validates. These bytes are what that engine rendered for this input: the older

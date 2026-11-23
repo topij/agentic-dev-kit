@@ -286,6 +286,32 @@ def sweep_groups(
     return active, [(title, intro_by_title.get(title, b""), blocks) for title, blocks in archived_by_title.items()]
 
 
+def normalize_seams(active: bytes) -> bytes:
+    """Give `active` exactly one blank line before each `## ` heading and one final newline.
+
+    A heading counts only outside code, as `parse` reads it, and the first byte of
+    the file needs no separator. Removing a section's last entry takes the blank
+    line that preceded the next heading with it (#1396), and removing the file's
+    last entry while its section keeps an earlier one leaves that entry's
+    separating blank line at EOF (#1474). Both are seams a sweep opens, and
+    `end-of-file-fixer`-style hooks reject the second. Only newline runs are
+    touched: a run ending at a heading becomes one blank line and the run at EOF
+    becomes one newline, so no other byte moves. A whitespace-only line is not a
+    newline run and is left as it is.
+    """
+    headings = [match.start() for match in SECTION_RE.finditer(_markdown_mask(active)) if match.start() > 0]
+    for start in reversed(headings):
+        run_start = start
+        while run_start > 0 and active[run_start - 1:run_start] == b"\n":
+            run_start -= 1
+        if run_start > 0:
+            # A run reaching offset 0 means only newlines precede the heading, so
+            # it starts the file's content and is left alone.
+            active = active[:run_start] + b"\n\n" + active[start:]
+    stripped = active.rstrip(b"\n")
+    return stripped + b"\n" if stripped else b""
+
+
 def take_migration_markers(active: bytes) -> tuple[bytes, list[bytes]]:
     """Remove every graduation-marker section from `active`; return (active, sections).
 
