@@ -291,8 +291,8 @@ below says; proving a sweep reads git live, as its own paragraphs say. Record th
 result and current and recorded identities in a candidate `action_core`. The prepared
 envelope embeds the complete immutable capture core and digest, the action core and
 digest, and the exact decision plus approver identity bound to `action_core_digest`.
-Only the three declared actions are valid: `preserve-valid-state-and-quarantine-old-gate`,
-`abandon-invalid-state`, and `retire-terminal-invalid-state`. An absent, empty, or unknown action or approving decision is
+Only the four declared actions are valid: `preserve-valid-state-and-quarantine-old-gate`,
+`abandon-invalid-state`, `retire-terminal-invalid-state`, and `retire-merged-sweep-state`. An absent, empty, or unknown action or approving decision is
 not recovery authority and stops operator-held.
 Before selecting either transition, require the exact `state-present-capture` or
 `state-present-prepared` kind, recompute the embedded old-gate digest, require its
@@ -310,8 +310,10 @@ bytes/digests, and filesystem observations. Never follow an unvalidated path fro
 malformed state; unresolved artifacts are named as unresolved. A valid captured state
 under a gate still owned by the current invocation leaves the state byte-identical,
 releases only that matching gate by normal teardown, and directs the operator to
-`resume`. A valid capture reached through a proven-stale gate may select only
-`preserve-valid-state-and-quarantine-old-gate`. Require exact approval of that action
+`resume`, unless it is a merged sweep that `retire-merged-sweep-state` below retires. A
+valid capture reached through a proven-stale gate may select only
+`preserve-valid-state-and-quarantine-old-gate`, or that retirement under the same
+conditions. Require exact approval of that action
 core digest, then digest-check and atomically replace the capture bundle with the
 prepared envelope before changing the old gate. A fresh invocation can resume the same
 prepared action. Revalidate the unchanged state and every old-gate name, then quarantine
@@ -388,6 +390,34 @@ merge commit and whether it was `recorded` or `found-in-git`, the ref it was fou
 the swept candidate ids, and final head, so the approved digest names the finished writes. The
 bytes are retained at the quarantine path, never rewritten. Any other or unreadable
 value keeps the state held.
+A **valid** state has one retirement too: a sweep whose pull request merged at a head
+the engine never reviewed (#1474). When a required check fails on the bytes the engine
+committed, the only way forward is a fix commit on the sweep branch. The engine's
+`pr-watch`, or after review its `merge-read-back`, then reads the moved head back
+`ambiguous`, and `resume` holds on it for good. The state shows the shape on its own:
+phase `forge-finalize`, every tracker and notification operation `verified` with settled
+attempt logs, `branch-create`, `commit`, `push` and `pull-request` `verified` with settled
+attempt logs, and after them only `pr-watch`, or `pr-watch` then `merge-read-back`, the
+last of which is not `verified`. Both of those only read. For such a state `recover`
+needs the forge (`--enable-github-forge`); without it, it refuses and says so. With it,
+the forge must read the state's own pull request (the `pull-request` read-back's URL and
+branch) back as merged into the protected branch, with a `mergedAt`, at a head other
+than the engine's. The engine's head is not required to be an ancestor of the merged
+head, because a squash merge leaves the branch's commits out of the protected branch's
+history. Git must then prove the sweep the way it does for a finished run in the
+engine's layout: exactly one first-parent commit since `protected_branch_head` moves
+every decided block out of `<friction-log>` and into `<friction-log-archive>`, and the
+protected ref still lacks them. If any check fails, `recover` writes nothing and refuses
+(`sweep pull request head moved and its merged sweep is not proven; recovery refused`).
+If all pass, it captures the state and offers `retire-merged-sweep-state` under the same
+quarantine, receipt and approval sequence as the other retirements. Its action core
+binds a `merged_sweep_evidence` summary: the session, verified tracker identifiers, pull
+request, branch, engine head, merged head, `mergedAt`, the sweep commit found in git, the
+ref it was found on, and the swept candidate ids. That summary holds only fields a merged
+pull request no longer changes, so the approving `recover` must also enable the forge,
+and it rebuilds the digest the operator approved. Without the forge, the approval does not
+bind and nothing moves. The bytes are retained at the quarantine path, and the next
+session starts from the receipt.
 The action core binds the capture-core digest, exact engine-derived quarantine target,
 exact `recovered-safe-to-restart` receipt core, old-gate capture, repository identity,
 and gate disposition. An owned disposition binds the current recovery invocation's

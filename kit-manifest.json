@@ -142,7 +142,7 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "58f6f515ada9f5023cebe703956ec53cc3a75d5e682042ba05b2d54b992a119c"
+      "sha256": "bac69c229fb42b2cd51543e16098de4c145e8b5ffb5384280316d19c4a1de6c6"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/finalize.md": {
       "required_by": [
@@ -156,7 +156,7 @@
         "docs/agentic-dev-kit/workflows/triage-friction-log.md"
       ],
       "role": "workflow",
-      "sha256": "15d93819411ce78ea2fe7c48b38dd3ba22e543ad63c23675861856948744890e"
+      "sha256": "96e254c9e896b508e48a1468774975b19eea1bfb6583915f51a57116fb9c064c"
     },
     "docs/agentic-dev-kit/workflows/triage-friction-log/state-schema.md": {
       "required_by": [
@@ -630,7 +630,7 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "e644f520d4427c6f148f2651e191a7d6ba2a47b9abbfea868365d29363f5016e"
+      "sha256": "be2cb3dd49ad6c7bbad396c54b8fb20f83ccd7a3d77f09174652127c80f8fd24"
     },
     "scripts/lib/triage/finalize.py": {
       "required_by": [
@@ -688,14 +688,14 @@
         "scripts/triage_friction_log.py"
       ],
       "role": "engine",
-      "sha256": "a9367fe1bcbc3708a457b817c3e6b8973abd1a1f99dba34b7b294ace8927565f"
+      "sha256": "d6cd8e3cc5802e30cb822eeeb39cfa101e818ff10cdfe84e77b70a7274debf18"
     },
     "scripts/lib/triage/recovery.py": {
       "required_by": [
         "scripts/lib/triage/engine.py"
       ],
       "role": "engine",
-      "sha256": "066a6cb667c9be705e00678d12ac8e1eb9df9312fe91fda23edb2fb6d0d11fd1"
+      "sha256": "e03b68e2097d165db8cdb32ab1d1bf6232f45047c1103426ce1199341d0dc8a7"
     },
     "scripts/lib/triage/storage.py": {
       "required_by": [
@@ -815,7 +815,7 @@
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
-      "sha256": "78683775d1d151f36d5a1485f624bfbd88896b315e6198520ea63f7f96de6dfd"
+      "sha256": "806b24085e7990ed35064b0ab66090c528c70ea733cecb3c7363ca03428108f6"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",

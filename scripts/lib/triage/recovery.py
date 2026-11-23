@@ -390,8 +390,9 @@ def prepare_state_action(
     *,
     approval: dict[str, Any],
     operator: str,
+    forge: Any = None,
 ) -> dict[str, Any]:
-    plan = state_action_plan(store, settings, bundle)
+    plan = state_action_plan(store, settings, bundle, forge=forge)
     if plan.get("held") is not None:
         held = plan["held"]
         core = bundle["capture_core"]
@@ -723,7 +724,126 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
     return found[0] if len(found) == 1 else None
 
 
-def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str, Any]) -> dict[str, Any]:
+# The forge operations a sweep PR's finalization records before anything that
+# only reads: each of these writes, so each must be verified before a merged
+# sweep can be retired. `pr-watch` and `merge-read-back` after them only read.
+_WRITING_FORGE_PREFIX = ["branch-create", "commit", "push", "pull-request"]
+_READ_ONLY_FORGE_TAIL = {"pr-watch", "merge-read-back"}
+MERGED_SWEEP_ACTION = "retire-merged-sweep-state"
+
+
+def merged_sweep_shape(parsed: Any) -> dict[str, Any] | None:
+    """The pull request a stuck `forge-finalize` state names, or None (#1474).
+
+    The shape `resume` cannot leave: a sweep PR that needed a fix commit moved
+    its head off the engine's, so the engine's `pr-watch` (or, after review,
+    `merge-read-back`) can never verify at that head, and the run waits on
+    reconciliation for good. Read from the state alone, so an ordinary valid
+    state never reaches the forge: phase `forge-finalize`, every tracker and
+    notification operation and every writing forge operation verified with a
+    settled attempt log, and after them only read-only operations, the last of
+    which never verified. Returns the pull request's URL, branch and engine
+    head from the verified `pull-request` read-back.
+    """
+    if not isinstance(parsed, dict) or parsed.get("phase") != "forge-finalize":
+        return None
+    for name in ("operations", "notification_operations"):
+        entries = parsed.get(name, [])
+        if not isinstance(entries, list) or any(not isinstance(entry, dict) or entry.get("status") not in _SETTLED for entry in entries):
+            return None
+    if not _attempt_log_settled(parsed.get("attempts", []), _SETTLED):
+        return None
+    forge = parsed.get("finalization_operations")
+    if not isinstance(forge, list) or any(not isinstance(entry, dict) for entry in forge):
+        return None
+    prefix, tail = forge[: len(_WRITING_FORGE_PREFIX)], forge[len(_WRITING_FORGE_PREFIX):]
+    if [entry.get("kind") for entry in prefix] != _WRITING_FORGE_PREFIX:
+        return None
+    if any(entry.get("status") not in _SETTLED or not _attempt_log_settled(entry.get("attempts", []), _SETTLED) for entry in prefix):
+        return None
+    if (
+        not tail
+        or len(tail) > len(_READ_ONLY_FORGE_TAIL)
+        or [entry.get("kind") for entry in tail] != ["pr-watch", "merge-read-back"][: len(tail)]
+        or tail[-1].get("status") == "verified"
+    ):
+        return None
+    read_back = prefix[-1].get("read_back")
+    if not isinstance(read_back, dict):
+        return None
+    url, branch, head = read_back.get("url"), read_back.get("headRefName"), read_back.get("headRefOid")
+    if not isinstance(url, str) or not isinstance(branch, str) or not isinstance(head, str) or not OID_RE.fullmatch(head):
+        return None
+    return {"pull_request": url, "branch": branch, "engine_head": head}
+
+
+def _merged_sweep_evidence(settings: Settings, parsed: dict[str, Any], forge: Any) -> dict[str, Any] | None:
+    """Prove a stuck `forge-finalize` state's sweep merged, or return None (#1474).
+
+    The forge must read the state's own pull request back as merged into the
+    protected branch at a head other than the engine's: a head the engine
+    reviewed would complete through `resume`. The engine's head is not required
+    to be an ancestor of the merged head, because a squash merge leaves the
+    branch commits out of the protected branch's history and git here may not
+    have them. What makes a new session safe is the same git proof the finished
+    run's retirement uses: exactly one first-parent commit since the run's
+    `protected_branch_head` moves every decided block out of the inbox and into
+    the archive, and the protected ref still lacks them. The evidence names
+    only fields a merged pull request does not change, so a second `recover`
+    rebuilds the same action digest the operator approved.
+    """
+    shape = merged_sweep_shape(parsed)
+    if shape is None or forge is None:
+        return None
+    # Imported here: the engine imports this module.
+    from .engine import _forge_destination
+
+    identity = parsed["run_identity"]
+    host, repository = _forge_destination(identity["repository_identity"]["remote"])
+    read_back = forge.authority(
+        "pull-request-read-back", {"host": host, "repository": repository, "pr": shape["pull_request"]}
+    )
+    if (
+        not isinstance(read_back, dict)
+        or read_back.get("url") != shape["pull_request"]
+        or read_back.get("headRefName") != shape["branch"]
+        or read_back.get("baseRefName") != settings.protected_branch
+        or read_back.get("merged") is not True
+        or not isinstance(read_back.get("mergedAt"), str)
+        or not isinstance(read_back.get("headRefOid"), str)
+        or not OID_RE.fullmatch(read_back["headRefOid"])
+        or read_back["headRefOid"] == shape["engine_head"]
+    ):
+        return None
+    sweep = _find_sweep_commit(settings, parsed)
+    landed = _sweep_landed(settings, parsed, sweep)
+    if not landed:
+        return None
+    return {
+        "session": identity["session"],
+        "verified_tracker_identifiers": parsed.get("verified_tracker_identifiers"),
+        "pull_request": shape["pull_request"],
+        "branch": shape["branch"],
+        "engine_head": shape["engine_head"],
+        "merged_head": read_back["headRefOid"],
+        "merged_at": read_back["mergedAt"],
+        "merge_commit": sweep,
+        "merge_commit_source": "found-in-git",
+        "merge_commit_reachable_from": landed,
+        "swept_candidates": sorted(_swept_blocks(parsed) or {}),
+    }
+
+
+def state_action_plan(
+    store: ArtifactStore, settings: Settings, bundle: dict[str, Any], *, forge: Any = None
+) -> dict[str, Any]:
+    """Choose the recovery action for a captured state.
+
+    `forge` is given only by a `recover` the operator ran with the forge
+    enabled; with it a valid state stuck in the `merged_sweep_shape` is offered
+    `retire-merged-sweep-state` when `_merged_sweep_evidence` proves its sweep
+    merged. Without it, or without that proof, a valid state is preserved.
+    """
     core = bundle.get("capture_core")
     if not isinstance(core, dict) or digest(core) != bundle.get("capture_core_digest"):
         raise TriageError("state capture digest mismatch", outcome="operator-held")
@@ -749,8 +869,13 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         valid = True
     except TriageError:
         pass
+    merged_evidence = None
     if valid:
         action = "preserve-valid-state-and-quarantine-old-gate"
+        if forge is not None:
+            merged_evidence = _merged_sweep_evidence(settings, loads_exact(state_raw), forge)
+            if merged_evidence is not None:
+                action = MERGED_SWEEP_ACTION
     else:
         try:
             parsed = loads_exact(state_raw)
@@ -797,7 +922,7 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         else:
             action = "abandon-invalid-state" if abandonable else "retire-terminal-invalid-state"
     quarantine_path = str(store.state_path) + f".quarantine-{core['state_digest'][:16]}"
-    moves_state = action in {"abandon-invalid-state", "retire-terminal-invalid-state"}
+    moves_state = action in {"abandon-invalid-state", "retire-terminal-invalid-state", MERGED_SWEEP_ACTION}
     receipt_core = {
         "kind": "test-recovered-safe-to-restart" if store.mode == "test" else "recovered-safe-to-restart",
         "mode": store.mode,
@@ -817,6 +942,10 @@ def state_action_plan(store: ArtifactStore, settings: Settings, bundle: dict[str
         # Bound into the digest the operator approves, so the approval names
         # the external writes the retired bytes record as finished.
         action_core["terminal_evidence"] = terminal_evidence
+    if action == MERGED_SWEEP_ACTION:
+        # Bound the same way: the approval names the merged pull request, the
+        # head it merged at, and the sweep commit git found.
+        action_core["merged_sweep_evidence"] = merged_evidence
     return {"action_core": action_core, "action_core_digest": digest(action_core), "held": None}
 
 

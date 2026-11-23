@@ -493,6 +493,9 @@ class FakeForge:
         self.calls: list[tuple[str, dict[str, Any]]] = []
         self.branch_create_absence = {"local_branch_absent": True, "worktree_absent": True, "remote_branch_absent": True}
         self.discard_read_backs: list[dict[str, Any]] = []
+        # What `pull-request-read-back` returns, on every call: a recovery plan
+        # reads the pull request more than once.
+        self.pull_request_read_back: dict[str, Any] | None = None
 
     def authority(self, action: str, request: dict[str, Any]) -> dict[str, Any]:
         self.calls.append((f"authority:{action}", request))
@@ -508,6 +511,10 @@ class FakeForge:
             if not self.discard_read_backs:
                 raise AssertionError("no fake commit-discard read-back configured")
             return self.discard_read_backs.pop(0)
+        if action == "pull-request-read-back":
+            if self.pull_request_read_back is None:
+                raise AssertionError("no fake pull-request read-back configured")
+            return dict(self.pull_request_read_back)
         if not self.observations or not isinstance(self.observations[0].read_back, dict):
             raise AssertionError(f"no fake forge authority source configured for {action}")
         read_back = self.observations[0].read_back
@@ -687,6 +694,12 @@ class GitHubForge:
             return {"clean": self._git(worktree, "status", "--porcelain") == ""}
         if action == "commit-discard-read-back":
             return self._discard_read_back(request)
+        if action == "pull-request-read-back":
+            # What `recover` reads to retire a merged sweep (#1474): the pull
+            # request as the forge reports it, at whatever head it now has.
+            pr_number = self._pr_number(request["pr"], host=request["host"], repository=request["repository"])
+            read_back = self._gh_json(request["repository"], pr_number, request["host"])
+            return {**read_back, "merged": bool(read_back.get("mergedAt"))}
         if action == "commit":
             worktree = Path(request["worktree"]).resolve()
             import tempfile
