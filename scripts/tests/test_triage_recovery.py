@@ -435,3 +435,51 @@ def test_git_output_is_bounded_by_git_timeout(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr(model, "run_stdout", recording)
     assert model.git_output(tmp_path, "rev-parse", "HEAD") == "x"
     assert seen == {"timeout": model.GIT_TIMEOUT}
+
+
+@pytest.mark.parametrize("failure", ["timeout", "cannot-start", "exit-128"])
+def test_a_candidate_read_git_gives_no_answer_to_finds_no_sweep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    """Two commits qualify, so the search must hold. When a read of the first times
+    out or Git cannot start, skipping it would leave the second as the only
+    candidate; the search ends with None instead. A non-zero exit is how `git show`
+    reports a path missing at a revision, so that candidate is skipped and the
+    other is returned."""
+    from types import SimpleNamespace
+
+    from subprocess_runner import CommandTimedOut, CommandUnavailable, Completed
+    from triage import recovery
+
+    repo = tmp_path / "repo"
+    since, first = _repo_with_a_sweep(repo)
+    (repo / "friction.md").write_text("BLOCK-A\n", encoding="utf-8")
+    _plain_git(repo, "commit", "-qam", "re-add")
+    (repo / "friction.md").write_text("", encoding="utf-8")
+    _plain_git(repo, "commit", "-qam", "second sweep")
+    second = _plain_git(repo, "rev-parse", "HEAD")
+    _plain_git(repo, "update-ref", "refs/remotes/origin/main", second)
+    settings = SimpleNamespace(
+        paths=SimpleNamespace(repo=repo, friction_log=repo / "friction.md", archive=repo / "archive.md"),
+        protected_branch="main",
+    )
+    parsed = {
+        "run_identity": {"protected_branch_head": since},
+        "frozen_snapshot": {"content": {"blocks": [{"candidate_id": "a", "source_block": "BLOCK-A\n"}]}},
+        "decisions": [{"candidate_id": "a", "decision": "archive"}],
+    }
+    assert recovery._find_sweep_commit(settings, parsed) is None
+    real = recovery.run_bytes
+
+    def show(argv, **kwargs):
+        if argv[-1] == f"{first}:archive.md":
+            if failure == "timeout":
+                raise CommandTimedOut("git show timed out after 30s")
+            if failure == "cannot-start":
+                raise CommandUnavailable("git could not run")
+            return Completed(128, b"", "fatal: path does not exist")
+        return real(argv, **kwargs)
+
+    monkeypatch.setattr(recovery, "run_bytes", show)
+    expected = second if failure == "exit-128" else None
+    assert recovery._find_sweep_commit(settings, parsed) == expected

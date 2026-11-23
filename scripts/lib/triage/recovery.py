@@ -596,23 +596,40 @@ def _swept_blocks(parsed: dict[str, Any]) -> dict[str, str] | None:
     return swept or None
 
 
-def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
-    """The file's text at `revision`, or None when Git cannot give it as UTF-8.
+class _GitUnanswered(Exception):
+    """Git timed out or could not start, so it said nothing about the file."""
 
-    None keeps the state held, so a read that fails, times out or cannot start is
-    treated like a missing file.
+
+def _git_read(settings: Settings, revision: str, path: Path) -> str | None:
+    """The file's text at `revision`, or None when Git gives no UTF-8 text for it.
+
+    A non-zero exit, which is how `git show` reports a path missing at that
+    revision, and output that is not UTF-8 both answer None. A timeout or a Git
+    that cannot start raises `_GitUnanswered`, because Git gave no answer at all.
     """
     rel = path.relative_to(settings.paths.repo).as_posix()
     try:
         result = run_bytes(["git", "-C", str(settings.paths.repo), "show", f"{revision}:{rel}"],
                            cwd=None, timeout=GIT_TIMEOUT, env=without_git_environment())
-    except CommandError:
-        return None
+    except CommandError as exc:
+        raise _GitUnanswered(str(exc)) from exc
     if result.returncode:
         return None
     try:
         return result.stdout.decode("utf-8")
     except UnicodeDecodeError:
+        return None
+
+
+def _git_show(settings: Settings, revision: str, path: Path) -> str | None:
+    """`_git_read`, with a read Git gave no answer to also returning None.
+
+    None keeps the state held, so a read that fails, times out or cannot start is
+    treated like a missing file.
+    """
+    try:
+        return _git_read(settings, revision, path)
+    except _GitUnanswered:
         return None
 
 
@@ -668,8 +685,10 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
     and only commits that change the friction log. A candidate is a commit that
     takes every block the run filed or archived out of the inbox and has each in
     its archive. Exactly one candidate is the sweep; none, or more than one,
-    returns None and the state stays held. `_sweep_landed` then re-checks the
-    commit it returns exactly as it checks a recorded one.
+    returns None and the state stays held. A read Git gives no answer to also
+    returns None: skipping that commit could leave a single candidate standing
+    when the unread one would have been a second. `_sweep_landed` then re-checks
+    the commit it returns exactly as it checks a recorded one.
     """
     swept = _swept_blocks(parsed)
     identity = parsed.get("run_identity")
@@ -691,9 +710,12 @@ def _find_sweep_commit(settings: Settings, parsed: dict[str, Any]) -> str | None
         return None
     found: list[str] = []
     for commit in listed.split():
-        before = _git_show(settings, f"{commit}^", log)
-        after = _git_show(settings, commit, log)
-        archived = _git_show(settings, commit, archive)
+        try:
+            before = _git_read(settings, f"{commit}^", log)
+            after = _git_read(settings, commit, log)
+            archived = _git_read(settings, commit, archive)
+        except _GitUnanswered:
+            return None
         if None in (before, after, archived):
             continue
         if all(text in before and text not in after and text in archived for text in swept.values()):

@@ -883,14 +883,21 @@ def test_the_isolated_tree_blobs_land_in_the_tree_despite_an_inherited_git_dir(
                               capture_output=True).returncode != 0
 
 
-def test_a_blob_copy_git_cannot_answer_is_a_run_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    from subprocess_runner import CommandTimedOut
+@pytest.mark.parametrize("failing", ["cat-file", "hash-object"])
+def test_a_blob_copy_git_cannot_answer_is_a_run_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failing: str
+) -> None:
+    """Both blob-copy calls are bounded by GIT_TIMEOUT, and a timeout in either is a
+    run error."""
+    from subprocess_runner import CommandTimedOut, Completed
 
     seen = []
 
     def timed_out(argv, *, cwd, timeout, **_kwargs):
-        seen.append(timeout)
-        raise CommandTimedOut("git cat-file timed out after 30s")
+        seen.append((argv[1], timeout))
+        if argv[1] == failing:
+            raise CommandTimedOut(f"git {failing} timed out after 30s")
+        return Completed(0, b"blob bytes", "")
 
     (tmp_path / "config").mkdir()
     (tmp_path / "config" / "dev-model.yaml").write_text("paths:\n  engines: scripts\n", encoding="utf-8")
@@ -898,9 +905,10 @@ def test_a_blob_copy_git_cannot_answer_is_a_run_error(tmp_path: Path, monkeypatc
     monkeypatch.setattr(review_eval, "_git", lambda where, *args, **_k: str(tree / ".git")
                         if args[:2] == ("rev-parse", "--absolute-git-dir") else "")
     monkeypatch.setattr(review_eval, "run_bytes", timed_out)
-    with pytest.raises(review_eval.RunError, match=r"^git cat-file timed out after 30s$"):
+    with pytest.raises(review_eval.RunError, match=rf"^git {failing} timed out after 30s$"):
         review_eval._isolated_tree(tmp_path, tree, {"base": "b" * 40, "head": "c" * 40}, "d" * 40)
-    assert seen == [review_eval.GIT_TIMEOUT]
+    calls = ["cat-file"] if failing == "cat-file" else ["cat-file", "hash-object"]
+    assert seen == [(name, review_eval.GIT_TIMEOUT) for name in calls]
 
 
 @pytest.mark.parametrize("failing", ["cat-file", "hash-object"])
