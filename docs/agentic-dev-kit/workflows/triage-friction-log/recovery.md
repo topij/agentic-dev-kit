@@ -390,11 +390,13 @@ merge commit and whether it was `recorded` or `found-in-git`, the ref it was fou
 the swept candidate ids, and final head, so the approved digest names the finished writes. The
 bytes are retained at the quarantine path, never rewritten. Any other or unreadable
 value keeps the state held.
-A **valid** state has one retirement too: a sweep whose pull request merged at a head
-the engine never reviewed (#1474). When a required check fails on the bytes the engine
-committed, the only way forward is a fix commit on the sweep branch. The engine's
-`pr-watch`, or after review its `merge-read-back`, then reads the moved head back
-`ambiguous`, and `resume` holds on it for good. The state shows the shape on its own:
+A **valid** state has one retirement too: a sweep whose pull request merged while the
+engine's own watch of it could never verify (#1474). The common cause: when a required
+check fails on the bytes the engine committed, the only way forward is a fix commit on
+the sweep branch. The engine's `pr-watch`, or after review its `merge-read-back`, then
+reads the moved head back `ambiguous`, and `resume` holds on it for good. A `pr-watch`
+left `failed` or `ambiguous` at the engine's own head, or `attempting` after a crash,
+holds the same way. The state shows the shape on its own:
 phase `forge-finalize`, every tracker and notification operation `verified` with settled
 attempt logs, `branch-create`, `commit`, `push` and `pull-request` `verified` with settled
 attempt logs, and after them only `pr-watch`, or `pr-watch` then `merge-read-back`, the
@@ -404,8 +406,9 @@ still refuses that state as valid and names `resume`. For such a state `recover`
 needs the forge (`--enable-github-forge`); without it, it refuses and says so. With it,
 the forge must read the state's own pull request (the `pull-request` read-back's URL and
 branch) back as merged into the protected branch, with a `mergedAt`, at any head: a
-merge at the engine's own head after a watch that failed, read invalid output or was cut
-off is as stuck, since `resume` retries only `unsettled`. The engine's head is not required to be an ancestor of the merged
+merge at the engine's own head after a `pr-watch` left `failed`, `ambiguous` or
+`attempting` is as stuck, since `resume` retries only `unsettled` (a watch whose command
+exits non-zero is recorded `unsettled`). The engine's head is not required to be an ancestor of the merged
 head, because a squash merge leaves the branch's commits out of the protected branch's
 history. Git must then prove the sweep the way it does for a finished run in the
 engine's layout: exactly one first-parent commit since `protected_branch_head` moves

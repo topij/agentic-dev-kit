@@ -735,10 +735,12 @@ MERGED_SWEEP_ACTION = "retire-merged-sweep-state"
 def merged_sweep_shape(parsed: Any) -> dict[str, Any] | None:
     """The pull request a stuck `forge-finalize` state names, or None (#1474).
 
-    The shape `resume` cannot leave: a sweep PR that needed a fix commit moved
-    its head off the engine's, so the engine's `pr-watch` (or, after review,
-    `merge-read-back`) can never verify at that head, and the run waits on
-    reconciliation for good. Read from the state alone, so an ordinary valid
+    The shape `resume` cannot leave: the engine's `pr-watch` (or, after review,
+    `merge-read-back`) ended in a status `resume` does not retry, so the run waits
+    on reconciliation for good. The common cause is a sweep PR that needed a fix
+    commit and moved its head off the engine's, which reads back `ambiguous`; a
+    `pr-watch` left `failed`, `ambiguous` or `attempting` at the engine's own
+    head holds the same way. Read from the state alone, so an ordinary valid
     state never reaches the forge: phase `forge-finalize`, every tracker and
     notification operation and every writing forge operation verified with a
     settled attempt log, and after them only read-only operations, the last of
