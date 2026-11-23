@@ -2302,6 +2302,10 @@ def run(
                         return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="captured state is valid; recovery refused")
                 captured = capture_state_present(store, settings, require_terminated=False, publish=True)
                 plan = state_action_plan(store, settings, captured, forge=forge)
+                # The forge is read again for the captured plan; word the result
+                # from the action that plan offers, not the earlier read (#1505
+                # review round 2, F1).
+                retire_merged = (plan.get("action_core") or {}).get("action") == MERGED_SWEEP_ACTION
                 if plan.get("held") is not None:
                     held = prepare_state_action(store, settings, captured, approval={}, operator="")
                     lease.held = False

@@ -2127,7 +2127,7 @@ def test_recover_retires_a_stuck_sweep_whose_fixed_pull_request_merged(
 
 
 @pytest.mark.evidence
-@pytest.mark.parametrize("change", ["unmerged", "engine-head", "other-pull-request", "other-base", "other-branch"])
+@pytest.mark.parametrize("change", ["unmerged", "merged-without-time", "engine-head", "other-pull-request", "other-base", "other-branch"])
 def test_recover_refuses_a_stuck_sweep_the_forge_does_not_show_merged_elsewhere(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
@@ -2138,6 +2138,8 @@ def test_recover_refuses_a_stuck_sweep_the_forge_does_not_show_merged_elsewhere(
     read_back = dict(stuck["merged"])
     if change == "unmerged":
         read_back.update(merged=False, mergedAt=None)
+    elif change == "merged-without-time":
+        read_back["mergedAt"] = None
     elif change == "engine-head":
         read_back["headRefOid"] = stuck["commit"]
     elif change == "other-pull-request":
@@ -2155,7 +2157,8 @@ def test_recover_refuses_a_stuck_sweep_the_forge_does_not_show_merged_elsewhere(
 @pytest.mark.evidence
 @pytest.mark.parametrize("change", [
     "phase", "tracker-unverified", "notification-unverified", "attempt-unsettled", "push-unverified",
-    "push-attempt-unsettled", "no-tail", "watch-verified", "watch-unsettled", "tail-out-of-order",
+    "branch-create-attempt-unsettled", "commit-attempt-unsettled", "push-attempt-unsettled",
+    "pull-request-attempt-unsettled", "no-tail", "watch-verified", "watch-unsettled", "tail-out-of-order",
     "engine-head-not-a-sha",
 ])
 def test_merged_sweep_shape_reads_only_a_stuck_sweep_with_every_write_verified(
@@ -2178,8 +2181,9 @@ def test_merged_sweep_shape_reads_only_a_stuck_sweep_with_every_write_verified(
         state["operations"] = [{"status": "ambiguous"}]
     elif change == "notification-unverified":
         state["notification_operations"] = [{"status": "ambiguous"}]
-    elif change == "push-attempt-unsettled":
-        operations[2]["attempts"] = [*operations[2]["attempts"], {"status": "attempting", "intent_digest": "x"}]
+    elif change.endswith("-attempt-unsettled"):
+        index = ["branch-create", "commit", "push", "pull-request"].index(change.removesuffix("-attempt-unsettled"))
+        operations[index]["attempts"] = [*operations[index]["attempts"], {"status": "attempting", "intent_digest": "x"}]
     elif change == "watch-unsettled":
         operations[-1]["status"] = "unsettled"
     elif change == "attempt-unsettled":
@@ -2195,6 +2199,56 @@ def test_merged_sweep_shape_reads_only_a_stuck_sweep_with_every_write_verified(
     else:
         operations[3]["read_back"]["headRefOid"] = "not-a-sha"
     assert merged_sweep_shape(state) is None
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("failure", [OSError("gh not found"), RuntimeError("client failed")], ids=["oserror", "runtime"])
+def test_a_forge_read_that_fails_any_way_refuses_and_releases_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    """A forge read that raises is a held refusal, and the gate is released, so the
+    next `recover` plans normally (#1505 review round 2, F2)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    _land_fixed_sweep(stuck)
+
+    class Failing(FakeForge):
+        def authority(self, action: str, request: dict) -> dict:
+            if action == "pull-request-read-back":
+                raise failure
+            return super().authority(action, request)
+
+    refused = run("recover", context="interactive", request={}, start=stuck["root"], forge=Failing([]))
+    assert refused["outcome"] == "operator-held"
+    assert "pull-request read-back failed" in refused["detail"]
+    assert stuck["state_path"].read_bytes() == stuck["raw"]
+    planned = _plan_merged_in_own_process(stuck["root"], stuck["merged"])
+    assert planned["detail"] == "merged sweep state captured for retirement"
+
+
+@pytest.mark.evidence
+def test_the_captured_plan_decides_the_recover_wording(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """If the forge's answer changes between the decision read and the captured
+    plan, the result is worded from the captured plan (#1505 review round 2, F1)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    _land_fixed_sweep(stuck)
+
+    class Flipping(FakeForge):
+        reads = 0
+
+        def authority(self, action: str, request: dict) -> dict:
+            if action == "pull-request-read-back":
+                Flipping.reads += 1
+                if Flipping.reads > 1:
+                    return {**stuck["merged"], "merged": False, "mergedAt": None}
+            return super().authority(action, request)
+
+    forge = Flipping([])
+    forge.pull_request_read_back = stuck["merged"]
+    result = run("recover", context="interactive", request={}, start=stuck["root"], forge=forge)
+    assert result["recovery_plan"]["action_core"]["action"] == "preserve-valid-state-and-quarantine-old-gate"
+    assert result["detail"] != "merged sweep state captured for retirement"
 
 
 @pytest.mark.evidence

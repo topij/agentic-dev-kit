@@ -808,9 +808,18 @@ def _merged_sweep_evidence(settings: Settings, parsed: dict[str, Any], forge: An
 
     identity = parsed["run_identity"]
     host, repository = _forge_destination(identity["repository_identity"]["remote"])
-    read_back = forge.authority(
-        "pull-request-read-back", {"host": host, "repository": repository, "pr": shape["pull_request"]}
-    )
+    try:
+        read_back = forge.authority(
+            "pull-request-read-back", {"host": host, "repository": repository, "pr": shape["pull_request"]}
+        )
+    except TriageError:
+        raise
+    except Exception as exc:
+        # A `gh` that cannot start or a forge client that fails some other way
+        # must refuse like a failed read-back, so `recover` releases its gate
+        # rather than leaving it held behind an escaped exception (#1505 review
+        # round 2, F2).
+        raise TriageError(f"pull-request read-back failed: {type(exc).__name__}", outcome="operator-held") from exc
     if (
         not isinstance(read_back, dict)
         or read_back.get("url") != shape["pull_request"]
