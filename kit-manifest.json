@@ -815,7 +815,7 @@
     },
     "scripts/tests/test_finalize_triage.py": {
       "role": "test",
-      "sha256": "806b24085e7990ed35064b0ab66090c528c70ea733cecb3c7363ca03428108f6"
+      "sha256": "9e3e24bd0160076f31eb4592780efdfafc91ddd807b96250264c9d61b2543776"
     },
     "scripts/tests/test_init_sh.py": {
       "role": "test",
