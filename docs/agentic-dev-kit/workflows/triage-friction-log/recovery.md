@@ -403,8 +403,9 @@ last of which is neither `verified` nor `unsettled`. Both of those only read. An
 still refuses that state as valid and names `resume`. For such a state `recover`
 needs the forge (`--enable-github-forge`); without it, it refuses and says so. With it,
 the forge must read the state's own pull request (the `pull-request` read-back's URL and
-branch) back as merged into the protected branch, with a `mergedAt`, at a head other
-than the engine's. The engine's head is not required to be an ancestor of the merged
+branch) back as merged into the protected branch, with a `mergedAt`, at any head: a
+merge at the engine's own head after a watch that failed, read invalid output or was cut
+off is as stuck, since `resume` retries only `unsettled`. The engine's head is not required to be an ancestor of the merged
 head, because a squash merge leaves the branch's commits out of the protected branch's
 history. Git must then prove the sweep the way it does for a finished run in the
 engine's layout: exactly one first-parent commit since `protected_branch_head` moves

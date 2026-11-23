@@ -783,8 +783,10 @@ def _merged_sweep_evidence(settings: Settings, parsed: dict[str, Any], forge: An
     """Prove a stuck `forge-finalize` state's sweep merged, or return None (#1474).
 
     The forge must read the state's own pull request back as merged into the
-    protected branch at a head other than the engine's: a head the engine
-    reviewed would complete through `resume`. The engine's head is not required
+    protected branch, at any head. A merge at the engine's own head qualifies
+    too: the shape admits only last statuses `resume` cannot clear (`failed`,
+    `ambiguous`, `attempting`), so `resume` would hold on it as it does on a moved
+    head (#1505 review round 4, F1). The engine's head is not required
     to be an ancestor of the merged head, because a squash merge leaves the
     branch commits out of the protected branch's history and git here may not
     have them. What makes a new session safe is the same git proof the finished
@@ -829,7 +831,6 @@ def _merged_sweep_evidence(settings: Settings, parsed: dict[str, Any], forge: An
         or not isinstance(read_back.get("mergedAt"), str)
         or not isinstance(read_back.get("headRefOid"), str)
         or not OID_RE.fullmatch(read_back["headRefOid"])
-        or read_back["headRefOid"] == shape["engine_head"]
     ):
         return None
     sweep = _find_sweep_commit(settings, parsed)

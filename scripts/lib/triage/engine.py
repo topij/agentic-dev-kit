@@ -2293,7 +2293,7 @@ def run(
                             next_entry = (
                                 "rerun recover with the forge enabled (--enable-github-forge)"
                                 if forge is None
-                                else "merge the sweep pull request and fetch the protected branch, then rerun recover"
+                                else "merge the sweep pull request if it is still open, fetch the protected branch, then rerun recover"
                             )
                             return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=next_entry, detail="sweep pull request watch cannot complete and its merged sweep is not proven; recovery refused")
                         # A completed state is retired by a session-starting entry, never

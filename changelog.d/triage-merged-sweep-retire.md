@@ -7,7 +7,7 @@ fix commit before they can merge, for example when a required check fails on the
 the engine committed. That left the run's state in `forge-finalize`, waiting on
 `reconciliation`, and no command could move it (#1474). After such a pull request merges,
 run `recover` interactively with `--enable-github-forge`. If the forge reads the pull
-request back as merged at the moved head, and git finds exactly one commit that swept
+request back as merged (at a moved head or at the engine's own), and git finds exactly one commit that swept
 the run's blocks, the recovery plan offers a fourth action, `retire-merged-sweep-state`.
 Its action core carries `merged_sweep_evidence`. Approve it as you approve the other
 recovery actions, running `recover` with `--enable-github-forge` again. The state is

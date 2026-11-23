@@ -2136,12 +2136,12 @@ def test_recover_retires_a_stuck_sweep_whose_fixed_pull_request_merged(
 
 
 @pytest.mark.evidence
-@pytest.mark.parametrize("change", ["unmerged", "merged-without-time", "engine-head", "other-pull-request", "other-base", "other-branch"])
+@pytest.mark.parametrize("change", ["unmerged", "merged-without-time", "other-pull-request", "other-base", "other-branch"])
 def test_recover_refuses_a_stuck_sweep_the_forge_does_not_show_merged_elsewhere(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, change: str
 ) -> None:
-    """Only a merge into the protected branch, of this run's own pull request, at a
-    head the engine did not review, retires the state; anything else leaves it."""
+    """Only a merge into the protected branch of this run's own pull request
+    retires the state; anything else leaves it."""
     stuck = _stuck_sweep(tmp_path, monkeypatch)
     _land_fixed_sweep(stuck)
     read_back = dict(stuck["merged"])
@@ -2149,8 +2149,6 @@ def test_recover_refuses_a_stuck_sweep_the_forge_does_not_show_merged_elsewhere(
         read_back.update(merged=False, mergedAt=None)
     elif change == "merged-without-time":
         read_back["mergedAt"] = None
-    elif change == "engine-head":
-        read_back["headRefOid"] = stuck["commit"]
     elif change == "other-pull-request":
         read_back["url"] = "https://github.com/topij/agentic-dev-kit/pull/1000"
     elif change == "other-base":
@@ -2277,3 +2275,21 @@ def test_recover_still_names_resume_for_a_watch_waiting_on_checks(
     refused = run("recover", context="interactive", request={}, start=stuck["root"], forge=forge)
     assert (refused["detail"], refused["resume_action"]) == ("captured state is valid; recovery refused", "resume")
     assert forge.calls == []
+
+
+@pytest.mark.evidence
+def test_recover_retires_a_stuck_sweep_merged_at_the_engines_own_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A watch that never verified, merged at the engine's own head with no fix
+    commit, is as stuck as a moved head: `resume` holds, so `recover` retires it
+    once git proves the sweep (#1505 review round 4, F1)."""
+    stuck = _stuck_sweep(tmp_path, monkeypatch)
+    _land_fixed_sweep(stuck)
+    at_engine_head = {**stuck["merged"], "headRefOid": stuck["commit"]}
+    resumed = run("resume", context="interactive", request={"finalize": True}, start=stuck["root"], forge=FakeForge([]))
+    assert resumed["outcome"] == "operator-held"
+    planned = _plan_merged_in_own_process(stuck["root"], at_engine_head)
+    assert planned["detail"] == "merged sweep state captured for retirement"
+    evidence = planned["recovery_plan"]["action_core"]["merged_sweep_evidence"]
+    assert evidence["engine_head"] == evidence["merged_head"] == stuck["commit"]
