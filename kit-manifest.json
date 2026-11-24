@@ -723,7 +723,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "f235a442c8cc58e2ab029622c6b65985ebc8d3d2a8abbe6494c0981a957d9ea8"
+      "sha256": "2a0d65fb3191c1e5ac30dc91175a35857db49067f6133358d22d638a90ca8dae"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -903,7 +903,7 @@
     },
     "scripts/tests/test_review_eval.py": {
       "role": "repo-only",
-      "sha256": "607ae148342248aab86694f899df523bd80d794da33d5f37150099bdfa17e5d8"
+      "sha256": "8b69ce484a7fb4a150ba7c0740458d826d081ad19607c4e702db61071f4ef06d"
     },
     "scripts/tests/test_runtime_parity_matrix.py": {
       "role": "repo-only",

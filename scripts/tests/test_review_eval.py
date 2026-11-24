@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import os
+import select
 import signal
 import subprocess
 import sys
@@ -298,6 +300,133 @@ def test_a_lens_that_overruns_its_timeout_is_stopped_and_cleaned_up(repo, tmp_pa
                 "--timeout", "1")
     assert proc.returncode == 1 and "timed out" in proc.stderr and "left its group" not in proc.stderr
     assert list(repo["scratch"].iterdir()) == []
+
+
+def _kills_recording_leader_state(monkeypatch) -> list[bool]:
+    """Record, at each group kill, whether the group's leader was still unreaped.
+
+    Asked of `ps`, which lists a process, a zombie included, until it is reaped; not
+    of `os.waitid`, which macOS's Python lacks before 3.13.
+    """
+    unreaped: list[bool] = []
+    kill = review_eval._kill_group
+
+    def recording(pgid: int) -> None:
+        listed = subprocess.run(["ps", "-o", "pid=", "-p", str(pgid)], capture_output=True, text=True)
+        unreaped.append(listed.stdout.strip() == str(pgid))
+        kill(pgid)
+
+    monkeypatch.setattr(review_eval, "_kill_group", recording)
+    return unreaped
+
+
+# Each way `_exited_unreaped` can observe the exit that this platform's Python offers.
+EXIT_OBSERVERS = [pytest.param(name, marks=pytest.mark.skipif(not available, reason=f"no {name} here"))
+                  for name, available in (("waitid", hasattr(os, "waitid")),
+                                          ("kqueue", hasattr(select, "kqueue")))]
+
+
+def _observe_exit_with(monkeypatch, observer: str) -> None:
+    if observer == "kqueue" and hasattr(os, "waitid"):
+        monkeypatch.delattr(os, "waitid")
+
+
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_every_group_kill_is_sent_while_the_leader_still_holds_the_group_id(
+        monkeypatch, tmp_path, observer) -> None:
+    """Once the leader is reaped, its pid, and so the group id, can be reused (#1172)."""
+    _observe_exit_with(monkeypatch, observer)
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    lens = [sys.executable, "-c", "import sys; t = sys.stdin.read(); print(t.upper()); "
+            "print('note', file=sys.stderr); sys.exit(3)"]
+    done = review_eval._run_lens(lens, tmp_path, "finding\n", timeout=30)
+    assert (done.returncode, done.stdout, done.stderr) == (3, "FINDING\n\n", "note\n")
+    assert unreaped and all(unreaped)
+
+
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_a_timed_out_lens_is_killed_while_the_leader_still_holds_the_group_id(
+        monkeypatch, tmp_path, observer) -> None:
+    _observe_exit_with(monkeypatch, observer)
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    lens = [sys.executable, "-c", "import sys, time; sys.stdin.read(); time.sleep(60)"]
+    with pytest.raises(subprocess.TimeoutExpired):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=1)
+    assert len(unreaped) == 2 and all(unreaped)
+
+
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_a_lens_that_closes_its_output_and_keeps_running_times_out(monkeypatch, tmp_path, observer) -> None:
+    """The observer's "not exited yet" answer: closed pipes alone are not a finished run."""
+    _observe_exit_with(monkeypatch, observer)
+    lens = [sys.executable, "-c", "import os, sys, time; sys.stdin.read(); os.close(1); os.close(2); "
+            "time.sleep(60)"]
+    with pytest.raises(subprocess.TimeoutExpired):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=1)
+
+
+@pytest.mark.skipif(not hasattr(select, "kqueue"), reason="no kqueue here")
+@pytest.mark.parametrize(("code", "outcome"), [(errno.ESRCH, True), (errno.EPERM, review_eval.RunError)])
+def test_a_kqueue_error_event_is_an_exit_only_when_it_says_no_such_process(monkeypatch, code, outcome) -> None:
+    class Event:
+        flags, data, fflags = select.KQ_EV_ERROR, code, 0
+
+    class Queue:
+        def control(self, changes, max_events, timeout):
+            return [Event()]
+
+        def close(self):
+            pass
+
+    monkeypatch.delattr(os, "waitid", raising=False)
+    monkeypatch.setattr(select, "kqueue", Queue)
+    if outcome is True:
+        assert review_eval._exited_unreaped(os.getpid(), 1) is True
+    else:
+        with pytest.raises(outcome, match="could not watch"):
+            review_eval._exited_unreaped(os.getpid(), 1)
+
+
+def test_a_thread_that_cannot_start_still_stops_and_reaps_the_lens(monkeypatch, tmp_path) -> None:
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    leaders: list[int] = []
+    popen = subprocess.Popen
+
+    def recording_popen(*args, **kwargs):
+        proc = popen(*args, **kwargs)
+        leaders.append(proc.pid)
+        return proc
+
+    def refusing_start(self) -> None:
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(review_eval.subprocess, "Popen", recording_popen)
+    monkeypatch.setattr(review_eval.threading.Thread, "start", refusing_start)
+    lens = [sys.executable, "-c", "import sys, time; sys.stdin.read(); time.sleep(60)"]
+    with pytest.raises(RuntimeError, match="can't start"):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=30)
+    assert unreaped == [True]
+    listed = subprocess.run(["ps", "-o", "pid=", "-p", str(leaders[0])], capture_output=True, text=True)
+    assert listed.stdout.strip() == ""
+
+
+def test_without_a_way_to_observe_the_exit_unreaped_the_run_stops_and_the_group_goes(
+        monkeypatch, tmp_path) -> None:
+    for module, name in ((os, "waitid"), (select, "kqueue")):
+        if hasattr(module, name):
+            monkeypatch.delattr(module, name)
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    lens = [sys.executable, "-c", "import sys; sys.stdin.read()"]
+    with pytest.raises(review_eval.RunError, match="without reaping"):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=30)
+    assert unreaped == [True]
+
+
+def test_a_lens_that_never_reads_its_prompt_still_returns(tmp_path) -> None:
+    """A prompt larger than the pipe buffer, left unread, does not hang the runner."""
+    lens = [sys.executable, "-c", "print('early')"]
+    done = review_eval._run_lens(lens, tmp_path, "x" * 1_000_000, timeout=30)
+    assert (done.returncode, done.stdout) == (0, "early\n")
 
 
 def test_a_lens_that_escapes_its_group_leaves_the_round_unretired(repo, tmp_path, monkeypatch, capsys) -> None:
