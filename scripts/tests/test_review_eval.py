@@ -300,6 +300,48 @@ def test_a_lens_that_overruns_its_timeout_is_stopped_and_cleaned_up(repo, tmp_pa
     assert list(repo["scratch"].iterdir()) == []
 
 
+def _kills_recording_leader_state(monkeypatch) -> list[bool]:
+    """Record, at each group kill, whether the group's leader was still unreaped."""
+    unreaped: list[bool] = []
+    kill = review_eval._kill_group
+
+    def recording(pgid: int) -> None:
+        try:
+            os.waitid(os.P_PID, pgid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
+            unreaped.append(True)
+        except ChildProcessError:
+            unreaped.append(False)
+        kill(pgid)
+
+    monkeypatch.setattr(review_eval, "_kill_group", recording)
+    return unreaped
+
+
+def test_every_group_kill_is_sent_while_the_leader_still_holds_the_group_id(monkeypatch, tmp_path) -> None:
+    """Once the leader is reaped, its pid, and so the group id, can be reused (#1172)."""
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    lens = [sys.executable, "-c", "import sys; t = sys.stdin.read(); print(t.upper()); "
+            "print('note', file=sys.stderr); sys.exit(3)"]
+    done = review_eval._run_lens(lens, tmp_path, "finding\n", timeout=30)
+    assert (done.returncode, done.stdout, done.stderr) == (3, "FINDING\n\n", "note\n")
+    assert unreaped and all(unreaped)
+
+
+def test_a_timed_out_lens_is_killed_while_the_leader_still_holds_the_group_id(monkeypatch, tmp_path) -> None:
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    lens = [sys.executable, "-c", "import sys, time; sys.stdin.read(); time.sleep(60)"]
+    with pytest.raises(subprocess.TimeoutExpired):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=1)
+    assert len(unreaped) == 2 and all(unreaped)
+
+
+def test_a_lens_that_never_reads_its_prompt_still_returns(tmp_path) -> None:
+    """A prompt larger than the pipe buffer, left unread, does not hang the runner."""
+    lens = [sys.executable, "-c", "print('early')"]
+    done = review_eval._run_lens(lens, tmp_path, "x" * 1_000_000, timeout=30)
+    assert (done.returncode, done.stdout) == (0, "early\n")
+
+
 def test_a_lens_that_escapes_its_group_leaves_the_round_unretired(repo, tmp_path, monkeypatch, capsys) -> None:
     """A process that left the group cannot be killed with it: the round is not called finished."""
     script = tmp_path / "escape.py"

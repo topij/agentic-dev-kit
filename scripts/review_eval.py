@@ -62,6 +62,8 @@ import shutil
 import signal
 import subprocess
 import sys
+import threading
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -433,21 +435,71 @@ def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subp
     is out of reach of that kill; if one still holds the lens's output after the
     kill, this raises ``LensEscaped`` rather than wait on it or call the round
     finished. One that left and closed its output is not seen at all.
+
+    The group's id is the leader's pid, and it is only safe to signal while that pid
+    cannot be reused. ``communicate()`` reaps the leader, after which a group whose
+    other members have all exited is gone and its id is free for an unrelated group
+    to take (#1172). So this does ``communicate()``'s work itself and leaves the leader
+    unreaped (a zombie, holding its pid) until every group kill is sent, then reaps it.
     """
     proc = subprocess.Popen(command, cwd=tree, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, errors="replace", start_new_session=True)
+    output: dict[str, str] = {}
+    readers = [threading.Thread(target=_read_all, args=(stream, output, name), daemon=True)
+               for name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr))]
+    writer = threading.Thread(target=_write_all, args=(proc.stdin, prompt), daemon=True)
+    for thread in (writer, *readers):
+        thread.start()
     try:
-        stdout, stderr = proc.communicate(prompt, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        _kill_group(proc.pid)
-        try:
-            proc.communicate(timeout=DRAIN_SECONDS)
-        except subprocess.TimeoutExpired as exc:
-            raise LensEscaped from exc
-        raise
+        if not _settled(proc.pid, [writer, *readers], timeout):
+            _kill_group(proc.pid)
+            if not _settled(proc.pid, readers, DRAIN_SECONDS):
+                raise LensEscaped
+            raise subprocess.TimeoutExpired(command, timeout)
     finally:
         _kill_group(proc.pid)
-    return subprocess.CompletedProcess(command, proc.returncode, stdout, stderr)
+        proc.kill()  # reaps the leader first if it already exited; signals nothing then
+        proc.wait()
+        # A reader still blocked holds its stream's lock, and closing would wait on it.
+        if not any(reader.is_alive() for reader in readers):
+            proc.stdout.close()
+            proc.stderr.close()
+    return subprocess.CompletedProcess(command, proc.returncode, output["stdout"], output["stderr"])
+
+
+# How often `_settled` looks again for the lens's leader to have exited.
+EXIT_POLL_SECONDS = 0.05
+
+
+def _settled(pid: int, threads: list[threading.Thread], timeout: float) -> bool:
+    """Whether every thread finished and the child ``pid`` exited within ``timeout``.
+
+    The exit is observed with ``WNOWAIT``, so the child is not reaped and its pid stays
+    taken: see ``_run_lens``.
+    """
+    deadline = time.monotonic() + timeout
+    for thread in threads:
+        thread.join(max(0.0, deadline - time.monotonic()))
+        if thread.is_alive():
+            return False
+    while os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is None:
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(EXIT_POLL_SECONDS)
+    return True
+
+
+def _read_all(stream: Any, output: dict[str, str], name: str) -> None:
+    output[name] = stream.read()
+
+
+def _write_all(stream: Any, text: str) -> None:
+    # A lens that exits, or is killed, without reading all of its prompt closes the
+    # pipe under the write; `communicate()` ignores that too.
+    with contextlib.suppress(BrokenPipeError):
+        stream.write(text)
+    with contextlib.suppress(BrokenPipeError):
+        stream.close()
 
 
 def _kill_group(pgid: int) -> None:

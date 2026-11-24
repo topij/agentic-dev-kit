@@ -359,7 +359,10 @@ acceptance record and its limits. The model replies were scripted; lane merges r
 On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
-▶ Next: step 3d's process-group half, #1172. The watcher (`_gh`),
+▶ Next: the rest of step 3d's process-group half, #1508: one shared group stop for
+the plan's other C5 sites, `launch_lane.py`, `runtime_smoke.py` and
+`reconcile_sessions.sh`. The change for #1172 covered the fourth, `review_eval.py`'s `_run_lens`,
+which now sends every group kill before it reaps the group's leader. The watcher (`_gh`),
 `session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls,
 `archive_plan_sessions.py`'s recovery-hint reads, `review_eval.py`'s Git calls and
 `_run_engine`, `kit_doctor.py`'s `_git_run`, and `lib/triage/`'s `git_output`, sweep
@@ -379,8 +382,7 @@ on purpose, and the same file runs its own `read-tree`, `cat-file` and `diff --c
 calls with their own environment. `lib/triage/model.py`'s `_identity_git` keeps `GIT_CONFIG_*`, and the
 operator chose on 2026-11-22 to leave it off the runner. #1219's item 1, the per-item timeout, holds on the
 runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
-(unpinned guards, untested helpers), which that move did not take. #1172 is the
-process-group stop half of 3d. #1486 records the operator's scoped host-sandbox
+(unpinned guards, untested helpers), which that move did not take. #1486 records the operator's scoped host-sandbox
 default for trusted Claude reviews. #1025 retains worker provisioning for external
 contributions and Codex. Lane merges remain operator-only.
 On 2026-11-22 the operator closed #1370 (delivered by #1440) and #345 (delivered by
