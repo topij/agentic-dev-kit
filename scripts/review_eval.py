@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -450,9 +451,10 @@ def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subp
     readers = [threading.Thread(target=_read_all, args=(stream, output, name), daemon=True)
                for name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr))]
     writer = threading.Thread(target=_write_all, args=(proc.stdin, prompt), daemon=True)
-    for thread in (writer, *readers):
-        thread.start()
     try:
+        # Inside the `try`: a thread that cannot start must still leave no lens running.
+        for thread in (writer, *readers):
+            thread.start()
         if not _settled(proc.pid, [writer, *readers], timeout):
             _kill_group(proc.pid)
             if not _settled(proc.pid, readers, DRAIN_SECONDS):
@@ -491,8 +493,10 @@ def _exited_unreaped(pid: int, timeout: float) -> bool:
     """Whether the child ``pid`` exits within ``timeout``, leaving it unreaped.
 
     ``os.waitid`` with ``WNOWAIT`` where Python has it. macOS lacks it before Python
-    3.13, which this script's floor admits, so there a kqueue ``NOTE_EXIT`` watch,
-    which also reports an exit made before the watch was added.
+    3.13, which this script's floor admits, so there a kqueue ``NOTE_EXIT`` watch.
+    A child that already exited, a zombie, cannot be watched: kqueue answers with an
+    ``EV_ERROR`` event carrying ``ESRCH``, which is read as the exit. Any other error
+    raises ``RunError`` rather than pass for one.
     """
     if hasattr(os, "waitid"):
         deadline = time.monotonic() + timeout
@@ -507,9 +511,16 @@ def _exited_unreaped(pid: int, timeout: float) -> bool:
             watch = select.kevent(pid, filter=select.KQ_FILTER_PROC,
                                   flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
                                   fflags=select.KQ_NOTE_EXIT)
-            return bool(queue.control([watch], 1, timeout))
+            events = queue.control([watch], 1, timeout)
         finally:
             queue.close()
+        if not events:
+            return False
+        if events[0].flags & select.KQ_EV_ERROR:
+            if events[0].data == errno.ESRCH:
+                return True
+            raise RunError(f"kqueue could not watch the lens's exit: {os.strerror(events[0].data)}")
+        return True  # the watch asks for NOTE_EXIT alone, so any other event is that
     raise RunError("this platform offers no way to observe a lens's exit without reaping it")
 
 

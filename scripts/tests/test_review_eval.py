@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -352,6 +353,61 @@ def test_a_timed_out_lens_is_killed_while_the_leader_still_holds_the_group_id(
     with pytest.raises(subprocess.TimeoutExpired):
         review_eval._run_lens(lens, tmp_path, "finding\n", timeout=1)
     assert len(unreaped) == 2 and all(unreaped)
+
+
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_a_lens_that_closes_its_output_and_keeps_running_times_out(monkeypatch, tmp_path, observer) -> None:
+    """The observer's "not exited yet" answer: closed pipes alone are not a finished run."""
+    _observe_exit_with(monkeypatch, observer)
+    lens = [sys.executable, "-c", "import os, sys, time; sys.stdin.read(); os.close(1); os.close(2); "
+            "time.sleep(60)"]
+    with pytest.raises(subprocess.TimeoutExpired):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=1)
+
+
+@pytest.mark.skipif(not hasattr(select, "kqueue"), reason="no kqueue here")
+@pytest.mark.parametrize(("code", "outcome"), [(errno.ESRCH, True), (errno.EPERM, review_eval.RunError)])
+def test_a_kqueue_error_event_is_an_exit_only_when_it_says_no_such_process(monkeypatch, code, outcome) -> None:
+    class Event:
+        flags, data, fflags = select.KQ_EV_ERROR, code, 0
+
+    class Queue:
+        def control(self, changes, max_events, timeout):
+            return [Event()]
+
+        def close(self):
+            pass
+
+    monkeypatch.delattr(os, "waitid", raising=False)
+    monkeypatch.setattr(select, "kqueue", Queue)
+    if outcome is True:
+        assert review_eval._exited_unreaped(os.getpid(), 1) is True
+    else:
+        with pytest.raises(outcome, match="could not watch"):
+            review_eval._exited_unreaped(os.getpid(), 1)
+
+
+def test_a_thread_that_cannot_start_still_stops_and_reaps_the_lens(monkeypatch, tmp_path) -> None:
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    leaders: list[int] = []
+    popen = subprocess.Popen
+
+    def recording_popen(*args, **kwargs):
+        proc = popen(*args, **kwargs)
+        leaders.append(proc.pid)
+        return proc
+
+    def refusing_start(self) -> None:
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(review_eval.subprocess, "Popen", recording_popen)
+    monkeypatch.setattr(review_eval.threading.Thread, "start", refusing_start)
+    lens = [sys.executable, "-c", "import sys, time; sys.stdin.read(); time.sleep(60)"]
+    with pytest.raises(RuntimeError, match="can't start"):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=30)
+    assert unreaped == [True]
+    listed = subprocess.run(["ps", "-o", "pid=", "-p", str(leaders[0])], capture_output=True, text=True)
+    assert listed.stdout.strip() == ""
 
 
 def test_without_a_way_to_observe_the_exit_unreaped_the_run_stops_and_the_group_goes(
