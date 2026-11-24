@@ -6,6 +6,7 @@ import contextlib
 import hashlib
 import json
 import os
+import select
 import signal
 import subprocess
 import sys
@@ -301,24 +302,39 @@ def test_a_lens_that_overruns_its_timeout_is_stopped_and_cleaned_up(repo, tmp_pa
 
 
 def _kills_recording_leader_state(monkeypatch) -> list[bool]:
-    """Record, at each group kill, whether the group's leader was still unreaped."""
+    """Record, at each group kill, whether the group's leader was still unreaped.
+
+    Asked of `ps`, which lists a process, a zombie included, until it is reaped; not
+    of `os.waitid`, which macOS's Python lacks before 3.13.
+    """
     unreaped: list[bool] = []
     kill = review_eval._kill_group
 
     def recording(pgid: int) -> None:
-        try:
-            os.waitid(os.P_PID, pgid, os.WEXITED | os.WNOWAIT | os.WNOHANG)
-            unreaped.append(True)
-        except ChildProcessError:
-            unreaped.append(False)
+        listed = subprocess.run(["ps", "-o", "pid=", "-p", str(pgid)], capture_output=True, text=True)
+        unreaped.append(listed.stdout.strip() == str(pgid))
         kill(pgid)
 
     monkeypatch.setattr(review_eval, "_kill_group", recording)
     return unreaped
 
 
-def test_every_group_kill_is_sent_while_the_leader_still_holds_the_group_id(monkeypatch, tmp_path) -> None:
+# Each way `_exited_unreaped` can observe the exit that this platform's Python offers.
+EXIT_OBSERVERS = [pytest.param(name, marks=pytest.mark.skipif(not available, reason=f"no {name} here"))
+                  for name, available in (("waitid", hasattr(os, "waitid")),
+                                          ("kqueue", hasattr(select, "kqueue")))]
+
+
+def _observe_exit_with(monkeypatch, observer: str) -> None:
+    if observer == "kqueue" and hasattr(os, "waitid"):
+        monkeypatch.delattr(os, "waitid")
+
+
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_every_group_kill_is_sent_while_the_leader_still_holds_the_group_id(
+        monkeypatch, tmp_path, observer) -> None:
     """Once the leader is reaped, its pid, and so the group id, can be reused (#1172)."""
+    _observe_exit_with(monkeypatch, observer)
     unreaped = _kills_recording_leader_state(monkeypatch)
     lens = [sys.executable, "-c", "import sys; t = sys.stdin.read(); print(t.upper()); "
             "print('note', file=sys.stderr); sys.exit(3)"]
@@ -327,12 +343,27 @@ def test_every_group_kill_is_sent_while_the_leader_still_holds_the_group_id(monk
     assert unreaped and all(unreaped)
 
 
-def test_a_timed_out_lens_is_killed_while_the_leader_still_holds_the_group_id(monkeypatch, tmp_path) -> None:
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_a_timed_out_lens_is_killed_while_the_leader_still_holds_the_group_id(
+        monkeypatch, tmp_path, observer) -> None:
+    _observe_exit_with(monkeypatch, observer)
     unreaped = _kills_recording_leader_state(monkeypatch)
     lens = [sys.executable, "-c", "import sys, time; sys.stdin.read(); time.sleep(60)"]
     with pytest.raises(subprocess.TimeoutExpired):
         review_eval._run_lens(lens, tmp_path, "finding\n", timeout=1)
     assert len(unreaped) == 2 and all(unreaped)
+
+
+def test_without_a_way_to_observe_the_exit_unreaped_the_run_stops_and_the_group_goes(
+        monkeypatch, tmp_path) -> None:
+    for module, name in ((os, "waitid"), (select, "kqueue")):
+        if hasattr(module, name):
+            monkeypatch.delattr(module, name)
+    unreaped = _kills_recording_leader_state(monkeypatch)
+    lens = [sys.executable, "-c", "import sys; sys.stdin.read()"]
+    with pytest.raises(review_eval.RunError, match="without reaping"):
+        review_eval._run_lens(lens, tmp_path, "finding\n", timeout=30)
+    assert unreaped == [True]
 
 
 def test_a_lens_that_never_reads_its_prompt_still_returns(tmp_path) -> None:

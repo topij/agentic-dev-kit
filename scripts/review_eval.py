@@ -57,6 +57,7 @@ import json
 import os
 import posixpath
 import re
+import select
 import shlex
 import shutil
 import signal
@@ -441,6 +442,7 @@ def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subp
     other members have all exited is gone and its id is free for an unrelated group
     to take (#1172). So this does ``communicate()``'s work itself and leaves the leader
     unreaped (a zombie, holding its pid) until every group kill is sent, then reaps it.
+    A ``RunError`` from ``_exited_unreaped`` takes the same ``finally``.
     """
     proc = subprocess.Popen(command, cwd=tree, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, errors="replace", start_new_session=True)
@@ -474,19 +476,41 @@ EXIT_POLL_SECONDS = 0.05
 def _settled(pid: int, threads: list[threading.Thread], timeout: float) -> bool:
     """Whether every thread finished and the child ``pid`` exited within ``timeout``.
 
-    The exit is observed with ``WNOWAIT``, so the child is not reaped and its pid stays
-    taken: see ``_run_lens``.
+    The exit is observed without reaping the child, so its pid stays taken: see
+    ``_run_lens``.
     """
     deadline = time.monotonic() + timeout
     for thread in threads:
         thread.join(max(0.0, deadline - time.monotonic()))
         if thread.is_alive():
             return False
-    while os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is None:
-        if time.monotonic() >= deadline:
-            return False
-        time.sleep(EXIT_POLL_SECONDS)
-    return True
+    return _exited_unreaped(pid, max(0.0, deadline - time.monotonic()))
+
+
+def _exited_unreaped(pid: int, timeout: float) -> bool:
+    """Whether the child ``pid`` exits within ``timeout``, leaving it unreaped.
+
+    ``os.waitid`` with ``WNOWAIT`` where Python has it. macOS lacks it before Python
+    3.13, which this script's floor admits, so there a kqueue ``NOTE_EXIT`` watch,
+    which also reports an exit made before the watch was added.
+    """
+    if hasattr(os, "waitid"):
+        deadline = time.monotonic() + timeout
+        while os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is None:
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(EXIT_POLL_SECONDS)
+        return True
+    if hasattr(select, "kqueue"):
+        queue = select.kqueue()
+        try:
+            watch = select.kevent(pid, filter=select.KQ_FILTER_PROC,
+                                  flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
+                                  fflags=select.KQ_NOTE_EXIT)
+            return bool(queue.control([watch], 1, timeout))
+        finally:
+            queue.close()
+    raise RunError("this platform offers no way to observe a lens's exit without reaping it")
 
 
 def _read_all(stream: Any, output: dict[str, str], name: str) -> None:
