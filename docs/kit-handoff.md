@@ -148,8 +148,8 @@ wait for that answer. **Owner:** [#796](https://github.com/topij/agentic-dev-kit
 [#797](https://github.com/topij/agentic-dev-kit/issues/797); the adopter-specific notes are
 in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed).
 
-▶ Next: narrow #796 to what cs-toolkit itself needs (Whole-kit plan step 8), then
-decide with the operator whether anything is left to implement.
+▶ Next: ask the operator to approve narrowing #796 to what cs-toolkit itself needs
+(Whole-kit plan step 8), and whether anything is then left to implement.
 
 ### Triage engine hardening
 
