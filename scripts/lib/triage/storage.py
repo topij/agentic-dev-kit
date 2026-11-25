@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import os
 import stat
 import uuid
@@ -16,6 +17,18 @@ from subprocess_runner import CommandError, run_result, without_git_environment
 
 from .canonical import digest_bytes, dumps
 from .model import GIT_TIMEOUT, Settings, TriageError
+
+
+class SymlinkedAncestorError(TriageError):
+    """A directory above an artifact is a symlink, which the no-follow walks
+    refuse by design. Raised instead of the bare `ENOTDIR`/`ELOOP` the open
+    reports, naming the directory (#1395), and typed so that a caller can tell
+    it from a held gate: no owner holds anything, and the remedy is a path with
+    no symlinked directory."""
+
+    def __init__(self, directory: Path) -> None:
+        super().__init__(f"symlinked parent is refused: {directory}", outcome="operator-held")
+        self.directory = directory
 
 
 @dataclass(frozen=True)
@@ -107,17 +120,41 @@ def fsync_dir(path: Path) -> None:
         os.close(descriptor)
 
 
+def _open_directory_no_follow(component: str, parent: int, directory: Path) -> int:
+    """Open one ancestor `component` below `parent` without following a link.
+
+    Both chain walks open through here, so a symlinked `directory` (the
+    component's full path) is refused by name on the first walk and on every
+    revalidation alike. Any other failure, including a regular file where a
+    directory belongs, or a component gone before `lstat` reads it, re-raises
+    the open's own error unchanged."""
+    try:
+        return os.open(
+            component,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+            dir_fd=parent,
+        )
+    except OSError as exc:
+        if exc.errno not in (errno.ENOTDIR, errno.ELOOP):
+            raise
+        try:
+            linked = stat.S_ISLNK(os.lstat(component, dir_fd=parent).st_mode)
+        except OSError:
+            raise exc from None
+        if linked:
+            raise SymlinkedAncestorError(directory) from exc
+        raise
+
+
 def _open_parent_chain(path: Path) -> tuple[list[int], list[tuple[int, int]], list[str]]:
     absolute = Path(os.path.abspath(path.parent))
     descriptors = [os.open("/", os.O_RDONLY | getattr(os, "O_DIRECTORY", 0))]
     identities = [(os.fstat(descriptors[0]).st_dev, os.fstat(descriptors[0]).st_ino)]
     components = list(absolute.parts[1:])
     try:
-        for component in components:
-            descriptor = os.open(
-                component,
-                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                dir_fd=descriptors[-1],
+        for depth, component in enumerate(components, start=1):
+            descriptor = _open_directory_no_follow(
+                component, descriptors[-1], Path("/", *components[:depth])
             )
             descriptors.append(descriptor)
             info = os.fstat(descriptor)
@@ -141,12 +178,8 @@ def _revalidate_parent_chain(
         root_info = os.fstat(probe)
         if (root_info.st_dev, root_info.st_ino) != identities[0]:
             raise TriageError("artifact ancestor chain retargeted", outcome="operator-held")
-        for component, expected in zip(components, identities[1:], strict=True):
-            following = os.open(
-                component,
-                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
-                dir_fd=probe,
-            )
+        for depth, (component, expected) in enumerate(zip(components, identities[1:], strict=True), start=1):
+            following = _open_directory_no_follow(component, probe, Path("/", *components[:depth]))
             os.close(probe)
             probe = following
             info = os.fstat(probe)
