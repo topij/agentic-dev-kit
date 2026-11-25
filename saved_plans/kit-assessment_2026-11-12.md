@@ -490,7 +490,7 @@ that wrote this document, taking the recommendation given for each, except D4: i
   request (step 1a). The trial runs for a month from the day that merges and is judged
   against the monthly inflow in M3.
 - **D4. Whether the full profile is meant for repositories other than the author's:
-  no, decided on 2026-11-25.** The full profile serves this repository and
+  no, decided on 2026-11-25.** The full profile is for this repository and
   `in-parallel-oy/cs-toolkit`, on Claude Code and Codex. The operator's other
   projects use lite, or can move to it (`topij/OpenKitchen`, step 8). Step 8 records what that decision drops and freezes. The rest of
   this entry is the 2026-11-12 answer it replaces, kept as history: undecided, with the
@@ -751,16 +751,16 @@ go-ahead, ticket by ticket.
   still repaired or taken to the operator, and D3 covers LOW findings only, with its
   safety-critical carve-out.
 - **Dropped:** steps 6b and 6c.
-- **Frozen to repairs: the lane stack.** `launch_lane.py`, `dev_session.sh`,
-  `reconcile_sessions.sh` and `isolated_lane.py`. `cs-toolkit` does not install the
-  kit's copies: `git -C <cs-toolkit> ls-tree -r --name-only 3a8a91872 scripts/devkit`,
-  run on 2026-11-25, lists none of the four. The same listing over the whole tree shows
-  its own `scripts/dev_session.sh` and `scripts/reconcile_sessions.sh`, which #1446
-  describes as a fork, and no `launch_lane.py` or `isolated_lane.py`. Whether that fork
-  still takes changes from the kit's copies was not read. Frozen means no new
-  capability: repairs continue, and so does the consolidation step 3d names for these
-  files (#1508, #1499). The standing-mandate workflow (#472) and a documented cloud-session lane route
-  are not taken.
+- **Not frozen: the lane stack.** `launch_lane.py`, `dev_session.sh`,
+  `reconcile_sessions.sh` and `isolated_lane.py`. An earlier draft of this step froze
+  them; the operator said on 2026-11-25 that they want to keep the lane stack and
+  parallel development, so the standing-mandate workflow (#472) and a documented
+  cloud-session lane route stay open proposals. For the record, `cs-toolkit` does not
+  install the kit's copies: `git -C <cs-toolkit> ls-tree -r --name-only 3a8a91872
+  scripts/devkit`, run on 2026-11-25, lists none of the four. The same listing over the
+  whole tree shows its own `scripts/dev_session.sh` and `scripts/reconcile_sessions.sh`,
+  which #1446 describes as a fork, and no `launch_lane.py` or `isolated_lane.py`.
+  Whether that fork still takes changes from the kit's copies was not read.
 - **Frozen to repairs: the full install path.** `adopt.md`'s full profile and the
   adoption fixtures. `cs-toolkit` is installed, so `upgrade.md` is the path that is
   exercised.
@@ -769,10 +769,11 @@ go-ahead, ticket by ticket.
   the edit. Partial
   adoption's capability negotiation (#454) is proposed for retirement as not planned.
 - **Kept:** what `cs-toolkit` installs, `upgrade.md`, two-runtime parity (the
-  operator said on 2026-11-25 that `cs-toolkit` uses Codex), lite, steps 2d and 6a,
+  operator said on 2026-11-25 that `cs-toolkit` uses Codex), lite, the lane stack, steps 2d and 6a,
   and steps 3d, 3e, 4 and 5, which lower the cost of owning what remains. The adoption
   fixtures stay in the suite.
-- **`topij/OpenKitchen` can move to lite.** The operator said so on 2026-11-25; the move
+- **`topij/OpenKitchen` can move to lite.** It is a full install until the operator
+  moves it, and an upgrade there waits on that. The operator said so on 2026-11-25; the move
   is not planned here.
 - **The unattended ticket queue (#1446).** The operator wants it for their projects.
   Proposed and not decided: a shared workflow document with a small set of config keys

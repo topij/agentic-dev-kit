@@ -271,10 +271,10 @@ sequences after a terminal state and a cost record). #1173 was retired as delive
 [#472](https://github.com/topij/agentic-dev-kit/issues/472); the review document above
 (a claude.ai link, not in the repository).
 
-▶ Next: no new capability. The lane stack is frozen under the Whole-kit plan's step 8
-(2026-11-25): #472 and the cloud-session lane route are not taken, and #454 is proposed
-for retirement. Step 3d's consolidation (#1508, #1499) continues. Judge #1239, #1242,
-#1243 and #1174's per-lane budgets against the freeze, with the operator, before work.
+▶ Next: choose the next proposal with the operator: the documented cloud-session lane
+route or #472's standing mandates. The operator keeps the lane stack (2026-11-25, Whole-kit
+plan step 8); #454 is proposed for retirement there. Smaller follow-ups: #1239, and #1242
+together with #1243's items in one PR, so the safety-critical panel runs once.
 
 ### Consumer upgrades
 
@@ -290,7 +290,7 @@ there retires it. Its `state-present-held` bundle `6d1168cb…` is keyed to the 
 nothing while no gate is present. The
 scheduled-run findings are on #1116. Separate
 adopter decisions: unattended notification delivery, and OpenKitchen, which the operator said on
-2026-11-25 can move to lite. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
+2026-11-25 can move to lite; it is a full install until then, and an upgrade there waits on that move. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-toolkit#3014, merged 2026-10-29), which
 contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-parallel-oy/cs-toolkit#3020, merged
 2026-10-30). Its installed `pr_followup_hook.py` matched kit `69f30eb6` byte for byte on 2026-11-03, so it carries
@@ -345,7 +345,7 @@ review rounds: #1440 (3a, `e4a4bd1`), #1441 (2e, `e094cc0`) and #1443 (2d, `52c4
 #1443 covered adoption, #1463 addressed its remaining pinning gaps, and #1464 delivered upgrade pinning for #1445.
 After the disposable GitHub App pilot on 2026-11-17, the operator retained D2.
 Issue operator-class lanes only. The operator reads and merges their pull requests.
-On 2026-11-25 the operator decided D4: the full profile serves this repository and cs-toolkit only. The plan's
+On 2026-11-25 the operator decided D4: the full profile is for this repository and cs-toolkit. The plan's
 step 8 lists what that drops and freezes, and its proposed, undecided shape for #1446's ticket queue.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
