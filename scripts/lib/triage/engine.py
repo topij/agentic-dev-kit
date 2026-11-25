@@ -2213,9 +2213,12 @@ def run(
             capabilities["single-writer-state-gate"] = {"status": "operator-held", "mechanism": str(gate_error)}
             if isinstance(gate_error, SymlinkedAncestorError):
                 # The state root was resolved before this, so the link appeared
-                # after resolution. No owner holds a gate here: `recover` has
-                # nothing to inspect, and its advice for a dead owner cannot help.
-                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=f"a directory above the gate became a symlink after the state root was resolved: put the real directory back at {gate_error.directory} before rerunning", detail=str(gate_error), refusal_code="single-writer-gate")
+                # after resolution. No gate can be read through it, so `recover`
+                # cannot inspect one yet. A swap after `exclusive_create` linked
+                # the gate leaves that gate behind the moved directory with no
+                # lease to release it; once the directory is back, the next run
+                # reports it as held and `recover` handles it as usual.
+                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=f"a directory above the gate became a symlink after the state root was resolved: put the real directory back at {gate_error.directory}, then rerun; a gate this run published before the swap is then reported as held, for interactive recover", detail=str(gate_error), refusal_code="single-writer-gate")
             if context == "interactive" and entry in {"recover", "test"}:
                 outcome, detail, plan, waiting_on = _blocking_recovery(settings, store, request, approval_context, forge)
                 return _result(capabilities, outcome, mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="review or resume the exact recorded recovery transition", detail=detail, recovery_plan=plan, waiting_on=waiting_on)

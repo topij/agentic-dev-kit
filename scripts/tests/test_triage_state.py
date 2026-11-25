@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import os
 import re
 import subprocess
@@ -97,29 +98,60 @@ def test_saved_index_that_omits_historical_entry_is_refused_before_tracker_calls
     assert state_path.read_bytes() == retained
 
 
-def test_observe_refuses_a_symlinked_ancestor_by_name_as_operator_held(tmp_path: Path) -> None:
+@pytest.mark.parametrize("below", [(), ("sub",), ("sub", "deeper")])
+def test_observe_refuses_a_symlinked_ancestor_by_name_as_operator_held(
+    tmp_path: Path, below: tuple[str, ...]
+) -> None:
+    """The refusal names the symlinked directory itself, wherever it sits in the
+    chain, not the artifact's parent below it."""
     real = tmp_path / "real"
-    real.mkdir()
+    real.joinpath(*below).mkdir(parents=True, exist_ok=True)
     linked = tmp_path / "linked"
     linked.symlink_to(real, target_is_directory=True)
-    target = linked / "state.json"
+    target = linked.joinpath(*below, "state.json")
     with pytest.raises(TriageError, match=f"symlinked parent is refused: {re.escape(str(linked))}$") as excinfo:
         observe(target)
     assert excinfo.value.outcome == "operator-held"
     assert isinstance(excinfo.value, SymlinkedAncestorError)
 
 
-def test_observe_refuses_an_ancestor_swapped_for_a_symlink_while_held(
+def test_observe_names_a_symlinked_ancestor_the_open_reports_as_eloop(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Linux reports a no-follow open of a symlink as ELOOP where macOS reports
+    ENOTDIR. The open is made to answer ELOOP for the linked component, so the
+    named refusal is pinned for both errnos on either host."""
+    real = tmp_path / "real"
+    real.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    real_open = os.open
+    answered: list[str] = []
+
+    def open_answering_eloop(path: object, flags: int, *args: object, **kwargs: object) -> int:
+        if path == linked.name and kwargs.get("dir_fd") is not None and flags & getattr(os, "O_NOFOLLOW", 0):
+            answered.append(linked.name)
+            raise OSError(errno.ELOOP, os.strerror(errno.ELOOP), linked.name)
+        return real_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", open_answering_eloop)
+    with pytest.raises(TriageError, match=f"symlinked parent is refused: {re.escape(str(linked))}$"):
+        observe(linked / "state.json")
+    assert answered, "the open was not made to answer ELOOP, so that branch was not exercised"
+
+
+@pytest.mark.parametrize("below", [(), ("sub",)])
+def test_observe_refuses_an_ancestor_swapped_for_a_symlink_while_held(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, below: tuple[str, ...]
 ) -> None:
     """The revalidation walk opens each component again by name, so a directory
     replaced by a symlink after the first walk ends `operator-held` with the
     same named refusal, not a bare OS error from the second walk."""
     real = tmp_path / "real"
-    real.mkdir()
+    real.joinpath(*below).mkdir(parents=True, exist_ok=True)
     held = tmp_path / "held"
-    held.mkdir()
-    target = held / "state.json"
+    held.joinpath(*below).mkdir(parents=True)
+    target = held.joinpath(*below, "state.json")
     target.write_bytes(b"{}")
     observe_at = storage._observe_at
 
@@ -136,40 +168,76 @@ def test_observe_refuses_an_ancestor_swapped_for_a_symlink_while_held(
     assert excinfo.value.outcome == "operator-held"
 
 
+def _swap_for_symlink(directory: Path, moved: Path) -> None:
+    directory.rename(moved)
+    directory.symlink_to(moved, target_is_directory=True)
+
+
 @pytest.mark.parametrize(("entry", "context"), [("new", "unattended"), ("recover", "interactive")])
 def test_a_gate_directory_swapped_for_a_symlink_is_not_reported_as_a_held_gate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str, context: str
 ) -> None:
     """The engine resolves the state root before it opens anything, so a
     symlinked gate ancestor is reachable only by a swap after that resolution.
-    It is refused by name, without the held-gate advice to recover a
-    proven-dead owner (there is no owner), and an interactive `recover` does not
-    go on to inspect a gate it cannot open."""
+    Swapped before the gate is published, it is refused by name, without the
+    held-gate advice to recover a proven-dead owner, and an interactive
+    `recover` does not go on to inspect a gate it cannot open."""
     repo = _triage_repository(tmp_path)
     state_root = tmp_path / "state-root"
     monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
     gate_directory = state_root / "triage"
+    moved = tmp_path / "triage-moved"
     process_start = gate._process_start
-    swapped: list[Path] = []
 
     def swap_then_read_start(pid: int) -> str | None:
-        if not swapped:
-            moved = tmp_path / "triage-moved"
-            gate_directory.rename(moved)
-            gate_directory.symlink_to(moved, target_is_directory=True)
-            swapped.append(moved)
+        if not moved.exists():
+            _swap_for_symlink(gate_directory, moved)
         return process_start(pid)
 
     monkeypatch.setattr(gate, "_process_start", swap_then_read_start)
     result = run(entry, context=context, request={}, start=repo)
 
-    assert swapped, "the swap did not run, so the gate was not opened through a symlink"
+    assert moved.exists(), "the swap did not run, so the gate was not opened through a symlink"
     assert result["outcome"] == "operator-held", result
     assert result["detail"] == f"symlinked parent is refused: {gate_directory}"
     assert result["refusal_code"] == "single-writer-gate"
     assert "proven-dead owner" not in result["resume_action"]
-    assert "symlink" in result["resume_action"]
-    assert not list(swapped[0].iterdir()), "a gate was published through the symlink"
+    assert f"put the real directory back at {gate_directory}" in result["resume_action"]
+    assert not list(moved.iterdir()), "a gate was published through the symlink"
+
+
+def test_a_gate_published_before_its_directory_was_swapped_is_reported_held_once_restored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A swap after the gate is linked leaves that gate behind the moved
+    directory with no lease to release it. The refusal's advice says so: once
+    the directory is put back, the next run reports the gate as held."""
+    repo = _triage_repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    gate_directory = state_root / "triage"
+    moved = tmp_path / "triage-moved"
+    real_link = os.link
+
+    def link_then_swap(*args: object, **kwargs: object) -> None:
+        real_link(*args, **kwargs)
+        if not moved.exists() and args[1] == "triage-pipeline-gate_live.lock":
+            _swap_for_symlink(gate_directory, moved)
+
+    monkeypatch.setattr(os, "link", link_then_swap)
+    refused = run("new", context="unattended", request={}, start=repo)
+    monkeypatch.setattr(os, "link", real_link)
+
+    assert moved.exists(), "the swap did not run after the gate was linked"
+    assert refused["detail"] == f"symlinked parent is refused: {gate_directory}", refused
+    assert "a gate this run published before the swap is then reported as held" in refused["resume_action"]
+    assert (moved / "triage-pipeline-gate_live.lock").exists()
+
+    gate_directory.unlink()
+    moved.rename(gate_directory)
+    again = run("new", context="unattended", request={}, start=repo)
+    assert (again["outcome"], again["refusal_code"]) == ("operator-held", "single-writer-gate"), again
+    assert again["detail"] == "single-writer gate is already held"
 
 
 def test_observe_does_not_report_a_regular_file_ancestor_as_a_symlinked_parent(tmp_path: Path) -> None:
