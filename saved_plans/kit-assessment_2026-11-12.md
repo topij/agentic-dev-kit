@@ -744,9 +744,11 @@ and none of them removes anything; this step is the subtraction. The operator ac
 each item below on that date. No ticket was changed by writing this step: retiring one
 is the operator's go-ahead, ticket by ticket.
 
-- **The test for full-profile work.** A change to a full-profile engine or workflow
-  needs a failure observed in this repository or in `cs-toolkit`. A review finding with
-  no observed failure behind it is recorded under D3 and not built.
+- **The test for full-profile work.** New full-profile work (a feature, added
+  hardening, adopter-proofing) needs a failure observed in this repository or in
+  `cs-toolkit`. This does not change how a review finding is handled: one above LOW is
+  still repaired or taken to the operator, and D3 covers LOW findings only, with its
+  safety-critical carve-out.
 - **Dropped:** steps 6b and 6c.
 - **Frozen to repairs: the lane stack.** `launch_lane.py`, `dev_session.sh`,
   `reconcile_sessions.sh` and `isolated_lane.py` run in this repository only;
