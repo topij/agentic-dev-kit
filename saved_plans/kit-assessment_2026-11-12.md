@@ -451,8 +451,8 @@ subject; it does not claim that delivering them completes the step.
 ### Step 0. The operator's decisions
 
 These gate the steps that follow. The operator made them on 2026-11-12, in the session
-that wrote this document, taking the recommendation given for each. D4 is the
-operator's own answer.
+that wrote this document, taking the recommendation given for each, except D4: its
+2026-11-12 answer was the operator's own, and the operator decided it on 2026-11-25.
 
 - **D1. A separate forge identity for lanes and lenses: yes, lanes first.** A second
   account with a fine-grained token scoped to this repository, for contents and pull
@@ -740,9 +740,8 @@ and the tests' patching can be moved to the new modules a seam at a time.
 
 ### Step 8. What D4 drops and freezes
 
-Added on 2026-11-25, when the operator decided D4. Steps 1 to 7 harden and consolidate
-and none of them drops or freezes a subsystem; this step is the subtraction. The
-operator accepted the items below on that date, except the ones marked proposed. No
+Added on 2026-11-25, when the operator decided D4. Steps 1 to 7 harden and consolidate;
+this step is the subtraction. The operator accepted the items below on that date, except the ones marked proposed. No
 ticket was changed by writing this step: retiring or editing one is the operator's
 go-ahead, ticket by ticket.
 
@@ -758,13 +757,16 @@ go-ahead, ticket by ticket.
   run on 2026-11-25, lists none of the four. The same listing over the whole tree shows
   its own `scripts/dev_session.sh` and `scripts/reconcile_sessions.sh`, which #1446
   describes as a fork, and no `launch_lane.py` or `isolated_lane.py`. Whether that fork
-  still takes changes from the kit's copies was not read. The standing-mandate workflow (#472) and a documented cloud-session lane route
+  still takes changes from the kit's copies was not read. Frozen means no new
+  capability: repairs continue, and so does the consolidation step 3d names for these
+  files (#1508, #1499). The standing-mandate workflow (#472) and a documented cloud-session lane route
   are not taken.
 - **Frozen to repairs: the full install path.** `adopt.md`'s full profile and the
   adoption fixtures. `cs-toolkit` is installed, so `upgrade.md` is the path that is
   exercised.
-- **To narrow:** reviewer profiles (#796) to what `cs-toolkit` itself needs; the
-  ticket is unchanged until the operator approves the edit. Partial
+- **To narrow (accepted; the ticket edit is pending):** reviewer profiles (#796) to
+  what `cs-toolkit` itself needs. The ticket is unchanged until the operator approves
+  the edit. Partial
   adoption's capability negotiation (#454) is proposed for retirement as not planned.
 - **Kept:** what `cs-toolkit` installs, `upgrade.md`, two-runtime parity (the
   operator said on 2026-11-25 that `cs-toolkit` uses Codex), lite, steps 2d and 6a,

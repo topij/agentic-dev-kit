@@ -148,8 +148,8 @@ wait for that answer. **Owner:** [#796](https://github.com/topij/agentic-dev-kit
 [#797](https://github.com/topij/agentic-dev-kit/issues/797); the adopter-specific notes are
 in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed).
 
-▶ Next: ask the operator to approve narrowing #796 to what cs-toolkit itself needs
-(Whole-kit plan step 8), and whether anything is then left to implement.
+▶ Next: the operator accepted narrowing #796 to what cs-toolkit itself needs (Whole-kit
+plan step 8). Ask for approval of the ticket edit, and whether anything is then left.
 
 ### Triage engine hardening
 
@@ -271,10 +271,10 @@ sequences after a terminal state and a cost record). #1173 was retired as delive
 [#472](https://github.com/topij/agentic-dev-kit/issues/472); the review document above
 (a claude.ai link, not in the repository).
 
-▶ Next: none beyond repairs. The lane stack is frozen under the Whole-kit plan's step 8
+▶ Next: no new capability. The lane stack is frozen under the Whole-kit plan's step 8
 (2026-11-25): #472 and the cloud-session lane route are not taken, and #454 is proposed
-for retirement. Repairs: #1239, and #1242 together with #1243's items in one PR, so the
-safety-critical panel runs once.
+for retirement. Step 3d's consolidation (#1508, #1499) continues. Judge #1239, #1242,
+#1243 and #1174's per-lane budgets against the freeze, with the operator, before work.
 
 ### Consumer upgrades
 
