@@ -83,6 +83,7 @@ from .recovery import (
 from .storage import (
     ArtifactStore,
     Observation,
+    SymlinkedAncestorError,
     atomic_replace,
     exclusive_create,
     observe,
@@ -2210,6 +2211,11 @@ def run(
             lease = acquire(store, repository_identity=current_identity, config_fingerprint=settings.fingerprint, run_identity=None, own_root=str(settings.paths.repo))
         except TriageError as gate_error:
             capabilities["single-writer-state-gate"] = {"status": "operator-held", "mechanism": str(gate_error)}
+            if isinstance(gate_error, SymlinkedAncestorError):
+                # The state root was resolved before this, so the link appeared
+                # after resolution. No owner holds a gate here: `recover` has
+                # nothing to inspect, and its advice for a dead owner cannot help.
+                return _result(capabilities, "operator-held", mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action=f"a directory above the gate became a symlink after the state root was resolved: put the real directory back at {gate_error.directory} before rerunning", detail=str(gate_error), refusal_code="single-writer-gate")
             if context == "interactive" and entry in {"recover", "test"}:
                 outcome, detail, plan, waiting_on = _blocking_recovery(settings, store, request, approval_context, forge)
                 return _result(capabilities, outcome, mode=mode, engine_mode=settings.engine_mode, report=None, frozen=None, resume_action="review or resume the exact recorded recovery transition", detail=detail, recovery_plan=plan, waiting_on=waiting_on)

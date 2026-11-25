@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 import time
@@ -15,12 +16,15 @@ ENGINE_DIR = engine_dir(Path(__file__))
 REPO_ROOT = find_repo_root(ENGINE_DIR)
 sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
+import triage.gate as gate  # noqa: E402
+import triage.storage as storage  # noqa: E402
 from triage.canonical import dumps, loads_exact  # noqa: E402
 from triage.engine import run  # noqa: E402
 from triage.inbox import parse  # noqa: E402
 from triage.model import TriageError  # noqa: E402
 from triage.providers import FakeTracker  # noqa: E402
 from triage.storage import (  # noqa: E402
+    SymlinkedAncestorError,
     atomic_replace,
     exclusive_create,
     observe,
@@ -99,9 +103,83 @@ def test_observe_refuses_a_symlinked_ancestor_by_name_as_operator_held(tmp_path:
     linked = tmp_path / "linked"
     linked.symlink_to(real, target_is_directory=True)
     target = linked / "state.json"
-    with pytest.raises(TriageError, match="symlinked parent is refused: linked") as excinfo:
+    with pytest.raises(TriageError, match=f"symlinked parent is refused: {re.escape(str(linked))}$") as excinfo:
         observe(target)
     assert excinfo.value.outcome == "operator-held"
+    assert isinstance(excinfo.value, SymlinkedAncestorError)
+
+
+def test_observe_refuses_an_ancestor_swapped_for_a_symlink_while_held(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The revalidation walk opens each component again by name, so a directory
+    replaced by a symlink after the first walk ends `operator-held` with the
+    same named refusal, not a bare OS error from the second walk."""
+    real = tmp_path / "real"
+    real.mkdir()
+    held = tmp_path / "held"
+    held.mkdir()
+    target = held / "state.json"
+    target.write_bytes(b"{}")
+    observe_at = storage._observe_at
+
+    def swap_then_observe(*args: object, **kwargs: object) -> object:
+        result = observe_at(*args, **kwargs)
+        held.rename(tmp_path / "moved")
+        held.symlink_to(real, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(storage, "_observe_at", swap_then_observe)
+    with pytest.raises(TriageError, match=f"symlinked parent is refused: {re.escape(str(held))}$") as excinfo:
+        observe(target)
+    assert held.is_symlink(), "the swap did not run, so the revalidation walk was not exercised"
+    assert excinfo.value.outcome == "operator-held"
+
+
+@pytest.mark.parametrize(("entry", "context"), [("new", "unattended"), ("recover", "interactive")])
+def test_a_gate_directory_swapped_for_a_symlink_is_not_reported_as_a_held_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, entry: str, context: str
+) -> None:
+    """The engine resolves the state root before it opens anything, so a
+    symlinked gate ancestor is reachable only by a swap after that resolution.
+    It is refused by name, without the held-gate advice to recover a
+    proven-dead owner (there is no owner), and an interactive `recover` does not
+    go on to inspect a gate it cannot open."""
+    repo = _triage_repository(tmp_path)
+    state_root = tmp_path / "state-root"
+    monkeypatch.setenv("DEVKIT_STATE_ROOT", str(state_root))
+    gate_directory = state_root / "triage"
+    process_start = gate._process_start
+    swapped: list[Path] = []
+
+    def swap_then_read_start(pid: int) -> str | None:
+        if not swapped:
+            moved = tmp_path / "triage-moved"
+            gate_directory.rename(moved)
+            gate_directory.symlink_to(moved, target_is_directory=True)
+            swapped.append(moved)
+        return process_start(pid)
+
+    monkeypatch.setattr(gate, "_process_start", swap_then_read_start)
+    result = run(entry, context=context, request={}, start=repo)
+
+    assert swapped, "the swap did not run, so the gate was not opened through a symlink"
+    assert result["outcome"] == "operator-held", result
+    assert result["detail"] == f"symlinked parent is refused: {gate_directory}"
+    assert result["refusal_code"] == "single-writer-gate"
+    assert "proven-dead owner" not in result["resume_action"]
+    assert "symlink" in result["resume_action"]
+    assert not list(swapped[0].iterdir()), "a gate was published through the symlink"
+
+
+def test_observe_does_not_report_a_regular_file_ancestor_as_a_symlinked_parent(tmp_path: Path) -> None:
+    """A regular file where a directory is expected also fails the walk with
+    ENOTDIR; only a component that `lstat` shows is a symlink gets the named
+    refusal."""
+    regular = tmp_path / "regular"
+    regular.write_bytes(b"")
+    with pytest.raises(NotADirectoryError):
+        observe(regular / "g")
 
 
 def test_preflight_rejects_tracked_and_control_artifact_targets(tmp_path: Path) -> None:
