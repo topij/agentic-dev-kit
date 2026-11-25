@@ -40,7 +40,7 @@ Use `wrap-up` to stage the change, record unresolved work and run the same-conte
 `review` before committing. When the repository declares safety-critical paths,
 a change to one of them or to the config itself also needs a fresh-context review
 and the operator's go-ahead before the commit. A repository that declares a
-protected branch opens a PR and waits for its checks; the operator merges. [Lite review](agentic-dev-kit/lite/lite-review.md) · [Lite wrap-up](agentic-dev-kit/lite/lite-wrap-up.md)
+protected branch opens a PR and reports its checks; the operator merges. [Lite review](agentic-dev-kit/lite/lite-review.md) · [Lite wrap-up](agentic-dev-kit/lite/lite-wrap-up.md)
 
 ## Run a development session
 

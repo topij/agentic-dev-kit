@@ -24,7 +24,7 @@ flowchart TD
 | Where to find project policy | The Lite workflows read `config/dev-model.yaml` directly. The repository can add source commands in its `AGENTS.md`. | The workflow reads configured paths, review policy and integration settings. Engines that use `kitconfig` also read its allowed local overrides. |
 | How to pick up work | Read the living plan, friction inbox and Git state. When `backlog.path` is configured, the briefing reads the repository's story backlog and wrap-up updates its statuses. | Read the project records together with forge, CI and tracker evidence. Unavailable sources appear as gaps in the briefing. |
 | Where review happens | Review the staged change before the wrap-up commit. A configured risk tier adds a fresh-context review and operator go-ahead when the staged change touches a declared path or the config itself. | Watch checks and independent review at the PR head. An authorized actor makes the merge decision after the gates settle. |
-| Where work lands | Commit locally. With `vcs.protected_branch` set, push a session branch, open or update a PR and wait for its checks. The operator merges. | Open completed work ready for review. Parallel lanes hand their PRs back to the coordinating session, called the cockpit. |
+| Where work lands | Commit locally. With `vcs.protected_branch` set, push a session branch, open or update a PR and report its checks. The operator merges. | Open completed work ready for review. Parallel lanes hand their PRs back to the coordinating session, called the cockpit. |
 
 The Lite contracts are [session start](agentic-dev-kit/lite/lite-session-start.md),
 [review](agentic-dev-kit/lite/lite-review.md) and [wrap-up](agentic-dev-kit/lite/lite-wrap-up.md).
