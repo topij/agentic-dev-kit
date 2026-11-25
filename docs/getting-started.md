@@ -17,7 +17,7 @@ follow the shorter session below.
 **Choose full** when the kit should watch CI and PR review, work with a tracker,
 or coordinate isolated agent lanes. **Choose lite** when you want a living plan,
 a friction inbox and a review before committing. Lite can open pull requests on
-projects with a configured protected branch. Its workflows run in your agent
+projects with a configured protected branch, and waits once for their checks. Its workflows run in your agent
 without installing engines or Git hooks in the project. [Profile selection](agentic-dev-kit/workflows/adopt.md#choose-the-profile)
 
 ### Prepare a full installation

@@ -28,7 +28,7 @@ agent needs to read. Both profiles support a project that uses pull requests.
 | --- | --- | --- |
 | Starting a session | Read the plan, friction inbox, Git state and optional local story backlog. | Bring the plan and inbox together with PR reviews, CI and the configured tracker. |
 | Reviewing the change | Review the staged diff before commit. When the configured risk tier applies, get a fresh-context review and operator approval. | Verify the branch and watch the PR. Independent review covers its current head, with an isolated lens or panel by default and an optional external review bot. |
-| Delivering it | Commit locally. With a protected branch configured, open a PR for the operator to merge. | Open completed work ready for review. Use the PR's checks, review evidence and project merge policy to decide who can merge. |
+| Delivering it | Commit locally. With a protected branch configured, open a PR and wait for its checks; the operator merges. | Open completed work ready for review. Use the PR's checks, review evidence and project merge policy to decide who can merge. |
 | Installed in your project | Workflow Markdown and skill bindings, project configuration, the plan and the inbox. Install and upgrade checks use the doctor in the *kit clone*. | Selected workflow docs, bindings, engines and hooks. Full also supports parallel lanes and recurring triage. |
 
 See the procedures for [choosing a profile](docs/agentic-dev-kit/workflows/adopt.md#choose-the-profile), [Lite review](docs/agentic-dev-kit/lite/lite-review.md) and [Full PR review](docs/agentic-dev-kit/workflows/pr-watch.md).
