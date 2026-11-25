@@ -140,6 +140,32 @@ def test_observe_names_a_symlinked_ancestor_the_open_reports_as_eloop(
     assert answered, "the open was not made to answer ELOOP, so that branch was not exercised"
 
 
+def test_a_component_gone_before_lstat_reraises_the_opens_own_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the open fails and the component is gone before `lstat` can say what
+    it was, the open's own error is re-raised: nothing shows it was a symlink."""
+    real = tmp_path / "real"
+    real.mkdir()
+    linked = tmp_path / "linked"
+    linked.symlink_to(real, target_is_directory=True)
+    real_lstat = os.lstat
+    answered: list[str] = []
+
+    def lstat_finding_it_gone(path: object, *args: object, **kwargs: object) -> os.stat_result:
+        if path == linked.name and kwargs.get("dir_fd") is not None:
+            answered.append(linked.name)
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), linked.name)
+        return real_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "lstat", lstat_finding_it_gone)
+    with pytest.raises(OSError) as excinfo:
+        observe(linked / "state.json")
+    assert answered, "lstat was not made to fail, so that branch was not exercised"
+    assert not isinstance(excinfo.value, TriageError)
+    assert excinfo.value.errno in (errno.ENOTDIR, errno.ELOOP)
+
+
 @pytest.mark.parametrize("below", [(), ("sub",)])
 def test_observe_refuses_an_ancestor_swapped_for_a_symlink_while_held(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, below: tuple[str, ...]

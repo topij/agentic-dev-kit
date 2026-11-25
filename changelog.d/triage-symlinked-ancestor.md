@@ -6,10 +6,12 @@ its full path (`symlinked parent is refused: <directory>`) instead of a bare OS 
 such as macOS's `[Errno 20] Not a directory: 'tmp'`. The walk runs for `--request` and
 `--approval-context` files and for every state, gate, recovery and quarantine artifact
 it opens, both the first time and on each re-walk before a write. A directory swapped
-for a symlink in between now ends the run `operator-held` with a canonical result,
-where it used to escape as an unhandled `OSError`. A directory under the state root
-that is already a symlink when a run starts is unchanged: the state resolver refuses it
-before any walk, as before.
+for a symlink between one storage call's first walk and its re-walk now ends the run
+`operator-held` with a canonical result, where it used to escape as an unhandled
+`OSError`. A directory under the state root that is a symlink when the engine resolves
+a state path, whether it was one when the run started or was swapped in between two
+storage calls, is unchanged: the state resolver refuses it with an unhandled
+`PathTraversalError`, as before.
 
 What to do: pass `--request` and `--approval-context` paths with no symlinked
 directory above them. Resolve them yourself first, as `engine-cli.md` already asks for
@@ -19,7 +21,8 @@ alias such as macOS's `/tmp` is the usual cause.
 A directory above the triage gate that becomes a symlink after the engine resolved the
 state root keeps `refusal_code: single-writer-gate`, but its `resume_action` now says
 to put the real directory back and rerun, not to use interactive `recover` for a
-proven-dead owner. An interactive `recover` or `test` returns the same refusal, since
-no gate can be read through the symlink; if the run had published its gate before the
-swap, the rerun reports that gate as held. A caller that matches on the old
+proven-dead owner. An interactive `recover` or `test` whose own gate acquisition meets
+the swap returns the same refusal. Once the directory is back, a rerun reports a gate
+the refused run published before the swap as held; while the symlink is still in place,
+a rerun fails in the state resolver as above. A caller that matches on the old
 `resume_action` text for this case must match the new one.
