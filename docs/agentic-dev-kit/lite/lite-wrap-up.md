@@ -367,9 +367,28 @@ current directory.
    fails leaves the commits local, and a pull request that fails to open leaves the
    branch pushed with no pull request. Give the command's error either way.
 
+1. **Wait for the pull request's checks**, only when the step above opened or updated
+   a pull request. On GitHub, run `gh pr checks --watch` on the session branch. It
+   returns when every check has finished: exit `0` when all passed, and non-zero when
+   one failed or when the pull request has no checks. A push registers its checks a
+   little after it lands, so when the command says there are none, run it once more
+   after a minute. None the second time means the repository runs no checks on pull
+   requests: say so in the report and go on.
+
+   When a check failed, read why (`gh run view <run-id> --log-failed`, with the run
+   the failed check links to) and repair it on the session branch: stage the repair by
+   name, run the review over it as the steps above do, commit, push, and wait again.
+   Stop after the second repair of the same check, or at a failure the session cannot
+   repair (the forge itself, a secret the run lacks, a check that fails on
+   `<protected-branch>` too), and report the check and its error. On a forge with no
+   such command, report that the checks were not watched. A red or unwatched pull
+   request is reported as that, never as handed over clean. Merging stays the
+   operator's whatever the checks say.
+
 1. **Report** what was recorded and where, the stories whose status changed,
    what was routed, the pull request when one
-   was opened or updated, the review's result (and the risk tier's, when it ran), and
+   was opened or updated and what its checks said, the review's result (and the risk
+   tier's, when it ran), and
    the next step for each line of work it touched — or that there was nothing to hand
    over, and which commits already say it all.
 
