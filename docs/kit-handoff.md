@@ -148,8 +148,8 @@ wait for that answer. **Owner:** [#796](https://github.com/topij/agentic-dev-kit
 [#797](https://github.com/topij/agentic-dev-kit/issues/797); the adopter-specific notes are
 in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed).
 
-▶ Next: implement #796 — adopter-defined reviewer profiles and a configured
-review-request method.
+▶ Next: narrow #796 to what cs-toolkit itself needs (Whole-kit plan step 8), then
+decide with the operator whether anything is left to implement.
 
 ### Triage engine hardening
 
@@ -271,12 +271,10 @@ sequences after a terminal state and a cost record). #1173 was retired as delive
 [#472](https://github.com/topij/agentic-dev-kit/issues/472); the review document above
 (a claude.ai link, not in the repository).
 
-▶ Next: choose the next proposal with the operator: the documented cloud-session lane
-route, #472's standing mandates, or #454's remainder (capability negotiation in the
-shared workflow for an adopter-retained engine, an extension contract for adopter
-state environment and destructive-path guards, the partial-adopter fixture, and a
-Codex launch through such an engine). Smaller follow-ups: #1239, and #1242 together
-with #1243's items in one PR, so the safety-critical panel runs once.
+▶ Next: none beyond repairs. The lane stack is frozen under the Whole-kit plan's step 8
+(2026-11-25): #472 and the cloud-session lane route are not taken, and #454 is proposed
+for retirement. Repairs: #1239, and #1242 together with #1243's items in one PR, so the
+safety-critical panel runs once.
 
 ### Consumer upgrades
 
@@ -291,8 +289,8 @@ LIVE state failing `canonical_state` on its configuration fingerprint (not #1111
 there retires it. Its `state-present-held` bundle `6d1168cb…` is keyed to the quarantined gate's digest, so it blocks
 nothing while no gate is present. The
 scheduled-run findings are on #1116. Separate
-adopter decisions: unattended notification delivery, and OpenKitchen's installation and lane prerequisites, to
-reassess before an upgrade there. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
+adopter decisions: unattended notification delivery, and OpenKitchen, which the operator said on
+2026-11-25 can move to lite. The earlier local assessment, `saved_plans/consumer-upgrade-assessment_2026-10-15.md`, predates
 these upgrades. cs-toolkit later installed kit `814b01da` (in-parallel-oy/cs-toolkit#3014, merged 2026-10-29), which
 contains `dd51941b`, and dropped CodeRabbit as a configured reviewer (in-parallel-oy/cs-toolkit#3020, merged
 2026-10-30). Its installed `pr_followup_hook.py` matched kit `69f30eb6` byte for byte on 2026-11-03, so it carries
@@ -311,7 +309,7 @@ the shared clauses worded for both profiles, the two `lite-wrap-up` gaps, execut
 (the `profile` key, `outside-profile`, the lite adapters, and `adopt.md`'s *Lite profile*). Phase 4's
 plugin option was tested on 2026-11-09 and set aside: a plugin's version pin holds per machine, not per
 repository (#1320's comment of that date). Phase 4's lite upgrade path is `upgrade.md`'s *Lite profile*, which runs `kit_doctor.py --upgrade-lite` (#1406); the lite-to-full move
-is not written. `topij/home-server` is the first lite
+was dropped on 2026-11-25 (Whole-kit plan, D4). `topij/home-server` is the first lite
 install (topij/home-server#31, first installed at kit `78f10709`); its field reports are #1361 to #1365. The operator chose on
 2026-11-05 that lite supports pull-request repositories through `vcs.protected_branch` (#1362).
 **Owner:** #1320.
@@ -325,7 +323,7 @@ same failure #1419 found was in the lite install path, `adopt.md`'s *Lite profil
 `<kit>` and `<root>`, and its L5 is `kit_doctor.py --verify-lite`. #1405 stays open for
 the full profile's kit block. #1399 gave lite an optional story backlog, `backlog.path` (*Backlog* in
 `lite-session-start.md`). Next is the TGuitar pilot, #1400, which
-the operator chose over tNote for phase 5 on 2026-11-09. The lite-to-full move is not written. #1381's review rounds
+the operator chose over tNote for phase 5 on 2026-11-09. #1381's review rounds
 showed that a prose list of config stops does not converge; the findings left open, and a proposed shared validator
 for the lite config readers, are on #1368. The parser-based guard on lite docs' links and engine names is #1347.
 
@@ -347,6 +345,8 @@ review rounds: #1440 (3a, `e4a4bd1`), #1441 (2e, `e094cc0`) and #1443 (2d, `52c4
 #1443 covered adoption, #1463 addressed its remaining pinning gaps, and #1464 delivered upgrade pinning for #1445.
 After the disposable GitHub App pilot on 2026-11-17, the operator retained D2.
 Issue operator-class lanes only. The operator reads and merges their pull requests.
+On 2026-11-25 the operator decided D4: the full profile serves this repository and cs-toolkit only. The plan's
+step 8 lists what that drops and freezes, and its proposed, undecided shape for #1446's ticket queue.
 **Owner:** [`saved_plans/kit-assessment_2026-11-12.md`](../saved_plans/kit-assessment_2026-11-12.md).
 
 On 2026-11-18,
