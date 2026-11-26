@@ -11,6 +11,10 @@ differently catches the subclass: ``CommandTimedOut``, ``CommandUnavailable``
 raised by ``run_stdout`` only). A caller's own argument errors (a NUL byte in argv,
 an empty argv, the wrong stdin type) are not translated, and ``run_stdout`` decodes as
 it always has, so output in another encoding raises ``UnicodeDecodeError`` there.
+
+The process-group functions at the end (``signal_group``, ``stop_group``,
+``group_has_live_member``, ``exited_unreaped``) are how an engine stops a child it
+started in a session of its own; their section says what the caller must hold.
 """
 
 from __future__ import annotations

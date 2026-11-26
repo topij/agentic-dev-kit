@@ -270,7 +270,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "2692a9350e7309eda16428a7998167304b68421883ce3a6eb781cdd7eeda6ab5"
+      "sha256": "1e673a9e701cfc4c09cac38df30664ddd8b90bd4821fdd0a9393d7fdc8fb3984"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -482,7 +482,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "585fd64e11eaf16108f31cc8cf088afb2b75a80e79eb21b5af53c1f86c07fac3"
+      "sha256": "cc099632c161696242aadc56285cf52617b8027d5f43a425a5b348aaa1c04ab2"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -723,7 +723,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "2a0d65fb3191c1e5ac30dc91175a35857db49067f6133358d22d638a90ca8dae"
+      "sha256": "f103f6e8ed0f9cf1d53a6ad05fd656eaa43df8770f15954ea5740d7bb647de87"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -731,7 +731,7 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "788867c4ef97c0e47a2ae853fdf53b8b86d20950d68f0d5f35aa84d0febc8083"
+      "sha256": "a88ded65b34436db226d86aa5d57121967ef6abd605ed28b2e5fec8e4ebf53ad"
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
@@ -889,6 +889,10 @@
       "role": "test",
       "sha256": "a73b3a7831c5ecd39bb55ca3d19aedbecf14188ac6fe127ed9dd30ecd76a3e56"
     },
+    "scripts/tests/test_process_group_stop.py": {
+      "role": "test",
+      "sha256": "b2fc11b555ad7664802f42b1e3064e7738ff5a93aebf2be81c283cee03bc9ca5"
+    },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
       "sha256": "22e3c4a307c2398bf11f262e226afbe4414001042cfe4c3299d1a664b3e16f08"
@@ -911,7 +915,7 @@
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "2de26bbcfe18b54e5e32402ac978bad0291fecc2421bde434729a55f0b9a0251"
+      "sha256": "57a8c09737fac349d7f7aa0e4d5ab0a7811115641ac4ab1ac9ccbff794ca1a05"
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",

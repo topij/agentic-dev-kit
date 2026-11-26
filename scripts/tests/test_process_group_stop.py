@@ -267,7 +267,13 @@ def _killpg_references(tree: ast.AST) -> list[int]:
 
 @pytest.mark.parametrize("site", MOVED_SITES)
 def test_a_moved_engine_never_calls_killpg_itself(site) -> None:
-    tree = ast.parse((ENGINE_DIR / site).read_text(encoding="utf-8"))
+    path = ENGINE_DIR / site
+    # This file ships with the runner; `runtime_smoke.py` and `review_eval.py` are
+    # repo-only, so an adopter's tree lacks them. An absent file calls nothing, so
+    # skipping it cannot hide a call.
+    if not path.exists():
+        pytest.skip(f"{site} is not installed here")
+    tree = ast.parse(path.read_text(encoding="utf-8"))
     assert _killpg_references(tree) == [], f"{site} names killpg; stop a group through subprocess_runner"
 
 
