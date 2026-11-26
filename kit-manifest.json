@@ -270,7 +270,7 @@
         "scripts/panel_prompt.py"
       ],
       "role": "engine",
-      "sha256": "2692a9350e7309eda16428a7998167304b68421883ce3a6eb781cdd7eeda6ab5"
+      "sha256": "1e673a9e701cfc4c09cac38df30664ddd8b90bd4821fdd0a9393d7fdc8fb3984"
     },
     "scripts/lane_usage.py": {
       "role": "engine",
@@ -482,7 +482,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "585fd64e11eaf16108f31cc8cf088afb2b75a80e79eb21b5af53c1f86c07fac3"
+      "sha256": "bf7794a4b27d739298d79e7b90ffeae4fe21bb9afe88790b3be03b8ea74ac4cf"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -723,7 +723,7 @@
     },
     "scripts/review_eval.py": {
       "role": "repo-only",
-      "sha256": "2a0d65fb3191c1e5ac30dc91175a35857db49067f6133358d22d638a90ca8dae"
+      "sha256": "f103f6e8ed0f9cf1d53a6ad05fd656eaa43df8770f15954ea5740d7bb647de87"
     },
     "scripts/run_installed_tests.py": {
       "role": "engine",
@@ -888,6 +888,10 @@
     "scripts/tests/test_pre_push_hook.py": {
       "role": "test",
       "sha256": "a73b3a7831c5ecd39bb55ca3d19aedbecf14188ac6fe127ed9dd30ecd76a3e56"
+    },
+    "scripts/tests/test_process_group_stop.py": {
+      "role": "test",
+      "sha256": "dc7b27bc2ce35d4860e93e5e40a0c29999a6a41dfbab14d760a9fedcac6fac04"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
