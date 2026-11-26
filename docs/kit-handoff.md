@@ -140,17 +140,6 @@ added the test of the refusal's count (#1336). Item 2 was #1331's. #1327 was ret
 
 ▶ Next: the operator decides whether #1335 is done; it is still open after #1442 merged.
 
-### Reviewer profiles
-
-**Status:** on 2026-09-25 the operator asked the reviewer's developer to post a GitHub
-check run, which would let the merge gate's existing check-based path see it; #797 can
-wait for that answer. **Owner:** [#796](https://github.com/topij/agentic-dev-kit/issues/796),
-[#797](https://github.com/topij/agentic-dev-kit/issues/797); the adopter-specific notes are
-in `saved_plans/fabro-review-tool-assessment_2026-09-25.md` (local, not committed).
-
-▶ Next: the operator accepted narrowing #796 to what cs-toolkit itself needs (Whole-kit
-plan step 8). Ask for approval of the ticket edit, and whether anything is then left.
-
 ### Triage engine hardening
 
 **Status:** finalize's commit-step worktree re-check is pinned by a test (#857), and the
@@ -258,7 +247,7 @@ the first-launch blockers on routes the operator chose on 2026-10-25: a
 lane is held to its repository by Git common directory, so a linked worktree can issue
 one (#1109); a user-local runtime install is placed on the trusted path by the host,
 and the overlay still refuses `parallel.<runtime>_headless_command` (#629);
-`dev_session.sh <subcommand> --help` is side-effect free, which is only part of #454.
+`dev_session.sh <subcommand> --help` is side-effect free; #454's wider ask was retired as not planned.
 Proposals not yet taken: a
 documented cloud-session lane route, and standing mandates (#472, which the review
 sequences after a terminal state and a cost record). #1173 was retired as delivered by
@@ -267,13 +256,12 @@ sequences after a terminal state and a cost record). #1173 was retired as delive
 [#1174](https://github.com/topij/agentic-dev-kit/issues/1174),
 [#1242](https://github.com/topij/agentic-dev-kit/issues/1242),
 [#1243](https://github.com/topij/agentic-dev-kit/issues/1243),
-[#454](https://github.com/topij/agentic-dev-kit/issues/454),
 [#472](https://github.com/topij/agentic-dev-kit/issues/472); the review document above
 (a claude.ai link, not in the repository).
 
 ▶ Next: choose the next proposal with the operator: the documented cloud-session lane
 route or #472's standing mandates. The operator keeps the lane stack (2026-11-25, Whole-kit
-plan step 8); #454 is proposed for retirement there. Smaller follow-ups: #1239, and #1242
+plan step 8), and on 2026-11-26 retired #454 as not planned. Smaller follow-ups: #1239, and #1242
 together with #1243's items in one PR, so the safety-critical panel runs once.
 
 ### Consumer upgrades
@@ -359,10 +347,10 @@ acceptance record and its limits. The model replies were scripted; lane merges r
 On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
-▶ Next: the rest of step 3d's process-group half, #1508: one shared group stop for
-the plan's other C5 sites, `launch_lane.py`, `runtime_smoke.py` and
-`reconcile_sessions.sh`. The change for #1172 covered the fourth, `review_eval.py`'s `_run_lens`,
-which now sends every group kill before it reaps the group's leader. The watcher (`_gh`),
+▶ Next: the rest of step 3d's process-group half. #1516 added the shared group stop to
+`lib/subprocess_runner.py` and moved `review_eval.py` onto it. #1508 holds `launch_lane.py`
+and `reconcile_sessions.sh`; `runtime_smoke.py` moves in #1517, redesigned, with the
+round-2 findings and the runner's carried LOWs. The watcher (`_gh`),
 `session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls,
 `archive_plan_sessions.py`'s recovery-hint reads, `review_eval.py`'s Git calls and
 `_run_engine`, `kit_doctor.py`'s `_git_run`, and `lib/triage/`'s `git_output`, sweep
