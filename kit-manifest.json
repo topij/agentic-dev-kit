@@ -482,7 +482,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "cc099632c161696242aadc56285cf52617b8027d5f43a425a5b348aaa1c04ab2"
+      "sha256": "b0e1dc3eaf81f2ede4c8ecfa388518f1eb621899d881622528903c9f52d5e939"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -731,7 +731,7 @@
     },
     "scripts/runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "a88ded65b34436db226d86aa5d57121967ef6abd605ed28b2e5fec8e4ebf53ad"
+      "sha256": "c18f36975539f1e2f87e09a0748db84672bafb26a1f4f656388fd5c3cb0b97a5"
     },
     "scripts/session_cleanup.py": {
       "role": "engine",
@@ -891,7 +891,7 @@
     },
     "scripts/tests/test_process_group_stop.py": {
       "role": "test",
-      "sha256": "b2fc11b555ad7664802f42b1e3064e7738ff5a93aebf2be81c283cee03bc9ca5"
+      "sha256": "88c6721dad8f3e4630755a0ae4ca981cfe9420b6271dd724d81f3b2884088657"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
@@ -915,7 +915,7 @@
     },
     "scripts/tests/test_runtime_smoke.py": {
       "role": "repo-only",
-      "sha256": "57a8c09737fac349d7f7aa0e4d5ab0a7811115641ac4ab1ac9ccbff794ca1a05"
+      "sha256": "cbbbbfaa5d741ad8db6ca4162f6863273462816335633743e42df2c01e268df2"
     },
     "scripts/tests/test_session_cleanup.py": {
       "role": "test",
