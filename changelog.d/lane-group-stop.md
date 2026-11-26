@@ -15,7 +15,14 @@ exit, then asks whether a live member is left. Two refusals change:
   launcher may not signal is still refused.
 - When the group's members cannot be listed (no `/proc` on Linux, or `/bin/ps`
   failing on macOS, which every clean exit there now asks), the launch fails. The
-  receipt's error starts with `cannot observe the child process group: …`, followed
-  by the stop's own refusal. Both signals are still sent. Because the stop cannot
-  list the group either, it then refuses with `child process group survived forced
-  termination`, leaves the child unreaped, and the receipt's `returncode` is null.
+  receipt's error starts with `cannot observe the child process group: …`, and the
+  stop that follows cannot list the group either, so it refuses too, leaves the
+  child unreaped, and the receipt's `returncode` is null. On Linux the stop sends
+  both signals and adds `child process group survived forced termination`. On
+  macOS the exited child's group answers EPERM, so the stop adds the same `cannot
+  observe …` text again and sends no SIGKILL, which would meet the same EPERM.
+
+On Linux with `/proc` mounted `hidepid`, a group member owned by another user is
+not seen, so a clean exit can pass with that member running. The launcher used to
+catch it through its signal-0 probe after reaping the child; with the child held,
+that probe succeeds on the child itself and cannot.

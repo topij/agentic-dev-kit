@@ -3587,8 +3587,9 @@ def test_a_force_stop_answered_with_eperm_and_a_live_member_is_refused(
 def test_a_group_that_outlives_sigkill_is_refused_and_its_leader_stays_held(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A group that cannot be listed answers `wait_group_empty` False too, so this
-    # is also the observer-unavailable case: escalated, then refused.
+    # A group that takes the signals but cannot be listed (Linux without /proc)
+    # answers `wait_group_empty` False too, so this is also that observer-unavailable
+    # case: escalated, then refused. The EPERM shape is the next test.
     launcher = _load_launcher()
     sent = _scripted_group(monkeypatch, launcher, signals={}, empties=[False, False])
     leader = _FakeLeader(4242, 0)
@@ -3644,6 +3645,47 @@ def test_stopping_a_child_that_leads_no_group_yet_returns_within_the_graces() ->
         with contextlib.suppress(ProcessLookupError):
             os.kill(child, signal.SIGKILL)
         os.waitpid(child, 0)
+
+
+def test_an_eperm_group_that_cannot_be_listed_is_refused_on_the_sigterm_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # macOS once the child exited: the zombie-only group answers EPERM, and `ps`,
+    # which settles it, fails. The SIGTERM leg refuses with the observer's error;
+    # SIGKILL is not sent, and the child stays held.
+    launcher = _load_launcher()
+    sent = _scripted_group(monkeypatch, launcher, signals={signal.SIGTERM: ["denied"]})
+
+    def unavailable(_pgid: int) -> bool:
+        raise launcher.GroupObserverUnavailable("ps failed")
+
+    monkeypatch.setattr(launcher, "group_has_live_member", unavailable)
+    leader = _FakeLeader(4242, 0)
+
+    with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: ps failed"):
+        launcher._terminate_process_group(leader, 1)
+
+    assert sent == [signal.SIGTERM]
+    assert not leader.released
+
+
+def test_the_exit_wait_gets_only_what_is_left_of_the_grace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A group that empties late has used part of the grace; the exit wait gets the
+    # rest, so one leg stays within one grace.
+    launcher = _load_launcher()
+
+    def empties_late(_pgid: int, timeout: float) -> bool:
+        time.sleep(0.6)
+        return True
+
+    monkeypatch.setattr(launcher, "wait_group_empty", empties_late)
+    leader = _FakeLeader(4242, 0)
+
+    assert launcher._group_stopped(leader, 1) is True
+    assert len(leader.exit_waits) == 1
+    assert leader.exit_waits[0] <= 0.5
 
 
 def test_a_released_child_s_group_is_never_signalled(monkeypatch: pytest.MonkeyPatch) -> None:

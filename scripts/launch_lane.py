@@ -1899,10 +1899,16 @@ def _terminate_process_group(
     reaped only once that holds, so every signal and probe here names a group id
     that cannot have been reused. A group that cannot be listed counts as not
     empty (``wait_group_empty``), so it is escalated and then refused, never
-    trusted stopped. That refusal reads "survived forced termination" although
-    both signals were sent, because the stop cannot tell a group it cannot list
-    from one that outlived SIGKILL; the child is then left unreaped, and the
-    receipt's ``returncode`` is null.
+    trusted stopped. Either way the child is left unreaped, and the receipt's
+    ``returncode`` is null. What the refusal says depends on the group's answer:
+    - a group that takes the signals (Linux, whose held zombie leader is
+      signalled): both are sent, and the refusal reads "survived forced
+      termination", since the stop cannot tell a group it cannot list from one
+      that outlived SIGKILL;
+    - a group that answers EPERM (macOS once the child has exited, #1238): the
+      SIGTERM leg's live-member question cannot be answered, so it refuses with
+      "cannot observe the child process group" and SIGKILL is not sent. SIGKILL
+      would meet the same EPERM.
     """
     if process.released:
         raise LaunchError("child process group is no longer held")
@@ -1925,7 +1931,8 @@ def _group_stopped(process: _ForkedChild, grace_seconds: int) -> bool:
     An empty group alone is not enough: a child signalled before its ``setsid()``
     leads no group yet, so its group answers ESRCH and reads empty while the child
     runs on, and ``reap`` would then block on it with no bound. Confirming the exit
-    first keeps every wait here within the grace.
+    first keeps the wait for it within the grace; a ``/bin/ps`` that hangs can
+    still hold one poll of ``wait_group_empty`` for up to its own timeout.
     """
     deadline = time.monotonic() + grace_seconds
     if not wait_group_empty(process.pid, grace_seconds):
