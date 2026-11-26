@@ -52,13 +52,10 @@ from __future__ import annotations
 
 import argparse
 import contextlib
-import errno
 import hashlib
 import json
-import os
 import posixpath
 import re
-import select
 import shlex
 import shutil
 import signal
@@ -80,9 +77,12 @@ from kitconfig import load_config  # noqa: E402
 from subprocess_runner import (  # noqa: E402
     CommandError,
     CommandFailed,
+    GroupObserverUnavailable,
+    exited_unreaped,
     run_bytes,
     run_result,
     run_stdout,
+    signal_group,
     without_git_environment,
 )
 
@@ -471,10 +471,6 @@ def _run_lens(command: list[str], tree: Path, prompt: str, timeout: int) -> subp
     return subprocess.CompletedProcess(command, proc.returncode, output["stdout"], output["stderr"])
 
 
-# How often `_settled` looks again for the lens's leader to have exited.
-EXIT_POLL_SECONDS = 0.05
-
-
 def _settled(pid: int, threads: list[threading.Thread], timeout: float) -> bool:
     """Whether every thread finished and the child ``pid`` exited within ``timeout``.
 
@@ -490,38 +486,11 @@ def _settled(pid: int, threads: list[threading.Thread], timeout: float) -> bool:
 
 
 def _exited_unreaped(pid: int, timeout: float) -> bool:
-    """Whether the child ``pid`` exits within ``timeout``, leaving it unreaped.
-
-    ``os.waitid`` with ``WNOWAIT`` where Python has it. macOS lacks it before Python
-    3.13, which this script's floor admits, so there a kqueue ``NOTE_EXIT`` watch.
-    A child that already exited, a zombie, cannot be watched: kqueue answers with an
-    ``EV_ERROR`` event carrying ``ESRCH``, which is read as the exit. Any other error
-    raises ``RunError`` rather than pass for one.
-    """
-    if hasattr(os, "waitid"):
-        deadline = time.monotonic() + timeout
-        while os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT | os.WNOHANG) is None:
-            if time.monotonic() >= deadline:
-                return False
-            time.sleep(EXIT_POLL_SECONDS)
-        return True
-    if hasattr(select, "kqueue"):
-        queue = select.kqueue()
-        try:
-            watch = select.kevent(pid, filter=select.KQ_FILTER_PROC,
-                                  flags=select.KQ_EV_ADD | select.KQ_EV_ONESHOT,
-                                  fflags=select.KQ_NOTE_EXIT)
-            events = queue.control([watch], 1, timeout)
-        finally:
-            queue.close()
-        if not events:
-            return False
-        if events[0].flags & select.KQ_EV_ERROR:
-            if events[0].data == errno.ESRCH:
-                return True
-            raise RunError(f"kqueue could not watch the lens's exit: {os.strerror(events[0].data)}")
-        return True  # the watch asks for NOTE_EXIT alone, so any other event is that
-    raise RunError("this platform offers no way to observe a lens's exit without reaping it")
+    """``subprocess_runner.exited_unreaped``, its failure a ``RunError`` like the rest."""
+    try:
+        return exited_unreaped(pid, timeout)
+    except GroupObserverUnavailable as exc:
+        raise RunError(f"cannot observe the lens's exit: {exc}") from exc
 
 
 def _read_all(stream: Any, output: dict[str, str], name: str) -> None:
@@ -538,8 +507,9 @@ def _write_all(stream: Any, text: str) -> None:
 
 
 def _kill_group(pgid: int) -> None:
-    with contextlib.suppress(ProcessLookupError, PermissionError):
-        os.killpg(pgid, signal.SIGKILL)
+    # A group already gone, or one only `EPERM` answers, is left as it is, as before
+    # the move: `_run_lens`'s `LensEscaped` check is what notices a member left.
+    signal_group(pgid, signal.SIGKILL)
 
 
 def prompt_args(root: Path, case: dict[str, Any], lens: str, runtime: str, tree: Path,

@@ -844,7 +844,7 @@ def test_a_signal_inherited_ignored_stays_ignored(monkeypatch):
 
 def test_no_client_starts_once_the_stop_has_begun(tmp_path, monkeypatch):
     monkeypatch.setattr(rs, "_STOPPING", False)
-    monkeypatch.setattr(rs, "_LIVE_GROUPS", set())
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
     rs.stop_live_children()
     assert rs._STOPPING
     marker = tmp_path / "started"
@@ -860,7 +860,7 @@ def test_a_client_an_interrupt_catches_mid_stop_stays_registered_until_stopped(t
     """A timeout's stop waits out its grace for a descendant that ignores SIGTERM after
     its leader has died; an interrupt in that wait must leave the group, which still has
     a member, for `stop_live_children`."""
-    monkeypatch.setattr(rs, "_LIVE_GROUPS", set())
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
     monkeypatch.setattr(rs, "_STOPPING", False)
     leader, descendant = tmp_path / "leader", tmp_path / "descendant"
 
@@ -886,11 +886,13 @@ def test_a_client_an_interrupt_catches_mid_stop_stays_registered_until_stopped(t
 
 def test_a_group_that_outlives_the_stop_is_named(monkeypatch):
     monkeypatch.setattr(rs, "_STOPPING", False)
-    monkeypatch.setattr(rs, "_LIVE_GROUPS", {424242})
-    monkeypatch.setattr(rs.os, "killpg", lambda _group, _signum: None)
-    monkeypatch.setattr(rs, "_group_alive", lambda _group: True)
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {424242: object()})
+    sent = []
+    monkeypatch.setattr(rs, "signal_group", lambda group, signum: sent.append((group, signum)) or "signalled")
+    monkeypatch.setattr(rs, "_settled", lambda _group: False)
     survivors = rs.stop_live_children(grace=0.2)
     assert survivors == [424242]
+    assert sent == [(424242, signal.SIGTERM), (424242, signal.SIGKILL)]
     assert rs.stopped(survivors) == "client process groups that outlived the stop: 424242"
     assert rs.stopped([]) == "every client process group it was running is stopped"
 
@@ -910,18 +912,67 @@ def test_what_a_stopped_run_left_at_out_is_read_from_the_disk(tmp_path, monkeypa
 
 
 def test_a_refused_signal_ends_the_stop(monkeypatch):
-    """macOS refuses a signal to a group whose only member is an unreaped zombie: the
-    stop takes the refusal for a group that is gone, and does not escalate."""
+    """macOS refuses a signal to a group whose only members are zombies (#1238): the
+    stop takes the refusal for a group with nothing left, and does not escalate. The
+    rule itself is `subprocess_runner.stop_group`'s, pinned in test_process_group_stop.py."""
     sent = []
 
     def refuse(_group, signum):
         sent.append(signum)
         raise PermissionError(1, "Operation not permitted")
 
-    monkeypatch.setattr(rs.os, "killpg", refuse)
-    rs._stop_group(types.SimpleNamespace(pid=424242, poll=lambda: 0), grace=0.1)
+    monkeypatch.setattr(os, "killpg", refuse)
+    monkeypatch.setattr(sys.modules["subprocess_runner"], "group_has_live_member", lambda _group: False)
+    assert rs._stop_group(types.SimpleNamespace(pid=424242), grace=0.1).stopped
     assert sent == [signal.SIGTERM]
-    assert rs._group_alive(424242) is False
+
+
+def _signals_recording_leader_state(monkeypatch) -> list[bool]:
+    """Record, at each group signal or probe, whether the group's leader was still unreaped.
+
+    Asked of `ps`, which lists a process, a zombie included, until it is reaped (#1508).
+    """
+    unreaped: list[bool] = []
+    killpg = os.killpg
+
+    def recording(group, signum):
+        listed = subprocess.run(["ps", "-o", "pid=", "-p", str(group)], capture_output=True, text=True)
+        unreaped.append(listed.stdout.strip() == str(group))
+        killpg(group, signum)
+
+    monkeypatch.setattr(os, "killpg", recording)
+    return unreaped
+
+
+@pytest.mark.parametrize("script", [
+    # Times out; the leader dies on SIGTERM and a descendant ignores it.
+    "(trap '' TERM; sleep 300 & wait) & wait",
+    # Exits, leaving a member in its group.
+    "(trap '' TERM; sleep 300 & wait) & sleep 0.5; exit 0",
+], ids=["timed-out", "outlived"])
+def test_every_group_signal_is_sent_while_the_leader_still_holds_the_group_id(tmp_path, monkeypatch, script):
+    _quick_stops(monkeypatch)
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    unreaped = _signals_recording_leader_state(monkeypatch)
+    invocation = rs.run_child(["bash", "-c", script], cwd=tmp_path, env=dict(os.environ), stdin_text="",
+                              timeout=2, log_dir=tmp_path, name="held")
+    assert invocation["timed_out"] or invocation["group_outlived_client"]
+    assert unreaped and all(unreaped)
+    assert not rs._LIVE_GROUPS
+
+
+def test_the_stop_of_every_client_signals_only_held_groups(tmp_path, monkeypatch):
+    """`stop_live_children` reaches a group from another thread; it signals only what is
+    still registered, and a registered leader is unreaped."""
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    process = subprocess.Popen(["bash", "-c", "(trap '' TERM; sleep 300 & wait) & exit 0"], start_new_session=True)
+    rs._LIVE_GROUPS[process.pid] = process
+    assert rs.exited_unreaped(process.pid, 15)
+    unreaped = _signals_recording_leader_state(monkeypatch)
+    assert rs.stop_live_children(grace=1) == []
+    assert unreaped and all(unreaped)
+    assert process.returncode == 0 and not rs._LIVE_GROUPS
 
 
 class _GoneStream:
@@ -1118,7 +1169,8 @@ def test_the_harness_must_be_the_revisions_own_bytes(tmp_path, monkeypatch):
     (kit / "scripts" / "lib").mkdir(parents=True)
     script = kit / "scripts" / "runtime_smoke.py"
     shutil.copy2(RUNNER, script)
-    shutil.copy2(ENGINE_DIR / "lib" / "kitconfig.py", kit / "scripts" / "lib" / "kitconfig.py")
+    for helper in ("kitconfig.py", "subprocess_runner.py"):
+        shutil.copy2(ENGINE_DIR / "lib" / helper, kit / "scripts" / "lib" / helper)
     subprocess.run(["git", "init", "-q"], cwd=kit, env=env, check=True)
     for key, value in env.items():
         monkeypatch.setenv(key, value)
@@ -1126,11 +1178,16 @@ def test_the_harness_must_be_the_revisions_own_bytes(tmp_path, monkeypatch):
     monkeypatch.setattr(rs, "SCRIPT_PATH", script.resolve())
 
     digests = rs.verify_harness(kit.resolve(), sha)
-    assert set(digests) == {"scripts/runtime_smoke.py", "scripts/lib/kitconfig.py"}
+    assert set(digests) == {"scripts/runtime_smoke.py", "scripts/lib/kitconfig.py",
+                            "scripts/lib/subprocess_runner.py"}
 
-    (kit / "scripts" / "lib" / "kitconfig.py").write_text("# edited after the commit\n", encoding="utf-8")
-    with pytest.raises(rs.Refusal, match="kitconfig.py differs"):
-        rs.verify_harness(kit.resolve(), sha)
+    for helper in ("kitconfig.py", "subprocess_runner.py"):
+        path = kit / "scripts" / "lib" / helper
+        committed = path.read_bytes()
+        path.write_text("# edited after the commit\n", encoding="utf-8")
+        with pytest.raises(rs.Refusal, match=f"{helper} differs"):
+            rs.verify_harness(kit.resolve(), sha)
+        path.write_bytes(committed)
 
 
 # ------------------------------------------------------------ fake clients
