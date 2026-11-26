@@ -55,6 +55,14 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR / "lib"))
 
 from kitconfig import get, load_config, repo_root  # noqa: E402
+from subprocess_runner import (  # noqa: E402
+    GROUP_DENIED,
+    GroupObserverUnavailable,
+    exited_unreaped,
+    group_has_live_member,
+    signal_group,
+    wait_group_empty,
+)
 
 SCHEMA_VERSION = 1
 DESCRIPTOR_NAME = "launch-descriptor.json"
@@ -497,28 +505,35 @@ class RuntimeProfile:
 
 
 class _ForkedChild:
-    """Minimal wait/poll surface for the fork-only observer process."""
+    """A forked child that leads its own process group, held unreaped until ``reap``.
+
+    The group's id is the child's pid, which is only safe to signal or probe while
+    it cannot be reused, that is while the child is unreaped (#1172, #1508). So
+    ``exited`` observes the exit without reaping, every group call is made while
+    ``released`` is false, and ``reap`` comes after the last of them.
+    """
 
     def __init__(self, pid: int, stdin: BinaryIO) -> None:
         self.pid = pid
         self.stdin = stdin
         self.returncode: int | None = None
+        # Set before the reap starts, so a signal handler that runs at any point
+        # of ``reap`` either sees the pid still held or does not signal it.
+        self.released = False
 
-    def poll(self) -> int | None:
-        if self.returncode is not None:
-            return self.returncode
-        waited, status = os.waitpid(self.pid, os.WNOHANG)
-        if waited == self.pid:
+    def exited(self, timeout: float) -> bool:
+        """Whether the child exits within ``timeout``; it stays unreaped either way."""
+        try:
+            return exited_unreaped(self.pid, timeout)
+        except GroupObserverUnavailable as exc:
+            raise LaunchError(f"cannot observe the child's exit: {exc}") from exc
+
+    def reap(self) -> int:
+        """Reap the child, waiting for it to exit; after this, nothing names its group."""
+        self.released = True
+        if self.returncode is None:
+            _waited, status = os.waitpid(self.pid, 0)
             self.returncode = os.waitstatus_to_exitcode(status)
-        return self.returncode
-
-    def wait(self, timeout: float | None = None) -> int:
-        deadline = None if timeout is None else time.monotonic() + timeout
-        while self.poll() is None:
-            if deadline is not None and time.monotonic() >= deadline:
-                raise subprocess.TimeoutExpired(["forked lane observer"], timeout)
-            time.sleep(0.02)
-        assert self.returncode is not None
         return self.returncode
 
 
@@ -1820,97 +1835,85 @@ def _terminal_receipt(
     _write_atomic(receipt_path, receipt)
 
 
-def _process_group_exists(process_group: int) -> bool:
+def _process_group_has_live_member(process: _ForkedChild) -> bool:
+    """Whether the child's group has a member that is not a zombie.
+
+    The child is held unreaped while this runs, so an exited child is still a member
+    of its group, as a zombie. A signal-0 probe cannot tell that zombie from a live
+    member (Linux signals it; macOS answers EPERM, #1238), so this asks
+    ``group_has_live_member``. An observer that cannot answer raises ``LaunchError``,
+    and the launch fails closed on it: the group is then stopped, not trusted empty.
+    """
+    if process.released:
+        raise LaunchError("child process group is no longer held")
     try:
-        os.killpg(process_group, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    return True
-
-
-def _wait_for_process_group_exit(
-    process: _ForkedChild, deadline: float
-) -> int | None:
-    while time.monotonic() < deadline:
-        process.poll()
-        if not _process_group_exists(process.pid):
-            if process.returncode is None:
-                remaining = max(0.0, deadline - time.monotonic())
-                try:
-                    return process.wait(timeout=remaining)
-                except subprocess.TimeoutExpired:
-                    return None
-            return process.returncode
-        time.sleep(0.05)
-    return None
+        return group_has_live_member(process.pid)
+    except GroupObserverUnavailable as exc:
+        raise LaunchError(f"cannot observe the child process group: {exc}") from exc
 
 
 def _signal_process_group(
     process: _ForkedChild, signum: int, error: str, grace_seconds: int
 ) -> None:
-    # macOS answers EPERM, not ESRCH, when a group's only member is the leader this
-    # wrapper has not reaped yet (#1238): an exited zombie, or a leader still
-    # exiting, which waitpid cannot reap for a moment longer. Wait up to the grace
-    # for the leader to become reapable, reap it, and ask once more. Every input
-    # that reaches the EPERM branch:
-    # - leader exited or exiting, no other member: the reap empties the group, the
-    #   retry answers ESRCH, and the group is gone;
-    # - leader reaped, a member that still answers EPERM (another owner, or a
-    #   zombie its new parent has not reaped yet): refused;
-    # - leader still running when the grace ends: refused without a retry.
-    try:
-        os.killpg(process.pid, signum)
+    """Send ``signum`` to the held child's group, or raise ``LaunchError(error)``.
+
+    ESRCH is a group already gone. EPERM names no single cause. Every input that
+    reaches it while the child is held:
+    - macOS, the child exited or still exiting and no other live member (#1238):
+      wait up to the grace for the child to exit; no live member is then left, so
+      nothing needs the signal;
+    - the child still running when the grace ends: refused;
+    - a live member this launcher may not signal (another owner), with the child
+      exited or not: refused;
+    - a member that is a zombie its new parent has not reaped: not live, so not
+      refused. Before #1508 the launcher reaped the child here and retried, and
+      refused this case.
+    Linux never answers EPERM for a zombie.
+    """
+    if signal_group(process.pid, signum) != GROUP_DENIED:
         return
-    except ProcessLookupError:
-        return
-    except PermissionError as exc:
-        deadline = time.monotonic() + grace_seconds
-        while process.poll() is None:
-            if time.monotonic() >= deadline:
-                raise LaunchError(error) from exc
-            time.sleep(0.02)
-    try:
-        os.killpg(process.pid, signum)
-    except ProcessLookupError:
-        return
-    except PermissionError as exc:
-        raise LaunchError(error) from exc
+    if not process.exited(grace_seconds) or _process_group_has_live_member(process):
+        raise LaunchError(error)
 
 
 def _relay_signal(process_group: int, signum: int) -> None:
     # Called from the launcher's signal handler, so nothing may escape it: an
-    # exception raised there surfaces at whatever line the main flow was on. ESRCH
-    # is a group already gone. EPERM is either a group holding only the unreaped
-    # leader (macOS, #1238), which needs no relay, or a member that cannot be
-    # signalled. A signal caught while a round runs routes the launch to
-    # _terminate_process_group, which refuses that member; one caught after the
-    # round's group check found the group empty.
-    with contextlib.suppress(ProcessLookupError, PermissionError):
-        os.killpg(process_group, signum)
+    # exception raised there surfaces at whatever line the main flow was on. The
+    # handler relays only while the child is held (``released`` is false), so the
+    # group id cannot have been reused. ESRCH is a group already gone. EPERM is
+    # either a group holding only the exited child (macOS, #1238), which needs no
+    # relay, or a member that cannot be signalled. A signal caught while a round
+    # runs routes the launch to _terminate_process_group, which refuses that
+    # member; one caught after the round's group check found the group empty.
+    with contextlib.suppress(OSError):
+        signal_group(process_group, signum)
 
 
 def _terminate_process_group(
     process: _ForkedChild, grace_seconds: int
 ) -> int:
+    """Stop the held child's group, SIGTERM then SIGKILL, then reap the child.
+
+    The group is stopped when no live member is left, not when the child exits: a
+    descendant that ignores SIGTERM outlives a child that does not. The child is
+    reaped only once that holds, so every signal and probe here names a group id
+    that cannot have been reused. A group that cannot be listed counts as not
+    empty (``wait_group_empty``), so it is escalated and then refused, never
+    trusted stopped.
+    """
+    if process.released:
+        raise LaunchError("child process group is no longer held")
     _signal_process_group(
         process, signal.SIGTERM, "cannot signal the child process group", grace_seconds
     )
-    returncode = _wait_for_process_group_exit(
-        process, time.monotonic() + grace_seconds
-    )
-    if returncode is not None:
-        return returncode
+    if wait_group_empty(process.pid, grace_seconds):
+        return process.reap()
     _signal_process_group(
         process, signal.SIGKILL, "cannot force-stop the child process group", grace_seconds
     )
-    returncode = _wait_for_process_group_exit(
-        process, time.monotonic() + grace_seconds
-    )
-    if returncode is None:
-        raise LaunchError("child process group survived forced termination")
-    return returncode
+    if wait_group_empty(process.pid, grace_seconds):
+        return process.reap()
+    raise LaunchError("child process group survived forced termination")
 
 
 def _terminate_launch_lineage(process_nonce: str, grace_seconds: int) -> None:
@@ -1951,15 +1954,12 @@ def _terminate_launch_lineage(process_nonce: str, grace_seconds: int) -> None:
         raise LaunchError("launch-lineage process survived forced termination")
 
 
-def _wait_for_process_or_signal(
-    process: _ForkedChild, caught: list[int]
-) -> int | None:
+def _wait_for_exit_or_signal(process: _ForkedChild, caught: list[int]) -> bool:
+    """Whether the child exited before a signal was caught; it stays unreaped."""
     while not caught:
-        try:
-            return process.wait(timeout=0.1)
-        except subprocess.TimeoutExpired:
-            continue
-    return None
+        if process.exited(0.1):
+            return True
+    return False
 
 
 def launch(
@@ -2080,7 +2080,8 @@ def launch(
 
     def relay(signum: int, _frame: object) -> None:
         caught.append(signum)
-        if process is not None:
+        # A released child may be reaped, and its pid reused (#1508).
+        if process is not None and not process.released:
             _relay_signal(process.pid, signum)
 
     previous_handlers = {
@@ -2107,7 +2108,7 @@ def launch(
         authority_write = -1
         deadline = time.monotonic() + observation_timeout
         ready = b""
-        while b"\n" not in ready and process.poll() is None and not caught:
+        while b"\n" not in ready and not process.exited(0) and not caught:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 error = "child observation timed out"
@@ -2145,11 +2146,11 @@ def launch(
                     ack_write = -1
                     process.stdin.write(combined)
                     process.stdin.close()
-        returncode = None if error else _wait_for_process_or_signal(process, caught)
-        if returncode is not None and _process_group_exists(process.pid):
+        exited = False if error else _wait_for_exit_or_signal(process, caught)
+        if exited and _process_group_has_live_member(process):
             error = "child exited while its process group remained active"
         if (
-            returncode is not None
+            exited
             and error is None
             and _processes_with_launch_nonce(process_nonce)
         ):
@@ -2157,7 +2158,8 @@ def launch(
         if caught or error:
             returncode = _terminate_process_group(process, termination_grace)
             _terminate_launch_lineage(process_nonce, termination_grace)
-        assert returncode is not None
+        else:
+            returncode = process.reap()
         if returncode == 0 and not caught and error is None:
             error = _post_exit_origin_error(descriptor, observation_timeout, caught)
         final_bytes = b""
@@ -2289,12 +2291,12 @@ def launch(
                 process.stdin.write(RESUME_NUDGE.encode())
             with contextlib.suppress(OSError):
                 process.stdin.close()
-            round_returncode = _wait_for_process_or_signal(process, caught)
+            round_exited = _wait_for_exit_or_signal(process, caught)
             round_error: str | None = None
-            if round_returncode is not None and _process_group_exists(process.pid):
+            if round_exited and _process_group_has_live_member(process):
                 round_error = "child exited while its process group remained active"
             if (
-                round_returncode is not None
+                round_exited
                 and round_error is None
                 and _processes_with_launch_nonce(process_nonce)
             ):
@@ -2302,6 +2304,8 @@ def launch(
             if caught or round_error:
                 round_returncode = _terminate_process_group(process, termination_grace)
                 _terminate_launch_lineage(process_nonce, termination_grace)
+            else:
+                round_returncode = process.reap()
             if round_returncode == 0 and not caught and round_error is None:
                 round_error = _post_exit_origin_error(descriptor, observation_timeout, caught)
             round_bytes = b""
@@ -2394,8 +2398,11 @@ def launch(
             return STALLED_EXIT
         return 0
     except (LaunchError, OSError) as exc:
-        returncode: int | None = process.poll() if process is not None else None
-        if process is not None and _process_group_exists(process.pid):
+        # A child still held is stopped whether or not it exited: its group may
+        # hold a member, and only a held child's group id is safe to signal. A
+        # released one was reaped after its group was found empty.
+        returncode: int | None = process.returncode if process is not None else None
+        if process is not None and not process.released:
             try:
                 returncode = _terminate_process_group(process, termination_grace)
             except LaunchError as termination_error:

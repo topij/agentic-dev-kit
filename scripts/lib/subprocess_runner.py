@@ -165,10 +165,13 @@ def run_stdout(argv: list[str], *, cwd: Path | None, timeout: int, stdin_text: s
 # ``Popen.poll()``, ``communicate()``, ``send_signal()`` and ``kill()`` all reap a
 # leader that has exited, so none of them may run first.
 #
-# ``signal_group`` is this module's one ``os.killpg`` call. The engine moved onto it
-# so far, ``review_eval.py``, calls these functions rather than ``os.killpg``, and a
-# test holds it to that; ``runtime_smoke.py`` (#1517), ``launch_lane.py`` and
+# ``signal_group`` is this module's one ``os.killpg`` call. The engines moved onto it
+# so far, ``review_eval.py`` and ``launch_lane.py``, call these functions rather than
+# ``os.killpg``, and a test holds them to that; ``runtime_smoke.py`` (#1517) and
 # ``reconcile_sessions.sh`` (#1508) still signal groups themselves until they move.
+# ``launch_lane.py`` composes its own two legs from ``signal_group``,
+# ``exited_unreaped`` and ``wait_group_empty`` rather than call ``stop_group``: its
+# EPERM rule waits for an exiting leader (#1238), and it refuses each leg by name.
 #
 # An observer that cannot answer (``GroupObserverUnavailable``) never ends a stop
 # early: ``stop_group`` and ``wait_group_empty`` count the group as still having a

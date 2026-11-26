@@ -348,8 +348,10 @@ On 2026-11-19 the operator accepted step 2c for isolated Claude lanes, including
 the GitHub CLI controls in #1477 and launcher checks in #1478. Ordinary host lanes remain outside that decision.
 
 ▶ Next: the rest of step 3d's process-group half. #1516 added the shared group stop to
-`lib/subprocess_runner.py` and moved `review_eval.py` onto it. #1508 holds `launch_lane.py`
-and `reconcile_sessions.sh`; `runtime_smoke.py` moves in #1517, redesigned, with the
+`lib/subprocess_runner.py` and moved `review_eval.py` onto it, and #1508's second pull
+request moved `launch_lane.py`. #1508 holds
+`reconcile_sessions.sh` and the test that pins `review_eval.py`'s SIGKILL (#1508's
+comment of 2026-11-26); `runtime_smoke.py` moves in #1517, redesigned, with the
 round-2 findings and the runner's carried LOWs. The watcher (`_gh`),
 `session_cleanup.py`'s `git()`, `sweep_scratch.py`'s Git calls,
 `archive_plan_sessions.py`'s recovery-hint reads, `review_eval.py`'s Git calls and
@@ -371,8 +373,8 @@ calls with their own environment. `lib/triage/model.py`'s `_identity_git` keeps 
 operator chose on 2026-11-22 to leave it off the runner. #1219's item 1, the per-item timeout, holds on the
 runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 (unpinned guards, untested helpers), which that move did not take. #1486 records the operator's scoped host-sandbox
-default for trusted Claude reviews. #1025 retains worker provisioning for external
-contributions and Codex. Lane merges remain operator-only.
+default for trusted Claude reviews. #1025, worker provisioning for external
+contributions and Codex, was closed as completed on 2026-11-21. Lane merges remain operator-only.
 On 2026-11-22 the operator closed #1370 (delivered by #1440) and #345 (delivered by
 #1441), and narrowed #1371 to its messages-and-prose remainder at P3. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on
