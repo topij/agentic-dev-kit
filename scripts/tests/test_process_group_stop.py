@@ -28,9 +28,10 @@ sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import subprocess_runner as sr  # noqa: E402
 
-# The engines moved onto the shared stop. #1508's second pull request adds
-# `launch_lane.py`, and `reconcile_sessions.sh`'s embedded Python, to this list.
-MOVED_SITES = ("runtime_smoke.py", "review_eval.py")
+# The engines moved onto the shared stop. #1517 adds `runtime_smoke.py`, and #1508's
+# second pull request adds `launch_lane.py` and `reconcile_sessions.sh`'s embedded
+# Python, to this list.
+MOVED_SITES = ("review_eval.py",)
 
 
 def _listed(pid: int) -> bool:
@@ -301,8 +302,8 @@ def _killpg_references(tree: ast.AST) -> list[int]:
 @pytest.mark.parametrize("site", MOVED_SITES)
 def test_a_moved_engine_never_calls_killpg_itself(site) -> None:
     path = ENGINE_DIR / site
-    # This file ships with the runner; `runtime_smoke.py` and `review_eval.py` are
-    # repo-only, so an adopter's tree lacks them. An absent file calls nothing, so
+    # This file ships with the runner; `review_eval.py` is repo-only, so an
+    # adopter's tree lacks it. An absent file calls nothing, so
     # skipping it cannot hide a call.
     if not path.exists():
         pytest.skip(f"{site} is not installed here")

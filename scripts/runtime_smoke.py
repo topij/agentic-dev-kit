@@ -149,14 +149,6 @@ SCRIPT_PATH = Path(__file__).resolve()
 sys.path.insert(0, str(SCRIPT_PATH.parent / "lib"))
 
 from kitconfig import get, load_config, loads, repo_root  # noqa: E402
-from subprocess_runner import (  # noqa: E402
-    GroupObserverUnavailable,
-    GroupStop,
-    exited_unreaped,
-    group_has_live_member,
-    signal_group,
-    stop_group,
-)
 
 SCHEMA = "adk-runtime-smoke/1"
 PARITY_DOC = "docs/agentic-dev-kit/runtime-parity.md"
@@ -190,16 +182,8 @@ EXIT_PASSED, EXIT_FAILED, EXIT_REFUSED, EXIT_INCOMPLETE, EXIT_ABORTED = 0, 1, 2,
 PREFLIGHT_TIMEOUT = 60
 # The process groups of the clients running now. An interrupt stops every one: a
 # client the runner abandoned would keep spending, perhaps under a trust bypass,
-# until its own timeout. Keyed by group id, which is the leader's pid. A leader is
-# reaped only once it has left this registry, and both happen under the lock, so a
-# group id found here is held by its unreaped leader and is safe to signal (#1508).
-_LIVE_GROUPS: dict[int, subprocess.Popen] = {}
-# The registered groups whose worker has finished with them: an interrupt or a
-# failed stop left a live member. Each leader has one reaper: its worker while the
-# worker runs, which waits on it and signals it outside the lock, and
-# `stop_live_children` only once the group is here. Two reapers let one reap a
-# leader the other was still waiting on or signalling.
-_ABANDONED: set[int] = set()
+# until its own timeout.
+_LIVE_GROUPS: set[int] = set()
 _LIVE_LOCK = threading.Lock()
 # How an operator's interrupt arrives: a key press, a kill, a closed terminal.
 INTERRUPT_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
@@ -408,35 +392,27 @@ def run_child(
                 except OSError as exc:
                     error = f"could not start: {exc}"
                 else:
-                    _LIVE_GROUPS[process.pid] = process
+                    _LIVE_GROUPS.add(process.pid)
         if process is not None:
-            # Not `communicate()`: it reaps the leader, and the group's id must stay
-            # taken until the group is stopped (#1508). The leader's exit is observed
-            # without reaping it, and `_reap_if_settled` reaps it last.
-            writer = threading.Thread(target=_feed, args=(process.stdin, stdin_text.encode()), daemon=True)
             try:
-                writer.start()
-                exited = exited_unreaped(process.pid, timeout)
-                outlived = exited and group_has_live_member(process.pid)
+                process.communicate(stdin_text.encode(), timeout=timeout)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                _stop_group(process)
             except BaseException:
                 _stop_group(process)
                 raise
             else:
-                # Not in the `try`: an interrupt during this stop must not start a
-                # second one; the group goes to `stop_live_children` instead.
-                if not exited:
-                    timed_out = True
-                    _stop_group(process)
-                elif outlived:
-                    # What the client left in its group goes with it.
+                # What the client left in its group goes with it.
+                if _group_alive(process.pid):
+                    outlived = True
                     _stop_group(process)
             finally:
                 # A group an interrupt caught mid-stop still has members; it stays
-                # registered, its leader unreaped, for `stop_live_children` to finish.
-                with _LIVE_LOCK:
-                    _reap_if_settled(process.pid)
-                    if process.pid in _LIVE_GROUPS:
-                        _ABANDONED.add(process.pid)
+                # registered for `stop_live_children` to finish.
+                if process.poll() is not None and not _group_alive(process.pid):
+                    with _LIVE_LOCK:
+                        _LIVE_GROUPS.discard(process.pid)
             returncode = process.returncode
     stderr_lines = [line for line in _read_text(stderr_path).splitlines() if line.strip()]
     return {
@@ -457,47 +433,31 @@ def run_child(
     }
 
 
-def _feed(stream: Any, data: bytes) -> None:
-    # A client that exits, or is stopped, without reading all of its input closes
-    # the pipe under the write; `communicate()` ignored that too.
-    with contextlib.suppress(BrokenPipeError):
-        stream.write(data)
-    with contextlib.suppress(BrokenPipeError):
-        stream.close()
-
-
-def _stop_group(process: subprocess.Popen, grace: float = 10) -> GroupStop:
+def _stop_group(process: subprocess.Popen, grace: float = 10) -> None:
     """Stop a client's whole process group: SIGTERM, a grace, then SIGKILL.
 
-    ``subprocess_runner.stop_group``, while ``run_child`` still holds the leader
-    unreaped. The group is stopped when no live member is left, not when its leader
-    exits: a descendant that ignores SIGTERM outlives a leader that does not.
+    The group is stopped when no member is left, not when its leader exits: a
+    descendant that ignores SIGTERM outlives a leader that does not.
     """
-    return stop_group(process.pid, grace=grace)
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(process.pid, sig)
+        except (ProcessLookupError, PermissionError):
+            break
+        if _group_ended(process, grace):
+            break
 
 
-def _settled(group: int) -> bool:
-    """Whether the group's leader has exited and no live member is left.
-
-    A group that cannot be observed is not settled: it stays registered, its leader
-    unreaped, rather than be reaped on a guess.
-    """
-    try:
-        return exited_unreaped(group, 0) and not group_has_live_member(group)
-    except GroupObserverUnavailable:
-        return False
-
-
-def _reap_if_settled(group: int) -> None:
-    """Under ``_LIVE_LOCK``: reap a registered leader, once its group is settled.
-
-    It leaves the registry first, so nothing signals its id after the reap frees it.
-    """
-    process = _LIVE_GROUPS.get(group)
-    if process is not None and _settled(group):
-        del _LIVE_GROUPS[group]
-        _ABANDONED.discard(group)
-        process.wait()
+def _group_ended(process: subprocess.Popen, grace: float) -> bool:
+    """Wait up to `grace` for the group to empty, reaping its leader on the way."""
+    deadline = time.monotonic() + grace
+    while True:
+        process.poll()  # an unreaped leader would still count as a member
+        if not _group_alive(process.pid):
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        time.sleep(0.05)
 
 
 def stop_live_children(grace: float = 5) -> list[int]:
@@ -506,31 +466,40 @@ def stop_live_children(grace: float = 5) -> list[int]:
     Called when the run is interrupted or fails. A client launched from a worker
     thread is not reached by the main thread's exception, so the registry is how
     the main thread finds it; once this has begun, no worker starts another.
-    Each signal is sent under the lock, to a group still registered, so its leader
-    is unreaped and its id cannot have been reused. A running worker reaps its own
-    group once it observes the exit; this reaps only a group its worker abandoned
-    (``_ABANDONED``), once that group is settled.
     """
     global _STOPPING
     with _LIVE_LOCK:
         _STOPPING = True
-    for signum in (signal.SIGTERM, signal.SIGKILL):
-        with _LIVE_LOCK:
-            for group in sorted(_LIVE_GROUPS):
-                signal_group(group, signum)
+        groups = sorted(_LIVE_GROUPS)
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        alive = []
+        for group in groups:
+            try:
+                os.killpg(group, sig)
+                alive.append(group)
+            except (ProcessLookupError, PermissionError):
+                continue
         deadline = time.monotonic() + grace
-        while True:
-            with _LIVE_LOCK:
-                for group in sorted(_ABANDONED):
-                    _reap_if_settled(group)
-                if not _LIVE_GROUPS:
-                    return []
-            if time.monotonic() >= deadline:
-                break
+        while alive and time.monotonic() < deadline:
+            alive = [group for group in alive if _group_alive(group)]
             time.sleep(0.1)
+        groups = alive
     # What outlived SIGKILL as well, for the caller to name rather than to claim stopped.
-    with _LIVE_LOCK:
-        return sorted(_LIVE_GROUPS)
+    return [group for group in groups if _group_alive(group)]
+
+
+def _group_alive(group: int) -> bool:
+    """Whether a process group has a member left.
+
+    A zombie member counts while it lasts. macOS refuses the probe once a group holds
+    only zombies, and so reports it gone; on Linux a zombie counts until it is reaped,
+    which this assumes an init does for orphans.
+    """
+    try:
+        os.killpg(group, 0)
+    except (ProcessLookupError, PermissionError):
+        return False
+    return True
 
 
 def _interrupt(signum: int, _frame: Any) -> None:
@@ -606,15 +575,14 @@ def resolve_revision(kit_root: Path, revision: str) -> str:
 
 
 def verify_harness(kit_root: Path, revision: str) -> dict[str, str]:
-    """Refuse unless this file and the helpers it imports are the revision's own bytes.
+    """Refuse unless this file and the helper it imports are the revision's own bytes.
 
     A record says which kit revision produced it; a runner edited after that commit
     would stamp a revision it is not. The fixture's engines need no such check: they
     are extracted from the revision itself.
     """
     digests: dict[str, str] = {}
-    lib = SCRIPT_PATH.parent / "lib"
-    for path in (SCRIPT_PATH, lib / "kitconfig.py", lib / "subprocess_runner.py"):
+    for path in (SCRIPT_PATH, SCRIPT_PATH.parent / "lib" / "kitconfig.py"):
         rel = path.relative_to(kit_root).as_posix()
         committed = subprocess.run(
             ["git", "show", f"{revision}:{rel}"], cwd=kit_root, capture_output=True
