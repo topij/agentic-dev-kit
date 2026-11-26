@@ -1555,10 +1555,70 @@ def test_a_clean_launch_probes_its_group_only_while_the_child_is_held(
 
     assert _launch_in_process(launcher, descriptor, prompt) == 0
     assert _receipt(sessions, descriptor)["status"] == "completed"
+    if not Path("/proc/self/stat").is_file():
+        # Without /proc the group check is a signal-0 probe, so one is recorded.
+        # With /proc it reads the process table and names no group id; there the
+        # reap check below is what this test holds.
+        assert calls, "the clean exit's group check sent no probe"
     assert all(held for _pgid, _signum, held in calls), calls
     assert all(signum == 0 for _pgid, signum, _held in calls), calls
     listed = subprocess.run(["ps", "-o", "pid=", "-p", str(forked[0])], capture_output=True, text=True)
     assert listed.stdout.strip() == "", "the child was not reaped after the launch"
+
+
+@pytest.mark.evidence
+def test_a_signal_after_the_reap_is_not_relayed_to_the_reaped_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The relay names the child's group only while the child is held: once reaped,
+    its pid, and so the group id, can be reused (#1508)."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    relayed: list[int] = []
+    reaped: list[int] = []
+    reap = launcher._ForkedChild.reap
+
+    def reap_then_signal(self: object) -> int:
+        returncode = reap(self)
+        reaped.append(self.pid)
+        os.kill(os.getpid(), signal.SIGTERM)  # the launcher's relay handler takes it
+        return returncode
+
+    monkeypatch.setattr(launcher._ForkedChild, "reap", reap_then_signal)
+    monkeypatch.setattr(launcher, "_relay_signal", lambda pgid, _signum: relayed.append(pgid))
+
+    assert _launch_in_process(launcher, descriptor, prompt) == 128 + signal.SIGTERM
+    assert reaped, "the launch never reaped its child"
+    assert relayed == []
+    assert _receipt(sessions, descriptor)["status"] == "interrupted"
+
+
+@pytest.mark.evidence
+def test_an_error_after_the_reap_does_not_stop_the_reaped_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exception raised after the clean exit's reap reaches the error path with a
+    released child, whose group id is no longer safe to signal (#1508)."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    stopped: list[int] = []
+
+    def fail_after_the_reap(*_args: object) -> str | None:
+        raise launcher.LaunchError("injected after the reap")
+
+    monkeypatch.setattr(launcher, "_post_exit_origin_error", fail_after_the_reap)
+    monkeypatch.setattr(
+        launcher,
+        "_terminate_process_group",
+        lambda process, _grace: stopped.append(process.pid) or 0,
+    )
+
+    assert _launch_in_process(launcher, descriptor, prompt) != 0
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert receipt["terminal"]["error"] == "injected after the reap"
+    assert receipt["terminal"]["returncode"] == 0
+    assert stopped == []
 
 
 # ── Per-runtime generalisation: Claude through `claude -p`, Codex unchanged ──────
@@ -3538,6 +3598,52 @@ def test_a_group_that_outlives_sigkill_is_refused_and_its_leader_stays_held(
 
     assert sent == [signal.SIGTERM, signal.SIGKILL]
     assert not leader.released
+
+
+def test_an_empty_group_whose_child_has_not_exited_is_not_reaped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A child signalled before its setsid() leads no group: both legs answer ESRCH
+    # and the group reads empty while the child runs on. Reaping it then would block
+    # with no bound, so the stop escalates and refuses with the child still held.
+    launcher = _load_launcher()
+    sent = _scripted_group(
+        monkeypatch,
+        launcher,
+        signals={signal.SIGTERM: ["gone"], signal.SIGKILL: ["gone"]},
+        empties=[True, True],
+    )
+    leader = _FakeLeader(4242, 0, exited=False)
+
+    with pytest.raises(launcher.LaunchError, match="survived forced termination"):
+        launcher._terminate_process_group(leader, 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
+    assert len(leader.exit_waits) == 2
+    assert not leader.released
+
+
+def test_stopping_a_child_that_leads_no_group_yet_returns_within_the_graces() -> None:
+    """The real shape of a signal caught between fork() and the child's setsid():
+    the child is outside any group of its own id, so no group signal reaches it.
+    The stop must refuse within its two graces, not wait on the child."""
+    launcher = _load_launcher()
+    child = os.fork()
+    if child == 0:
+        time.sleep(6)
+        os._exit(0)
+    try:
+        started = time.monotonic()
+        with (
+            open(os.devnull, "wb") as stdin,
+            pytest.raises(launcher.LaunchError, match="survived forced termination"),
+        ):
+            launcher._terminate_process_group(launcher._ForkedChild(child, stdin), 1)
+        assert time.monotonic() - started < 4
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(child, signal.SIGKILL)
+        os.waitpid(child, 0)
 
 
 def test_a_released_child_s_group_is_never_signalled(monkeypatch: pytest.MonkeyPatch) -> None:

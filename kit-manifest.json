@@ -278,7 +278,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "f88a2d5e27e740d1f5ff294dc9fc42a2e37459d75ba98344f9da1075fa15a74f"
+      "sha256": "392d95bf841fe4a26f98c851f1d96e556838dff3f900d63939746d6ada5df1f5"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -844,7 +844,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "dcf0d400e55aa278d8afa58dc34c4484e8a66bc1c9a09050ee0a1c408f2a4db4"
+      "sha256": "f6fdc7efdd8e3f7cd5e1db545ee81953dba3941532b7271b717131879002cf35"
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",
@@ -892,7 +892,7 @@
     },
     "scripts/tests/test_process_group_stop.py": {
       "role": "test",
-      "sha256": "9aa046d9236518b6eaf1d8025322ca28f206ba9a7838a1b9184a2099ca24c2d4"
+      "sha256": "afe630a519f07a5dff8b701d58873d0304653f3173e71f9f41ba357a749f615f"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",

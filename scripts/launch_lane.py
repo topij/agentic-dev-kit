@@ -1899,21 +1899,38 @@ def _terminate_process_group(
     reaped only once that holds, so every signal and probe here names a group id
     that cannot have been reused. A group that cannot be listed counts as not
     empty (``wait_group_empty``), so it is escalated and then refused, never
-    trusted stopped.
+    trusted stopped. That refusal reads "survived forced termination" although
+    both signals were sent, because the stop cannot tell a group it cannot list
+    from one that outlived SIGKILL; the child is then left unreaped, and the
+    receipt's ``returncode`` is null.
     """
     if process.released:
         raise LaunchError("child process group is no longer held")
     _signal_process_group(
         process, signal.SIGTERM, "cannot signal the child process group", grace_seconds
     )
-    if wait_group_empty(process.pid, grace_seconds):
+    if _group_stopped(process, grace_seconds):
         return process.reap()
     _signal_process_group(
         process, signal.SIGKILL, "cannot force-stop the child process group", grace_seconds
     )
-    if wait_group_empty(process.pid, grace_seconds):
+    if _group_stopped(process, grace_seconds):
         return process.reap()
     raise LaunchError("child process group survived forced termination")
+
+
+def _group_stopped(process: _ForkedChild, grace_seconds: int) -> bool:
+    """Whether, within one grace, the group has no live member and the child exited.
+
+    An empty group alone is not enough: a child signalled before its ``setsid()``
+    leads no group yet, so its group answers ESRCH and reads empty while the child
+    runs on, and ``reap`` would then block on it with no bound. Confirming the exit
+    first keeps every wait here within the grace.
+    """
+    deadline = time.monotonic() + grace_seconds
+    if not wait_group_empty(process.pid, grace_seconds):
+        return False
+    return process.exited(max(0.0, deadline - time.monotonic()))
 
 
 def _terminate_launch_lineage(process_nonce: str, grace_seconds: int) -> None:

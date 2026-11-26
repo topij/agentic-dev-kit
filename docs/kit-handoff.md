@@ -374,7 +374,7 @@ operator chose on 2026-11-22 to leave it off the runner. #1219's item 1, the per
 runner's `CommandTimedOut`; #1219 stays open for its items 2 and 3
 (unpinned guards, untested helpers), which that move did not take. #1486 records the operator's scoped host-sandbox
 default for trusted Claude reviews. #1025, worker provisioning for external
-contributions and Codex, was closed as completed on 2026-11-21. Lane merges remain operator-only.
+contributions and Codex, was completed on 2026-11-21. Lane merges remain operator-only.
 On 2026-11-22 the operator closed #1370 (delivered by #1440) and #345 (delivered by
 #1441), and narrowed #1371 to its messages-and-prose remainder at P3. The primary
 checkout's untracked `config/dev-model.local.yaml` carries `operator_logins: [topij]` under `systemize:` (read on

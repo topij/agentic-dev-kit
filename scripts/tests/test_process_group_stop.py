@@ -28,9 +28,8 @@ sys.path.insert(0, str(ENGINE_DIR / "lib"))
 
 import subprocess_runner as sr  # noqa: E402
 
-# The engines moved onto the shared stop. #1517 adds `runtime_smoke.py`, and #1508's
-# second pull request adds `launch_lane.py` and `reconcile_sessions.sh`'s embedded
-# Python, to this list.
+# The engines moved onto the shared stop. #1517 adds `runtime_smoke.py`, and a later
+# #1508 pull request adds `reconcile_sessions.sh`'s embedded Python, to this list.
 MOVED_SITES = ("review_eval.py", "launch_lane.py")
 
 
