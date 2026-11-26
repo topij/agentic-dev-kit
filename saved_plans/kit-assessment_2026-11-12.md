@@ -426,7 +426,8 @@ file completely before the first action (`pr-watch.md:17-20`,
    `saved_plans/` and `docs/kit-*`, and an `adopt.md` and `upgrade.md` that take a ref
    and verify it. This also gives the changelog fragments something to compile into.
 4. **`kit_doctor.py --upgrade` for the full profile.** The states already exist and
-   `--upgrade-lite` shows the plan, apply and verify shape. D4 defers it.
+   `--upgrade-lite` shows the plan, apply and verify shape. D4 deferred it on 2026-11-12 and dropped
+   it on 2026-11-25.
 5. **One merge predicate, importable.** C1. The triage, lane and reconcile paths then
    cannot disagree.
 6. **Usage on the record before tuning review.** #1174. Review proportionality, the
@@ -450,8 +451,8 @@ subject; it does not claim that delivering them completes the step.
 ### Step 0. The operator's decisions
 
 These gate the steps that follow. The operator made them on 2026-11-12, in the session
-that wrote this document, taking the recommendation given for each. D4 is the
-operator's own answer.
+that wrote this document, taking the recommendation given for each, except D4: its
+2026-11-12 answer was the operator's own, and the operator decided it on 2026-11-25.
 
 - **D1. A separate forge identity for lanes and lenses: yes, lanes first.** A second
   account with a fine-grained token scoped to this repository, for contents and pull
@@ -489,8 +490,11 @@ operator's own answer.
   request (step 1a). The trial runs for a month from the day that merges and is judged
   against the monthly inflow in M3.
 - **D4. Whether the full profile is meant for repositories other than the author's:
-  undecided, and the option is kept.** So the plan neither builds for it nor forecloses
-  it. The full-profile upgrade engine is deferred (step 6c). The steps both answers need
+  no, decided on 2026-11-25.** The full profile is for this repository and
+  `in-parallel-oy/cs-toolkit`, on Claude Code and Codex. The operator's other
+  projects use lite, or can move to it (`topij/OpenKitchen`, step 8). Step 8 records what that decision drops and freezes. The rest of
+  this entry is the 2026-11-12 answer it replaces, kept as history: undecided, with the
+  option kept, so the plan neither built for it nor foreclosed it. The full-profile upgrade engine is deferred (step 6c). The steps both answers need
   go ahead: pinned installs (2d), the lite-first README and export (6a), and the
   adoption fixtures that keep the full install path tested. The lite-to-full move (6b)
   comes before the upgrade engine, because it is what lets a lite adopter grow into
@@ -717,11 +721,12 @@ operator's own answer.
   `saved_plans/` and `docs/kit-*`. The `cp -r` route is replaced or gains its cleanup
   step.
   **Tickets:** #18.
-- **6b. The lite-to-full move.** Already the Lite install profile workstream's open
-  item. D4 puts it ahead of 6c, because it keeps full reachable for a lite adopter.
+- **6b. The lite-to-full move.** Dropped on 2026-11-25 under D4: no lite project is
+  meant to grow into full.
   **Tickets:** none filed.
 - **6c. `kit_doctor.py --upgrade` for the full profile** `[L · standard · local]`.
-  Deferred under D4 until one of its two revisit conditions holds. When it is built:
+  Dropped on 2026-11-25 under D4: `cs-toolkit` upgrades through `upgrade.md`. The
+  design note is kept in case that changes. If it is built:
   generalise the lite planner, and move config migration out of interactive `init.sh`
   into a stdlib module `init.sh` calls.
   **Tickets:** #534, #1170.
@@ -732,6 +737,49 @@ Last, and only after 3a, 3b and 4b. By then the first two `pr_watch.py` seams ar
 and the tests' patching can be moved to the new modules a seam at a time.
 
 **Tickets:** none filed.
+
+### Step 8. What D4 drops and freezes
+
+Added on 2026-11-25, when the operator decided D4. Steps 1 to 7 harden and consolidate;
+this step is the subtraction. The operator accepted the items below on that date, except the ones marked proposed. No
+ticket was changed by writing this step: retiring or editing one is the operator's
+go-ahead, ticket by ticket.
+
+- **The test for full-profile work.** New full-profile work (a feature, added
+  hardening, adopter-proofing) needs a failure observed in this repository or in
+  `cs-toolkit`. This does not change how a review finding is handled: one above LOW is
+  still repaired or taken to the operator, and D3 covers LOW findings only, with its
+  safety-critical carve-out.
+- **Dropped:** steps 6b and 6c.
+- **Not frozen: the lane stack.** `launch_lane.py`, `dev_session.sh`,
+  `reconcile_sessions.sh` and `isolated_lane.py`. An earlier draft of this step froze
+  them; the operator said on 2026-11-25 that they want to keep the lane stack and
+  parallel development, so the standing-mandate workflow (#472) and a documented
+  cloud-session lane route stay open proposals. For the record, `cs-toolkit` does not
+  install the kit's copies: `git -C <cs-toolkit> ls-tree -r --name-only 3a8a91872
+  scripts/devkit`, run on 2026-11-25, lists none of the four. The same listing over the
+  whole tree shows its own `scripts/dev_session.sh` and `scripts/reconcile_sessions.sh`,
+  which #1446 describes as a fork, and no `launch_lane.py` or `isolated_lane.py`.
+  Whether that fork still takes changes from the kit's copies was not read.
+- **Frozen to repairs: the full install path.** `adopt.md`'s full profile and the
+  adoption fixtures. `cs-toolkit` is installed, so `upgrade.md` is the path that is
+  exercised.
+- **To narrow (accepted; the ticket edit is pending):** reviewer profiles (#796) to
+  what `cs-toolkit` itself needs. The ticket is unchanged until the operator approves
+  the edit. Partial
+  adoption's capability negotiation (#454) is proposed for retirement as not planned.
+- **Kept:** what `cs-toolkit` installs, `upgrade.md`, two-runtime parity (the
+  operator said on 2026-11-25 that `cs-toolkit` uses Codex), lite, the lane stack, steps 2d and 6a,
+  and steps 3d, 3e, 4 and 5, which lower the cost of owning what remains. The adoption
+  fixtures stay in the suite.
+- **`topij/OpenKitchen` can move to lite.** It is a full install until the operator
+  moves it, and an upgrade there waits on that. The operator said so on 2026-11-25; the move
+  is not planned here.
+- **The unattended ticket queue (#1446).** The operator wants it for their projects.
+  Proposed and not decided: a shared workflow document with a small set of config keys
+  and no new engine, run as a scheduled cloud session, taking only tickets the operator
+  labelled, with every pull request parked for the operator. It waits on `cs-toolkit`'s
+  cloud pilot, as #1446's comment says.
 
 ### The first three
 
@@ -772,5 +820,6 @@ merge path, and lets 2a's change to review evidence land in one place.
 - Whether anything runs `post-merge-systemize` on a schedule in this repository (D3).
 - Whether `test_pre_push_hook.py` catches the three mutations #36 lists.
 - The contents of issue bodies, except #36's opening and #1398's opening.
-- Anything about `in-parallel-oy/cs-toolkit` or the lite repositories beyond what
+- Anything about `in-parallel-oy/cs-toolkit` or the lite repositories, as of
+  2026-11-12 (step 8 cites one later read of `cs-toolkit`'s tree), beyond what
   `docs/kit-handoff.md` says of them.
