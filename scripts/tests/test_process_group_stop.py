@@ -171,6 +171,39 @@ def test_a_group_that_outlives_sigkill_is_not_stopped(monkeypatch) -> None:
     assert sent == [signal.SIGTERM, signal.SIGKILL]
 
 
+def _observer_unavailable(monkeypatch) -> None:
+    def unavailable(pgid):
+        raise sr.GroupObserverUnavailable(f"cannot list process group {pgid}")
+
+    monkeypatch.setattr(sr, "group_has_live_member", unavailable)
+
+
+def test_a_group_that_cannot_be_listed_is_escalated_and_not_claimed_stopped(monkeypatch) -> None:
+    """Fail closed: an unanswerable observer counts as a live member (#1516, round 1)."""
+    sent = _killpg_answering(monkeypatch, None)
+    _observer_unavailable(monkeypatch)
+    assert sr.stop_group(424242, grace=0.1) == sr.GroupStop(stopped=False)
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
+    assert sr.wait_group_empty(424242, 0.1) is False
+
+
+def test_a_refusal_that_cannot_be_listed_is_denied_not_stopped(monkeypatch) -> None:
+    sent = _killpg_answering(monkeypatch, PermissionError)
+    _observer_unavailable(monkeypatch)
+    assert sr.stop_group(424242, grace=0.1) == sr.GroupStop(stopped=False, denied=True)
+    assert sent == [signal.SIGTERM]
+
+
+def test_linux_without_proc_is_unavailable_not_a_probe(monkeypatch, tmp_path) -> None:
+    """Linux signals a zombie, so a probe would count the held leader live forever."""
+    sent = _killpg_answering(monkeypatch, None)
+    monkeypatch.setattr(sr, "Path", lambda _path: tmp_path / "no-proc")
+    monkeypatch.setattr(sr.sys, "platform", "linux")
+    with pytest.raises(sr.GroupObserverUnavailable, match="/proc is not mounted"):
+        sr.group_has_live_member(424242)
+    assert sent == []
+
+
 # ------------------------------------------------------------ member readers
 
 

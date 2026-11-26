@@ -24,6 +24,7 @@ import os
 import select
 import signal
 import subprocess
+import sys
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -164,8 +165,15 @@ def run_stdout(argv: list[str], *, cwd: Path | None, timeout: int, stdin_text: s
 # ``Popen.poll()``, ``communicate()``, ``send_signal()`` and ``kill()`` all reap a
 # leader that has exited, so none of them may run first.
 #
-# ``signal_group`` is the one place ``os.killpg`` is called; the engines that stop a
-# group call these functions rather than ``os.killpg`` (a test holds them to it).
+# ``signal_group`` is this module's one ``os.killpg`` call. The engines moved onto it
+# so far, ``runtime_smoke.py`` and ``review_eval.py``, call these functions rather
+# than ``os.killpg``, and a test holds them to it; ``launch_lane.py`` and
+# ``reconcile_sessions.sh`` still signal groups themselves until #1508's second change.
+#
+# An observer that cannot answer (``GroupObserverUnavailable``) never ends a stop
+# early: ``stop_group`` and ``wait_group_empty`` count the group as still having a
+# live member, so the stop escalates and reports ``stopped=False`` rather than
+# raise from a caller's cleanup path or claim the group empty.
 
 
 class GroupObserverUnavailable(CommandError):
@@ -222,6 +230,10 @@ def group_has_live_member(pgid: int) -> bool:
     proc = Path("/proc")
     if (proc / "self" / "stat").is_file():
         return any(True for _ in _proc_live_members(proc, pgid))
+    if sys.platform.startswith("linux"):
+        # Linux signals a zombie, so without /proc a probe would count the held
+        # leader as live forever.
+        raise GroupObserverUnavailable(f"cannot list process group {pgid}: /proc is not mounted")
     outcome = signal_group(pgid, 0)
     if outcome == GROUP_GONE:
         return False
@@ -264,13 +276,24 @@ def _ps_has_live_member(pgid: int) -> bool:
 
 
 def wait_group_empty(pgid: int, timeout: float) -> bool:
-    """Whether group ``pgid`` has no live member within ``timeout`` seconds."""
+    """Whether group ``pgid`` has no live member within ``timeout`` seconds.
+
+    A group that cannot be listed counts as not empty, so this waits out ``timeout``.
+    """
     deadline = time.monotonic() + timeout
-    while group_has_live_member(pgid):
+    while _live_or_unknown(pgid):
         if time.monotonic() >= deadline:
             return False
         time.sleep(GROUP_POLL_SECONDS)
     return True
+
+
+def _live_or_unknown(pgid: int) -> bool:
+    """``group_has_live_member``, with a group that cannot be listed counted as live."""
+    try:
+        return group_has_live_member(pgid)
+    except GroupObserverUnavailable:
+        return True
 
 
 @dataclass(frozen=True)
@@ -297,7 +320,7 @@ def stop_group(pgid: int, *, grace: float) -> GroupStop:
         if outcome == GROUP_GONE:
             return GroupStop(stopped=True)
         if outcome == GROUP_DENIED:
-            if group_has_live_member(pgid):
+            if _live_or_unknown(pgid):
                 return GroupStop(stopped=False, denied=True)
             return GroupStop(stopped=True)
         if wait_group_empty(pgid, grace):

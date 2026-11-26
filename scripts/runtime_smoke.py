@@ -150,6 +150,7 @@ sys.path.insert(0, str(SCRIPT_PATH.parent / "lib"))
 
 from kitconfig import get, load_config, loads, repo_root  # noqa: E402
 from subprocess_runner import (  # noqa: E402
+    GroupObserverUnavailable,
     GroupStop,
     exited_unreaped,
     group_has_live_member,
@@ -193,6 +194,12 @@ PREFLIGHT_TIMEOUT = 60
 # reaped only once it has left this registry, and both happen under the lock, so a
 # group id found here is held by its unreaped leader and is safe to signal (#1508).
 _LIVE_GROUPS: dict[int, subprocess.Popen] = {}
+# The registered groups whose worker has finished with them: an interrupt or a
+# failed stop left a live member. Each leader has one reaper: its worker while the
+# worker runs, which waits on it and signals it outside the lock, and
+# `stop_live_children` only once the group is here. Two reapers let one reap a
+# leader the other was still waiting on or signalling.
+_ABANDONED: set[int] = set()
 _LIVE_LOCK = threading.Lock()
 # How an operator's interrupt arrives: a key press, a kill, a closed terminal.
 INTERRUPT_SIGNALS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
@@ -428,6 +435,8 @@ def run_child(
                 # registered, its leader unreaped, for `stop_live_children` to finish.
                 with _LIVE_LOCK:
                     _reap_if_settled(process.pid)
+                    if process.pid in _LIVE_GROUPS:
+                        _ABANDONED.add(process.pid)
             returncode = process.returncode
     stderr_lines = [line for line in _read_text(stderr_path).splitlines() if line.strip()]
     return {
@@ -468,8 +477,15 @@ def _stop_group(process: subprocess.Popen, grace: float = 10) -> GroupStop:
 
 
 def _settled(group: int) -> bool:
-    """Whether the group's leader has exited and no live member is left."""
-    return exited_unreaped(group, 0) and not group_has_live_member(group)
+    """Whether the group's leader has exited and no live member is left.
+
+    A group that cannot be observed is not settled: it stays registered, its leader
+    unreaped, rather than be reaped on a guess.
+    """
+    try:
+        return exited_unreaped(group, 0) and not group_has_live_member(group)
+    except GroupObserverUnavailable:
+        return False
 
 
 def _reap_if_settled(group: int) -> None:
@@ -480,6 +496,7 @@ def _reap_if_settled(group: int) -> None:
     process = _LIVE_GROUPS.get(group)
     if process is not None and _settled(group):
         del _LIVE_GROUPS[group]
+        _ABANDONED.discard(group)
         process.wait()
 
 
@@ -490,8 +507,9 @@ def stop_live_children(grace: float = 5) -> list[int]:
     thread is not reached by the main thread's exception, so the registry is how
     the main thread finds it; once this has begun, no worker starts another.
     Each signal is sent under the lock, to a group still registered, so its leader
-    is unreaped and its id cannot have been reused. A group whose leader exited and
-    whose last member is gone is reaped here if its worker has not done so.
+    is unreaped and its id cannot have been reused. A running worker reaps its own
+    group once it observes the exit; this reaps only a group its worker abandoned
+    (``_ABANDONED``), once that group is settled.
     """
     global _STOPPING
     with _LIVE_LOCK:
@@ -503,7 +521,7 @@ def stop_live_children(grace: float = 5) -> list[int]:
         deadline = time.monotonic() + grace
         while True:
             with _LIVE_LOCK:
-                for group in sorted(_LIVE_GROUPS):
+                for group in sorted(_ABANDONED):
                     _reap_if_settled(group)
                 if not _LIVE_GROUPS:
                     return []

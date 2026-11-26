@@ -845,6 +845,7 @@ def test_a_signal_inherited_ignored_stays_ignored(monkeypatch):
 def test_no_client_starts_once_the_stop_has_begun(tmp_path, monkeypatch):
     monkeypatch.setattr(rs, "_STOPPING", False)
     monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    monkeypatch.setattr(rs, "_ABANDONED", set())
     rs.stop_live_children()
     assert rs._STOPPING
     marker = tmp_path / "started"
@@ -861,6 +862,7 @@ def test_a_client_an_interrupt_catches_mid_stop_stays_registered_until_stopped(t
     its leader has died; an interrupt in that wait must leave the group, which still has
     a member, for `stop_live_children`."""
     monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    monkeypatch.setattr(rs, "_ABANDONED", set())
     monkeypatch.setattr(rs, "_STOPPING", False)
     leader, descendant = tmp_path / "leader", tmp_path / "descendant"
 
@@ -887,6 +889,7 @@ def test_a_client_an_interrupt_catches_mid_stop_stays_registered_until_stopped(t
 def test_a_group_that_outlives_the_stop_is_named(monkeypatch):
     monkeypatch.setattr(rs, "_STOPPING", False)
     monkeypatch.setattr(rs, "_LIVE_GROUPS", {424242: object()})
+    monkeypatch.setattr(rs, "_ABANDONED", {424242})
     sent = []
     monkeypatch.setattr(rs, "signal_group", lambda group, signum: sent.append((group, signum)) or "signalled")
     monkeypatch.setattr(rs, "_settled", lambda _group: False)
@@ -927,6 +930,11 @@ def test_a_refused_signal_ends_the_stop(monkeypatch):
     assert sent == [signal.SIGTERM]
 
 
+def _listed(pid: int) -> bool:
+    out = subprocess.run(["ps", "-o", "pid=", "-p", str(pid)], capture_output=True, text=True).stdout
+    return out.strip() == str(pid)
+
+
 def _signals_recording_leader_state(monkeypatch) -> list[bool]:
     """Record, at each group signal or probe, whether the group's leader was still unreaped.
 
@@ -953,6 +961,7 @@ def _signals_recording_leader_state(monkeypatch) -> list[bool]:
 def test_every_group_signal_is_sent_while_the_leader_still_holds_the_group_id(tmp_path, monkeypatch, script):
     _quick_stops(monkeypatch)
     monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    monkeypatch.setattr(rs, "_ABANDONED", set())
     unreaped = _signals_recording_leader_state(monkeypatch)
     invocation = rs.run_child(["bash", "-c", script], cwd=tmp_path, env=dict(os.environ), stdin_text="",
                               timeout=2, log_dir=tmp_path, name="held")
@@ -961,18 +970,86 @@ def test_every_group_signal_is_sent_while_the_leader_still_holds_the_group_id(tm
     assert not rs._LIVE_GROUPS
 
 
+def _exited_leaving_a_member() -> subprocess.Popen:
+    process = subprocess.Popen(["bash", "-c", "(trap '' TERM; sleep 300 & wait) & exit 0"], start_new_session=True)
+    assert rs.exited_unreaped(process.pid, 15)
+    return process
+
+
 def test_the_stop_of_every_client_signals_only_held_groups(tmp_path, monkeypatch):
     """`stop_live_children` reaches a group from another thread; it signals only what is
-    still registered, and a registered leader is unreaped."""
+    still registered, and a registered leader is unreaped. It reaps a group its worker
+    abandoned."""
     monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    monkeypatch.setattr(rs, "_ABANDONED", set())
     monkeypatch.setattr(rs, "_STOPPING", False)
-    process = subprocess.Popen(["bash", "-c", "(trap '' TERM; sleep 300 & wait) & exit 0"], start_new_session=True)
+    process = _exited_leaving_a_member()
     rs._LIVE_GROUPS[process.pid] = process
-    assert rs.exited_unreaped(process.pid, 15)
+    rs._ABANDONED.add(process.pid)
     unreaped = _signals_recording_leader_state(monkeypatch)
     assert rs.stop_live_children(grace=1) == []
     assert unreaped and all(unreaped)
+    assert process.returncode == 0 and not rs._LIVE_GROUPS and not rs._ABANDONED
+
+
+def test_the_stop_of_every_client_leaves_a_running_workers_leader_to_it(tmp_path, monkeypatch):
+    """A worker still running waits on its leader and signals it outside the lock, so
+    `stop_live_children` must not reap it from under the worker (#1516, round 1)."""
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    monkeypatch.setattr(rs, "_ABANDONED", set())
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    process = _exited_leaving_a_member()
+    rs._LIVE_GROUPS[process.pid] = process
+    try:
+        assert rs.stop_live_children(grace=0.5) == [process.pid]
+        assert process.returncode is None and _listed(process.pid)  # signalled, not reaped
+    finally:
+        with rs._LIVE_LOCK:
+            rs._reap_if_settled(process.pid)  # the worker's own reap
     assert process.returncode == 0 and not rs._LIVE_GROUPS
+
+
+def test_an_interrupt_while_a_worker_waits_does_not_take_its_leader(tmp_path, monkeypatch):
+    """The race round 1's adversarial lens reproduced: the stop runs while the worker is
+    waiting on its leader, whose client takes a moment to exit on SIGTERM. The worker
+    must still find its leader unreaped, and signal nothing once it is reaped."""
+    _quick_stops(monkeypatch)
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {})
+    monkeypatch.setattr(rs, "_ABANDONED", set())
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    wait = rs.exited_unreaped
+    stops = []
+
+    def stop_during_the_wait(pid, timeout):
+        if not stops:
+            stops.append(rs.stop_live_children(grace=0.5))
+        return wait(pid, timeout)
+
+    monkeypatch.setattr(rs, "exited_unreaped", stop_during_the_wait)
+    unreaped = _signals_recording_leader_state(monkeypatch)
+    invocation = rs.run_child(["bash", "-c", "trap 'sleep 0.1; exit 0' TERM; sleep 30 & wait"], cwd=tmp_path,
+                              env=dict(os.environ), stdin_text="", timeout=30, log_dir=tmp_path, name="racing")
+    assert invocation["error"] is None and invocation["returncode"] == 0
+    assert unreaped and all(unreaped)
+    assert not rs._LIVE_GROUPS and not rs._ABANDONED
+
+
+def test_a_group_that_cannot_be_observed_is_stopped_and_named_not_reaped(monkeypatch):
+    """An observer that cannot answer (a failing `ps`, say) must not end the stop before
+    SIGKILL, nor have a leader reaped on a guess (#1516, round 1)."""
+    monkeypatch.setattr(rs, "_STOPPING", False)
+    monkeypatch.setattr(rs, "_LIVE_GROUPS", {424242: object()})
+    monkeypatch.setattr(rs, "_ABANDONED", {424242})
+    sent = []
+    monkeypatch.setattr(rs, "signal_group", lambda group, signum: sent.append(signum) or "signalled")
+    monkeypatch.setattr(rs, "exited_unreaped", lambda _pid, _timeout: True)
+
+    def unavailable(_group):
+        raise rs.GroupObserverUnavailable("cannot list process group 424242")
+
+    monkeypatch.setattr(rs, "group_has_live_member", unavailable)
+    assert rs.stop_live_children(grace=0.2) == [424242]
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
 
 
 class _GoneStream:
