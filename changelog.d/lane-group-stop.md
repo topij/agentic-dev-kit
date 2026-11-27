@@ -24,6 +24,12 @@ exit, then asks whether a live member is left. These refusals change:
   survived forced termination`. On macOS the exited child's group answers EPERM,
   so the stop adds the same `cannot observe …` text again and sends no SIGKILL,
   which would meet the same EPERM.
+- `subprocess_runner.wait_group_empty` and `stop_group` count a listing that raises
+  an OS error as a group that still has a live member, as they already counted
+  `GroupObserverUnavailable`, rather than raise it. A wait then runs out its
+  timeout, so the launcher's stop still waits the grace before SIGKILL. A caller
+  that caught `OSError` from either gets `False` or `GroupStop(stopped=False)`
+  instead.
 - When the child's exit cannot be observed (an OS error from `waitid` or
   `kqueue`), the launch fails with `cannot observe the child's exit: …`.
 - An OS error raised by a stop on the failure path is added to the receipt's

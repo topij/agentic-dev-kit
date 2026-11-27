@@ -171,25 +171,42 @@ def test_a_group_that_outlives_sigkill_is_not_stopped(monkeypatch) -> None:
     assert sent == [signal.SIGTERM, signal.SIGKILL]
 
 
-def _observer_unavailable(monkeypatch) -> None:
+# An observer that says it cannot list the group, and a listing that raises a raw
+# OSError (``/proc``'s ``iterdir`` at EMFILE, say), are the same answer to a stop.
+UNLISTABLE = ["unavailable", "raw-oserror"]
+
+
+def _observer_unavailable(monkeypatch, failure: str = "unavailable") -> None:
     def unavailable(pgid):
-        raise sr.GroupObserverUnavailable(f"cannot list process group {pgid}")
+        if failure == "unavailable":
+            raise sr.GroupObserverUnavailable(f"cannot list process group {pgid}")
+        raise OSError(errno.EMFILE, f"cannot list process group {pgid}")
 
     monkeypatch.setattr(sr, "group_has_live_member", unavailable)
 
 
-def test_a_group_that_cannot_be_listed_is_escalated_and_not_claimed_stopped(monkeypatch) -> None:
+@pytest.mark.parametrize("failure", UNLISTABLE)
+def test_a_group_that_cannot_be_listed_is_escalated_and_not_claimed_stopped(monkeypatch, failure) -> None:
     """Fail closed: an unanswerable observer counts as a live member (#1516, round 1)."""
     sent = _killpg_answering(monkeypatch, None)
-    _observer_unavailable(monkeypatch)
+    _observer_unavailable(monkeypatch, failure)
     assert sr.stop_group(424242, grace=0.1) == sr.GroupStop(stopped=False)
     assert sent == [signal.SIGTERM, signal.SIGKILL]
-    assert sr.wait_group_empty(424242, 0.1) is False
 
 
-def test_a_refusal_that_cannot_be_listed_is_denied_not_stopped(monkeypatch) -> None:
+@pytest.mark.parametrize("failure", UNLISTABLE)
+def test_a_wait_on_a_group_that_cannot_be_listed_runs_out_its_timeout(monkeypatch, failure) -> None:
+    # It neither returns at once nor raises, so a stop's SIGKILL waits for the grace.
+    _observer_unavailable(monkeypatch, failure)
+    started = time.monotonic()
+    assert sr.wait_group_empty(424242, 0.3) is False
+    assert time.monotonic() - started >= 0.3
+
+
+@pytest.mark.parametrize("failure", UNLISTABLE)
+def test_a_refusal_that_cannot_be_listed_is_denied_not_stopped(monkeypatch, failure) -> None:
     sent = _killpg_answering(monkeypatch, PermissionError)
-    _observer_unavailable(monkeypatch)
+    _observer_unavailable(monkeypatch, failure)
     assert sr.stop_group(424242, grace=0.1) == sr.GroupStop(stopped=False, denied=True)
     assert sent == [signal.SIGTERM]
 

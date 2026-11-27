@@ -3536,26 +3536,40 @@ def test_a_live_member_left_by_an_exited_leader_is_still_stopped(
 
 def test_a_group_whose_listing_raises_still_gets_sigkill(monkeypatch: pytest.MonkeyPatch) -> None:
     """A raw OSError from the group listing (EMFILE, say) is not a stopped group: the
-    stop escalates to SIGKILL, which ends a member that ignores SIGTERM, and then
-    refuses, since it still cannot list the group. The leader stays unreaped."""
+    stop waits out the grace, escalates to SIGKILL, which ends a member that ignores
+    SIGTERM, and then refuses, since it still cannot list the group. The leader stays
+    unreaped."""
     launcher = _load_launcher()
     leader, member = _fork_group_leader(live_member=True)
     assert member is not None
+    grace = 1
 
-    def listing_raises(_pgid: int, _timeout: float) -> bool:
+    def listing_raises(_pgid: int) -> bool:
         raise OSError(errno.EMFILE, "injected listing failure")
 
-    monkeypatch.setattr(launcher, "wait_group_empty", listing_raises)
+    # Injected where the runner's wait reads it, so the wait's own handling is what
+    # runs.
+    monkeypatch.setitem(launcher.wait_group_empty.__globals__, "group_has_live_member", listing_raises)
     calls = _group_calls_recording_leader_state(monkeypatch)
+    signalled_at: list[float] = []
+    recording = os.killpg
+
+    def timed(pgid: int, signum: int) -> None:
+        signalled_at.append(time.monotonic())
+        recording(pgid, signum)
+
+    monkeypatch.setattr(os, "killpg", timed)
     try:
         with open(os.devnull, "wb") as stdin:
             child = launcher._ForkedChild(leader, stdin)
             with pytest.raises(launcher.LaunchError, match="survived forced termination"):
-                launcher._terminate_process_group(child, 1)
+                launcher._terminate_process_group(child, grace)
             assert not child.released
         signals = [signum for _pgid, signum, _held in calls]
         assert signals == [signal.SIGTERM, signal.SIGKILL], calls
         assert all(held for _pgid, _signum, held in calls), calls
+        # SIGKILL waited for the grace the SIGTERM leg was owed.
+        assert signalled_at[1] - signalled_at[0] >= grace, signalled_at
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             try:
@@ -3834,8 +3848,9 @@ def test_an_observer_that_cannot_answer_is_a_launch_error(
     # `GroupObserverUnavailable` is not an OSError, so untranslated it would escape
     # the launch's `except (LaunchError, OSError)` with no receipt and no cleanup.
     # A raw OSError from an observer (`iterdir` at EMFILE, `kqueue`, `waitid`) is
-    # translated too. The stop's group wait instead counts it as not empty, as the
-    # runner counts a group it cannot list, so the stop escalates.
+    # translated too. The stop's group wait is not asked here: the runner's
+    # `wait_group_empty` counts both as a group not yet empty, so the stop escalates
+    # (`test_a_group_whose_listing_raises_still_gets_sigkill`).
     launcher = _load_launcher()
 
     def unavailable(*_args: object) -> bool:
@@ -3845,18 +3860,12 @@ def test_an_observer_that_cannot_answer_is_a_launch_error(
 
     monkeypatch.setattr(launcher, "group_has_live_member", unavailable)
     monkeypatch.setattr(launcher, "exited_unreaped", unavailable)
-    # The runner's wait catches its own GroupObserverUnavailable; only a raw
-    # OSError reaches the launcher from it.
-    if failure == "raw-oserror":
-        monkeypatch.setattr(launcher, "wait_group_empty", unavailable)
     with open(os.devnull, "wb") as stdin:
         child = launcher._ForkedChild(4242, stdin)
         with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: .*no ps"):
             launcher._process_group_has_live_member(child)
         with pytest.raises(launcher.LaunchError, match="cannot observe the child's exit: .*no ps"):
             child.exited(0)
-        if failure == "raw-oserror":
-            assert launcher._group_stopped(child, 1) is False
         assert not child.released
 
 

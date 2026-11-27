@@ -278,7 +278,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "317624a290acb9d4c079e2beb3a6b42b67a8f3d1a3faddd572c01a7040155072"
+      "sha256": "a5b7d4c5ec982cefdbc73aac792af681455b5c28bb4aeeda5f3d3d70256a37f8"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -483,7 +483,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "3ff3d6b940543a815cbd22568225462cada1965eeb0ca244a88b356e495c4c02"
+      "sha256": "9e1e570bb3cb326306520f9e6aa6bd9d4191afc857422ed1c1a8874bb271c064"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -844,7 +844,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "86fd6215afb16ff18b5fbe2fdb5746be2be79c9d57b7f925224ad59445e9a515"
+      "sha256": "b9a955a9b5917ccecbd184135471f62682c143638d5d2487dd91b217b0e42616"
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",
@@ -892,7 +892,7 @@
     },
     "scripts/tests/test_process_group_stop.py": {
       "role": "test",
-      "sha256": "afe630a519f07a5dff8b701d58873d0304653f3173e71f9f41ba357a749f615f"
+      "sha256": "fb0d6ccbb3328ff56a191eabb46078d168076e5f1f6cc022c1388b69b0be02bd"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",
