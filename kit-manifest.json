@@ -278,7 +278,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "d1bfea59f7514ab14782076ae61edd8aa72a9738063babc17c80d91df34ca7e6"
+      "sha256": "a5b7d4c5ec982cefdbc73aac792af681455b5c28bb4aeeda5f3d3d70256a37f8"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -473,6 +473,7 @@
       "required_by": [
         "scripts/archive_plan_sessions.py",
         "scripts/kit_doctor.py",
+        "scripts/launch_lane.py",
         "scripts/lib/triage/gate.py",
         "scripts/lib/triage/model.py",
         "scripts/lib/triage/recovery.py",
@@ -482,7 +483,7 @@
         "scripts/sweep_scratch.py"
       ],
       "role": "engine",
-      "sha256": "bf7794a4b27d739298d79e7b90ffeae4fe21bb9afe88790b3be03b8ea74ac4cf"
+      "sha256": "9e1e570bb3cb326306520f9e6aa6bd9d4191afc857422ed1c1a8874bb271c064"
     },
     "scripts/lib/systemize/__init__.py": {
       "role": "engine",
@@ -843,7 +844,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "c479d4950f0e536bdcc6292142de6a21478cde13d0a90cb4e36937d748fc0bdc"
+      "sha256": "b9a955a9b5917ccecbd184135471f62682c143638d5d2487dd91b217b0e42616"
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",
@@ -891,7 +892,7 @@
     },
     "scripts/tests/test_process_group_stop.py": {
       "role": "test",
-      "sha256": "dc7b27bc2ce35d4860e93e5e40a0c29999a6a41dfbab14d760a9fedcac6fac04"
+      "sha256": "fb0d6ccbb3328ff56a191eabb46078d168076e5f1f6cc022c1388b69b0be02bd"
     },
     "scripts/tests/test_reconcile_sessions.py": {
       "role": "test",

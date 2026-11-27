@@ -165,15 +165,19 @@ def run_stdout(argv: list[str], *, cwd: Path | None, timeout: int, stdin_text: s
 # ``Popen.poll()``, ``communicate()``, ``send_signal()`` and ``kill()`` all reap a
 # leader that has exited, so none of them may run first.
 #
-# ``signal_group`` is this module's one ``os.killpg`` call. The engine moved onto it
-# so far, ``review_eval.py``, calls these functions rather than ``os.killpg``, and a
-# test holds it to that; ``runtime_smoke.py`` (#1517), ``launch_lane.py`` and
+# ``signal_group`` is this module's one ``os.killpg`` call. The engines moved onto it
+# so far, ``review_eval.py`` and ``launch_lane.py``, call these functions rather than
+# ``os.killpg``, and a test holds them to that; ``runtime_smoke.py`` (#1517) and
 # ``reconcile_sessions.sh`` (#1508) still signal groups themselves until they move.
+# ``launch_lane.py`` composes its own two legs from ``signal_group``,
+# ``exited_unreaped`` and ``wait_group_empty`` rather than call ``stop_group``: its
+# EPERM rule waits for an exiting leader (#1238), and it refuses each leg by name.
 #
-# An observer that cannot answer (``GroupObserverUnavailable``) never ends a stop
-# early: ``stop_group`` and ``wait_group_empty`` count the group as still having a
-# live member, so the stop escalates and reports ``stopped=False`` rather than
-# raise from a caller's cleanup path or claim the group empty.
+# An observer that cannot answer (``GroupObserverUnavailable``, or a raw ``OSError``
+# from its listing) never ends a stop early: ``stop_group`` and ``wait_group_empty``
+# count the group as still having a live member, so a wait runs out its timeout and
+# the stop escalates and reports ``stopped=False`` rather than raise from a caller's
+# cleanup path or claim the group empty.
 
 
 class GroupObserverUnavailable(CommandError):
@@ -278,7 +282,8 @@ def _ps_has_live_member(pgid: int) -> bool:
 def wait_group_empty(pgid: int, timeout: float) -> bool:
     """Whether group ``pgid`` has no live member within ``timeout`` seconds.
 
-    A group that cannot be listed counts as not empty, so this waits out ``timeout``.
+    A group that cannot be listed counts as not empty, so this waits out ``timeout``
+    (``_live_or_unknown``).
     """
     deadline = time.monotonic() + timeout
     while _live_or_unknown(pgid):
@@ -292,7 +297,14 @@ def _live_or_unknown(pgid: int) -> bool:
     """``group_has_live_member``, with a group that cannot be listed counted as live."""
     try:
         return group_has_live_member(pgid)
-    except GroupObserverUnavailable:
+    # Every OSError that reaches here is a listing that did not answer, and none of
+    # them is evidence the group is empty, so each counts as live:
+    # - ``/proc``'s ``iterdir`` failing (EMFILE, ENFILE, ENOMEM, EACCES);
+    # - an ``os.killpg`` probe failing other than ESRCH or EPERM, which
+    #   ``signal_group`` answers itself; ESRCH, the one empty answer, never gets here.
+    # A ``/proc/<pid>/stat`` read that fails is skipped inside the listing, not
+    # raised (#1520).
+    except (GroupObserverUnavailable, OSError):
         return True
 
 

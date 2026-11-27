@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import contextlib
 import copy
 import datetime as dt
+import errno
 import fcntl
 import hashlib
 import importlib.util
@@ -1406,24 +1408,24 @@ def test_interruption_terminates_detached_launch_lineage(tmp_path: Path) -> None
 
 
 @pytest.mark.evidence
-def test_exception_after_reaped_leader_still_cleans_up_descendant(
+def test_exception_at_the_group_check_still_cleans_up_descendant(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _repo, engine, sessions, descriptor, prompt, _env = _install_repo(
         tmp_path, spawn_descendant=True
     )
     launcher = _load_launcher(engine)
-    original_group_exists = launcher._process_group_exists
+    original_group_check = launcher._process_group_has_live_member
     calls = 0
 
-    def fail_first_group_check(process_group: int) -> bool:
+    def fail_first_group_check(process: object) -> bool:
         nonlocal calls
         calls += 1
         if calls == 1:
             raise OSError("injected parent-side group observation failure")
-        return original_group_exists(process_group)
+        return original_group_check(process)
 
-    monkeypatch.setattr(launcher, "_process_group_exists", fail_first_group_check)
+    monkeypatch.setattr(launcher, "_process_group_has_live_member", fail_first_group_check)
     pid_path = sessions / "probe" / "descendant.pid"
     descendant_pid: int | None = None
     try:
@@ -1452,6 +1454,258 @@ def test_exception_after_reaped_leader_still_cleans_up_descendant(
         if descendant_pid is not None:
             with contextlib.suppress(ProcessLookupError):
                 os.kill(descendant_pid, signal.SIGKILL)
+
+
+# Each way `exited_unreaped` can observe an exit that this platform's Python offers.
+EXIT_OBSERVERS = [
+    pytest.param(name, marks=pytest.mark.skipif(not available, reason=f"no {name} here"))
+    for name, available in (
+        ("waitid", hasattr(os, "waitid")),
+        ("kqueue", hasattr(select, "kqueue")),
+    )
+]
+
+
+def _observe_exit_with(monkeypatch: pytest.MonkeyPatch, observer: str) -> None:
+    if observer == "kqueue" and hasattr(os, "waitid"):
+        monkeypatch.delattr(os, "waitid")
+
+
+def _group_calls_recording_leader_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[int, int, bool]]:
+    """Record each `os.killpg` call as (group, signal, whether the group's leader was
+    still unreaped). Asked of `ps`, which lists a process, a zombie included, until
+    it is reaped. Every group signal and probe goes through `os.killpg`, the
+    runner's and any left in the launcher alike."""
+    calls: list[tuple[int, int, bool]] = []
+    killpg = os.killpg
+
+    def recording(pgid: int, signum: int) -> None:
+        listed = subprocess.run(
+            ["ps", "-o", "pid=", "-p", str(pgid)], capture_output=True, text=True
+        )
+        calls.append((pgid, signum, listed.stdout.strip() == str(pgid)))
+        killpg(pgid, signum)
+
+    monkeypatch.setattr(os, "killpg", recording)
+    return calls
+
+
+def _launch_in_process(launcher: ModuleType, descriptor: dict[str, object], prompt: Path) -> int:
+    return launcher.main(
+        ["--descriptor", str(descriptor["descriptor_path"]), "--prompt-file", str(prompt)]
+    )
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_a_stopped_launch_signals_its_group_only_while_the_child_is_held(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, observer: str
+) -> None:
+    """The real round: the child exits leaving a member, the launch stops the group,
+    and every call names a held id."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(
+        tmp_path, spawn_descendant=True
+    )
+    launcher = _load_launcher(engine)
+    _observe_exit_with(monkeypatch, observer)
+    calls = _group_calls_recording_leader_state(monkeypatch)
+    pid_path = sessions / "probe" / "descendant.pid"
+    descendant_pid: int | None = None
+    try:
+        assert _launch_in_process(launcher, descriptor, prompt) != 0
+        descendant_pid = int(pid_path.read_text(encoding="utf-8"))
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "process group remained active" in receipt["terminal"]["error"]
+        # The member may die of SIGTERM before it installs its handler, so SIGKILL
+        # is pinned by the forked-group test below, whose member is ready first.
+        assert signal.SIGTERM in [signum for _pgid, signum, _held in calls], calls
+        assert all(held for _pgid, _signum, held in calls), calls
+        with pytest.raises(ProcessLookupError):
+            os.kill(descendant_pid, 0)
+        leader = calls[0][0]
+        listed = subprocess.run(["ps", "-o", "pid=", "-p", str(leader)], capture_output=True, text=True)
+        assert listed.stdout.strip() == "", "the child was not reaped after the stop"
+    finally:
+        if descendant_pid is not None:
+            with contextlib.suppress(ProcessLookupError):
+                os.kill(descendant_pid, signal.SIGKILL)
+
+
+@pytest.mark.evidence
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_a_clean_launch_probes_its_group_only_while_the_child_is_held(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, observer: str
+) -> None:
+    """The success path's group check runs on the exited, unreaped child: a probe
+    after the reap could name a reused id (#1508)."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    _observe_exit_with(monkeypatch, observer)
+    calls = _group_calls_recording_leader_state(monkeypatch)
+    forked: list[int] = []
+    fork = launcher._fork_observer_child
+
+    def recording_fork(*args: object, **kwargs: object) -> object:
+        child = fork(*args, **kwargs)
+        forked.append(child.pid)
+        return child
+
+    monkeypatch.setattr(launcher, "_fork_observer_child", recording_fork)
+
+    assert _launch_in_process(launcher, descriptor, prompt) == 0
+    assert _receipt(sessions, descriptor)["status"] == "completed"
+    if not Path("/proc/self/stat").is_file():
+        # Without /proc the group check is a signal-0 probe, so one is recorded.
+        # With /proc it reads the process table and names no group id; there the
+        # reap check below is what this test holds.
+        assert calls, "the clean exit's group check sent no probe"
+    assert all(held for _pgid, _signum, held in calls), calls
+    assert all(signum == 0 for _pgid, signum, _held in calls), calls
+    listed = subprocess.run(["ps", "-o", "pid=", "-p", str(forked[0])], capture_output=True, text=True)
+    assert listed.stdout.strip() == "", "the child was not reaped after the launch"
+
+
+@pytest.mark.evidence
+def test_a_signal_after_the_reap_is_not_relayed_to_the_reaped_pid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The relay names the child's group only while the child is held: once reaped,
+    its pid, and so the group id, can be reused (#1508)."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    relayed: list[int] = []
+    reaped: list[int] = []
+    reap = launcher._ForkedChild.reap
+
+    def reap_then_signal(self: object) -> int:
+        returncode = reap(self)
+        reaped.append(self.pid)
+        os.kill(os.getpid(), signal.SIGTERM)  # the launcher's relay handler takes it
+        return returncode
+
+    monkeypatch.setattr(launcher._ForkedChild, "reap", reap_then_signal)
+    monkeypatch.setattr(launcher, "_relay_signal", lambda pgid, _signum: relayed.append(pgid))
+
+    assert _launch_in_process(launcher, descriptor, prompt) == 128 + signal.SIGTERM
+    assert reaped, "the launch never reaped its child"
+    assert relayed == []
+    assert _receipt(sessions, descriptor)["status"] == "interrupted"
+
+
+@pytest.mark.evidence
+def test_an_error_after_the_reap_does_not_stop_the_reaped_group(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An exception raised after the clean exit's reap reaches the error path with a
+    released child, whose group id is no longer safe to signal (#1508)."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    stopped: list[int] = []
+
+    def fail_after_the_reap(*_args: object) -> str | None:
+        raise launcher.LaunchError("injected after the reap")
+
+    monkeypatch.setattr(launcher, "_post_exit_origin_error", fail_after_the_reap)
+    monkeypatch.setattr(
+        launcher,
+        "_terminate_process_group",
+        lambda process, _grace: stopped.append(process.pid) or 0,
+    )
+
+    assert _launch_in_process(launcher, descriptor, prompt) != 0
+    receipt = _receipt(sessions, descriptor)
+    assert receipt["status"] == "failed"
+    assert receipt["terminal"]["error"] == "injected after the reap"
+    assert receipt["terminal"]["returncode"] == 0
+    assert stopped == []
+
+
+@pytest.mark.evidence
+def test_a_raw_oserror_from_the_stop_still_writes_the_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A raw OSError raised by either stop on the error path is folded into the
+    receipt's error, not raised past the receipt. Both stops are faked, so this pins
+    the error path's two catch clauses, not where in a stop the error arises."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    held: list[int] = []
+
+    def fail_the_group_check(_process: object) -> bool:
+        raise launcher.LaunchError("injected group check failure")
+
+    def fail_the_stop(process: object, _grace: int) -> int:
+        held.append(process.pid)
+        raise OSError(errno.EMFILE, "injected stop failure")
+
+    monkeypatch.setattr(launcher, "_process_group_has_live_member", fail_the_group_check)
+    def fail_the_lineage_stop(_nonce: str, _grace: int) -> None:
+        raise OSError(errno.EMFILE, "injected lineage stop failure")
+
+    monkeypatch.setattr(launcher, "_terminate_process_group", fail_the_stop)
+    monkeypatch.setattr(launcher, "_terminate_launch_lineage", fail_the_lineage_stop)
+    try:
+        assert _launch_in_process(launcher, descriptor, prompt) == 70
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "injected group check failure" in receipt["terminal"]["error"]
+        assert "injected stop failure" in receipt["terminal"]["error"]
+        assert "injected lineage stop failure" in receipt["terminal"]["error"]
+        assert receipt["terminal"]["returncode"] is None
+    finally:
+        for pid in held:  # the stopped stop left the exited child unreaped
+            with contextlib.suppress(ChildProcessError):
+                os.waitpid(pid, 0)
+
+
+@pytest.mark.evidence
+def test_a_child_that_exits_without_ready_is_not_waited_on_past_its_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another process can hold the READY pipe's write end after the child exits, so
+    the pipe never reaches EOF. The READY loop ends on the child's exit, not on the
+    observation timeout (5 s in this fixture's config)."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    held_open: list[int] = []
+    exit_answers = iter([False])
+    stdin = open(os.devnull, "wb")  # noqa: SIM115 - the launcher closes it
+
+    class ExitsAfterAPartialWrite:
+        pid = 4242
+        returncode = None
+        released = False
+
+        def __init__(self) -> None:
+            self.stdin = stdin
+
+        def exited(self, _timeout: float) -> bool:
+            return next(exit_answers, True)
+
+    def fork(arguments: argparse.Namespace, **_kwargs: object) -> object:
+        # The child reads the launch capability; a holder of READY's write end
+        # outlives it and has written part of a line.
+        held_open.append(os.dup(arguments.authority_fd))
+        holder = os.dup(arguments.ready_fd)
+        held_open.append(holder)
+        os.write(holder, b"REA")
+        return ExitsAfterAPartialWrite()
+
+    monkeypatch.setattr(launcher, "_fork_observer_child", fork)
+    monkeypatch.setattr(launcher, "_terminate_process_group", lambda _process, _grace: 1)
+    try:
+        started = time.monotonic()
+        assert _launch_in_process(launcher, descriptor, prompt) == 70
+        assert time.monotonic() - started < 4
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "child did not produce an accepted observation" in receipt["terminal"]["error"]
+    finally:
+        for descriptor_fd in held_open:
+            os.close(descriptor_fd)
 
 
 # ── Per-runtime generalisation: Claude through `claude -p`, Codex unchanged ──────
@@ -3197,12 +3451,14 @@ def _fork_group_leader(*, live_member: bool) -> tuple[int, int | None]:
         if live_member:
             member = os.fork()
             if member == 0:
-                # Close the pipe here, or the parent's read waits for this member.
-                os.close(write_fd)
+                # SIGTERM is ignored before the pid is written, so the stop cannot
+                # end the member on its first leg. Closing the pipe after it lets
+                # the parent's read end.
                 signal.signal(signal.SIGTERM, signal.SIG_IGN)
+                os.write(write_fd, str(os.getpid()).encode())
+                os.close(write_fd)
                 time.sleep(60)
                 os._exit(0)
-            os.write(write_fd, str(member).encode())
         os.close(write_fd)
         os._exit(0)
     os.close(write_fd)
@@ -3220,32 +3476,50 @@ def _fork_group_leader(*, live_member: bool) -> tuple[int, int | None]:
     return leader, int(raw) if raw else None
 
 
-def test_terminating_a_group_that_holds_only_the_unreaped_leader_succeeds() -> None:
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_terminating_a_group_that_holds_only_the_unreaped_leader_succeeds(
+    monkeypatch: pytest.MonkeyPatch, observer: str
+) -> None:
     launcher = _load_launcher()
+    _observe_exit_with(monkeypatch, observer)
     leader, _member = _fork_group_leader(live_member=False)
     if sys.platform == "darwin":
         # The case #1238 is about: macOS answers EPERM, not ESRCH, here.
         with pytest.raises(PermissionError):
             os.killpg(leader, 0)
+    calls = _group_calls_recording_leader_state(monkeypatch)
     with open(os.devnull, "wb") as stdin:
         returncode = launcher._terminate_process_group(
             launcher._ForkedChild(leader, stdin), 1
         )
     assert returncode == 0
+    assert [signum for _pgid, signum, _held in calls][:1] == [signal.SIGTERM], calls
+    assert signal.SIGKILL not in [signum for _pgid, signum, _held in calls], calls
+    assert all(held for _pgid, _signum, held in calls), calls
     with pytest.raises(ProcessLookupError):
         os.killpg(leader, 0)
 
 
-def test_a_live_member_left_by_an_exited_leader_is_still_stopped() -> None:
+@pytest.mark.parametrize("observer", EXIT_OBSERVERS)
+def test_a_live_member_left_by_an_exited_leader_is_still_stopped(
+    monkeypatch: pytest.MonkeyPatch, observer: str
+) -> None:
+    """SIGTERM is ignored, so only SIGKILL ends the member; every signal and probe is
+    sent while the leader is still unreaped, and the leader is reaped last."""
     launcher = _load_launcher()
+    _observe_exit_with(monkeypatch, observer)
     leader, member = _fork_group_leader(live_member=True)
     assert member is not None
+    calls = _group_calls_recording_leader_state(monkeypatch)
     try:
         with open(os.devnull, "wb") as stdin:
             returncode = launcher._terminate_process_group(
                 launcher._ForkedChild(leader, stdin), 1
             )
         assert returncode == 0
+        signals = [signum for _pgid, signum, _held in calls]
+        assert signals[:1] == [signal.SIGTERM] and signal.SIGKILL in signals, calls
+        assert all(held for _pgid, _signum, held in calls), calls
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             try:
@@ -3260,141 +3534,371 @@ def test_a_live_member_left_by_an_exited_leader_is_still_stopped() -> None:
             os.kill(member, signal.SIGKILL)
 
 
-class _FakeLeader:
-    """A leader whose poll() answers None for `running_polls` calls, then
-    `returncode` (None forever when returncode is None)."""
+def test_a_group_whose_listing_raises_still_gets_sigkill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A raw OSError from the group listing (EMFILE, say) is not a stopped group: the
+    stop waits out the grace, escalates to SIGKILL, which ends a member that ignores
+    SIGTERM, and then refuses, since it still cannot list the group. The leader stays
+    unreaped."""
+    launcher = _load_launcher()
+    leader, member = _fork_group_leader(live_member=True)
+    assert member is not None
+    grace = 1
 
-    def __init__(self, pid: int, returncode: int | None, running_polls: int = 0) -> None:
+    def listing_raises(_pgid: int) -> bool:
+        raise OSError(errno.EMFILE, "injected listing failure")
+
+    # Injected where the runner's wait reads it, so the wait's own handling is what
+    # runs.
+    monkeypatch.setitem(launcher.wait_group_empty.__globals__, "group_has_live_member", listing_raises)
+    calls = _group_calls_recording_leader_state(monkeypatch)
+    signalled_at: list[float] = []
+    recording = os.killpg
+
+    def timed(pgid: int, signum: int) -> None:
+        signalled_at.append(time.monotonic())
+        recording(pgid, signum)
+
+    monkeypatch.setattr(os, "killpg", timed)
+    try:
+        with open(os.devnull, "wb") as stdin:
+            child = launcher._ForkedChild(leader, stdin)
+            with pytest.raises(launcher.LaunchError, match="survived forced termination"):
+                launcher._terminate_process_group(child, grace)
+            assert not child.released
+        signals = [signum for _pgid, signum, _held in calls]
+        assert signals == [signal.SIGTERM, signal.SIGKILL], calls
+        assert all(held for _pgid, _signum, held in calls), calls
+        # SIGKILL waited for the grace the SIGTERM leg was owed.
+        assert signalled_at[1] - signalled_at[0] >= grace, signalled_at
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                os.kill(member, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.02)
+        with pytest.raises(ProcessLookupError):
+            os.kill(member, 0)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(member, signal.SIGKILL)
+        with contextlib.suppress(ChildProcessError):
+            os.waitpid(leader, 0)
+
+
+class _FakeLeader:
+    """A held child: ``exited`` answers ``exited`` and records it, ``reap`` answers
+    ``returncode``."""
+
+    def __init__(self, pid: int, returncode: int, *, exited: bool = True) -> None:
         self.pid = pid
         self.returncode: int | None = None
+        self.released = False
         self._returncode = returncode
-        self._running_polls = running_polls
+        self._exited = exited
+        self.exit_waits: list[float] = []
 
-    def poll(self) -> int | None:
-        if self._running_polls:
-            self._running_polls -= 1
-            return None
+    def exited(self, timeout: float) -> bool:
+        self.exit_waits.append(timeout)
+        return self._exited
+
+    def reap(self) -> int:
+        self.released = True
         self.returncode = self._returncode
         return self.returncode
 
 
-def test_an_exiting_leader_that_becomes_reapable_is_not_refused(
+def _scripted_group(
+    monkeypatch: pytest.MonkeyPatch,
+    launcher: ModuleType,
+    *,
+    signals: dict[int, list[str]],
+    live: bool = False,
+    empties: list[bool] | None = None,
+) -> list[int]:
+    """Answer the launcher's group calls from a script. ``signals`` maps a signal to
+    its ``signal_group`` answers in order (``signalled`` once a queue is empty);
+    ``live`` answers every live-member question; ``empties`` answers each
+    ``wait_group_empty`` in order. Returns the signals sent."""
+    sent: list[int] = []
+    waits = iter(empties or [])
+
+    def signal_group(_pgid: int, signum: int) -> str:
+        sent.append(signum)
+        queue = signals.get(signum, [])
+        return queue.pop(0) if queue else "signalled"
+
+    monkeypatch.setattr(launcher, "signal_group", signal_group)
+    monkeypatch.setattr(launcher, "group_has_live_member", lambda _pgid: live)
+    monkeypatch.setattr(launcher, "wait_group_empty", lambda _pgid, _timeout: next(waits))
+    return sent
+
+
+def test_an_exiting_leader_answered_with_eperm_is_not_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # macOS answers EPERM while the leader is still exiting and waitpid cannot reap
-    # it yet; once it can, the group is gone and the retry answers ESRCH.
+    # macOS answers EPERM while the held leader is still exiting (#1238). Once it
+    # has exited and no live member is left, nothing needs the signal; the leader
+    # stays unreaped, so the group id is never freed for a retry to land on.
     launcher = _load_launcher()
-    answers = [PermissionError(1, "Operation not permitted"), ProcessLookupError(3, "No such process")]
-    sent: list[int] = []
-
-    def killpg(_process_group: int, signum: int) -> None:
-        sent.append(signum)
-        raise answers.pop(0)
-
-    monkeypatch.setattr(launcher.os, "killpg", killpg)
-    leader = _FakeLeader(4242, 0, running_polls=3)
+    sent = _scripted_group(monkeypatch, launcher, signals={signal.SIGTERM: ["denied"]})
+    leader = _FakeLeader(4242, 0)
 
     launcher._signal_process_group(leader, signal.SIGTERM, "refused", 1)
 
-    assert sent == [signal.SIGTERM, signal.SIGTERM]
+    assert sent == [signal.SIGTERM]
+    assert leader.exit_waits == [1]
+    assert not leader.released
 
 
 @pytest.mark.parametrize(
-    ("leader_returncode", "expected_signals"),
-    [(None, 1), (0, 2)],
-    ids=["leader-running", "leader-exited-member-still-refuses"],
+    ("leader_exited", "live_member"),
+    [(False, False), (True, True)],
+    ids=["leader-running", "leader-exited-member-still-live"],
 )
-def test_a_group_that_keeps_answering_eperm_is_still_refused(
-    monkeypatch: pytest.MonkeyPatch, leader_returncode: int | None, expected_signals: int
+def test_a_group_that_answers_eperm_with_a_live_member_is_refused(
+    monkeypatch: pytest.MonkeyPatch, leader_exited: bool, live_member: bool
 ) -> None:
-    # A member this wrapper cannot signal, while the leader runs or after it is
-    # reaped, stays a refusal; only an EPERM that a reap turns into ESRCH is gone.
+    # A member this launcher cannot signal, while the leader runs or after it
+    # exited, stays a refusal; only an EPERM with no live member left is gone.
     launcher = _load_launcher()
-    sent: list[tuple[int, int]] = []
-
-    def refuse(process_group: int, signum: int) -> None:
-        sent.append((process_group, signum))
-        raise PermissionError(1, "Operation not permitted")
-
-    monkeypatch.setattr(launcher.os, "killpg", refuse)
-    leader = _FakeLeader(4242, leader_returncode)
+    sent = _scripted_group(
+        monkeypatch, launcher, signals={signal.SIGTERM: ["denied"]}, live=live_member
+    )
+    leader = _FakeLeader(4242, 0, exited=leader_exited)
 
     with pytest.raises(launcher.LaunchError, match="cannot signal the child process group"):
         launcher._terminate_process_group(leader, 1)
 
-    assert sent == [(4242, signal.SIGTERM)] * expected_signals
-
-
-def _scripted_killpg(script: dict[int, list[BaseException | None]]):
-    """A killpg that answers each signal from its own queue (None delivers) and
-    answers ESRCH once a queue is empty; returns (killpg, sent)."""
-    sent: list[int] = []
-
-    def killpg(_process_group: int, signum: int) -> None:
-        sent.append(signum)
-        queue = script.setdefault(signum, [])
-        answer = queue.pop(0) if queue else ProcessLookupError(3, "No such process")
-        if answer is not None:
-            raise answer
-
-    return killpg, sent
-
-
-def _eperm() -> PermissionError:
-    return PermissionError(1, "Operation not permitted")
+    assert sent == [signal.SIGTERM]
+    assert not leader.released
 
 
 def test_termination_waits_for_an_exiting_leader_on_the_sigterm_leg(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # The leader is still exiting when SIGTERM is sent; the leg's grace must reach
-    # the wait, or the first poll refuses.
     launcher = _load_launcher()
-    killpg, sent = _scripted_killpg({signal.SIGTERM: [_eperm()]})
-    monkeypatch.setattr(launcher.os, "killpg", killpg)
+    sent = _scripted_group(
+        monkeypatch, launcher, signals={signal.SIGTERM: ["denied"]}, empties=[True]
+    )
+    leader = _FakeLeader(4242, 0)
 
-    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+    returncode = launcher._terminate_process_group(leader, 1)
 
     assert returncode == 0
-    assert sent[:2] == [signal.SIGTERM, signal.SIGTERM]
-    assert signal.SIGKILL not in sent
+    assert sent == [signal.SIGTERM]
+    assert leader.released
 
 
 def test_termination_waits_for_an_exiting_leader_on_the_sigkill_leg(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # SIGTERM is delivered but the group outlives the grace; on the force-stop leg
-    # the leader is exiting, so the retry must send SIGKILL again after the wait.
+    # the leader answers EPERM while exiting, and the stop still ends.
     launcher = _load_launcher()
-    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm()]})
-    monkeypatch.setattr(launcher.os, "killpg", killpg)
-    waits = iter([None, 0])
-    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: next(waits))
+    sent = _scripted_group(
+        monkeypatch, launcher, signals={signal.SIGKILL: ["denied"]}, empties=[False, True]
+    )
+    leader = _FakeLeader(4242, 0)
 
-    returncode = launcher._terminate_process_group(_FakeLeader(4242, 0, running_polls=3), 1)
+    returncode = launcher._terminate_process_group(leader, 1)
 
     assert returncode == 0
-    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
 
 
-def test_a_force_stop_that_keeps_answering_eperm_is_refused(
+def test_a_force_stop_answered_with_eperm_and_a_live_member_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     launcher = _load_launcher()
-    killpg, sent = _scripted_killpg({signal.SIGTERM: [None], signal.SIGKILL: [_eperm(), _eperm()]})
-    monkeypatch.setattr(launcher.os, "killpg", killpg)
-    monkeypatch.setattr(launcher, "_wait_for_process_group_exit", lambda *_: None)
+    sent = _scripted_group(
+        monkeypatch, launcher, signals={signal.SIGKILL: ["denied"]}, live=True, empties=[False]
+    )
+    leader = _FakeLeader(4242, 0)
 
     with pytest.raises(launcher.LaunchError, match="cannot force-stop the child process group"):
-        launcher._terminate_process_group(_FakeLeader(4242, 0), 1)
+        launcher._terminate_process_group(leader, 1)
 
-    assert sent == [signal.SIGTERM, signal.SIGKILL, signal.SIGKILL]
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
+    assert not leader.released
+
+
+def test_a_group_that_outlives_sigkill_is_refused_and_its_leader_stays_held(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A group that takes the signals but cannot be listed (Linux without /proc)
+    # answers `wait_group_empty` False too, so this is also that observer-unavailable
+    # case: escalated, then refused. The EPERM shape is the next test.
+    launcher = _load_launcher()
+    sent = _scripted_group(monkeypatch, launcher, signals={}, empties=[False, False])
+    leader = _FakeLeader(4242, 0)
+
+    with pytest.raises(launcher.LaunchError, match="survived forced termination"):
+        launcher._terminate_process_group(leader, 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
+    assert not leader.released
+
+
+def test_an_empty_group_whose_child_has_not_exited_is_not_reaped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A child signalled before its setsid() leads no group: both legs answer ESRCH
+    # and the group reads empty while the child runs on. Reaping it then would block
+    # with no bound, so the stop escalates and refuses with the child still held.
+    launcher = _load_launcher()
+    sent = _scripted_group(
+        monkeypatch,
+        launcher,
+        signals={signal.SIGTERM: ["gone"], signal.SIGKILL: ["gone"]},
+        empties=[True, True],
+    )
+    leader = _FakeLeader(4242, 0, exited=False)
+
+    with pytest.raises(launcher.LaunchError, match="survived forced termination"):
+        launcher._terminate_process_group(leader, 1)
+
+    assert sent == [signal.SIGTERM, signal.SIGKILL]
+    assert len(leader.exit_waits) == 2
+    assert not leader.released
+
+
+def test_stopping_a_child_that_leads_no_group_yet_returns_within_the_graces() -> None:
+    """The real shape of a signal caught between fork() and the child's setsid():
+    the child is outside any group of its own id, so no group signal reaches it.
+    The stop must refuse within its two graces, not wait on the child."""
+    launcher = _load_launcher()
+    child = os.fork()
+    if child == 0:
+        time.sleep(6)
+        os._exit(0)
+    try:
+        started = time.monotonic()
+        with (
+            open(os.devnull, "wb") as stdin,
+            pytest.raises(launcher.LaunchError, match="survived forced termination"),
+        ):
+            launcher._terminate_process_group(launcher._ForkedChild(child, stdin), 1)
+        assert time.monotonic() - started < 4
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(child, signal.SIGKILL)
+        os.waitpid(child, 0)
+
+
+def test_an_eperm_group_that_cannot_be_listed_is_refused_on_the_sigterm_leg(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # macOS once the child exited: the zombie-only group answers EPERM, and `ps`,
+    # which settles it, fails. The SIGTERM leg refuses with the observer's error;
+    # SIGKILL is not sent, and the child stays held.
+    launcher = _load_launcher()
+    sent = _scripted_group(monkeypatch, launcher, signals={signal.SIGTERM: ["denied"]})
+
+    def unavailable(_pgid: int) -> bool:
+        raise launcher.GroupObserverUnavailable("ps failed")
+
+    monkeypatch.setattr(launcher, "group_has_live_member", unavailable)
+    leader = _FakeLeader(4242, 0)
+
+    with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: ps failed"):
+        launcher._terminate_process_group(leader, 1)
+
+    assert sent == [signal.SIGTERM]
+    assert not leader.released
+
+
+def test_the_exit_wait_gets_only_what_is_left_of_the_grace(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A group that empties late has used part of the grace; the exit wait gets the
+    # rest, so one leg stays within one grace.
+    launcher = _load_launcher()
+
+    def empties_late(_pgid: int, timeout: float) -> bool:
+        time.sleep(0.6)
+        return True
+
+    monkeypatch.setattr(launcher, "wait_group_empty", empties_late)
+    leader = _FakeLeader(4242, 0)
+
+    assert launcher._group_stopped(leader, 1) is True
+    assert len(leader.exit_waits) == 1
+    assert leader.exit_waits[0] <= 0.5
+
+
+def test_a_released_child_s_group_is_never_signalled(monkeypatch: pytest.MonkeyPatch) -> None:
+    launcher = _load_launcher()
+    sent = _scripted_group(monkeypatch, launcher, signals={})
+    leader = _FakeLeader(4242, 0)
+    leader.reap()
+
+    with pytest.raises(launcher.LaunchError, match="no longer held"):
+        launcher._terminate_process_group(leader, 1)
+    with pytest.raises(launcher.LaunchError, match="no longer held"):
+        launcher._process_group_has_live_member(leader)
+
+    assert sent == []
+
+
+@pytest.mark.parametrize("failure", ["unavailable", "raw-oserror"])
+def test_an_observer_that_cannot_answer_is_a_launch_error(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    # `GroupObserverUnavailable` is not an OSError, so untranslated it would escape
+    # the launch's `except (LaunchError, OSError)` with no receipt and no cleanup.
+    # A raw OSError from an observer (`iterdir` at EMFILE, `kqueue`, `waitid`) is
+    # translated too. The stop's group wait is not asked here: the runner's
+    # `wait_group_empty` counts both as a group not yet empty, so the stop escalates
+    # (`test_a_group_whose_listing_raises_still_gets_sigkill`).
+    launcher = _load_launcher()
+
+    def unavailable(*_args: object) -> bool:
+        if failure == "unavailable":
+            raise launcher.GroupObserverUnavailable("no ps")
+        raise OSError(errno.EMFILE, "no ps")
+
+    monkeypatch.setattr(launcher, "group_has_live_member", unavailable)
+    monkeypatch.setattr(launcher, "exited_unreaped", unavailable)
+    with open(os.devnull, "wb") as stdin:
+        child = launcher._ForkedChild(4242, stdin)
+        with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: .*no ps"):
+            launcher._process_group_has_live_member(child)
+        with pytest.raises(launcher.LaunchError, match="cannot observe the child's exit: .*no ps"):
+            child.exited(0)
+        assert not child.released
+
+
+def test_the_reap_marks_the_child_released_before_it_starts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The signal relay reads `released`; a handler that runs during the reap must
+    # already see it set, or it could signal a pid the reap just freed.
+    launcher = _load_launcher()
+    seen: list[bool] = []
+
+    with open(os.devnull, "wb") as stdin:
+        child = launcher._ForkedChild(4242, stdin)
+
+        def waitpid(pid: int, options: int) -> tuple[int, int]:
+            seen.append(child.released)
+            return pid, 0
+
+        monkeypatch.setattr(launcher.os, "waitpid", waitpid)
+        assert child.reap() == 0
+        assert child.reap() == 0
+
+    assert seen == [True]
 
 
 @pytest.mark.parametrize(
     "answer",
-    [PermissionError(1, "Operation not permitted"), ProcessLookupError(3, "No such process")],
-    ids=["eperm", "esrch"],
+    [
+        PermissionError(1, "Operation not permitted"),
+        ProcessLookupError(3, "No such process"),
+        OSError(22, "Invalid argument"),
+    ],
+    ids=["eperm", "esrch", "other-oserror"],
 )
 def test_the_signal_relay_never_raises_from_the_handler(
     monkeypatch: pytest.MonkeyPatch, answer: BaseException
