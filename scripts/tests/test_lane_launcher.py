@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import contextlib
 import copy
 import datetime as dt
+import errno
 import fcntl
 import hashlib
 import importlib.util
@@ -1619,6 +1621,91 @@ def test_an_error_after_the_reap_does_not_stop_the_reaped_group(
     assert receipt["terminal"]["error"] == "injected after the reap"
     assert receipt["terminal"]["returncode"] == 0
     assert stopped == []
+
+
+@pytest.mark.evidence
+def test_a_raw_oserror_from_the_stop_still_writes_the_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The error path's stops may raise a raw OSError (an observer, `killpg`, the
+    reap, the lineage listing); each is folded into the receipt's error, not raised
+    past the receipt."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    held: list[int] = []
+
+    def fail_the_group_check(_process: object) -> bool:
+        raise launcher.LaunchError("injected group check failure")
+
+    def fail_the_stop(process: object, _grace: int) -> int:
+        held.append(process.pid)
+        raise OSError(errno.EMFILE, "injected stop failure")
+
+    monkeypatch.setattr(launcher, "_process_group_has_live_member", fail_the_group_check)
+    def fail_the_lineage_stop(_nonce: str, _grace: int) -> None:
+        raise OSError(errno.EMFILE, "injected lineage stop failure")
+
+    monkeypatch.setattr(launcher, "_terminate_process_group", fail_the_stop)
+    monkeypatch.setattr(launcher, "_terminate_launch_lineage", fail_the_lineage_stop)
+    try:
+        assert _launch_in_process(launcher, descriptor, prompt) == 70
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "injected group check failure" in receipt["terminal"]["error"]
+        assert "injected stop failure" in receipt["terminal"]["error"]
+        assert "injected lineage stop failure" in receipt["terminal"]["error"]
+        assert receipt["terminal"]["returncode"] is None
+    finally:
+        for pid in held:  # the stopped stop left the exited child unreaped
+            with contextlib.suppress(ChildProcessError):
+                os.waitpid(pid, 0)
+
+
+@pytest.mark.evidence
+def test_a_child_that_exits_without_ready_is_not_waited_on_past_its_exit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Another process can hold the READY pipe's write end after the child exits, so
+    the pipe never reaches EOF. The READY loop ends on the child's exit, not on the
+    observation timeout (5 s in this fixture's config)."""
+    _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
+    launcher = _load_launcher(engine)
+    held_open: list[int] = []
+    exit_answers = iter([False])
+    stdin = open(os.devnull, "wb")  # noqa: SIM115 - the launcher closes it
+
+    class ExitsAfterAPartialWrite:
+        pid = 4242
+        returncode = None
+        released = False
+
+        def __init__(self) -> None:
+            self.stdin = stdin
+
+        def exited(self, _timeout: float) -> bool:
+            return next(exit_answers, True)
+
+    def fork(arguments: argparse.Namespace, **_kwargs: object) -> object:
+        # The child reads the launch capability; a holder of READY's write end
+        # outlives it and has written part of a line.
+        held_open.append(os.dup(arguments.authority_fd))
+        holder = os.dup(arguments.ready_fd)
+        held_open.append(holder)
+        os.write(holder, b"REA")
+        return ExitsAfterAPartialWrite()
+
+    monkeypatch.setattr(launcher, "_fork_observer_child", fork)
+    monkeypatch.setattr(launcher, "_terminate_process_group", lambda _process, _grace: 1)
+    try:
+        started = time.monotonic()
+        assert _launch_in_process(launcher, descriptor, prompt) == 70
+        assert time.monotonic() - started < 4
+        receipt = _receipt(sessions, descriptor)
+        assert receipt["status"] == "failed"
+        assert "child did not produce an accepted observation" in receipt["terminal"]["error"]
+    finally:
+        for descriptor_fd in held_open:
+            os.close(descriptor_fd)
 
 
 # ── Per-runtime generalisation: Claude through `claude -p`, Codex unchanged ──────
@@ -3702,22 +3789,34 @@ def test_a_released_child_s_group_is_never_signalled(monkeypatch: pytest.MonkeyP
     assert sent == []
 
 
-def test_an_observer_that_cannot_answer_is_a_launch_error(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("failure", ["unavailable", "raw-oserror"])
+def test_an_observer_that_cannot_answer_is_a_launch_error(
+    monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
     # `GroupObserverUnavailable` is not an OSError, so untranslated it would escape
     # the launch's `except (LaunchError, OSError)` with no receipt and no cleanup.
+    # A raw OSError from an observer (`iterdir` at EMFILE, `kqueue`, `waitid`) is
+    # translated too, so the stop's own observers fail closed with the same text.
     launcher = _load_launcher()
 
     def unavailable(*_args: object) -> bool:
-        raise launcher.GroupObserverUnavailable("no ps")
+        if failure == "unavailable":
+            raise launcher.GroupObserverUnavailable("no ps")
+        raise OSError(errno.EMFILE, "no ps")
 
     monkeypatch.setattr(launcher, "group_has_live_member", unavailable)
     monkeypatch.setattr(launcher, "exited_unreaped", unavailable)
+    monkeypatch.setattr(launcher, "wait_group_empty", unavailable)
     with open(os.devnull, "wb") as stdin:
         child = launcher._ForkedChild(4242, stdin)
-        with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: no ps"):
+        with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: .*no ps"):
             launcher._process_group_has_live_member(child)
-        with pytest.raises(launcher.LaunchError, match="cannot observe the child's exit: no ps"):
+        with pytest.raises(launcher.LaunchError, match="cannot observe the child's exit: .*no ps"):
             child.exited(0)
+        if failure == "raw-oserror":  # the runner's wait counts its own refusal as not empty
+            with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: .*no ps"):
+                launcher._group_stopped(child, 1)
+        assert not child.released
 
 
 def test_the_reap_marks_the_child_released_before_it_starts(

@@ -522,10 +522,14 @@ class _ForkedChild:
         self.released = False
 
     def exited(self, timeout: float) -> bool:
-        """Whether the child exits within ``timeout``; it stays unreaped either way."""
+        """Whether the child exits within ``timeout``; it stays unreaped either way.
+
+        An observer that cannot answer, whether it says so or fails with a raw
+        ``OSError``, raises ``LaunchError``, so the launch fails closed on it.
+        """
         try:
             return exited_unreaped(self.pid, timeout)
-        except GroupObserverUnavailable as exc:
+        except (GroupObserverUnavailable, OSError) as exc:
             raise LaunchError(f"cannot observe the child's exit: {exc}") from exc
 
     def reap(self) -> int:
@@ -1841,14 +1845,15 @@ def _process_group_has_live_member(process: _ForkedChild) -> bool:
     The child is held unreaped while this runs, so an exited child is still a member
     of its group, as a zombie. A signal-0 probe cannot tell that zombie from a live
     member (Linux signals it; macOS answers EPERM, #1238), so this asks
-    ``group_has_live_member``. An observer that cannot answer raises ``LaunchError``,
-    and the launch fails closed on it: the group is then stopped, not trusted empty.
+    ``group_has_live_member``. An observer that cannot answer, whether it says so
+    or fails with a raw ``OSError``, raises ``LaunchError``, and the launch fails
+    closed on it: the group is then stopped, not trusted empty.
     """
     if process.released:
         raise LaunchError("child process group is no longer held")
     try:
         return group_has_live_member(process.pid)
-    except GroupObserverUnavailable as exc:
+    except (GroupObserverUnavailable, OSError) as exc:
         raise LaunchError(f"cannot observe the child process group: {exc}") from exc
 
 
@@ -1898,8 +1903,8 @@ def _terminate_process_group(
     descendant that ignores SIGTERM outlives a child that does not. The child is
     reaped only once that holds, so every signal and probe here names a group id
     that cannot have been reused. A group that cannot be listed counts as not
-    empty (``wait_group_empty``), so it is escalated and then refused, never
-    trusted stopped. Either way the child is left unreaped, and the receipt's
+    empty (``wait_group_empty``), so it is refused, never trusted stopped. The
+    child is then left unreaped, and the receipt's
     ``returncode`` is null. What the refusal says depends on the group's answer:
     - a group that takes the signals (Linux, whose held zombie leader is
       signalled): both are sent, and the refusal reads "survived forced
@@ -1935,7 +1940,11 @@ def _group_stopped(process: _ForkedChild, grace_seconds: int) -> bool:
     still hold one poll of ``wait_group_empty`` for up to its own timeout.
     """
     deadline = time.monotonic() + grace_seconds
-    if not wait_group_empty(process.pid, grace_seconds):
+    try:
+        empty = wait_group_empty(process.pid, grace_seconds)
+    except OSError as exc:  # the runner counts only its own refusal as "not empty"
+        raise LaunchError(f"cannot observe the child process group: {exc}") from exc
+    if not empty:
         return False
     return process.exited(max(0.0, deadline - time.monotonic()))
 
@@ -2424,16 +2433,17 @@ def launch(
     except (LaunchError, OSError) as exc:
         # A child still held is stopped whether or not it exited: its group may
         # hold a member, and only a held child's group id is safe to signal. A
-        # released one was reaped after its group was found empty.
+        # released one was reaped after its group was found empty. Neither stop
+        # may raise past the receipt below, a raw OSError included.
         returncode: int | None = process.returncode if process is not None else None
         if process is not None and not process.released:
             try:
                 returncode = _terminate_process_group(process, termination_grace)
-            except LaunchError as termination_error:
+            except (LaunchError, OSError) as termination_error:
                 exc = LaunchError(f"{exc}; {termination_error}")
         try:
             _terminate_launch_lineage(process_nonce, termination_grace)
-        except LaunchError as termination_error:
+        except (LaunchError, OSError) as termination_error:
             exc = LaunchError(f"{exc}; {termination_error}")
         _terminal_receipt(
             receipt_path,
