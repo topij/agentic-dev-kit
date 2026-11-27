@@ -278,7 +278,7 @@
     },
     "scripts/launch_lane.py": {
       "role": "engine",
-      "sha256": "c4708e807958f7edc84e9de0fc88e3c337f6404998f264a348307c1d95af603f"
+      "sha256": "317624a290acb9d4c079e2beb3a6b42b67a8f3d1a3faddd572c01a7040155072"
     },
     "scripts/lib/adapter_templates/claude/adopt.md": {
       "role": "template",
@@ -844,7 +844,7 @@
     },
     "scripts/tests/test_lane_launcher.py": {
       "role": "test",
-      "sha256": "2f2ac24d0f2493c532c527be1225ee62e1ebb3ee1e1fbb9a77a9c54eeb85237b"
+      "sha256": "86fd6215afb16ff18b5fbe2fdb5746be2be79c9d57b7f925224ad59445e9a515"
     },
     "scripts/tests/test_lane_usage.py": {
       "role": "test",

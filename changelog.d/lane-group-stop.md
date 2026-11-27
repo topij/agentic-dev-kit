@@ -15,18 +15,19 @@ exit, then asks whether a live member is left. These refusals change:
 - A group answered with `EPERM` whose only other members are zombies is now stopped,
   not refused with `cannot signal the child process group`. A live member the
   launcher may not signal is still refused.
-- When the group's members cannot be listed (no `/proc` on Linux, or `/bin/ps`
-  failing on macOS, which every clean exit there now asks), the launch fails. The
-  receipt's error starts with `cannot observe the child process group: …`, and the
-  stop that follows cannot list the group either, so it refuses too, leaves the
-  child unreaped, and the receipt's `returncode` is null. On Linux the stop sends
-  both signals and adds `child process group survived forced termination`. On
-  macOS the exited child's group answers EPERM, so the stop adds the same `cannot
-  observe …` text again and sends no SIGKILL, which would meet the same EPERM.
-- An observer that fails with an OS error, of the group or of the child's exit,
-  now fails the launch with `cannot observe the child process group: …` or `cannot
-  observe the child's exit: …` and writes the receipt. An OS error raised by the
-  stop on that path is added to the receipt's error rather than raised past it.
+- When the group's members cannot be listed (no `/proc` on Linux, `/bin/ps`
+  failing on macOS, which every clean exit there now asks, or the listing raising
+  an OS error such as `EMFILE`), the launch fails. The receipt's error starts with
+  `cannot observe the child process group: …`. A stop that still cannot list the
+  group refuses too, leaves the child unreaped, and the receipt's `returncode` is
+  null. On Linux the stop sends both signals and adds `child process group
+  survived forced termination`. On macOS the exited child's group answers EPERM,
+  so the stop adds the same `cannot observe …` text again and sends no SIGKILL,
+  which would meet the same EPERM.
+- When the child's exit cannot be observed (an OS error from `waitid` or
+  `kqueue`), the launch fails with `cannot observe the child's exit: …`.
+- An OS error raised by a stop on the failure path is added to the receipt's
+  error, rather than raised past the receipt, which left none.
 
 On Linux with `/proc` mounted `hidepid`, a group member owned by another user is
 not seen, so a clean exit can pass with that member running. The launcher used to

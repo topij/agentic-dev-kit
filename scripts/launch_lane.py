@@ -1903,7 +1903,8 @@ def _terminate_process_group(
     descendant that ignores SIGTERM outlives a child that does not. The child is
     reaped only once that holds, so every signal and probe here names a group id
     that cannot have been reused. A group that cannot be listed counts as not
-    empty (``wait_group_empty``), so it is refused, never trusted stopped. The
+    empty (``_group_stopped``), whether the observer says it cannot list it or its
+    listing raises an ``OSError``, so it is refused, never trusted stopped. The
     child is then left unreaped, and the receipt's
     ``returncode`` is null. What the refusal says depends on the group's answer:
     - a group that takes the signals (Linux, whose held zombie leader is
@@ -1937,13 +1938,17 @@ def _group_stopped(process: _ForkedChild, grace_seconds: int) -> bool:
     leads no group yet, so its group answers ESRCH and reads empty while the child
     runs on, and ``reap`` would then block on it with no bound. Confirming the exit
     first keeps the wait for it within the grace; a ``/bin/ps`` that hangs can
-    still hold one poll of ``wait_group_empty`` for up to its own timeout.
+    still hold one poll of ``wait_group_empty`` for up to its own timeout. A group
+    that cannot be listed, whether the runner says so or its listing raises an
+    ``OSError``, is not stopped.
     """
     deadline = time.monotonic() + grace_seconds
     try:
         empty = wait_group_empty(process.pid, grace_seconds)
-    except OSError as exc:  # the runner counts only its own refusal as "not empty"
-        raise LaunchError(f"cannot observe the child process group: {exc}") from exc
+    except OSError:
+        # The runner counts a group it cannot list as not empty, so the stop goes
+        # on to SIGKILL; a raw OSError from its listing (EMFILE, say) counts the same.
+        return False
     if not empty:
         return False
     return process.exited(max(0.0, deadline - time.monotonic()))

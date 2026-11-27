@@ -1627,9 +1627,9 @@ def test_an_error_after_the_reap_does_not_stop_the_reaped_group(
 def test_a_raw_oserror_from_the_stop_still_writes_the_receipt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The error path's stops may raise a raw OSError (an observer, `killpg`, the
-    reap, the lineage listing); each is folded into the receipt's error, not raised
-    past the receipt."""
+    """A raw OSError raised by either stop on the error path is folded into the
+    receipt's error, not raised past the receipt. Both stops are faked, so this pins
+    the error path's two catch clauses, not where in a stop the error arises."""
     _repo, engine, sessions, descriptor, prompt, _env = _install_repo(tmp_path)
     launcher = _load_launcher(engine)
     held: list[int] = []
@@ -3534,6 +3534,44 @@ def test_a_live_member_left_by_an_exited_leader_is_still_stopped(
             os.kill(member, signal.SIGKILL)
 
 
+def test_a_group_whose_listing_raises_still_gets_sigkill(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A raw OSError from the group listing (EMFILE, say) is not a stopped group: the
+    stop escalates to SIGKILL, which ends a member that ignores SIGTERM, and then
+    refuses, since it still cannot list the group. The leader stays unreaped."""
+    launcher = _load_launcher()
+    leader, member = _fork_group_leader(live_member=True)
+    assert member is not None
+
+    def listing_raises(_pgid: int, _timeout: float) -> bool:
+        raise OSError(errno.EMFILE, "injected listing failure")
+
+    monkeypatch.setattr(launcher, "wait_group_empty", listing_raises)
+    calls = _group_calls_recording_leader_state(monkeypatch)
+    try:
+        with open(os.devnull, "wb") as stdin:
+            child = launcher._ForkedChild(leader, stdin)
+            with pytest.raises(launcher.LaunchError, match="survived forced termination"):
+                launcher._terminate_process_group(child, 1)
+            assert not child.released
+        signals = [signum for _pgid, signum, _held in calls]
+        assert signals == [signal.SIGTERM, signal.SIGKILL], calls
+        assert all(held for _pgid, _signum, held in calls), calls
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            try:
+                os.kill(member, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.02)
+        with pytest.raises(ProcessLookupError):
+            os.kill(member, 0)
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.kill(member, signal.SIGKILL)
+        with contextlib.suppress(ChildProcessError):
+            os.waitpid(leader, 0)
+
+
 class _FakeLeader:
     """A held child: ``exited`` answers ``exited`` and records it, ``reap`` answers
     ``returncode``."""
@@ -3796,7 +3834,8 @@ def test_an_observer_that_cannot_answer_is_a_launch_error(
     # `GroupObserverUnavailable` is not an OSError, so untranslated it would escape
     # the launch's `except (LaunchError, OSError)` with no receipt and no cleanup.
     # A raw OSError from an observer (`iterdir` at EMFILE, `kqueue`, `waitid`) is
-    # translated too, so the stop's own observers fail closed with the same text.
+    # translated too. The stop's group wait instead counts it as not empty, as the
+    # runner counts a group it cannot list, so the stop escalates.
     launcher = _load_launcher()
 
     def unavailable(*_args: object) -> bool:
@@ -3806,16 +3845,18 @@ def test_an_observer_that_cannot_answer_is_a_launch_error(
 
     monkeypatch.setattr(launcher, "group_has_live_member", unavailable)
     monkeypatch.setattr(launcher, "exited_unreaped", unavailable)
-    monkeypatch.setattr(launcher, "wait_group_empty", unavailable)
+    # The runner's wait catches its own GroupObserverUnavailable; only a raw
+    # OSError reaches the launcher from it.
+    if failure == "raw-oserror":
+        monkeypatch.setattr(launcher, "wait_group_empty", unavailable)
     with open(os.devnull, "wb") as stdin:
         child = launcher._ForkedChild(4242, stdin)
         with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: .*no ps"):
             launcher._process_group_has_live_member(child)
         with pytest.raises(launcher.LaunchError, match="cannot observe the child's exit: .*no ps"):
             child.exited(0)
-        if failure == "raw-oserror":  # the runner's wait counts its own refusal as not empty
-            with pytest.raises(launcher.LaunchError, match="cannot observe the child process group: .*no ps"):
-                launcher._group_stopped(child, 1)
+        if failure == "raw-oserror":
+            assert launcher._group_stopped(child, 1) is False
         assert not child.released
 
 
